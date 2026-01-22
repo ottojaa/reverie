@@ -69,3 +69,4 @@ export const SuggestResponseSchema = z.array(z.string())
 
 export type SuggestResponse = z.infer<typeof SuggestResponseSchema>
 
+

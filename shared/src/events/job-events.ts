@@ -25,3 +25,4 @@ export const JobEventSchema = z.object({
 
 export type JobEvent = z.infer<typeof JobEventSchema>
 
+

@@ -20,11 +20,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "importHelpers": true,
-    "noEmitOnError": true,
-    "customConditions": ["@reverie/source"],
-    "baseUrl": ".",
-    "paths": {
-      "@reverie/shared": ["shared/src/index.ts"]
-    }
+    "noEmitOnError": true
   }
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { UuidSchema, DateOnlySchema, PaginationQuerySchema } from './common.js'
+import { DateOnlySchema, PaginationQuerySchema, UuidSchema } from './common.js'
 import { JobStatusEnum } from './jobs.js'
 
 export const DocumentCategoryEnum = z.enum([
@@ -37,7 +37,7 @@ export const DocumentSchema = z.object({
   ocr_status: JobStatusEnum,
   thumbnail_status: JobStatusEnum,
   llm_summary: z.string().nullable(),
-  llm_metadata: z.record(z.string(), z.unknown()).nullable(),
+  llm_metadata: z.record(z.unknown()).nullable(),
   llm_processed_at: z.string().datetime().nullable(),
   llm_token_count: z.number().nullable(),
   created_at: z.string().datetime(),
@@ -70,4 +70,5 @@ export const DocumentStatusResponseSchema = z.object({
 })
 
 export type DocumentStatusResponse = z.infer<typeof DocumentStatusResponseSchema>
+
 

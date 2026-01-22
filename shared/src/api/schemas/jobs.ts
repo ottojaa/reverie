@@ -39,3 +39,4 @@ export const JobBatchResponseSchema = z.array(
 
 export type JobBatchResponse = z.infer<typeof JobBatchResponseSchema>
 
+
