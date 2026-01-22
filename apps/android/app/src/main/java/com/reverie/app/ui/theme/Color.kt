@@ -1,0 +1,46 @@
+package com.reverie.app.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Light theme colors
+val LightPrimary = Color(0xFF4C5D7A)
+val LightOnPrimary = Color(0xFFFFFFFF)
+val LightPrimaryContainer = Color(0xFFD6E3FF)
+val LightOnPrimaryContainer = Color(0xFF061A33)
+val LightSecondary = Color(0xFF595D71)
+val LightOnSecondary = Color(0xFFFFFFFF)
+val LightSecondaryContainer = Color(0xFFDDE1F9)
+val LightOnSecondaryContainer = Color(0xFF161A2C)
+val LightTertiary = Color(0xFF73546F)
+val LightOnTertiary = Color(0xFFFFFFFF)
+val LightTertiaryContainer = Color(0xFFFFD7F5)
+val LightOnTertiaryContainer = Color(0xFF2A1229)
+val LightBackground = Color(0xFFFAF8FF)
+val LightOnBackground = Color(0xFF1A1B21)
+val LightSurface = Color(0xFFFAF8FF)
+val LightOnSurface = Color(0xFF1A1B21)
+val LightSurfaceVariant = Color(0xFFE1E2EC)
+val LightOnSurfaceVariant = Color(0xFF44474E)
+val LightOutline = Color(0xFF74777F)
+
+// Dark theme colors
+val DarkPrimary = Color(0xFFB4C5E4)
+val DarkOnPrimary = Color(0xFF1E2E4A)
+val DarkPrimaryContainer = Color(0xFF354562)
+val DarkOnPrimaryContainer = Color(0xFFD6E3FF)
+val DarkSecondary = Color(0xFFC1C6DD)
+val DarkOnSecondary = Color(0xFF2B3042)
+val DarkSecondaryContainer = Color(0xFF414659)
+val DarkOnSecondaryContainer = Color(0xFFDDE1F9)
+val DarkTertiary = Color(0xFFE2BBDB)
+val DarkOnTertiary = Color(0xFF422740)
+val DarkTertiaryContainer = Color(0xFF5A3D57)
+val DarkOnTertiaryContainer = Color(0xFFFFD7F5)
+val DarkBackground = Color(0xFF111318)
+val DarkOnBackground = Color(0xFFE2E2E9)
+val DarkSurface = Color(0xFF111318)
+val DarkOnSurface = Color(0xFFE2E2E9)
+val DarkSurfaceVariant = Color(0xFF44474E)
+val DarkOnSurfaceVariant = Color(0xFFC4C6D0)
+val DarkOutline = Color(0xFF8E9099)
+
