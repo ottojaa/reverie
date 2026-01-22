@@ -1,0 +1,6 @@
+packages:
+  - 'packages/*'
+  - 'backend'
+  - 'apps/*'
+  - 'shared'
+autoInstallPeers: true
