@@ -4,13 +4,13 @@
   "files": [],
   "references": [
     {
-      "path": "./backend"
+      "path": "./apps/backend"
     },
     {
       "path": "./apps/web"
     },
     {
-      "path": "./shared"
+      "path": "./libs/shared"
     }
   ]
 }
