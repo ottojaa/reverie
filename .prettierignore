@@ -1,5 +1,24 @@
-# Add files here to ignore them from prettier formatting
-/dist
-/coverage
-/.nx/cache
-/.nx/workspace-data
+# Build outputs
+dist
+coverage
+release
+out-tsc
+dist-electron
+
+# Nx
+.nx/cache
+.nx/workspace-data
+
+# Dependencies
+node_modules
+pnpm-lock.yaml
+
+# Android
+apps/android
+
+# Generated
+*.gen.ts
+*.gen.tsx
+
+# Other
+tmp
