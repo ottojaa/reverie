@@ -1,0 +1,104 @@
+{
+    "$schema": "../../node_modules/nx/schemas/project-schema.json",
+    "name": "@reverie/web",
+    "projectType": "application",
+    "sourceRoot": "apps/web/src",
+    "tags": [],
+    "targets": {
+        "build": {
+            "executor": "@nx/vite:build",
+            "outputs": ["{options.outputPath}"],
+            "defaultConfiguration": "production",
+            "options": {
+                "outputPath": "apps/web/dist"
+            },
+            "configurations": {
+                "development": {
+                    "mode": "development"
+                },
+                "production": {
+                    "mode": "production"
+                }
+            }
+        },
+        "serve": {
+            "executor": "@nx/vite:dev-server",
+            "continuous": true,
+            "defaultConfiguration": "development",
+            "options": {
+                "buildTarget": "@reverie/web:build"
+            },
+            "configurations": {
+                "development": {
+                    "buildTarget": "@reverie/web:build:development"
+                },
+                "production": {
+                    "buildTarget": "@reverie/web:build:production"
+                }
+            }
+        },
+        "preview": {
+            "executor": "@nx/vite:preview-server",
+            "defaultConfiguration": "development",
+            "options": {
+                "buildTarget": "@reverie/web:build"
+            },
+            "configurations": {
+                "development": {
+                    "buildTarget": "@reverie/web:build:development"
+                },
+                "production": {
+                    "buildTarget": "@reverie/web:build:production"
+                }
+            }
+        },
+        "build:electron": {
+            "executor": "nx:run-commands",
+            "dependsOn": ["build"],
+            "options": {
+                "command": "tsc -p electron/tsconfig.json",
+                "cwd": "apps/web"
+            }
+        },
+        "serve:electron": {
+            "executor": "nx:run-commands",
+            "options": {
+                "commands": ["vite", "wait-on http://localhost:4200 && tsc -p electron/tsconfig.json && NODE_ENV=development electron ."],
+                "cwd": "apps/web",
+                "parallel": true
+            }
+        },
+        "package:mac": {
+            "executor": "nx:run-commands",
+            "dependsOn": ["build:electron"],
+            "options": {
+                "command": "electron-builder build --mac",
+                "cwd": "apps/web"
+            }
+        },
+        "package:win": {
+            "executor": "nx:run-commands",
+            "dependsOn": ["build:electron"],
+            "options": {
+                "command": "electron-builder build --win",
+                "cwd": "apps/web"
+            }
+        },
+        "package:linux": {
+            "executor": "nx:run-commands",
+            "dependsOn": ["build:electron"],
+            "options": {
+                "command": "electron-builder build --linux",
+                "cwd": "apps/web"
+            }
+        },
+        "package": {
+            "executor": "nx:run-commands",
+            "dependsOn": ["build:electron"],
+            "options": {
+                "command": "electron-builder build --mac --win --linux",
+                "cwd": "apps/web"
+            }
+        }
+    }
+}

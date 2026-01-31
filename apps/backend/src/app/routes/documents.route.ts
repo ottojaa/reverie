@@ -11,16 +11,19 @@ import { z } from 'zod'
 import { db } from '../../db/kysely'
 import { type Document as DbDocument } from '../../db/schema'
 import { getUploadService } from '../../services/upload.service'
+import { getStorageService } from '../../services/storage.service'
 
 const uploadService = getUploadService()
+const storageService = getStorageService()
 
 export default async function (fastify: FastifyInstance) {
-  // List documents
+  // List documents (requires authentication)
   fastify.get<{
     Querystring: DocumentListQuery
   }>(
     '/documents',
     {
+      preHandler: [fastify.authenticate],
       schema: {
         description: 'List documents with optional filters',
         querystring: DocumentListQuerySchema,
@@ -30,9 +33,13 @@ export default async function (fastify: FastifyInstance) {
       },
     },
     async function (request) {
+      const userId = request.user.id
       const { limit, offset, folder_id, category, date_from, date_to } = request.query
 
-      let query = db.selectFrom('documents').selectAll()
+      let query = db
+        .selectFrom('documents')
+        .selectAll()
+        .where('user_id', '=', userId)
 
       // Apply filters
       if (folder_id) {
@@ -48,19 +55,23 @@ export default async function (fastify: FastifyInstance) {
         query = query.where('extracted_date', '<=', new Date(date_to))
       }
 
-      // Get total count
-      const countQuery = db.selectFrom('documents').select(db.fn.countAll().as('count'))
+      // Get total count (must apply same filters)
+      let countQuery = db
+        .selectFrom('documents')
+        .select(db.fn.countAll().as('count'))
+        .where('user_id', '=', userId)
+
       if (folder_id) {
-        countQuery.where('folder_id', '=', folder_id)
+        countQuery = countQuery.where('folder_id', '=', folder_id)
       }
       if (category) {
-        countQuery.where('document_category', '=', category)
+        countQuery = countQuery.where('document_category', '=', category)
       }
       if (date_from) {
-        countQuery.where('extracted_date', '>=', new Date(date_from))
+        countQuery = countQuery.where('extracted_date', '>=', new Date(date_from))
       }
       if (date_to) {
-        countQuery.where('extracted_date', '<=', new Date(date_to))
+        countQuery = countQuery.where('extracted_date', '<=', new Date(date_to))
       }
 
       const [documents, countResult] = await Promise.all([
@@ -77,13 +88,14 @@ export default async function (fastify: FastifyInstance) {
     }
   )
 
-  // Get document by ID
+  // Get document by ID (requires authentication)
   fastify.get<{
     Params: { id: string }
     Reply: Document
   }>(
     '/documents/:id',
     {
+      preHandler: [fastify.authenticate],
       schema: {
         description: 'Get document by ID',
         params: z.object({ id: UuidSchema }),
@@ -93,7 +105,8 @@ export default async function (fastify: FastifyInstance) {
       },
     },
     async function (request, reply) {
-      const document = await uploadService.getDocument(request.params.id)
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
       if (!document) {
         return reply.notFound('Document not found')
       }
@@ -101,12 +114,13 @@ export default async function (fastify: FastifyInstance) {
     }
   )
 
-  // Delete document
+  // Delete document (requires authentication)
   fastify.delete<{
     Params: { id: string }
   }>(
     '/documents/:id',
     {
+      preHandler: [fastify.authenticate],
       schema: {
         description: 'Delete a document',
         params: z.object({ id: UuidSchema }),
@@ -116,33 +130,65 @@ export default async function (fastify: FastifyInstance) {
       },
     },
     async function (request, reply) {
-      const document = await uploadService.getDocument(request.params.id)
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
       if (!document) {
         return reply.notFound('Document not found')
       }
 
-      // Delete from database (cascade will handle related records)
-      await db.deleteFrom('documents').where('id', '=', request.params.id).execute()
+      // Delete file from storage (with storage usage update)
+      try {
+        await storageService.deleteFile(document.file_path, userId)
 
-      // TODO: Delete file from storage
+        // Delete thumbnails if they exist
+        if (document.thumbnail_paths) {
+          for (const path of Object.values(document.thumbnail_paths)) {
+            await storageService.deleteFile(path, userId)
+          }
+        }
+      } catch (err) {
+        // Log but don't fail if storage delete fails
+        console.error('Failed to delete file from storage:', err)
+      }
+
+      // Delete from database (cascade will handle related records)
+      await db
+        .deleteFrom('documents')
+        .where('id', '=', request.params.id)
+        .where('user_id', '=', userId)
+        .execute()
 
       reply.status(204).send()
     }
   )
 
-  // Get document status (for polling)
+  // Get document status (requires authentication)
   fastify.get<{
     Params: { id: string }
   }>(
     '/documents/:id/status',
     {
+      preHandler: [fastify.authenticate],
       schema: {
         description: 'Get document processing status',
         params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.object({
+            document_id: z.string().uuid(),
+            ocr_status: z.enum(['pending', 'processing', 'complete', 'failed']),
+            thumbnail_status: z.enum(['pending', 'processing', 'complete', 'failed']),
+            jobs: z.array(z.object({
+              type: z.string(),
+              status: z.enum(['pending', 'processing', 'complete', 'failed']),
+              completed_at: z.string().nullable(),
+            })),
+          }),
+        },
       },
     },
     async function (request, reply) {
-      const document = await uploadService.getDocument(request.params.id)
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
       if (!document) {
         return reply.notFound('Document not found')
       }
@@ -165,6 +211,66 @@ export default async function (fastify: FastifyInstance) {
           completed_at: job.completed_at?.toISOString(),
         })),
       }
+    }
+  )
+
+  // Get all jobs for a document (requires authentication)
+  fastify.get<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/jobs',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Get all processing jobs for a document',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.array(z.object({
+            id: z.string().uuid(),
+            job_type: z.string(),
+            target_type: z.string(),
+            target_id: z.string().uuid(),
+            status: z.enum(['pending', 'processing', 'complete', 'failed']),
+            priority: z.number(),
+            attempts: z.number(),
+            error_message: z.string().nullable(),
+            result: z.unknown().nullable(),
+            created_at: z.string(),
+            started_at: z.string().nullable(),
+            completed_at: z.string().nullable(),
+          })),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      const jobs = await db
+        .selectFrom('processing_jobs')
+        .selectAll()
+        .where('target_id', '=', request.params.id)
+        .where('target_type', '=', 'document')
+        .orderBy('created_at', 'desc')
+        .execute()
+
+      return jobs.map((job) => ({
+        id: job.id,
+        job_type: job.job_type,
+        target_type: job.target_type,
+        target_id: job.target_id,
+        status: job.status,
+        priority: job.priority,
+        attempts: job.attempts,
+        error_message: job.error_message,
+        result: job.result,
+        created_at: job.created_at.toISOString(),
+        started_at: job.started_at?.toISOString() ?? null,
+        completed_at: job.completed_at?.toISOString() ?? null,
+      }))
     }
   )
 }
@@ -194,5 +300,3 @@ function serializeDocument(doc: DbDocument): Document {
     updated_at: doc.updated_at.toISOString(),
   }
 }
-
-

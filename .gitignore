@@ -4,7 +4,6 @@
 dist
 tmp
 out-tsc
-instructions
 
 # dependencies
 node_modules

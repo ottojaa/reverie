@@ -1,87 +1,99 @@
-import 'dotenv/config'
-import Fastify from 'fastify'
-import { createServer } from 'http'
-import { app } from './app/app'
-import { checkDbConnection, closeDb } from './db/kysely'
-import { env } from './config/env'
-import { initializeSocketServer, closeSocketServer } from './websocket'
-import { startRedisSubscriber, stopRedisSubscriber } from './websocket'
-import { closeAllQueues } from './queues'
-import { closeRedisConnections } from './queues/redis'
+import 'dotenv/config';
+import Fastify from 'fastify';
+import { createServer } from 'http';
+import { app } from './app/app';
+import { env } from './config/env';
+import { checkDbConnection, closeDb } from './db/kysely';
+import { closeAllQueues } from './queues';
+import { closeRedisConnections } from './queues/redis';
+import { closeSocketServer, initializeSocketServer, startRedisSubscriber, stopRedisSubscriber } from './websocket';
 
-const host = env.HOST
-const port = env.PORT
+const host = env.HOST;
+const port = env.PORT;
 
 async function main() {
-  // Create HTTP server first (needed for Socket.IO)
-  const httpServer = createServer()
+    // Create HTTP server first (needed for Socket.IO)
+    const httpServer = createServer();
 
-  // Instantiate Fastify with some config
-  const server = Fastify({
-    logger: {
-      level: env.NODE_ENV === 'production' ? 'info' : 'debug',
-    },
-    serverFactory: (handler) => {
-      httpServer.on('request', handler)
-      return httpServer
-    },
-  })
+    // Instantiate Fastify with some config
+    const envToLogger = {
+        development: {
+            transport: {
+                target: 'pino-pretty',
+                options: {
+                    translateTime: true,
+                    ignore: 'pid,hostname,reqId,responseTime,req,res',
+                    messageFormat: '{msg} [id={reqId} {req.method} {req.url}] {res.statusCode}',
+                },
+            },
+        },
+        production: true,
+        test: false,
+    };
 
-  // Register your application as a normal plugin
-  server.register(app)
+    const server = Fastify({
+        logger: envToLogger[env.NODE_ENV],
+        serverFactory: (handler) => {
+            httpServer.on('request', handler);
+            return httpServer;
+        },
+    });
 
-  // Graceful shutdown
-  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']
-  signals.forEach((signal) => {
-    process.on(signal, async () => {
-      server.log.info(`Received ${signal}, shutting down gracefully...`)
+    // Register your application as a normal plugin
+    server.register(app);
 
-      // Close WebSocket server and Redis subscriber first
-      await stopRedisSubscriber()
-      await closeSocketServer()
+    // Graceful shutdown
+    const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+    signals.forEach((signal) => {
+        process.on(signal, async () => {
+            server.log.info(`Received ${signal}, shutting down gracefully...`);
 
-      // Close Fastify
-      await server.close()
+            // Close WebSocket server and Redis subscriber first
+            await stopRedisSubscriber();
+            await closeSocketServer();
 
-      // Close queues and Redis
-      await closeAllQueues()
-      await closeRedisConnections()
+            // Close Fastify
+            await server.close();
 
-      // Close database
-      await closeDb()
+            // Close queues and Redis
+            await closeAllQueues();
+            await closeRedisConnections();
 
-      process.exit(0)
-    })
-  })
+            // Close database
+            await closeDb();
 
-  try {
-    // Check database connection
-    const dbConnected = await checkDbConnection()
-    if (!dbConnected) {
-      server.log.warn('Database connection failed - some features may be unavailable')
-    } else {
-      server.log.info('Database connection established')
+            process.exit(0);
+        });
+    });
+
+    try {
+        // Check database connection
+        const dbConnected = await checkDbConnection();
+        if (!dbConnected) {
+            server.log.warn('Database connection failed - some features may be unavailable');
+        } else {
+            server.log.info('Database connection established');
+        }
+
+        // Initialize WebSocket server if enabled
+        if (env.WS_ENABLED) {
+            initializeSocketServer({ httpServer });
+            await startRedisSubscriber();
+            server.log.info('WebSocket server initialized');
+        }
+
+        // Start listening
+        await server.listen({ port, host });
+        server.log.info(`Server ready at http://${host}:${port}`);
+        server.log.info(`API docs available at http://${host}:${port}/docs`);
+
+        if (env.WS_ENABLED) {
+            server.log.info(`WebSocket server ready at ws://${host}:${port}`);
+        }
+    } catch (err) {
+        server.log.error(err);
+        process.exit(1);
     }
-
-    // Initialize WebSocket server if enabled
-    if (env.WS_ENABLED) {
-      initializeSocketServer({ httpServer })
-      await startRedisSubscriber()
-      server.log.info('WebSocket server initialized')
-    }
-
-    // Start listening
-    await server.listen({ port, host })
-    server.log.info(`Server ready at http://${host}:${port}`)
-    server.log.info(`API docs available at http://${host}:${port}/docs`)
-
-    if (env.WS_ENABLED) {
-      server.log.info(`WebSocket server ready at ws://${host}:${port}`)
-    }
-  } catch (err) {
-    server.log.error(err)
-    process.exit(1)
-  }
 }
 
-main()
+main();

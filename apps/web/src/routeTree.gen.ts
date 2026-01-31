@@ -10,9 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadRouteImport } from './routes/upload'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginCallbackRouteImport } from './routes/login.callback'
 import { Route as DocumentIdRouteImport } from './routes/document.$id'
 
 const UploadRoute = UploadRouteImport.update({
@@ -20,9 +23,19 @@ const UploadRoute = UploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrowseRoute = BrowseRouteImport.update({
@@ -35,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginCallbackRoute = LoginCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => LoginRoute,
+} as any)
 const DocumentIdRoute = DocumentIdRouteImport.update({
   id: '/document/$id',
   path: '/document/$id',
@@ -44,37 +62,73 @@ const DocumentIdRoute = DocumentIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
+  '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
+  '/login/callback': typeof LoginCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
+  '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
+  '/login/callback': typeof LoginCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
+  '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
+  '/login/callback': typeof LoginCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/browse' | '/search' | '/upload' | '/document/$id'
+  fullPaths:
+    | '/'
+    | '/browse'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/upload'
+    | '/document/$id'
+    | '/login/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/browse' | '/search' | '/upload' | '/document/$id'
-  id: '__root__' | '/' | '/browse' | '/search' | '/upload' | '/document/$id'
+  to:
+    | '/'
+    | '/browse'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/upload'
+    | '/document/$id'
+    | '/login/callback'
+  id:
+    | '__root__'
+    | '/'
+    | '/browse'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/upload'
+    | '/document/$id'
+    | '/login/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BrowseRoute: typeof BrowseRoute
+  LoginRoute: typeof LoginRouteWithChildren
   SearchRoute: typeof SearchRoute
+  SettingsRoute: typeof SettingsRoute
   UploadRoute: typeof UploadRoute
   DocumentIdRoute: typeof DocumentIdRoute
 }
@@ -88,11 +142,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/search': {
       id: '/search'
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/browse': {
@@ -109,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login/callback': {
+      id: '/login/callback'
+      path: '/callback'
+      fullPath: '/login/callback'
+      preLoaderRoute: typeof LoginCallbackRouteImport
+      parentRoute: typeof LoginRoute
+    }
     '/document/$id': {
       id: '/document/$id'
       path: '/document/$id'
@@ -119,10 +194,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface LoginRouteChildren {
+  LoginCallbackRoute: typeof LoginCallbackRoute
+}
+
+const LoginRouteChildren: LoginRouteChildren = {
+  LoginCallbackRoute: LoginCallbackRoute,
+}
+
+const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BrowseRoute: BrowseRoute,
+  LoginRoute: LoginRouteWithChildren,
   SearchRoute: SearchRoute,
+  SettingsRoute: SettingsRoute,
   UploadRoute: UploadRoute,
   DocumentIdRoute: DocumentIdRoute,
 }
