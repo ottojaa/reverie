@@ -1,17 +1,24 @@
 import { Queue } from 'bullmq'
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config'
 import { getRedisConnectionOptions } from './redis'
+import type { DocumentCategory, ExtractedMetadata } from '../ocr/types'
 
 export interface OcrJobData {
   documentId: string
   sessionId?: string
   filePath: string
+  /** Force reprocessing even if already complete */
+  forceReprocess?: boolean
 }
 
 export interface OcrJobResult {
   rawText: string
   confidence: number
-  metadata: Record<string, unknown>
+  textDensity: number
+  hasMeaningfulText: boolean
+  category: DocumentCategory
+  needsReview: boolean
+  metadata: ExtractedMetadata | null
 }
 
 let ocrQueueInstance: Queue | null = null

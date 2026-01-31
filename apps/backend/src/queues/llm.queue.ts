@@ -4,7 +4,7 @@ import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config'
 
 export interface LlmJobData {
   documentId: string
-  sessionId?: string
+  sessionId?: string | undefined
   ocrText: string
 }
 

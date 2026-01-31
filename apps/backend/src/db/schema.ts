@@ -60,6 +60,7 @@ export interface DocumentsTable {
     extracted_date: Date | null;
     ocr_status: JobStatus;
     thumbnail_status: JobStatus;
+    has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     llm_summary: string | null;
     llm_metadata: Record<string, unknown> | null;
     llm_processed_at: Date | null;
@@ -84,6 +85,8 @@ export interface OcrResultsTable {
     document_id: string;
     raw_text: string;
     confidence_score: number | null;
+    text_density: number | null; // Added in Plan 05: chars per 1000px²
+    has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     metadata: OcrMetadata | null;
     text_vector: unknown | null; // tsvector type
     processed_at: ColumnType<Date, Date | undefined, never>;

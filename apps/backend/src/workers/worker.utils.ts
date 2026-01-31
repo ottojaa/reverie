@@ -116,7 +116,7 @@ export async function publishJobFailed(
  * - Publishes events to Redis
  * - Handles errors and retries
  */
-export async function processJobWithTracking<TData extends { documentId: string; sessionId?: string }, TResult>(
+export async function processJobWithTracking<TData extends { documentId: string; sessionId?: string | undefined }, TResult>(
   job: Job<TData>,
   processor: (job: Job<TData>) => Promise<TResult>
 ): Promise<TResult> {

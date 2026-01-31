@@ -231,6 +231,9 @@ importers:
       socket.io:
         specifier: ^4.8.3
         version: 4.8.3
+      tesseract.js:
+        specifier: ^7.0.0
+        version: 7.0.0(encoding@0.1.13)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -265,6 +268,9 @@ importers:
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
+      motion:
+        specifier: ^12.29.2
+        version: 12.29.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
@@ -3938,6 +3944,9 @@ packages:
   blurhash@2.0.5:
     resolution: {integrity: sha512-cRygWd7kGBQO3VEhPiTgq4Wc43ctsM+o46urrmPOiuAe+07fzlSB9OJVdpgDL0jPqXUVQ9ht7aq7kxOeJHRK+w==}
 
+  bmp-js@0.1.0:
+    resolution: {integrity: sha512-vHdS19CnY3hwiNdkaqk93DvjVLfbEcI8mys4UjuWrlX1haDmroo8o4xCzh4wD6DGV6HxRCyauwhHRqMTfERtjw==}
+
   bn.js@4.12.2:
     resolution: {integrity: sha512-n4DSx829VRTRByMRGdjQ9iqsN0Bh4OolPsFnaZBLcbi8iXcB+kJ9s7EnRt4wILZNV3kPLHkRVfOc/HvhC3ovDw==}
 
@@ -5026,6 +5035,20 @@ packages:
   fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
 
+  framer-motion@12.29.2:
+    resolution: {integrity: sha512-lSNRzBJk4wuIy0emYQ/nfZ7eWhqud2umPKw2QAQki6uKhZPKm2hRQHeQoHTG9MIvfobb+A/LbEWPJU794ZUKrg==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
     engines: {node: '>= 0.6'}
@@ -5332,6 +5355,9 @@ packages:
     engines: {node: ^10 || ^12 || >= 14}
     peerDependencies:
       postcss: ^8.1.0
+
+  idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
 
   identity-obj-proxy@3.0.0:
     resolution: {integrity: sha512-00n6YnVHKrinT9t0d9+5yZC6UBNJANpYEQvL2LlX6Ab9lnmxzIRcEmTPuyGScvl1+jKuCICX1Z0Ab1pPKKdikA==}
@@ -6176,6 +6202,26 @@ packages:
   mnemonist@0.40.3:
     resolution: {integrity: sha512-Vjyr90sJ23CKKH/qPAgUKicw/v6pRoamxIEDFOF8uSgFME7DqPRpHgRTejWVjkdGg5dXj0/NyxZHZ9bcjH+2uQ==}
 
+  motion-dom@12.29.2:
+    resolution: {integrity: sha512-/k+NuycVV8pykxyiTCoFzIVLA95Nb1BFIVvfSu9L50/6K6qNeAYtkxXILy/LRutt7AzaYDc2myj0wkCVVYAPPA==}
+
+  motion-utils@12.29.2:
+    resolution: {integrity: sha512-G3kc34H2cX2gI63RqU+cZq+zWRRPSsNIOjpdl9TN4AQwC4sgwYPl/Q/Obf/d53nOm569T0fYK+tcoSV50BWx8A==}
+
+  motion@12.29.2:
+    resolution: {integrity: sha512-jMpHdAzEDF1QQ055cB+1lOBLdJ6ialVWl6QQzpJI2OvmHequ7zFVHM2mx0HNAy+Tu4omUlApfC+4vnkX0geEOg==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -6366,6 +6412,10 @@ packages:
 
   openapi-types@12.1.3:
     resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
+
+  opencollective-postinstall@2.0.3:
+    resolution: {integrity: sha512-8AV/sCtuzUeTo8gQK5qDZzARrulB3egtLzFgteqB2tcT4Mw7B8Kt7JcDHmltjz6FOAHsvTevk70gZEbhM4ZS9Q==}
+    hasBin: true
 
   opener@1.5.2:
     resolution: {integrity: sha512-ur5UIdyw5Y7yEj9wLzhqXiy6GZ3Mwx0yGI+5sMn2r0N0v3cKJvUmFH5yPP+WXh9e0xfyzyJX95D8l088DNFj7A==}
@@ -6811,6 +6861,9 @@ packages:
 
   regenerate@1.4.2:
     resolution: {integrity: sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A==}
+
+  regenerator-runtime@0.13.11:
+    resolution: {integrity: sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==}
 
   regexpu-core@6.4.0:
     resolution: {integrity: sha512-0ghuzq67LI9bLXpOX/ISfve/Mq33a4aFRzoQYhnnok1JOFpmE/A2TBGkNVenOGEeSBCjIiWcc6MVOG5HEQv0sA==}
@@ -7371,6 +7424,12 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  tesseract.js-core@7.0.0:
+    resolution: {integrity: sha512-WnNH518NzmbSq9zgTPeoF8c+xmilS8rFIl1YKbk/ptuuc7p6cLNELNuPAzcmsYw450ca6bLa8j3t0VAtq435Vw==}
+
+  tesseract.js@7.0.0:
+    resolution: {integrity: sha512-exPBkd+z+wM1BuMkx/Bjv43OeLBxhL5kKWsz/9JY+DXcXdiBjiAch0V49QR3oAJqCaL5qURE0vx9Eo+G5YE7mA==}
+
   test-exclude@6.0.0:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}
     engines: {node: '>=8'}
@@ -7764,6 +7823,9 @@ packages:
   walker@1.0.8:
     resolution: {integrity: sha512-ts/8E8l5b7kY0vlWLewOkDXMmPdLcVV4GmOQLyxuSswIJsweeFZtAsMF7k1Nszz+TYBQrlYRmzOnr398y1JemQ==}
 
+  wasm-feature-detect@1.8.0:
+    resolution: {integrity: sha512-zksaLKM2fVlnB5jQQDqKXXwYHLQUVH9es+5TOOHwGOVJOCeRBCiPjwSg+3tN2AdTCzjgli4jijCH290kXb/zWQ==}
+
   watchpack@2.5.1:
     resolution: {integrity: sha512-Zn5uXdcFNIA1+1Ei5McRd+iRzfhENPCe7LeABkJtNulSxjma+l7ltNx55BWZkRlwRnpOgHqxnjyaDgJnNXnqzg==}
     engines: {node: '>=10.13.0'}
@@ -7928,6 +7990,9 @@ packages:
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
+
+  zlibjs@0.3.1:
+    resolution: {integrity: sha512-+J9RrgTKOmlxFSDHo0pI1xM6BLVUv+o0ZT9ANtCxGkjIVCCUdx9alUF8Gm+dGLKbkkkidWIHFDZHDMpfITt4+w==}
 
   zod-to-json-schema@3.25.1:
     resolution: {integrity: sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA==}
@@ -12759,6 +12824,8 @@ snapshots:
 
   blurhash@2.0.5: {}
 
+  bmp-js@0.1.0: {}
+
   bn.js@4.12.2: {}
 
   body-parser@1.20.3:
@@ -14113,6 +14180,15 @@ snapshots:
 
   fraction.js@5.3.4: {}
 
+  framer-motion@12.29.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      motion-dom: 12.29.2
+      motion-utils: 12.29.2
+      tslib: 2.8.1
+    optionalDependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
   fresh@0.5.2: {}
 
   front-matter@4.0.2:
@@ -14529,6 +14605,8 @@ snapshots:
   icss-utils@5.1.0(postcss@8.5.6):
     dependencies:
       postcss: 8.5.6
+
+  idb-keyval@6.2.2: {}
 
   identity-obj-proxy@3.0.0:
     dependencies:
@@ -15512,6 +15590,20 @@ snapshots:
     dependencies:
       obliterator: 2.0.5
 
+  motion-dom@12.29.2:
+    dependencies:
+      motion-utils: 12.29.2
+
+  motion-utils@12.29.2: {}
+
+  motion@12.29.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      framer-motion: 12.29.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      tslib: 2.8.1
+    optionalDependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
   mrmime@2.0.1: {}
 
   ms@2.0.0: {}
@@ -15721,6 +15813,8 @@ snapshots:
       is-wsl: 2.2.0
 
   openapi-types@12.1.3: {}
+
+  opencollective-postinstall@2.0.3: {}
 
   opener@1.5.2: {}
 
@@ -16187,6 +16281,8 @@ snapshots:
       regenerate: 1.4.2
 
   regenerate@1.4.2: {}
+
+  regenerator-runtime@0.13.11: {}
 
   regexpu-core@6.4.0:
     dependencies:
@@ -16873,6 +16969,22 @@ snapshots:
       commander: 2.20.3
       source-map-support: 0.5.21
 
+  tesseract.js-core@7.0.0: {}
+
+  tesseract.js@7.0.0(encoding@0.1.13):
+    dependencies:
+      bmp-js: 0.1.0
+      idb-keyval: 6.2.2
+      is-url: 1.2.4
+      node-fetch: 2.7.0(encoding@0.1.13)
+      opencollective-postinstall: 2.0.3
+      regenerator-runtime: 0.13.11
+      tesseract.js-core: 7.0.0
+      wasm-feature-detect: 1.8.0
+      zlibjs: 0.3.1
+    transitivePeerDependencies:
+      - encoding
+
   test-exclude@6.0.0:
     dependencies:
       '@istanbuljs/schema': 0.1.3
@@ -17307,6 +17419,8 @@ snapshots:
     dependencies:
       makeerror: 1.0.12
 
+  wasm-feature-detect@1.8.0: {}
+
   watchpack@2.5.1:
     dependencies:
       glob-to-regexp: 0.4.1
@@ -17454,6 +17568,8 @@ snapshots:
       fd-slicer: 1.1.0
 
   yocto-queue@0.1.0: {}
+
+  zlibjs@0.3.1: {}
 
   zod-to-json-schema@3.25.1(zod@3.25.76):
     dependencies:

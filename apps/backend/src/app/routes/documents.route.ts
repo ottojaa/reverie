@@ -12,9 +12,29 @@ import { db } from '../../db/kysely'
 import { type Document as DbDocument } from '../../db/schema'
 import { getUploadService } from '../../services/upload.service'
 import { getStorageService } from '../../services/storage.service'
+import { addOcrJob } from '../../queues/ocr.queue'
+import { nanoid } from 'nanoid'
 
 const uploadService = getUploadService()
 const storageService = getStorageService()
+
+// OCR Result schema for API responses
+const OcrResultSchema = z.object({
+  document_id: z.string().uuid(),
+  raw_text: z.string(),
+  confidence_score: z.number().nullable(),
+  text_density: z.number().nullable(),
+  has_meaningful_text: z.boolean(),
+  metadata: z.object({
+    companies: z.array(z.string()).optional(),
+    dates: z.array(z.string()).optional(),
+    values: z.array(z.object({
+      amount: z.number(),
+      currency: z.string(),
+    })).optional(),
+  }).nullable(),
+  processed_at: z.string(),
+})
 
 export default async function (fastify: FastifyInstance) {
   // List documents (requires authentication)
@@ -271,6 +291,191 @@ export default async function (fastify: FastifyInstance) {
         started_at: job.started_at?.toISOString() ?? null,
         completed_at: job.completed_at?.toISOString() ?? null,
       }))
+    }
+  )
+
+  // ==================== OCR Endpoints (Plan 05) ====================
+
+  // Trigger OCR processing for a document
+  fastify.post<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/ocr',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Trigger OCR processing for a document',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.object({
+            job_id: z.string(),
+            status: z.enum(['pending', 'processing', 'already_complete']),
+          }),
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      // Check if already processing or complete
+      if (document.ocr_status === 'complete') {
+        return { job_id: '', status: 'already_complete' as const }
+      }
+
+      if (document.ocr_status === 'processing') {
+        // Find existing job
+        const existingJob = await db
+          .selectFrom('processing_jobs')
+          .select('id')
+          .where('target_id', '=', request.params.id)
+          .where('job_type', '=', 'ocr')
+          .where('status', 'in', ['pending', 'processing'])
+          .executeTakeFirst()
+
+        return {
+          job_id: existingJob?.id ?? '',
+          status: 'processing' as const,
+        }
+      }
+
+      // Queue new OCR job
+      const jobId = `ocr-${request.params.id}-${nanoid(6)}`
+      await addOcrJob(
+        {
+          documentId: request.params.id,
+          filePath: document.file_path,
+        },
+        jobId
+      )
+
+      // Track in processing_jobs table
+      await db
+        .insertInto('processing_jobs')
+        .values({
+          job_type: 'ocr',
+          target_type: 'document',
+          target_id: request.params.id,
+          status: 'pending',
+        })
+        .execute()
+
+      // Update document status
+      await db
+        .updateTable('documents')
+        .set({ ocr_status: 'pending' })
+        .where('id', '=', request.params.id)
+        .execute()
+
+      return { job_id: jobId, status: 'pending' as const }
+    }
+  )
+
+  // Get OCR result for a document
+  fastify.get<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/ocr',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Get OCR result for a document',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: OcrResultSchema,
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      const ocrResult = await db
+        .selectFrom('ocr_results')
+        .selectAll()
+        .where('document_id', '=', request.params.id)
+        .executeTakeFirst()
+
+      if (!ocrResult) {
+        return reply.notFound('OCR result not found. Document may not have been processed yet.')
+      }
+
+      return {
+        document_id: ocrResult.document_id,
+        raw_text: ocrResult.raw_text,
+        confidence_score: ocrResult.confidence_score,
+        text_density: ocrResult.text_density ?? null,
+        has_meaningful_text: (ocrResult as { has_meaningful_text?: boolean }).has_meaningful_text ?? true,
+        metadata: ocrResult.metadata,
+        processed_at: ocrResult.processed_at.toISOString(),
+      }
+    }
+  )
+
+  // Retry/reprocess OCR for a document
+  fastify.post<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/ocr/retry',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Retry OCR processing for a document (force reprocess)',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.object({
+            job_id: z.string(),
+            status: z.literal('pending'),
+          }),
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      // Queue new OCR job with force reprocess flag
+      const jobId = `ocr-retry-${request.params.id}-${nanoid(6)}`
+      await addOcrJob(
+        {
+          documentId: request.params.id,
+          filePath: document.file_path,
+          forceReprocess: true,
+        },
+        jobId
+      )
+
+      // Track in processing_jobs table
+      await db
+        .insertInto('processing_jobs')
+        .values({
+          job_type: 'ocr',
+          target_type: 'document',
+          target_id: request.params.id,
+          status: 'pending',
+        })
+        .execute()
+
+      // Update document status
+      await db
+        .updateTable('documents')
+        .set({ ocr_status: 'pending' })
+        .where('id', '=', request.params.id)
+        .execute()
+
+      return { job_id: jobId, status: 'pending' as const }
     }
   )
 }
