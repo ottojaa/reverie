@@ -1,22 +1,28 @@
 import { Queue } from 'bullmq'
 import { getRedisConnectionOptions } from './redis'
 import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config'
+import type { LlmProcessingType, LlmSkipReason } from '../llm/types'
 
 export interface LlmJobData {
   documentId: string
   sessionId?: string | undefined
-  ocrText: string
+  /** Optional - will be determined by eligibility check if not provided */
+  type?: LlmProcessingType | undefined
 }
 
 export interface LlmJobResult {
-  summary: string
+  summary: string | null
   enhancedMetadata: {
-    title?: string
-    keyEntities?: string[]
-    topics?: string[]
+    title?: string | undefined
+    keyEntities?: string[] | undefined
+    topics?: string[] | undefined
+    skipped?: boolean | undefined
+    skipReason?: LlmSkipReason | undefined
     [key: string]: unknown
   }
   tokenCount: number
+  skipped?: boolean | undefined
+  skipReason?: LlmSkipReason | undefined
 }
 
 let llmQueueInstance: Queue | null = null

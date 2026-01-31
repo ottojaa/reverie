@@ -167,6 +167,9 @@ export function createWorkerLogger(workerName: string) {
     info: (message: string, meta?: Record<string, unknown>) => {
       console.log(`[${workerName}] ${message}`, meta ? JSON.stringify(meta) : '')
     },
+    warn: (message: string, meta?: Record<string, unknown>) => {
+      console.warn(`[${workerName}] ${message}`, meta ? JSON.stringify(meta) : '')
+    },
     error: (message: string, error?: Error, meta?: Record<string, unknown>) => {
       console.error(`[${workerName}] ${message}`, error?.stack ?? '', meta ? JSON.stringify(meta) : '')
     },

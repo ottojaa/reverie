@@ -13,7 +13,9 @@ import { type Document as DbDocument } from '../../db/schema'
 import { getUploadService } from '../../services/upload.service'
 import { getStorageService } from '../../services/storage.service'
 import { addOcrJob } from '../../queues/ocr.queue'
+import { addLlmJob } from '../../queues/llm.queue'
 import { nanoid } from 'nanoid'
+import { checkLlmEligibility } from '../../llm/eligibility'
 
 const uploadService = getUploadService()
 const storageService = getStorageService()
@@ -476,6 +478,286 @@ export default async function (fastify: FastifyInstance) {
         .execute()
 
       return { job_id: jobId, status: 'pending' as const }
+    }
+  )
+
+  // ==================== LLM Endpoints (Plan 06) ====================
+
+  // LLM Result schema for API responses
+  const LlmResultSchema = z.object({
+    document_id: z.string().uuid(),
+    summary: z.string().nullable(),
+    metadata: z.object({
+      type: z.enum(['text_summary', 'vision_describe']).optional(),
+      title: z.string().optional(),
+      keyEntities: z.array(z.string()).optional(),
+      topics: z.array(z.string()).optional(),
+      documentType: z.string().optional(),
+      sentiment: z.enum(['positive', 'neutral', 'negative']).optional(),
+      truncated: z.boolean().optional(),
+      samplingStrategy: z.enum(['full', 'start_end', 'distributed']).optional(),
+      originalTextLength: z.number().optional(),
+      skipped: z.boolean().optional(),
+      skipReason: z.string().optional(),
+    }).nullable(),
+    processed_at: z.string().nullable(),
+    token_count: z.number().nullable(),
+  })
+
+  // Trigger LLM processing for a document
+  fastify.post<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/process-llm',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Trigger LLM processing for a document',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.object({
+            job_id: z.string(),
+            status: z.enum(['pending', 'processing', 'already_complete', 'not_eligible']),
+            reason: z.string().optional(),
+          }),
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      // Check if already processed
+      if (document.llm_processed_at) {
+        return { job_id: '', status: 'already_complete' as const }
+      }
+
+      // Check eligibility
+      const ocrResult = await db
+        .selectFrom('ocr_results')
+        .selectAll()
+        .where('document_id', '=', request.params.id)
+        .executeTakeFirst()
+
+      const eligibility = checkLlmEligibility(document, ocrResult)
+      if (!eligibility.eligible) {
+        return {
+          job_id: '',
+          status: 'not_eligible' as const,
+          reason: eligibility.reason,
+        }
+      }
+
+      // Queue LLM job
+      const jobId = `llm-${request.params.id}-${nanoid(6)}`
+      await addLlmJob(
+        {
+          documentId: request.params.id,
+          type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
+        },
+        jobId
+      )
+
+      // Track in processing_jobs table
+      await db
+        .insertInto('processing_jobs')
+        .values({
+          job_type: 'llm_summary',
+          target_type: 'document',
+          target_id: request.params.id,
+          status: 'pending',
+        })
+        .execute()
+
+      return { job_id: jobId, status: 'pending' as const }
+    }
+  )
+
+  // Get LLM result for a document
+  fastify.get<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/llm',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Get LLM processing result for a document',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: LlmResultSchema,
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      if (!document.llm_processed_at && !document.llm_metadata) {
+        return reply.notFound('LLM result not found. Document may not have been processed yet.')
+      }
+
+      return {
+        document_id: document.id,
+        summary: document.llm_summary,
+        metadata: document.llm_metadata,
+        processed_at: document.llm_processed_at?.toISOString() ?? null,
+        token_count: document.llm_token_count,
+      }
+    }
+  )
+
+  // Reprocess LLM for a document (force regeneration)
+  fastify.post<{
+    Params: { id: string }
+  }>(
+    '/documents/:id/reprocess-llm',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Force reprocess LLM for a document (regenerate summary)',
+        params: z.object({ id: UuidSchema }),
+        response: {
+          200: z.object({
+            job_id: z.string(),
+            status: z.literal('pending'),
+          }),
+          404: z.object({ message: z.string() }),
+        },
+      },
+    },
+    async function (request, reply) {
+      const userId = request.user.id
+      const document = await uploadService.getDocument(request.params.id, userId)
+      if (!document) {
+        return reply.notFound('Document not found')
+      }
+
+      // Clear existing LLM data
+      await db
+        .updateTable('documents')
+        .set({
+          llm_summary: null,
+          llm_metadata: null,
+          llm_processed_at: null,
+          llm_token_count: null,
+        })
+        .where('id', '=', request.params.id)
+        .execute()
+
+      // Queue LLM job
+      const jobId = `llm-reprocess-${request.params.id}-${nanoid(6)}`
+      await addLlmJob(
+        {
+          documentId: request.params.id,
+        },
+        jobId
+      )
+
+      // Track in processing_jobs table
+      await db
+        .insertInto('processing_jobs')
+        .values({
+          job_type: 'llm_summary',
+          target_type: 'document',
+          target_id: request.params.id,
+          status: 'pending',
+        })
+        .execute()
+
+      return { job_id: jobId, status: 'pending' as const }
+    }
+  )
+
+  // Batch process multiple documents with LLM
+  fastify.post<{
+    Body: { document_ids: string[] }
+  }>(
+    '/documents/batch-process-llm',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Batch process multiple documents with LLM',
+        body: z.object({
+          document_ids: z.array(UuidSchema).min(1).max(100),
+        }),
+        response: {
+          200: z.object({
+            job_ids: z.array(z.string()),
+            skipped: z.array(z.object({
+              document_id: z.string().uuid(),
+              reason: z.string(),
+            })),
+          }),
+        },
+      },
+    },
+    async function (request) {
+      const userId = request.user.id
+      const { document_ids } = request.body
+
+      const jobIds: string[] = []
+      const skipped: Array<{ document_id: string; reason: string }> = []
+
+      for (const documentId of document_ids) {
+        // Verify document belongs to user
+        const document = await uploadService.getDocument(documentId, userId)
+        if (!document) {
+          skipped.push({ document_id: documentId, reason: 'not_found' })
+          continue
+        }
+
+        // Skip if already processed
+        if (document.llm_processed_at) {
+          skipped.push({ document_id: documentId, reason: 'already_processed' })
+          continue
+        }
+
+        // Check eligibility
+        const ocrResult = await db
+          .selectFrom('ocr_results')
+          .selectAll()
+          .where('document_id', '=', documentId)
+          .executeTakeFirst()
+
+        const eligibility = checkLlmEligibility(document, ocrResult)
+        if (!eligibility.eligible) {
+          skipped.push({ document_id: documentId, reason: eligibility.reason ?? 'not_eligible' })
+          continue
+        }
+
+        // Queue LLM job
+        const jobId = `llm-batch-${documentId}-${nanoid(6)}`
+        await addLlmJob(
+          {
+            documentId,
+            type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
+          },
+          jobId
+        )
+
+        // Track in processing_jobs table
+        await db
+          .insertInto('processing_jobs')
+          .values({
+            job_type: 'llm_summary',
+            target_type: 'document',
+            target_id: documentId,
+            status: 'pending',
+          })
+          .execute()
+
+        jobIds.push(jobId)
+      }
+
+      return { job_ids: jobIds, skipped }
     }
   )
 }

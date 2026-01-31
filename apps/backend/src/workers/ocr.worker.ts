@@ -79,14 +79,14 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {
             const llmJobId = `llm-${documentId}`;
-            const llmJobData: { documentId: string; ocrText: string; sessionId?: string } = {
-                documentId,
-                ocrText: result.rawText,
-            };
-            if (job.data.sessionId) {
-                llmJobData.sessionId = job.data.sessionId;
-            }
-            await addLlmJob(llmJobData, llmJobId);
+            await addLlmJob(
+                {
+                    documentId,
+                    sessionId: job.data.sessionId,
+                    // Type will be determined by eligibility check in LLM worker
+                },
+                llmJobId
+            );
             logger.info('Queued LLM job', { documentId, llmJobId });
         } else {
             logger.info('Skipping LLM job', {

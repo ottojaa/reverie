@@ -28,9 +28,22 @@ const envSchema = z.object({
     STORAGE_S3_ACCESS_KEY: z.string().optional(),
     STORAGE_S3_SECRET_KEY: z.string().optional(),
 
-    // OpenAI
+    // OpenAI / LLM
     OPENAI_API_KEY: z.string().optional(),
     OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+    OPENAI_TEMPERATURE: z.coerce.number().default(0.3),
+    OPENAI_MAX_TOKENS: z.coerce.number().default(1000),
+
+    // LLM Processing
+    LLM_ENABLED: z.coerce.boolean().default(true),
+    LLM_MAX_INPUT_CHARS: z.coerce.number().default(50000),
+    LLM_SNIPPET_SIZE: z.coerce.number().default(5000),
+    LLM_PROCESS_CODE_FILES: z.coerce.boolean().default(false),
+    LLM_MIN_OCR_CONFIDENCE: z.coerce.number().default(30),
+
+    // LLM Vision (optional)
+    LLM_VISION_ENABLED: z.coerce.boolean().default(false),
+    LLM_VISION_MODEL: z.string().default('gpt-4o'),
 
     // CORS (HTTP API)
     CORS_ORIGIN: z.string().url().default('http://localhost:4200'),
