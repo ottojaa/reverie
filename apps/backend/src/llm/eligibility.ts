@@ -1,5 +1,5 @@
 /**
- * LLM Eligibility Checker (Plan 06)
+ * LLM Eligibility Checker
  *
  * Determines whether a document should be processed by LLM
  * and which processing type to use.
@@ -7,7 +7,7 @@
 
 import { env } from '../config/env';
 import type { Document, OcrResult } from '../db/schema';
-import type { FileCategory, LlmEligibility, LlmProcessingType, LlmSkipReason } from './types';
+import type { FileCategory, LlmEligibility, LlmSkipReason } from './types';
 
 /**
  * Check if a document is eligible for LLM processing
@@ -83,7 +83,9 @@ export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | 
             eligible: false,
             reason: 'ocr_confidence_too_low',
             processingType: 'skip',
-            warnings: [`OCR confidence (${ocrResult.confidence_score}%) below minimum (${env.LLM_MIN_OCR_CONFIDENCE}%), skipping LLM to avoid garbage-in-garbage-out`],
+            warnings: [
+                `OCR confidence (${ocrResult.confidence_score}%) below minimum (${env.LLM_MIN_OCR_CONFIDENCE}%), skipping LLM to avoid garbage-in-garbage-out`,
+            ],
         };
     }
 
@@ -133,11 +135,7 @@ export function getFileCategory(mimeType: string): FileCategory {
 /**
  * Build skip metadata for documents that won't be processed
  */
-export function buildSkipMetadata(
-    reason: LlmSkipReason,
-    textLength?: number,
-    warnings?: string[]
-): Record<string, unknown> {
+export function buildSkipMetadata(reason: LlmSkipReason, textLength?: number, warnings?: string[]): Record<string, unknown> {
     return {
         skipped: true,
         skip_reason: reason,

@@ -9,7 +9,7 @@ import { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from
 import type { DocumentCategory, ExtractedMetadata, OcrProcessingResult } from './types';
 
 /**
- * OCR Service (Plan 05)
+ * OCR Service
  *
  * Main orchestration for OCR processing:
  * 1. Load and validate image
@@ -233,4 +233,4 @@ function convertStoredMetadata(metadata: OcrMetadata): ExtractedMetadata {
 }
 
 // Re-export types for convenience
-export type { OcrProcessingResult, DocumentCategory, ExtractedMetadata };
+export type { DocumentCategory, ExtractedMetadata, OcrProcessingResult };

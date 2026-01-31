@@ -1,5 +1,5 @@
 /**
- * OCR Pipeline Types (Plan 05)
+ * OCR Pipeline Types
  */
 
 /**

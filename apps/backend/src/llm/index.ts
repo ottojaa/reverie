@@ -1,5 +1,5 @@
 /**
- * LLM Module (Plan 06)
+ * LLM Module
  *
  * LLM integration for document processing:
  * - Text summarization with smart sampling
@@ -8,31 +8,31 @@
  */
 
 // Main service
-export { processDocument, reprocessDocument, batchProcessDocuments } from './llm.service';
+export { batchProcessDocuments, processDocument, reprocessDocument } from './llm.service';
 
 // Eligibility checking
-export { checkLlmEligibility, getFileCategory, buildSkipMetadata } from './eligibility';
+export { buildSkipMetadata, checkLlmEligibility, getFileCategory } from './eligibility';
 
 // Text preparation
-export { prepareTextForLlm, buildPromptWithSamplingContext, estimateTokenCount } from './text-preparer';
+export { buildPromptWithSamplingContext, estimateTokenCount, prepareTextForLlm } from './text-preparer';
 
 // OpenAI client
 export { isOpenAIAvailable, isVisionAvailable } from './openai.client';
 
 // Types
 export type {
-    LlmProcessingType,
-    LlmSkipReason,
-    SamplingStrategy,
-    LlmEligibility,
-    PreparedText,
-    LlmPrompt,
-    LlmSummaryResponse,
-    VisionResponse,
-    EnhancedMetadata,
-    SkippedMetadata,
-    LlmMetadata,
     DocumentLlmResult,
-    VisionResult,
+    EnhancedMetadata,
     FileCategory,
+    LlmEligibility,
+    LlmMetadata,
+    LlmProcessingType,
+    LlmPrompt,
+    LlmSkipReason,
+    LlmSummaryResponse,
+    PreparedText,
+    SamplingStrategy,
+    SkippedMetadata,
+    VisionResponse,
+    VisionResult,
 } from './types';

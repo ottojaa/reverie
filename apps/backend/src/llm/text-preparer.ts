@@ -1,12 +1,12 @@
 /**
- * Text Preparation Utilities (Plan 06)
+ * Text Preparation Utilities
  *
  * Handles text sampling strategies for large documents to fit within
  * LLM token limits while preserving document understanding.
  */
 
 import { env } from '../config/env';
-import type { PreparedText, SamplingStrategy } from './types';
+import type { PreparedText } from './types';
 
 /**
  * Prepare text for LLM processing with smart sampling for large documents

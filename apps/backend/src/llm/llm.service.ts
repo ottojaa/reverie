@@ -1,5 +1,5 @@
 /**
- * LLM Service (Plan 06)
+ * LLM Service
  *
  * Main orchestration for LLM document processing:
  * - Check eligibility and route to appropriate processor
@@ -8,15 +8,15 @@
  * - Store results and update search indexes
  */
 
+import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
 import { getStorageService } from '../services/storage.service';
-import { checkLlmEligibility, buildSkipMetadata } from './eligibility';
+import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isOpenAIAvailable, summarizeDocument } from './openai.client';
 import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
 import { prepareTextForLlm } from './text-preparer';
 import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
-import { env } from '../config/env';
 
 /**
  * Process a document with LLM
@@ -24,10 +24,7 @@ import { env } from '../config/env';
  * Main entry point for LLM processing. Checks eligibility, routes to
  * appropriate processor, and stores results.
  */
-export async function processDocument(
-    documentId: string,
-    forceType?: LlmProcessingType
-): Promise<DocumentLlmResult> {
+export async function processDocument(documentId: string, forceType?: LlmProcessingType): Promise<DocumentLlmResult> {
     // 1. Fetch document and OCR result
     const document = await db.selectFrom('documents').selectAll().where('id', '=', documentId).executeTakeFirst();
 
@@ -46,11 +43,7 @@ export async function processDocument(
         await db
             .updateTable('documents')
             .set({
-                llm_metadata: buildSkipMetadata(
-                    eligibility.reason!,
-                    ocrResult?.raw_text?.length,
-                    eligibility.warnings
-                ),
+                llm_metadata: buildSkipMetadata(eligibility.reason!, ocrResult?.raw_text?.length, eligibility.warnings),
                 llm_processed_at: new Date(),
             })
             .where('id', '=', documentId)
@@ -218,12 +211,7 @@ async function processVisionDocument(document: Document): Promise<VisionResult> 
  *
  * Appends summary, entities, and topics to the OCR text vector for search
  */
-async function updateSearchIndex(
-    documentId: string,
-    summary: string,
-    entities: string[],
-    topics: string[]
-): Promise<void> {
+async function updateSearchIndex(documentId: string, summary: string, entities: string[], topics: string[]): Promise<void> {
     // Build additional search text from LLM output
     const searchText = [summary, ...entities, ...topics].filter(Boolean).join(' ');
 
@@ -244,7 +232,7 @@ async function updateSearchIndex(
                 // Note: In a production system, you might want a separate
                 // llm_text_vector column to keep OCR and LLM text separate
                 // For now, we'll store LLM content in metadata
-                metadata: db.fn('COALESCE', ['metadata', db.val('{}')])
+                metadata: db.fn('COALESCE', ['metadata', db.val('{}')]),
             })
             .where('document_id', '=', documentId)
             .execute();
@@ -253,12 +241,7 @@ async function updateSearchIndex(
     // Store LLM search terms in document tags for faceted search
     const tagsToAdd = [...entities, ...topics].filter(Boolean);
     if (tagsToAdd.length > 0) {
-        const existingTags = await db
-            .selectFrom('document_tags')
-            .select('tag')
-            .where('document_id', '=', documentId)
-            .where('source', '=', 'auto')
-            .execute();
+        const existingTags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
 
         const existingTagSet = new Set(existingTags.map((t) => t.tag.toLowerCase()));
         const newTags = tagsToAdd.filter((t) => !existingTagSet.has(t.toLowerCase()));
@@ -271,7 +254,7 @@ async function updateSearchIndex(
                         document_id: documentId,
                         tag,
                         source: 'auto' as const,
-                    }))
+                    })),
                 )
                 .execute();
         }

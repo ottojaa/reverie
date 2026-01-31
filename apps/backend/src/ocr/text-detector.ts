@@ -1,8 +1,8 @@
-import type { ImageSize, TextDetectionResult, TesseractOutput } from './types';
+import type { ImageSize, TesseractOutput, TextDetectionResult } from './types';
 import { TEXT_DETECTION_THRESHOLDS } from './types';
 
 /**
- * Text Detector (Plan 05)
+ * Text Detector
  *
  * Analyzes OCR output to determine if an image contains meaningful text
  * vs being a photo, graphic, or other non-textual content.
@@ -82,7 +82,44 @@ function checkForGibberish(text: string): boolean {
 
     // Check for common English words
     const words = text.toLowerCase().split(/\s+/);
-    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'is', 'are', 'was', 'were', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'this', 'that', 'it', 'be', 'have', 'has', 'had', 'not', 'you', 'we', 'they', 'he', 'she', 'my', 'your', 'our', 'their']);
+    const commonWords = new Set([
+        'the',
+        'a',
+        'an',
+        'and',
+        'or',
+        'is',
+        'are',
+        'was',
+        'were',
+        'to',
+        'of',
+        'in',
+        'for',
+        'on',
+        'with',
+        'at',
+        'by',
+        'from',
+        'as',
+        'this',
+        'that',
+        'it',
+        'be',
+        'have',
+        'has',
+        'had',
+        'not',
+        'you',
+        'we',
+        'they',
+        'he',
+        'she',
+        'my',
+        'your',
+        'our',
+        'their',
+    ]);
 
     let commonWordCount = 0;
     for (const word of words) {

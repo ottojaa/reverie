@@ -1,13 +1,13 @@
 /**
- * Prompt Builder (Plan 06)
+ * Prompt Builder
  *
  * Constructs prompts for LLM document processing.
  * Prompts are generic to handle diverse document types.
  */
 
-import type { Document, OcrResult, OcrMetadata } from '../db/schema';
-import type { LlmPrompt, PreparedText } from './types';
+import type { Document, OcrMetadata, OcrResult } from '../db/schema';
 import { buildPromptWithSamplingContext } from './text-preparer';
+import type { LlmPrompt, PreparedText } from './types';
 
 /**
  * System message for document analysis (generic for all document types)

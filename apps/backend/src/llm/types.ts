@@ -1,5 +1,5 @@
 /**
- * LLM Module Types (Plan 06)
+ * LLM Module Types
  */
 
 // ===== Processing Types =====

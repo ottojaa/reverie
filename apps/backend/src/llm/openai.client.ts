@@ -1,5 +1,5 @@
 /**
- * OpenAI Client Wrapper (Plan 06)
+ * OpenAI Client Wrapper
  *
  * Provides typed methods for calling OpenAI API for document processing.
  */
@@ -122,11 +122,7 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
 /**
  * Call OpenAI Vision API for image description
  */
-export async function describeImage(
-    imageBase64: string,
-    mimeType: string,
-    prompt: string
-): Promise<{ result: VisionResponse; tokenCount: number }> {
+export async function describeImage(imageBase64: string, mimeType: string, prompt: string): Promise<{ result: VisionResponse; tokenCount: number }> {
     const client = getOpenAIClient();
 
     const response = await client.chat.completions.create({

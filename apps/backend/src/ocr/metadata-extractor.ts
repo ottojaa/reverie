@@ -1,8 +1,8 @@
+import { COMPANY_PATTERNS, CURRENCY_PATTERNS, DATE_PATTERNS, MONTH_MAP, PERCENTAGE_PATTERNS, STOCK_TICKERS, parseNumber } from './patterns';
 import type { CurrencyValue, ExtractedMetadata } from './types';
-import { DATE_PATTERNS, MONTH_MAP, CURRENCY_PATTERNS, PERCENTAGE_PATTERNS, COMPANY_PATTERNS, STOCK_TICKERS, parseNumber } from './patterns';
 
 /**
- * Metadata Extractor (Plan 05)
+ * Metadata Extractor
  *
  * Parses structured data from OCR text:
  * - Dates

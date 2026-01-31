@@ -1,7 +1,7 @@
 import { Kysely, sql } from 'kysely';
 
 /**
- * Migration: Add text detection columns for OCR pipeline (Plan 05)
+ * Migration: Add text detection columns for OCR pipeline
  *
  * Adds columns to track:
  * - Whether a document contains meaningful text (vs photos/graphics)
@@ -15,10 +15,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .execute();
 
     // Add text_density and has_meaningful_text columns to ocr_results table
-    await db.schema
-        .alterTable('ocr_results')
-        .addColumn('text_density', 'real')
-        .execute();
+    await db.schema.alterTable('ocr_results').addColumn('text_density', 'real').execute();
 
     await db.schema
         .alterTable('ocr_results')

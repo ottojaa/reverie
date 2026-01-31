@@ -1,5 +1,5 @@
 /**
- * Regex patterns for metadata extraction from OCR text (Plan 05)
+ * Regex patterns for metadata extraction from OCR text
  */
 
 /**

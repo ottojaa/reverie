@@ -3,7 +3,7 @@ import type { ImageSize, PreprocessingOptions } from './types';
 import { OCR_LIMITS } from './types';
 
 /**
- * Image Preprocessor for OCR (Plan 05)
+ * Image Preprocessor for OCR
  *
  * Optimizes images before OCR processing:
  * - Convert to grayscale (improves accuracy)

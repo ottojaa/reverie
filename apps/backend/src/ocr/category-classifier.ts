@@ -1,8 +1,8 @@
-import type { DocumentCategory, ExtractedMetadata, ImageSize } from './types';
 import { CATEGORY_KEYWORDS } from './patterns';
+import type { DocumentCategory, ExtractedMetadata, ImageSize } from './types';
 
 /**
- * Category Classifier (Plan 05)
+ * Category Classifier
  *
  * Classifies documents based on:
  * 1. Whether text was detected

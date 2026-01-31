@@ -1,8 +1,8 @@
-import { createWorker, Worker, OEM, PSM } from 'tesseract.js';
+import { createWorker, OEM, PSM, Worker } from 'tesseract.js';
 import type { TesseractOutput } from './types';
 
 /**
- * Tesseract OCR Client (Plan 05)
+ * Tesseract OCR Client
  *
  * Wrapper around tesseract.js for text extraction.
  * Manages worker lifecycle and provides simplified interface.
