@@ -226,16 +226,10 @@ async function updateSearchIndex(documentId: string, summary: string, entities: 
         // Update existing OCR result with enhanced search vector
         // The text_vector column uses PostgreSQL tsvector, we append to raw_text
         // which triggers the text_vector update via PostgreSQL trigger
-        await db
-            .updateTable('ocr_results')
-            .set({
-                // Note: In a production system, you might want a separate
-                // llm_text_vector column to keep OCR and LLM text separate
-                // For now, we'll store LLM content in metadata
-                metadata: db.fn('COALESCE', ['metadata', db.val('{}')]),
-            })
-            .where('document_id', '=', documentId)
-            .execute();
+        // Note: In a production system, you might want a separate
+        // llm_text_vector column to keep OCR and LLM text separate
+        // For now, we rely on LLM content stored in document tags for search
+        // The OCR metadata is already set during OCR processing
     }
 
     // Store LLM search terms in document tags for faceted search

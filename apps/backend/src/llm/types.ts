@@ -22,9 +22,9 @@ export type SamplingStrategy = 'full' | 'start_end' | 'distributed';
 
 export interface LlmEligibility {
     eligible: boolean;
-    reason?: LlmSkipReason;
+    reason?: LlmSkipReason | undefined;
     processingType: LlmProcessingType;
-    warnings?: string[];
+    warnings?: string[] | undefined;
 }
 
 // ===== Text Preparation =====
@@ -49,42 +49,44 @@ export interface LlmPrompt {
 
 export interface LlmSummaryResponse {
     summary: string;
-    title?: string;
+    title?: string | undefined;
     key_entities: string[];
     topics: string[];
-    document_type?: string;
-    key_values?: Array<{ label: string; value: string }>;
-    sentiment?: 'positive' | 'neutral' | 'negative';
-    additional_dates?: string[];
+    document_type?: string | undefined;
+    key_values?: Array<{ label: string; value: string }> | undefined;
+    sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
+    additional_dates?: string[] | undefined;
 }
 
 export interface VisionResponse {
     description: string;
-    detected_objects?: string[];
-    scene_type?: 'outdoor' | 'indoor' | 'screenshot' | 'artwork' | 'other';
-    has_people?: boolean;
+    detected_objects?: string[] | undefined;
+    scene_type?: 'outdoor' | 'indoor' | 'screenshot' | 'artwork' | 'other' | undefined;
+    has_people?: boolean | undefined;
 }
 
 // ===== Metadata Types =====
 
 export interface EnhancedMetadata {
     type: 'text_summary' | 'vision_describe';
-    title?: string;
+    title?: string | undefined;
     keyEntities: string[];
     topics: string[];
-    sentiment?: 'positive' | 'neutral' | 'negative';
-    documentType?: string;
-    extractedDates?: string[];
-    keyValues?: Array<{ label: string; value: string }>;
+    sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
+    documentType?: string | undefined;
+    extractedDates?: string[] | undefined;
+    keyValues?: Array<{ label: string; value: string }> | undefined;
     // Sampling info (for large files)
-    truncated?: boolean;
-    samplingStrategy?: SamplingStrategy;
-    originalTextLength?: number;
-    sampledSections?: number;
+    truncated?: boolean | undefined;
+    samplingStrategy?: SamplingStrategy | undefined;
+    originalTextLength?: number | undefined;
+    sampledSections?: number | undefined;
     // Vision-specific
-    detectedObjects?: string[];
-    sceneType?: string;
-    hasPeople?: boolean;
+    detectedObjects?: string[] | undefined;
+    sceneType?: string | undefined;
+    hasPeople?: boolean | undefined;
+    // Index signature for kysely compatibility
+    [key: string]: unknown;
 }
 
 export interface SkippedMetadata {
@@ -101,14 +103,14 @@ export type LlmMetadata = EnhancedMetadata | SkippedMetadata;
 
 export interface DocumentLlmResult {
     success: boolean;
-    skipped?: boolean;
-    reason?: LlmSkipReason;
-    summary?: string;
-    enhancedMetadata?: EnhancedMetadata;
-    tokenCount?: number;
-    truncated?: boolean;
-    samplingStrategy?: SamplingStrategy;
-    originalTextLength?: number;
+    skipped?: boolean | undefined;
+    reason?: LlmSkipReason | undefined;
+    summary?: string | undefined;
+    enhancedMetadata?: EnhancedMetadata | undefined;
+    tokenCount?: number | undefined;
+    truncated?: boolean | undefined;
+    samplingStrategy?: SamplingStrategy | undefined;
+    originalTextLength?: number | undefined;
 }
 
 export interface VisionResult {

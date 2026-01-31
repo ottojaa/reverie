@@ -1,0 +1,102 @@
+---
+description: Shared library conventions for Zod schemas and types
+globs: libs/shared/**/*.ts
+alwaysApply: false
+---
+
+# Shared Library
+
+TypeScript library containing Zod schemas and types used by both backend and web app.
+
+## Purpose
+
+- Define API contracts once, share everywhere
+- Runtime validation = compile-time types
+- Single source of truth for request/response shapes
+- Utility functions shared between web and backend
+
+## Environment Constraint
+
+All code must work in both Node.js and browser:
+
+- No Node.js-specific APIs (`fs`, `path`, `process`, etc.)
+- No browser-specific APIs (`window`, `document`, `localStorage`, etc.)
+- No environment-specific dependencies
+- Use feature detection if absolutely needed
+
+## Structure
+
+```
+src/
+  api/
+    contracts.ts     # Re-exports all schemas
+    schemas/
+      common.ts      # Shared primitives (pagination, errors)
+      documents.ts   # Document CRUD schemas
+      folders.ts     # Folder schemas
+      upload.ts      # Upload request/response
+      jobs.ts        # Job status schemas
+      search.ts      # Search query/result schemas
+  domain/
+    document.ts      # Domain types
+    folder.ts
+  events/
+    job-events.ts    # WebSocket event types
+  utils/
+    formatting.ts    # Date, number, string formatters
+    validation.ts    # Common validation helpers
+  errors.ts          # Error types
+  index.ts           # Main exports
+```
+
+## Schema Pattern
+
+```typescript
+import { z } from 'zod';
+
+// Define schema
+export const DocumentSchema = z.object({
+    id: z.string().uuid(),
+    filename: z.string(),
+    category: z.string().optional(),
+    created_at: z.string().datetime(),
+});
+
+// Infer type from schema
+export type Document = z.infer<typeof DocumentSchema>;
+
+// Request/Response schemas
+export const GetDocumentsResponseSchema = z.object({
+    documents: z.array(DocumentSchema),
+    total: z.number(),
+});
+```
+
+## Utility Functions
+
+Place shared helpers in `utils/`:
+
+```typescript
+// ✅ Works everywhere - pure functions, no environment APIs
+export function formatFileSize(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = bytes
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex++
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`
+}
+
+// ❌ Won't work - uses Node.js API
+import { readFileSync } from 'fs'  // Browser doesn't have this
+```
+
+## Conventions
+
+- All schemas end with `Schema` suffix
+- Inferred types use the name without suffix
+- Export everything from `index.ts`
+- Use `.js` extensions in imports (ESM)
+- No environment-specific code - must run in both Node.js and browser

@@ -1,0 +1,66 @@
+---
+description: Backend conventions for Fastify API and workers
+globs: apps/backend/**/*.ts
+alwaysApply: false
+---
+
+# Backend Architecture
+
+Fastify API server with BullMQ workers for async processing.
+
+## Route Pattern
+
+Routes import schemas from `@reverie/shared` and use Zod for validation:
+
+```typescript
+import { SomeRequestSchema, SomeResponseSchema } from '@reverie/shared';
+
+export default async function (fastify: FastifyInstance) {
+    fastify.post<{ Body: z.infer<typeof SomeRequestSchema> }>(
+        '/endpoint',
+        {
+            schema: {
+                body: SomeRequestSchema,
+                response: { 200: SomeResponseSchema },
+            },
+        },
+        async (request) => {
+            // Handler calls service, never contains business logic
+            return someService.doThing(request.body);
+        },
+    );
+}
+```
+
+## Layer Responsibilities
+
+- **Routes** (`app/routes/`): HTTP validation, call services, return responses
+- **Services** (`services/`): Business logic, database operations, transaction management
+- **Storage** (`storage/`): File storage abstraction (local FS or S3)
+- **Workers** (`workers/`): BullMQ job processors for OCR, thumbnails, LLM
+- **Queues** (`queues/`): BullMQ queue definitions and job enqueueing
+
+## Database (Kysely)
+
+- Type-safe queries via `db` instance from `db/kysely.ts`
+- Migrations in `db/migrations/` - use Kysely migration format
+- Schema types defined in `db/schema.ts`
+
+## Job Processing
+
+Workers publish events to Redis pub/sub for real-time client updates:
+
+```typescript
+await publishJobEvent({
+    type: 'job:complete',
+    job_id: job.id,
+    document_id: job.data.documentId,
+    status: 'complete',
+});
+```
+
+## Error Handling
+
+- Use `shared/errors.ts` for standardized API errors
+- Never leak raw database errors to clients
+- Wrap external service errors at service boundary

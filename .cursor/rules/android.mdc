@@ -1,0 +1,71 @@
+---
+description: Android app conventions for Kotlin + Jetpack Compose
+globs: apps/android/**/*.kt
+alwaysApply: false
+---
+
+# Android App (Kotlin + Jetpack Compose)
+
+Native Android app with Material Design 3 and Material You theming.
+
+## Architecture
+
+MVVM + Clean Architecture:
+
+```
+ui/
+  screens/       # Screen composables + ViewModels
+  components/    # Reusable composables
+  navigation/    # NavGraph and Screen definitions
+  theme/         # Material 3 theme (Color, Type, Theme)
+data/
+  api/           # Ktor client and API models
+  repository/    # Data repositories
+domain/
+  model/         # Domain models
+  usecase/       # Use cases
+di/              # Hilt modules
+```
+
+## Key Technologies
+
+- **UI**: Jetpack Compose with Material 3
+- **DI**: Hilt
+- **Navigation**: Navigation Compose (single Activity)
+- **Networking**: Ktor Client
+- **Image Loading**: Coil
+- **Async**: Kotlin Coroutines + Flow
+
+## Screen Pattern
+
+```kotlin
+@Composable
+fun SomeScreen(
+    viewModel: SomeViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Compose UI based on state
+}
+
+@HiltViewModel
+class SomeViewModel @Inject constructor(
+    private val repository: SomeRepository
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(SomeUiState())
+    val uiState = _uiState.asStateFlow()
+}
+```
+
+## Design Guidelines
+
+- Use Material 3 components and dynamic color (Material You)
+- Follow single Activity architecture
+- Use bottom sheets for document actions
+- FAB for primary action (upload)
+- Pull-to-refresh for lists
+
+## API Integration
+
+API models generated from OpenAPI spec or manually aligned with backend schemas.
+Use Ktor client for network requests with kotlinx.serialization.

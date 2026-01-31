@@ -1,0 +1,37 @@
+---
+description: Reverie project overview and general conventions
+alwaysApply: true
+---
+
+# Reverie Project
+
+Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing and searching document collections.
+
+## Monorepo Structure
+
+- `apps/backend` - Fastify API server + BullMQ workers
+- `apps/web` - Electron + React desktop app
+- `apps/android` - Kotlin + Jetpack Compose mobile app
+- `libs/shared` - Zod schemas and TypeScript types shared between backend and web
+
+## Key Conventions
+
+- Use Nx to run tasks: `nx serve backend`, `nx build web`, `nx run-many -t lint`
+- Shared types via `@reverie/shared` - import Zod schemas for API contracts
+- API contracts are defined once in shared, used by both backend validation and client types
+- ESM modules throughout TypeScript projects
+
+## Tech Stack Quick Reference
+
+| Layer           | Technology                                        |
+| --------------- | ------------------------------------------------- |
+| Backend Runtime | Node.js + Fastify                                 |
+| Database        | PostgreSQL + Kysely                               |
+| Validation      | Zod                                               |
+| Job Queue       | BullMQ + Redis                                    |
+| Real-time       | Socket.io                                         |
+| Web UI          | React + TanStack Router/Query + Tailwind + shadcn |
+| Desktop         | Electron                                          |
+| Mobile          | Kotlin + Jetpack Compose                          |
+| OCR             | Tesseract.js                                      |
+| LLM             | OpenAI API                                        |
