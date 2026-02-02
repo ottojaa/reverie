@@ -1,4 +1,4 @@
-import { UploadRequestSchema, UploadResponseSchema, type UploadResponse } from '@reverie/shared';
+import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
 
@@ -14,9 +14,9 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Upload one or more images',
+                description: 'Upload one or more files (any type)',
                 consumes: ['multipart/form-data'],
-                body: UploadRequestSchema,
+                // Note: body schema removed - multipart form-data is parsed manually via request.parts()
                 response: {
                     200: UploadResponseSchema,
                 },
@@ -45,11 +45,13 @@ export default async function (fastify: FastifyInstance) {
                 return reply.badRequest('No files provided');
             }
 
-            // Validate file types
-            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            // Optional: Add file size limit (100MB per file)
+            const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
             for (const file of files) {
-                if (!allowedTypes.includes(file.mimetype)) {
-                    return reply.badRequest(`Invalid file type: ${file.mimetype}. Allowed types: ${allowedTypes.join(', ')}`);
+                if (file.buffer.length > MAX_FILE_SIZE) {
+                    return reply.badRequest(
+                        `File "${file.filename}" exceeds maximum size of 100MB`,
+                    );
                 }
             }
 

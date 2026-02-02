@@ -3,7 +3,7 @@ import { db } from '../db/kysely';
 import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
-import { getStorageService, type UserStorageContext } from './storage.service';
+import { canGenerateThumbnail, getStorageService, type UserStorageContext } from './storage.service';
 
 export interface UploadedFile {
     buffer: Buffer;
@@ -62,11 +62,16 @@ export class UploadService {
         folderId: string | undefined,
         sessionId: string,
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
-        // Process and store the image (with user context for quotas)
-        const processed = await this.storageService.processAndStoreImage(file.buffer, file.filename, file.mimetype, userContext);
+        // Process and store the file (with user context for quotas)
+        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, file.mimetype, userContext);
 
         // Check for duplicate by hash (scoped to user)
-        const existing = await db.selectFrom('documents').selectAll().where('file_hash', '=', processed.hash).where('user_id', '=', userId).executeTakeFirst();
+        const existing = await db
+            .selectFrom('documents')
+            .selectAll()
+            .where('file_hash', '=', processed.hash)
+            .where('user_id', '=', userId)
+            .executeTakeFirst();
 
         if (existing) {
             // Return existing document without creating new jobs
@@ -75,6 +80,9 @@ export class UploadService {
                 jobs: [],
             };
         }
+
+        // Determine if we can generate thumbnails for this file type
+        const canThumbnail = canGenerateThumbnail(file.mimetype);
 
         // Create document record (with user_id)
         const newDocument: NewDocument = {
@@ -89,48 +97,67 @@ export class UploadService {
             height: processed.height,
             thumbnail_blurhash: processed.blurhash,
             ocr_status: 'pending',
-            thumbnail_status: 'pending',
+            // For files that can't have thumbnails, mark as complete immediately
+            thumbnail_status: canThumbnail ? 'pending' : 'complete',
         };
 
         const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();
 
         // Create processing jobs and enqueue to BullMQ
-        const jobTypes: Array<'ocr' | 'thumbnail'> = ['ocr', 'thumbnail'];
         const createdJobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
 
-        for (const jobType of jobTypes) {
-            const newJob: NewProcessingJob = {
-                job_type: jobType,
+        // OCR job - create for all files (will be skipped by worker if not applicable)
+        const ocrJob: NewProcessingJob = {
+            job_type: 'ocr',
+            target_type: 'document',
+            target_id: document.id,
+            status: 'pending',
+            priority: 0,
+        };
+
+        const createdOcrJob = await db
+            .insertInto('processing_jobs')
+            .values(ocrJob)
+            .returning(['id', 'job_type', 'status', 'target_id'])
+            .executeTakeFirstOrThrow();
+
+        createdJobs.push(createdOcrJob);
+
+        await addOcrJob(
+            {
+                documentId: document.id,
+                sessionId,
+                filePath: document.file_path,
+            },
+            createdOcrJob.id,
+        );
+
+        // Thumbnail job - only create if file type supports thumbnails
+        if (canThumbnail) {
+            const thumbnailJob: NewProcessingJob = {
+                job_type: 'thumbnail',
                 target_type: 'document',
                 target_id: document.id,
                 status: 'pending',
-                priority: jobType === 'thumbnail' ? 10 : 0, // Thumbnails have higher priority
+                priority: 10, // Thumbnails have higher priority
             };
 
-            const job = await db.insertInto('processing_jobs').values(newJob).returning(['id', 'job_type', 'status', 'target_id']).executeTakeFirstOrThrow();
+            const createdThumbnailJob = await db
+                .insertInto('processing_jobs')
+                .values(thumbnailJob)
+                .returning(['id', 'job_type', 'status', 'target_id'])
+                .executeTakeFirstOrThrow();
 
-            createdJobs.push(job);
+            createdJobs.push(createdThumbnailJob);
 
-            // Enqueue job to BullMQ
-            if (jobType === 'ocr') {
-                await addOcrJob(
-                    {
-                        documentId: document.id,
-                        sessionId,
-                        filePath: document.file_path,
-                    },
-                    job.id,
-                );
-            } else if (jobType === 'thumbnail') {
-                await addThumbnailJob(
-                    {
-                        documentId: document.id,
-                        sessionId,
-                        filePath: document.file_path,
-                    },
-                    job.id,
-                );
-            }
+            await addThumbnailJob(
+                {
+                    documentId: document.id,
+                    sessionId,
+                    filePath: document.file_path,
+                },
+                createdThumbnailJob.id,
+            );
         }
 
         return {

@@ -7,6 +7,27 @@ import { db } from '../db/kysely';
 import type { ThumbnailPaths } from '../db/schema';
 import { generateStoragePath, getExtension, getStorage } from '../storage';
 
+/**
+ * File type categories for processing strategies
+ */
+export type FileCategory = 'image' | 'pdf' | 'video' | 'audio' | 'document' | 'other';
+
+/**
+ * Result of processing and storing a file
+ */
+export interface ProcessedFile {
+    buffer: Buffer;
+    hash: string;
+    storagePath: string;
+    width: number | null; // null for non-visual files
+    height: number | null;
+    blurhash: string | null; // null for non-images (generated during upload for images)
+    fileCategory: FileCategory;
+}
+
+/**
+ * @deprecated Use ProcessedFile instead
+ */
 export interface ProcessedImage {
     buffer: Buffer;
     hash: string;
@@ -17,8 +38,37 @@ export interface ProcessedImage {
 }
 
 export interface ThumbnailResult {
-    paths: ThumbnailPaths;
-    blurhash: string;
+    paths: ThumbnailPaths | null;
+    blurhash: string | null;
+}
+
+/**
+ * Determine file category from MIME type
+ */
+export function getFileCategory(mimeType: string): FileCategory {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (
+        mimeType.startsWith('application/vnd.ms-') ||
+        mimeType.startsWith('application/vnd.openxmlformats-officedocument') ||
+        mimeType === 'application/msword' ||
+        mimeType === 'text/plain' ||
+        mimeType === 'text/csv' ||
+        mimeType === 'application/rtf'
+    ) {
+        return 'document';
+    }
+    return 'other';
+}
+
+/**
+ * Check if a MIME type can have visual thumbnails generated
+ */
+export function canGenerateThumbnail(mimeType: string): boolean {
+    const category = getFileCategory(mimeType);
+    return category === 'image' || category === 'pdf';
 }
 
 export interface UserStorageContext {
@@ -101,31 +151,48 @@ export class StorageService {
     }
 
     /**
-     * Process and store an uploaded image (with user context)
+     * Process and store any uploaded file (with user context)
+     * Handles different file types with appropriate strategies
      */
-    async processAndStoreImage(buffer: Buffer, originalFilename: string, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedImage> {
+    async processAndStoreFile(
+        buffer: Buffer,
+        originalFilename: string,
+        mimeType: string,
+        userContext?: UserStorageContext,
+    ): Promise<ProcessedFile> {
         // Check quota if user context is provided
         if (userContext) {
             this.checkStorageQuota(userContext, buffer.length);
         }
 
-        // Get image metadata
-        const metadata = await sharp(buffer).metadata();
-        const width = metadata.width ?? 0;
-        const height = metadata.height ?? 0;
+        const fileCategory = getFileCategory(mimeType);
 
         // Calculate hash
         const hash = createHash('sha256').update(buffer).digest('hex');
 
         // Generate storage path (relative to user's storage directory)
-        const extension = getExtension(originalFilename) || mimeType.split('/')[1] || 'jpg';
+        const extension = getExtension(originalFilename) || mimeType.split('/')[1] || 'bin';
         const relativeStoragePath = generateStoragePath(hash, extension);
 
         // Add user prefix if context provided
         const storagePath = userContext ? this.getUserScopedPath(userContext.storagePath, relativeStoragePath) : relativeStoragePath;
 
-        // Generate blurhash from small version
-        const blurhash = await this.generateBlurhash(buffer);
+        let width: number | null = null;
+        let height: number | null = null;
+        let blurhash: string | null = null;
+
+        // For images, extract metadata and generate blurhash
+        if (fileCategory === 'image') {
+            try {
+                const metadata = await sharp(buffer).metadata();
+                width = metadata.width ?? null;
+                height = metadata.height ?? null;
+                blurhash = await this.generateBlurhash(buffer);
+            } catch {
+                // If sharp fails (e.g., unsupported image format), continue without metadata
+                console.warn(`Could not extract image metadata for ${originalFilename}`);
+            }
+        }
 
         // Store original file
         await this.storage.store(buffer, storagePath, {
@@ -144,6 +211,29 @@ export class StorageService {
             width,
             height,
             blurhash,
+            fileCategory,
+        };
+    }
+
+    /**
+     * Process and store an uploaded image (with user context)
+     * @deprecated Use processAndStoreFile instead
+     */
+    async processAndStoreImage(
+        buffer: Buffer,
+        originalFilename: string,
+        mimeType: string,
+        userContext?: UserStorageContext,
+    ): Promise<ProcessedImage> {
+        const result = await this.processAndStoreFile(buffer, originalFilename, mimeType, userContext);
+
+        return {
+            buffer: result.buffer,
+            hash: result.hash,
+            storagePath: result.storagePath,
+            width: result.width ?? 0,
+            height: result.height ?? 0,
+            blurhash: result.blurhash ?? '',
         };
     }
 

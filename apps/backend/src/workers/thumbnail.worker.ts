@@ -6,7 +6,7 @@ import { QUEUE_NAMES, QUEUE_CONCURRENCY } from '../queues/queue.config'
 import type { ThumbnailJobData, ThumbnailJobResult } from '../queues/thumbnail.queue'
 import { processJobWithTracking, createWorkerLogger, publishJobProgress } from './worker.utils'
 import { db } from '../db/kysely'
-import { getStorageService } from '../services/storage.service'
+import { getStorageService, getFileCategory } from '../services/storage.service'
 import { NonRetryableJobError } from '../jobs/job.types'
 
 const logger = createWorkerLogger('Thumbnail')
@@ -17,6 +17,64 @@ const THUMBNAIL_SIZES = {
   md: 300,
   lg: 600,
 } as const
+
+/**
+ * Render first page of PDF to PNG buffer using pdf-to-img
+ */
+async function renderPdfFirstPage(pdfBuffer: Buffer): Promise<Buffer> {
+  // pdf-to-img is ESM-only, use dynamic import
+  const { pdf } = await import('pdf-to-img')
+
+  // Convert buffer to data URL for pdf-to-img
+  const dataUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
+
+  const document = await pdf(dataUrl, { scale: 2 })
+
+  // Get first page
+  const firstPage = await document.getPage(1)
+  if (!firstPage) {
+    throw new NonRetryableJobError('PDF has no pages')
+  }
+
+  return firstPage
+}
+
+/**
+ * Get image buffer for thumbnail generation based on file type
+ */
+async function getImageBuffer(
+  fileBuffer: Buffer,
+  mimeType: string,
+): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number } }> {
+  const category = getFileCategory(mimeType)
+
+  if (category === 'pdf') {
+    // For PDFs, render first page as image
+    const pngBuffer = await renderPdfFirstPage(fileBuffer)
+    const metadata = await sharp(pngBuffer).metadata()
+
+    if (!metadata.width || !metadata.height) {
+      throw new NonRetryableJobError('Could not get PDF page dimensions')
+    }
+
+    return {
+      imageBuffer: pngBuffer,
+      originalDimensions: { width: metadata.width, height: metadata.height },
+    }
+  } else {
+    // For images, use buffer directly
+    const metadata = await sharp(fileBuffer).metadata()
+
+    if (!metadata.width || !metadata.height) {
+      throw new NonRetryableJobError('Could not read image dimensions')
+    }
+
+    return {
+      imageBuffer: fileBuffer,
+      originalDimensions: { width: metadata.width, height: metadata.height },
+    }
+  }
+}
 
 /**
  * Process a thumbnail generation job
@@ -43,24 +101,14 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
   // Read original file from storage
   const fileBuffer = await storageService.readFile(filePath)
 
-  // Get original image metadata
-  const originalImage = sharp(fileBuffer)
-  const metadata = await originalImage.metadata()
-
-  if (!metadata.width || !metadata.height) {
-    throw new NonRetryableJobError('Could not read image dimensions')
-  }
-
-  const originalDimensions = {
-    width: metadata.width,
-    height: metadata.height,
-  }
+  // Get image buffer based on file type (renders PDF first page if needed)
+  const { imageBuffer, originalDimensions } = await getImageBuffer(fileBuffer, document.mime_type)
 
   await publishJobProgress(job.id!, 30, documentId, job.data.sessionId)
 
   // Generate thumbnails in parallel
   const thumbnailPromises = Object.entries(THUMBNAIL_SIZES).map(async ([size, width]) => {
-    const resized = await sharp(fileBuffer)
+    const resized = await sharp(imageBuffer)
       .resize(width, null, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer()
@@ -77,7 +125,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
   await publishJobProgress(job.id!, 70, documentId, job.data.sessionId)
 
   // Generate blurhash from smallest thumbnail
-  const smallThumbnailBuffer = await sharp(fileBuffer)
+  const smallThumbnailBuffer = await sharp(imageBuffer)
     .resize(32, 32, { fit: 'inside' })
     .ensureAlpha()
     .raw()
@@ -121,7 +169,11 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     .where('id', '=', documentId)
     .execute()
 
-  logger.info('Thumbnail job completed', { documentId, blurhash: blurhash.substring(0, 10) + '...' })
+  logger.info('Thumbnail job completed', {
+    documentId,
+    mimeType: document.mime_type,
+    blurhash: blurhash.substring(0, 10) + '...',
+  })
 
   return result
 }

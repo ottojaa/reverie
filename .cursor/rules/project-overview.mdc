@@ -20,6 +20,7 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 - Shared types via `@reverie/shared` - import Zod schemas for API contracts
 - API contracts are defined once in shared, used by both backend validation and client types
 - ESM modules throughout TypeScript projects
+- Never use "any" type in TypeScript code, unless absolutely necessary
 
 ## Tech Stack Quick Reference
 

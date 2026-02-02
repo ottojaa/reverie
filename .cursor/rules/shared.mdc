@@ -1,7 +1,7 @@
 ---
 description: Shared library conventions for Zod schemas and types
 globs: libs/shared/**/*.ts
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Shared Library
@@ -79,18 +79,18 @@ Place shared helpers in `utils/`:
 ```typescript
 // ✅ Works everywhere - pure functions, no environment APIs
 export function formatFileSize(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = bytes
-  let unitIndex = 0
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-  return `${size.toFixed(1)} ${units[unitIndex]}`
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
 }
 
 // ❌ Won't work - uses Node.js API
-import { readFileSync } from 'fs'  // Browser doesn't have this
+import { readFileSync } from 'fs'; // Browser doesn't have this
 ```
 
 ## Conventions

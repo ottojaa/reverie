@@ -103,6 +103,48 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
+    // Get document thumbnail (requires authentication)
+    fastify.get<{
+        Params: { id: string; size: 'sm' | 'md' | 'lg' };
+    }>(
+        '/documents/:id/thumbnail/:size',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Get document thumbnail',
+                params: z.object({
+                    id: UuidSchema,
+                    size: z.enum(['sm', 'md', 'lg']),
+                }),
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const document = await uploadService.getDocument(request.params.id, userId);
+            if (!document) {
+                return reply.notFound('Document not found');
+            }
+
+            if (!document.thumbnail_paths) {
+                return reply.notFound('Thumbnail not available');
+            }
+
+            const thumbnailPath = document.thumbnail_paths[request.params.size];
+            if (!thumbnailPath) {
+                return reply.notFound('Thumbnail size not available');
+            }
+
+            try {
+                const buffer = await storageService.readFile(thumbnailPath);
+                reply.header('Content-Type', 'image/webp');
+                reply.header('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+                return reply.send(buffer);
+            } catch {
+                return reply.notFound('Thumbnail file not found');
+            }
+        },
+    );
+
     // Get document by ID (requires authentication)
     fastify.get<{
         Params: { id: string };

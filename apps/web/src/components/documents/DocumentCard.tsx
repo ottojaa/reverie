@@ -1,0 +1,160 @@
+import { Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Link } from '@tanstack/react-router';
+import type { Document } from '@reverie/shared';
+import { cn } from '@/lib/utils';
+import { FileTypeIcon, getFileTypeConfig, getFileExtension } from '@/components/ui/FileTypeIcon';
+
+interface DocumentCardProps {
+    document: Document;
+    className?: string;
+}
+
+/**
+ * Format file size for display
+ */
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/**
+ * Format date for display
+ */
+function formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
+/**
+ * Get thumbnail URL for a document
+ */
+function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
+    if (!document.thumbnail_paths) return null;
+    const path = document.thumbnail_paths[size];
+    if (!path) return null;
+
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    return `${API_BASE}/documents/${document.id}/thumbnail/${size}`;
+}
+
+export function DocumentCard({ document, className }: DocumentCardProps) {
+    const isProcessing =
+        document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
+    const isPending =
+        document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
+    const hasThumbnail =
+        document.thumbnail_paths && document.thumbnail_status === 'complete';
+
+    const fileConfig = getFileTypeConfig(document.mime_type);
+    const extension = getFileExtension(document.original_filename);
+    const thumbnailUrl = getThumbnailUrl(document);
+
+    return (
+        <Link to="/document/$id" params={{ id: document.id }}>
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ scale: 1.02, y: -2 }}
+                transition={{ duration: 0.2 }}
+                className={cn(
+                    'group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md',
+                    className,
+                )}
+            >
+                {/* Thumbnail / Icon area */}
+                <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+                    {hasThumbnail && thumbnailUrl ? (
+                        <>
+                            {/* Blurhash placeholder */}
+                            {document.thumbnail_blurhash && (
+                                <div
+                                    className="absolute inset-0 bg-cover bg-center"
+                                    style={{
+                                        // Blurhash would be decoded here with a library
+                                        // For now, use a gradient as placeholder
+                                        background: `linear-gradient(135deg, ${fileConfig.bgColor}, ${fileConfig.bgColor})`,
+                                    }}
+                                />
+                            )}
+                            {/* Actual thumbnail */}
+                            <img
+                                src={thumbnailUrl}
+                                alt={document.original_filename}
+                                className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
+                                loading="lazy"
+                            />
+                        </>
+                    ) : (
+                        /* File type icon for non-thumbnail files */
+                        <div
+                            className={cn(
+                                'flex h-full w-full items-center justify-center',
+                                fileConfig.bgColor,
+                            )}
+                        >
+                            <FileTypeIcon
+                                mimeType={document.mime_type}
+                                size="xl"
+                                className="opacity-80"
+                            />
+                        </div>
+                    )}
+
+                    {/* File extension badge */}
+                    {extension && (
+                        <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white backdrop-blur-sm">
+                            .{extension.toLowerCase()}
+                        </div>
+                    )}
+
+                    {/* Processing overlay */}
+                    {(isProcessing || isPending) && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+                        >
+                            <motion.div
+                                animate={isProcessing ? { rotate: 360 } : {}}
+                                transition={
+                                    isProcessing
+                                        ? { duration: 2, repeat: Infinity, ease: 'linear' }
+                                        : {}
+                                }
+                            >
+                                <Loader2
+                                    className={cn(
+                                        'size-8 text-white',
+                                        isProcessing && 'animate-spin',
+                                    )}
+                                />
+                            </motion.div>
+                            <span className="absolute bottom-2 left-2 text-xs font-medium text-white">
+                                {isProcessing ? 'Processing...' : 'Pending...'}
+                            </span>
+                        </motion.div>
+                    )}
+                </div>
+
+                {/* File info */}
+                <div className="p-3">
+                    <p className="truncate text-sm font-medium" title={document.original_filename}>
+                        {document.original_filename}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{formatFileSize(document.size_bytes)}</span>
+                        <span>•</span>
+                        <span>{formatDate(document.created_at)}</span>
+                    </div>
+                </div>
+            </motion.div>
+        </Link>
+    );
+}

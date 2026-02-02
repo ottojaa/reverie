@@ -7,6 +7,7 @@ import { checkDbConnection, closeDb } from './db/kysely';
 import { closeAllQueues } from './queues';
 import { closeRedisConnections } from './queues/redis';
 import { closeSocketServer, initializeSocketServer, startRedisSubscriber, stopRedisSubscriber } from './websocket';
+import { startAllWorkers } from './workers';
 
 const host = env.HOST;
 const port = env.PORT;
@@ -90,6 +91,11 @@ async function main() {
         if (env.WS_ENABLED) {
             server.log.info(`WebSocket server ready at ws://${host}:${port}`);
         }
+
+        // Start workers in the same process (for development)
+        // In production, you might want to run workers separately
+        startAllWorkers();
+        server.log.info('Background workers started');
     } catch (err) {
         server.log.error(err);
         process.exit(1);

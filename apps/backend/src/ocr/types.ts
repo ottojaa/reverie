@@ -2,33 +2,10 @@
  * OCR Pipeline Types
  */
 
-/**
- * Document categories - distinguishes between content types
- */
-export type DocumentCategory =
-    // Non-text content (photos, graphics)
-    | 'photo' // Personal photos, images without text
-    | 'screenshot' // Screen captures (may have some text but treated differently)
-    | 'graphic' // Artwork, diagrams, illustrations
+import type { DocumentCategory } from '@reverie/shared';
 
-    // Common document types
-    | 'receipt' // Purchase receipts, invoices
-    | 'invoice' // Bills, invoices
-    | 'statement' // Bank statements, account statements
-    | 'letter' // Correspondence, emails
-    | 'contract' // Legal agreements, contracts
-    | 'form' // Filled forms, applications
-    | 'certificate' // Certificates, licenses
-    | 'report' // Reports, analyses
-    | 'article' // News articles, blog posts
-    | 'memo' // Internal memos, notes
-    | 'newsletter' // Newsletters, publications
-
-    // Financial documents (common use case)
-    | 'stock_statement' // Stock/investment statements
-    | 'dividend_notice' // Dividend notifications
-    | 'tax_document' // Tax forms, returns
-    | 'other'; // Uncategorized documents with text
+// Re-export DocumentCategory from shared lib for convenience
+export type { DocumentCategory };
 
 /**
  * Extracted metadata from document text
