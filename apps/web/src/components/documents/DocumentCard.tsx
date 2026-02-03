@@ -33,21 +33,25 @@ function formatDate(dateString: string): string {
 }
 
 /**
- * Get thumbnail URL for a document
+ * Get thumbnail URL for a document (uses pre-signed URLs from API)
  */
 function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
-    if (!document.thumbnail_paths) return null;
-    const path = document.thumbnail_paths[size];
-    if (!path) return null;
-
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    return `${API_BASE}/documents/${document.id}/thumbnail/${size}`;
+    // Use pre-signed URLs from the API response
+    if (document.thumbnail_urls) {
+        const url = document.thumbnail_urls[size];
+        if (url) {
+            // Signed URLs are relative, prepend API base
+            const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            return `${API_BASE}${url}`;
+        }
+    }
+    return null;
 }
 
 export function DocumentCard({ document, className }: DocumentCardProps) {
     const isProcessing = document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
     const isPending = document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
-    const hasThumbnail = document.thumbnail_paths && document.thumbnail_status === 'complete';
+    const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
 
     const fileConfig = getFileTypeConfig(document.mime_type);
     const extension = getFileExtension(document.original_filename);

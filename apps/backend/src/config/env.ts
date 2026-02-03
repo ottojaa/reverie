@@ -68,6 +68,10 @@ const envSchema = z.object({
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     GOOGLE_CALLBACK_URL: z.string().url().optional(),
+
+    // File serving (signed URLs)
+    FILE_URL_SECRET: z.string().min(32),
+    FILE_URL_EXPIRES_SECONDS: z.coerce.number().default(3600),
 });
 
 export type Env = z.infer<typeof envSchema>;

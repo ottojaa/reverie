@@ -4,6 +4,7 @@ import { access, mkdir, stat, unlink } from 'fs/promises';
 import * as path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
+import { env } from '../config/env';
 import type { IStorageProvider, StorageMetadata, StorageResult } from './storage.interface';
 
 export class LocalStorageProvider implements IStorageProvider {
@@ -75,9 +76,19 @@ export class LocalStorageProvider implements IStorageProvider {
         };
     }
 
-    async generateUrl(storagePath: string, _expiresIn?: number): Promise<string> {
-        // For local storage, return a path that can be served via a file-serving endpoint
-        return `/files/${storagePath}`;
+    async generateUrl(storagePath: string, expiresIn?: number): Promise<string> {
+        const ttl = expiresIn ?? env.FILE_URL_EXPIRES_SECONDS;
+        const expires = Math.floor(Date.now() / 1000) + ttl;
+
+        // nginx secure_link_md5 format: md5(expires + uri + secret)
+        // URI will be /files/{storagePath}
+        const uri = `/files/${storagePath}`;
+        const stringToSign = `${expires}${uri}${env.FILE_URL_SECRET}`;
+
+        // nginx expects base64url-encoded MD5 hash
+        const hash = createHash('md5').update(stringToSign).digest('base64url');
+
+        return `${uri}?e=${expires}&s=${hash}`;
     }
 
     getAbsolutePath(storagePath: string): string {

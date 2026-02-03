@@ -1,10 +1,11 @@
+import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQuery } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
-import type { SearchQuery, SearchResponse, SearchResult, SearchFacets, SuggestQuery } from '@reverie/shared';
 import { db } from '../db/kysely';
-import { parseQuery, validateQuery } from './query-parser';
-import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
-import { generateSnippets, generateFilenameSnippet, generateSummarySnippet } from './highlighter';
+import { getStorageService } from '../services/storage.service';
 import { generateFacets } from './facets';
+import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
+import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
+import { parseQuery, validateQuery } from './query-parser';
 
 /**
  * Search Service
@@ -60,10 +61,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     };
 
     // Build base query with all joins
-    const baseQuery = db
-        .selectFrom('documents as d')
-        .leftJoin('folders as f', 'f.id', 'd.folder_id')
-        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
+    const baseQuery = db.selectFrom('documents as d').leftJoin('folders as f', 'f.id', 'd.folder_id').leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
@@ -109,7 +107,13 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     // Execute queries
     const [rows, countResult, facets] = await Promise.all([
         finalQuery.execute(),
-        filteredCountQuery.clearSelect().clearOrderBy().clearLimit().clearOffset().select(sql<number>`count(DISTINCT d.id)::int`.as('count')).executeTakeFirst(),
+        filteredCountQuery
+            .clearSelect()
+            .clearOrderBy()
+            .clearLimit()
+            .clearOffset()
+            .select(sql<number>`count(DISTINCT d.id)::int`.as('count'))
+            .executeTakeFirst(),
         query.include_facets ? generateFacets(parsed, options.userId) : Promise.resolve(undefined),
     ]);
 
@@ -124,9 +128,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     // Get tags for all documents
     const tagRows =
-        documentIds.length > 0
-            ? await db.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', documentIds).execute()
-            : [];
+        documentIds.length > 0 ? await db.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', documentIds).execute() : [];
 
     const tagMap = new Map<string, string[]>();
     for (const row of tagRows) {
@@ -136,50 +138,54 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         tagMap.get(row.document_id)!.push(row.tag);
     }
 
-    // Transform results
-    const results: SearchResult[] = rows.map((row) => {
-        // Generate snippet
-        let snippet: string | null = null;
-        if (parsed.fullText) {
-            // Try OCR text snippet first
-            snippet = snippetMap.get(row.id) ?? null;
+    // Transform results (async for signed URL generation)
+    const storageService = getStorageService();
+    const results: SearchResult[] = await Promise.all(
+        rows.map(async (row) => {
+            // Generate snippet
+            let snippet: string | null = null;
+            if (parsed.fullText) {
+                // Try OCR text snippet first
+                snippet = snippetMap.get(row.id) ?? null;
 
-            // Fall back to summary snippet
-            if (!snippet && row.llm_summary) {
-                snippet = generateSummarySnippet(row.llm_summary, parsed.fullText);
+                // Fall back to summary snippet
+                if (!snippet && row.llm_summary) {
+                    snippet = generateSummarySnippet(row.llm_summary, parsed.fullText);
+                }
+
+                // Fall back to filename snippet
+                if (!snippet) {
+                    snippet = generateFilenameSnippet(row.folder_path, row.original_filename, parsed.fullText);
+                }
             }
 
-            // Fall back to filename snippet
-            if (!snippet) {
-                snippet = generateFilenameSnippet(row.folder_path, row.original_filename, parsed.fullText);
-            }
-        }
+            // Get file extension from mime type
+            const format = mimeToExtension(row.mime_type);
 
-        // Get file extension from mime type
-        const format = mimeToExtension(row.mime_type);
+            // Build signed thumbnail URL
+            const thumbnailPaths = row.thumbnail_paths as { sm: string; md: string; lg: string } | null;
+            const thumbnailUrl = thumbnailPaths ? await storageService.getFileUrl(thumbnailPaths.md) : null;
 
-        // Build thumbnail URL
-        const thumbnailUrl = row.thumbnail_paths ? `/api/thumbnails/${row.id}/md` : null;
-
-        return {
-            document_id: row.id,
-            filename: row.original_filename,
-            folder_path: row.folder_path,
-            folder_id: row.folder_id,
-            uploaded_at: row.created_at.toISOString(),
-            extracted_date: row.extracted_date?.toISOString().split('T')[0] ?? null,
-            category: row.document_category as SearchResult['category'],
-            mime_type: row.mime_type,
-            format,
-            snippet,
-            has_text: row.has_meaningful_text,
-            thumbnail_url: thumbnailUrl,
-            blurhash: row.thumbnail_blurhash,
-            size_bytes: Number(row.size_bytes),
-            tags: tagMap.get(row.id) ?? [],
-            relevance: (row as any).relevance ?? null,
-        };
-    });
+            return {
+                document_id: row.id,
+                filename: row.original_filename,
+                folder_path: row.folder_path,
+                folder_id: row.folder_id,
+                uploaded_at: row.created_at.toISOString(),
+                extracted_date: row.extracted_date?.toISOString().split('T')[0] ?? null,
+                category: row.document_category as SearchResult['category'],
+                mime_type: row.mime_type,
+                format,
+                snippet,
+                has_text: row.has_meaningful_text,
+                thumbnail_url: thumbnailUrl,
+                blurhash: row.thumbnail_blurhash,
+                size_bytes: Number(row.size_bytes),
+                tags: tagMap.get(row.id) ?? [],
+                relevance: (row as any).relevance ?? null,
+            };
+        }),
+    );
 
     const endTime = performance.now();
 

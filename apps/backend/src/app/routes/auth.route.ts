@@ -98,7 +98,7 @@ export default async function (fastify: FastifyInstance) {
             schema: {
                 description: 'Refresh access token using refresh token',
                 tags: ['Auth'],
-                body: RefreshTokenRequestSchema.partial(),
+                body: RefreshTokenRequestSchema.partial().nullable().optional(),
                 response: {
                     200: RefreshTokenResponseSchema,
                     401: AuthErrorSchema,
@@ -106,8 +106,8 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            // Try to get refresh token from body or cookie
-            const refreshToken = request.body.refresh_token || request.cookies.refresh_token;
+            // Try to get refresh token from body or cookie (web sends cookie only via credentials: 'include')
+            const refreshToken = request.body?.refresh_token ?? request.cookies?.refresh_token;
 
             if (!refreshToken) {
                 return reply.status(401).send({
@@ -234,7 +234,8 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
             async function (request, reply) {
-                const oauth2 = (fastify as unknown as { googleOAuth2?: { generateAuthorizationUri: (req: unknown, reply: unknown) => Promise<string> } }).googleOAuth2;
+                const oauth2 = (fastify as unknown as { googleOAuth2?: { generateAuthorizationUri: (req: unknown, reply: unknown) => Promise<string> } })
+                    .googleOAuth2;
                 if (!oauth2) {
                     return reply.status(500).send({
                         error: 'google_oauth_not_configured',

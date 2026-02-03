@@ -94,8 +94,11 @@ export default async function (fastify: FastifyInstance) {
                 countQuery.executeTakeFirst(),
             ]);
 
+            // Serialize documents with signed URLs (parallel for performance)
+            const serializedDocuments = await Promise.all(documents.map(serializeDocument));
+
             return {
-                items: documents.map(serializeDocument),
+                items: serializedDocuments,
                 total: Number(countResult?.count ?? 0),
                 limit,
                 offset,
@@ -167,7 +170,7 @@ export default async function (fastify: FastifyInstance) {
             if (!document) {
                 return reply.notFound('Document not found');
             }
-            return serializeDocument(document);
+            return await serializeDocument(document);
         },
     );
 
@@ -781,7 +784,20 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-function serializeDocument(doc: DbDocument): Document {
+async function serializeDocument(doc: DbDocument): Promise<Document> {
+    // Generate signed URLs for file access
+    const fileUrl = await storageService.getFileUrl(doc.file_path);
+
+    // Generate signed URLs for thumbnails if they exist
+    let thumbnailUrls: Document['thumbnail_urls'] = null;
+    if (doc.thumbnail_paths) {
+        thumbnailUrls = {
+            sm: await storageService.getFileUrl(doc.thumbnail_paths.sm),
+            md: await storageService.getFileUrl(doc.thumbnail_paths.md),
+            lg: await storageService.getFileUrl(doc.thumbnail_paths.lg),
+        };
+    }
+
     return {
         id: doc.id,
         folder_id: doc.folder_id,
@@ -804,5 +820,7 @@ function serializeDocument(doc: DbDocument): Document {
         llm_token_count: doc.llm_token_count,
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
+        file_url: fileUrl,
+        thumbnail_urls: thumbnailUrls,
     };
 }
