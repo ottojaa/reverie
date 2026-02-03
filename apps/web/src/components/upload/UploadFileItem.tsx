@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button';
+import type { UploadFile } from '@/lib/upload';
+import { cn } from '@/lib/utils';
 import {
     AlertCircle,
     Check,
@@ -14,9 +17,6 @@ import {
     X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import type { UploadFile } from '@/lib/upload';
 
 interface UploadFileItemProps {
     file: UploadFile;
@@ -40,21 +40,13 @@ function getFileIcon(mimeType: string): { icon: typeof File; color: string } {
     if (mimeType.startsWith('audio/')) {
         return { icon: FileAudio, color: 'text-green-500' };
     }
-    if (
-        mimeType.includes('spreadsheet') ||
-        mimeType.includes('excel') ||
-        mimeType === 'text/csv'
-    ) {
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'text/csv') {
         return { icon: FileSpreadsheet, color: 'text-emerald-600' };
     }
     if (mimeType.includes('word') || mimeType.includes('document')) {
         return { icon: FileText, color: 'text-blue-600' };
     }
-    if (
-        mimeType.startsWith('text/') ||
-        mimeType.includes('javascript') ||
-        mimeType.includes('json')
-    ) {
+    if (mimeType.startsWith('text/') || mimeType.includes('javascript') || mimeType.includes('json')) {
         return { icon: FileCode, color: 'text-gray-600' };
     }
     if (mimeType.includes('zip') || mimeType.includes('archive') || mimeType.includes('tar')) {
@@ -77,13 +69,7 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
     const { icon: FileIcon, color: iconColor } = getFileIcon(file.file.type);
 
     const progress =
-        file.status === 'uploading'
-            ? file.uploadProgress
-            : file.status === 'processing'
-              ? file.processingProgress
-              : file.status === 'complete'
-                ? 100
-                : 0;
+        file.status === 'uploading' ? file.uploadProgress : file.status === 'processing' ? file.processingProgress : file.status === 'complete' ? 100 : 0;
 
     const canRemove = file.status === 'queued' || file.status === 'error';
     const canRetry = file.status === 'error';
@@ -120,27 +106,18 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
                         {formatFileSize(file.file.size)}
                         {file.status === 'uploading' && ` • Uploading ${progress}%`}
                         {file.status === 'processing' && ` • Processing ${progress}%`}
-                        {file.status === 'error' && file.error && (
-                            <span className="text-destructive"> • {file.error}</span>
-                        )}
+                        {file.status === 'error' && file.error && <span className="text-destructive"> • {file.error}</span>}
                     </p>
                 </div>
 
                 {/* Status indicator */}
                 <div className="shrink-0">
-                    {file.status === 'queued' && (
-                        <span className="text-sm text-muted-foreground">Queued</span>
-                    )}
+                    {file.status === 'queued' && <span className="text-sm text-muted-foreground">Queued</span>}
 
-                    {file.status === 'uploading' && (
-                        <Loader2 className="size-5 animate-spin text-primary" />
-                    )}
+                    {file.status === 'uploading' && <Loader2 className="size-5 animate-spin text-primary" />}
 
                     {file.status === 'processing' && (
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                        >
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>
                             <Loader2 className="size-5 text-primary" />
                         </motion.div>
                     )}
@@ -157,11 +134,7 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
                     )}
 
                     {file.status === 'error' && (
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="rounded-full bg-destructive p-1"
-                        >
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="rounded-full bg-destructive p-1">
                             <AlertCircle className="size-4 text-white" />
                         </motion.div>
                     )}
@@ -169,26 +142,14 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
 
                 {/* Retry button */}
                 {canRetry && onRetry && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0"
-                        onClick={() => onRetry(file.id)}
-                        title="Retry upload"
-                    >
+                    <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => onRetry(file.id)} title="Retry upload">
                         <RefreshCw className="size-4" />
                     </Button>
                 )}
 
                 {/* Remove button */}
                 {canRemove && onRemove && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0"
-                        onClick={() => onRemove(file.id)}
-                        title="Remove file"
-                    >
+                    <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => onRemove(file.id)} title="Remove file">
                         <X className="size-4" />
                     </Button>
                 )}

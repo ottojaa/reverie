@@ -1,9 +1,9 @@
+import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { cn } from '@/lib/utils';
+import type { Document } from '@reverie/shared';
+import { Link } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link } from '@tanstack/react-router';
-import type { Document } from '@reverie/shared';
-import { cn } from '@/lib/utils';
-import { FileTypeIcon, getFileTypeConfig, getFileExtension } from '@/components/ui/FileTypeIcon';
 
 interface DocumentCardProps {
     document: Document;
@@ -45,12 +45,9 @@ function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): s
 }
 
 export function DocumentCard({ document, className }: DocumentCardProps) {
-    const isProcessing =
-        document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
-    const isPending =
-        document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
-    const hasThumbnail =
-        document.thumbnail_paths && document.thumbnail_status === 'complete';
+    const isProcessing = document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
+    const isPending = document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
+    const hasThumbnail = document.thumbnail_paths && document.thumbnail_status === 'complete';
 
     const fileConfig = getFileTypeConfig(document.mime_type);
     const extension = getFileExtension(document.original_filename);
@@ -64,7 +61,11 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
                 whileHover={{ scale: 1.02, y: -2 }}
                 transition={{ duration: 0.2 }}
                 className={cn(
-                    'group relative overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md',
+                    'group relative overflow-hidden rounded-xl bg-card transition-shadow',
+                    // Light: shadow elevation, subtle border
+                    'border border-border/50 shadow-md hover:shadow-lg',
+                    // Dark: background layering, subtle border, no shadow
+                    'dark:border-border dark:shadow-none dark:hover:shadow-none',
                     className,
                 )}
             >
@@ -93,17 +94,8 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
                         </>
                     ) : (
                         /* File type icon for non-thumbnail files */
-                        <div
-                            className={cn(
-                                'flex h-full w-full items-center justify-center',
-                                fileConfig.bgColor,
-                            )}
-                        >
-                            <FileTypeIcon
-                                mimeType={document.mime_type}
-                                size="xl"
-                                className="opacity-80"
-                            />
+                        <div className={cn('flex h-full w-full items-center justify-center', fileConfig.bgColor)}>
+                            <FileTypeIcon mimeType={document.mime_type} size="xl" className="opacity-80" />
                         </div>
                     )}
 
@@ -123,22 +115,11 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
                         >
                             <motion.div
                                 animate={isProcessing ? { rotate: 360 } : {}}
-                                transition={
-                                    isProcessing
-                                        ? { duration: 2, repeat: Infinity, ease: 'linear' }
-                                        : {}
-                                }
+                                transition={isProcessing ? { duration: 2, repeat: Infinity, ease: 'linear' } : {}}
                             >
-                                <Loader2
-                                    className={cn(
-                                        'size-8 text-white',
-                                        isProcessing && 'animate-spin',
-                                    )}
-                                />
+                                <Loader2 className={cn('size-8 text-white', isProcessing && 'animate-spin')} />
                             </motion.div>
-                            <span className="absolute bottom-2 left-2 text-xs font-medium text-white">
-                                {isProcessing ? 'Processing...' : 'Pending...'}
-                            </span>
+                            <span className="absolute bottom-2 left-2 text-xs font-medium text-white">{isProcessing ? 'Processing...' : 'Pending...'}</span>
                         </motion.div>
                     )}
                 </div>

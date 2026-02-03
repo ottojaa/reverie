@@ -1,7 +1,7 @@
-import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUpload } from '@/lib/upload';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { UploadFileItem } from './UploadFileItem';
 
 interface UploadFileListProps {
@@ -9,17 +9,7 @@ interface UploadFileListProps {
 }
 
 export function UploadFileList({ folderId }: UploadFileListProps) {
-    const {
-        files,
-        isUploading,
-        startUpload,
-        removeFile,
-        clearCompleted,
-        clearFailed,
-        retryFailed,
-        retryFile,
-        stats,
-    } = useUpload();
+    const { files, isUploading, startUpload, removeFile, clearCompleted, clearFailed, retryFailed, retryFile, stats } = useUpload();
 
     if (files.length === 0) {
         return null;
@@ -41,11 +31,7 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
 
                     {/* Progress summary */}
                     {(stats.uploading > 0 || stats.processing > 0) && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-2 text-sm text-muted-foreground"
-                        >
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Loader2 className="size-4 animate-spin" />
                             {stats.uploading > 0 && <span>Uploading {stats.uploading}</span>}
                             {stats.processing > 0 && <span>Processing {stats.processing}</span>}
@@ -54,11 +40,7 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
 
                     {/* Failed count */}
                     {hasFailed && !isUploading && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-1 text-sm text-destructive"
-                        >
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1 text-sm text-destructive">
                             <AlertCircle className="size-4" />
                             {stats.error} failed
                         </motion.div>
@@ -125,12 +107,7 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
             <div className="space-y-2">
                 <AnimatePresence mode="popLayout">
                     {files.map((file) => (
-                        <UploadFileItem
-                            key={file.id}
-                            file={file}
-                            onRemove={removeFile}
-                            onRetry={retryFile}
-                        />
+                        <UploadFileItem key={file.id} file={file} onRemove={removeFile} onRetry={retryFile} />
                     ))}
                 </AnimatePresence>
             </div>

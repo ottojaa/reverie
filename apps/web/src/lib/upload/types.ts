@@ -1,4 +1,4 @@
-import type { UploadedDocument, Job } from '@reverie/shared';
+import type { Job, UploadedDocument } from '@reverie/shared';
 
 /**
  * Status of a file in the upload queue

@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
 import type { Document } from '@reverie/shared';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -20,10 +20,7 @@ interface UseDocumentsOptions {
 /**
  * Fetch documents from the API
  */
-async function fetchDocuments(
-    accessToken: string,
-    options: UseDocumentsOptions = {},
-): Promise<DocumentsResponse> {
+async function fetchDocuments(accessToken: string, options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
     const params = new URLSearchParams();
 
     if (options.folderId) {

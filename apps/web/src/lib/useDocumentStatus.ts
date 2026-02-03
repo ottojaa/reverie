@@ -1,12 +1,7 @@
-import { useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import type { Document, JobEvent } from '@reverie/shared';
-import {
-    connectSocket,
-    onJobEvents,
-    subscribeToDocument,
-    unsubscribeFromDocument,
-} from './socket';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
+import { connectSocket, onJobEvents, subscribeToDocument, unsubscribeFromDocument } from './socket';
 
 /**
  * Hook to subscribe to real-time status updates for a document

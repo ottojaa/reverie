@@ -222,9 +222,31 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
-    // GET /auth/google/callback - Google OAuth callback
-    // Note: /auth/google start redirect is handled by the oauth2 plugin
+    // GET /auth/google - Start Google OAuth (redirect to Google)
+    // Explicit route because the oauth2 plugin registers inside its encapsulated context and isn't visible here
     if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_CALLBACK_URL) {
+        fastify.get(
+            '/auth/google',
+            {
+                schema: {
+                    description: 'Start Google OAuth flow (redirects to Google)',
+                    tags: ['Auth'],
+                },
+            },
+            async function (request, reply) {
+                const oauth2 = (fastify as unknown as { googleOAuth2?: { generateAuthorizationUri: (req: unknown, reply: unknown) => Promise<string> } }).googleOAuth2;
+                if (!oauth2) {
+                    return reply.status(500).send({
+                        error: 'google_oauth_not_configured',
+                        message: 'Google OAuth not configured',
+                    });
+                }
+                const authorizationUri = await oauth2.generateAuthorizationUri(request, reply);
+                return reply.redirect(authorizationUri);
+            },
+        );
+
+        // GET /auth/google/callback - Google OAuth callback
         fastify.get<{ Querystring: { code?: string; error?: string } }>(
             '/auth/google/callback',
             {

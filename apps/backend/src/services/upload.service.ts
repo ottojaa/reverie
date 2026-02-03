@@ -66,12 +66,7 @@ export class UploadService {
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, file.mimetype, userContext);
 
         // Check for duplicate by hash (scoped to user)
-        const existing = await db
-            .selectFrom('documents')
-            .selectAll()
-            .where('file_hash', '=', processed.hash)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
+        const existing = await db.selectFrom('documents').selectAll().where('file_hash', '=', processed.hash).where('user_id', '=', userId).executeTakeFirst();
 
         if (existing) {
             // Return existing document without creating new jobs

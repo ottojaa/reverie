@@ -49,9 +49,7 @@ export default async function (fastify: FastifyInstance) {
             const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
             for (const file of files) {
                 if (file.buffer.length > MAX_FILE_SIZE) {
-                    return reply.badRequest(
-                        `File "${file.filename}" exceeds maximum size of 100MB`,
-                    );
+                    return reply.badRequest(`File "${file.filename}" exceeds maximum size of 100MB`);
                 }
             }
 

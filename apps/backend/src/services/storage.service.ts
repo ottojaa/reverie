@@ -154,12 +154,7 @@ export class StorageService {
      * Process and store any uploaded file (with user context)
      * Handles different file types with appropriate strategies
      */
-    async processAndStoreFile(
-        buffer: Buffer,
-        originalFilename: string,
-        mimeType: string,
-        userContext?: UserStorageContext,
-    ): Promise<ProcessedFile> {
+    async processAndStoreFile(buffer: Buffer, originalFilename: string, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedFile> {
         // Check quota if user context is provided
         if (userContext) {
             this.checkStorageQuota(userContext, buffer.length);
@@ -219,12 +214,7 @@ export class StorageService {
      * Process and store an uploaded image (with user context)
      * @deprecated Use processAndStoreFile instead
      */
-    async processAndStoreImage(
-        buffer: Buffer,
-        originalFilename: string,
-        mimeType: string,
-        userContext?: UserStorageContext,
-    ): Promise<ProcessedImage> {
+    async processAndStoreImage(buffer: Buffer, originalFilename: string, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedImage> {
         const result = await this.processAndStoreFile(buffer, originalFilename, mimeType, userContext);
 
         return {

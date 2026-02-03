@@ -1,10 +1,10 @@
+import { Button } from '@/components/ui/button';
+import { useUpload } from '@/lib/upload';
+import { cn } from '@/lib/utils';
 import { FileUp, Upload } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { useUpload } from '@/lib/upload';
 
 interface UploadDropzoneProps {
     className?: string;
@@ -35,9 +35,7 @@ export function UploadDropzone({ className, disabled }: UploadDropzoneProps) {
             {...getRootProps()}
             className={cn(
                 'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200',
-                isDragActive
-                    ? 'border-primary bg-primary/5 scale-[1.02]'
-                    : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30',
+                isDragActive ? 'border-primary bg-primary/5 scale-[1.02]' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30',
                 (disabled || isUploading) && 'pointer-events-none opacity-50',
                 className,
             )}
@@ -53,16 +51,10 @@ export function UploadDropzone({ className, disabled }: UploadDropzoneProps) {
                         exit={{ opacity: 0, scale: 0.9 }}
                         className="flex flex-col items-center"
                     >
-                        <motion.div
-                            animate={{ y: [0, -8, 0] }}
-                            transition={{ duration: 1, repeat: Infinity }}
-                            className="rounded-full bg-primary/10 p-4"
-                        >
+                        <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 1, repeat: Infinity }} className="rounded-full bg-primary/10 p-4">
                             <FileUp className="size-10 text-primary" />
                         </motion.div>
-                        <p className="mt-4 text-lg font-medium text-primary">
-                            {isDragAccept ? 'Drop files here' : 'Release to upload'}
-                        </p>
+                        <p className="mt-4 text-lg font-medium text-primary">{isDragAccept ? 'Drop files here' : 'Release to upload'}</p>
                     </motion.div>
                 ) : (
                     <motion.div
@@ -76,14 +68,8 @@ export function UploadDropzone({ className, disabled }: UploadDropzoneProps) {
                             <Upload className="size-10 text-primary" />
                         </div>
                         <p className="mt-4 text-lg font-medium">Drag and drop files here</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            or click the button below to select files
-                        </p>
-                        <Button
-                            onClick={open}
-                            className="mt-6"
-                            disabled={disabled || isUploading}
-                        >
+                        <p className="mt-1 text-sm text-muted-foreground">or click the button below to select files</p>
+                        <Button onClick={open} className="mt-6" disabled={disabled || isUploading}>
                             <Upload className="mr-2 size-4" />
                             Choose Files
                         </Button>

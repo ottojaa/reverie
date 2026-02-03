@@ -1,15 +1,5 @@
-import {
-    File,
-    FileArchive,
-    FileAudio,
-    FileCode,
-    FileImage,
-    FileSpreadsheet,
-    FileText,
-    FileVideo,
-    type LucideIcon,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, type LucideIcon } from 'lucide-react';
 
 /**
  * File type configuration with icon and colors
@@ -66,12 +56,7 @@ export function getFileTypeConfig(mimeType: string): FileTypeConfig {
     }
 
     // Spreadsheets (Excel, CSV, etc.)
-    if (
-        mimeType.includes('spreadsheet') ||
-        mimeType.includes('excel') ||
-        mimeType === 'text/csv' ||
-        mimeType === 'application/vnd.ms-excel'
-    ) {
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'text/csv' || mimeType === 'application/vnd.ms-excel') {
         return {
             icon: FileSpreadsheet,
             color: 'text-emerald-600',
@@ -81,11 +66,7 @@ export function getFileTypeConfig(mimeType: string): FileTypeConfig {
     }
 
     // Word documents
-    if (
-        mimeType.includes('word') ||
-        mimeType === 'application/msword' ||
-        mimeType.includes('wordprocessingml')
-    ) {
+    if (mimeType.includes('word') || mimeType === 'application/msword' || mimeType.includes('wordprocessingml')) {
         return {
             icon: FileText,
             color: 'text-blue-600',
@@ -95,13 +76,7 @@ export function getFileTypeConfig(mimeType: string): FileTypeConfig {
     }
 
     // Code and text files
-    if (
-        mimeType.startsWith('text/') ||
-        mimeType.includes('javascript') ||
-        mimeType.includes('json') ||
-        mimeType.includes('xml') ||
-        mimeType.includes('html')
-    ) {
+    if (mimeType.startsWith('text/') || mimeType.includes('javascript') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('html')) {
         return {
             icon: FileCode,
             color: 'text-gray-600',
@@ -168,12 +143,7 @@ const bgSizeClasses = {
     xl: 'p-4',
 };
 
-export function FileTypeIcon({
-    mimeType,
-    size = 'md',
-    showBackground = false,
-    className,
-}: FileTypeIconProps) {
+export function FileTypeIcon({ mimeType, size = 'md', showBackground = false, className }: FileTypeIconProps) {
     const config = getFileTypeConfig(mimeType);
     const Icon = config.icon;
 

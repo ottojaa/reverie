@@ -1,20 +1,7 @@
 import type { JobEvent } from '@reverie/shared';
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useReducer,
-    type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import { useAuth } from '../auth';
-import {
-    connectSocket,
-    onJobEvents,
-    subscribeToSession,
-    unsubscribeFromSession,
-} from '../socket';
+import { connectSocket, onJobEvents, subscribeToSession, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFiles } from './uploadApi';
 
@@ -205,15 +192,12 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                     });
 
                     // Calculate processing progress
-                    const completedJobs =
-                        updatedJobs?.filter((j) => j.status === 'complete').length ?? 0;
+                    const completedJobs = updatedJobs?.filter((j) => j.status === 'complete').length ?? 0;
                     const totalJobs = updatedJobs?.length ?? 1;
                     const processingProgress = Math.round((completedJobs / totalJobs) * 100);
 
                     // Check if all jobs are complete
-                    const allComplete = updatedJobs?.every(
-                        (j) => j.status === 'complete' || j.status === 'failed',
-                    );
+                    const allComplete = updatedJobs?.every((j) => j.status === 'complete' || j.status === 'failed');
 
                     newFiles.set(id, {
                         ...file,
@@ -330,9 +314,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 throw new Error('Not authenticated');
             }
 
-            const queuedFiles = Array.from(state.files.values()).filter(
-                (f) => f.status === 'queued',
-            );
+            const queuedFiles = Array.from(state.files.values()).filter((f) => f.status === 'queued');
 
             if (queuedFiles.length === 0) {
                 return;
@@ -352,10 +334,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 );
 
                 // Map filenames to document IDs and jobs
-                const fileDocumentMap = new Map<
-                    string,
-                    { documentId: string; jobs: Array<{ id: string }> }
-                >();
+                const fileDocumentMap = new Map<string, { documentId: string; jobs: Array<{ id: string }> }>();
 
                 for (const doc of result.documents) {
                     const docJobs = result.jobs.filter((j) => j.target_id === doc.id);

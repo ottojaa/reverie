@@ -1,8 +1,2 @@
+export type { UploadApiResult, UploadFile, UploadFileStatus, UploadSession, UploadState } from './types';
 export { UploadProvider, useUpload } from './UploadContext';
-export type {
-    UploadFile,
-    UploadFileStatus,
-    UploadSession,
-    UploadState,
-    UploadApiResult,
-} from './types';
