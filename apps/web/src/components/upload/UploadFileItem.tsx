@@ -22,6 +22,8 @@ interface UploadFileItemProps {
     file: UploadFile;
     onRemove?: (fileId: string) => void;
     onRetry?: (fileId: string) => void;
+    /** When true, root is a plain div (for use inside a parent that handles exit animation) */
+    disableExitAnimation?: boolean;
 }
 
 /**
@@ -65,7 +67,7 @@ function formatFileSize(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps) {
+export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }: UploadFileItemProps) {
     const { icon: FileIcon, color: iconColor } = getFileIcon(file.file.type);
 
     const progress =
@@ -74,23 +76,13 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
     const canRemove = file.status === 'queued' || file.status === 'error';
     const canRetry = file.status === 'error';
 
-    return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, x: -20, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative overflow-hidden rounded-lg border bg-card p-4"
-        >
+    const className = 'relative overflow-hidden rounded-lg border bg-card p-4';
+
+    const content = (
+        <>
             {/* Progress bar background */}
             {(file.status === 'uploading' || file.status === 'processing') && (
-                <motion.div
-                    className="absolute inset-0 bg-primary/5"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                />
+                <motion.div className="absolute inset-0 bg-primary/5" initial={{ width: 0 }} animate={{ width: `${progress}%` }} />
             )}
 
             <div className="relative flex items-center gap-4">
@@ -154,6 +146,16 @@ export function UploadFileItem({ file, onRemove, onRetry }: UploadFileItemProps)
                     </Button>
                 )}
             </div>
+        </>
+    );
+
+    if (disableExitAnimation) {
+        return <div className={className}>{content}</div>;
+    }
+
+    return (
+        <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20, height: 0 }} className={className}>
+            {content}
         </motion.div>
     );
 }

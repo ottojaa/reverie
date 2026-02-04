@@ -2,6 +2,7 @@ import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/rea
 import { useEffect } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { useAuth } from '../lib/auth';
+import { UploadProvider } from '../lib/upload';
 
 // Routes that don't require authentication
 const publicRoutes = ['/', '/login', '/login/callback'];
@@ -39,9 +40,11 @@ function RootComponent() {
 
     // For authenticated routes, render with layout
     return (
-        <Layout>
-            <Outlet />
-        </Layout>
+        <UploadProvider>
+            <Layout>
+                <Outlet />
+            </Layout>
+        </UploadProvider>
     );
 }
 

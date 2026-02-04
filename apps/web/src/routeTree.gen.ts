@@ -9,28 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UploadRouteImport } from './routes/upload'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginCallbackRouteImport } from './routes/login.callback'
 import { Route as DocumentIdRouteImport } from './routes/document.$id'
 
-const UploadRoute = UploadRouteImport.update({
-  id: '/upload',
-  path: '/upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SearchRoute = SearchRouteImport.update({
-  id: '/search',
-  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -63,9 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
   '/login': typeof LoginRouteWithChildren
-  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
-  '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
 }
@@ -73,9 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
   '/login': typeof LoginRouteWithChildren
-  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
-  '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
 }
@@ -84,9 +68,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/browse': typeof BrowseRoute
   '/login': typeof LoginRouteWithChildren
-  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
-  '/upload': typeof UploadRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
 }
@@ -96,9 +78,7 @@ export interface FileRouteTypes {
     | '/'
     | '/browse'
     | '/login'
-    | '/search'
     | '/settings'
-    | '/upload'
     | '/document/$id'
     | '/login/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -106,9 +86,7 @@ export interface FileRouteTypes {
     | '/'
     | '/browse'
     | '/login'
-    | '/search'
     | '/settings'
-    | '/upload'
     | '/document/$id'
     | '/login/callback'
   id:
@@ -116,9 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/browse'
     | '/login'
-    | '/search'
     | '/settings'
-    | '/upload'
     | '/document/$id'
     | '/login/callback'
   fileRoutesById: FileRoutesById
@@ -127,33 +103,17 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BrowseRoute: typeof BrowseRoute
   LoginRoute: typeof LoginRouteWithChildren
-  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
-  UploadRoute: typeof UploadRoute
   DocumentIdRoute: typeof DocumentIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/upload': {
-      id: '/upload'
-      path: '/upload'
-      fullPath: '/upload'
-      preLoaderRoute: typeof UploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/search': {
-      id: '/search'
-      path: '/search'
-      fullPath: '/search'
-      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -208,9 +168,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BrowseRoute: BrowseRoute,
   LoginRoute: LoginRouteWithChildren,
-  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
-  UploadRoute: UploadRoute,
   DocumentIdRoute: DocumentIdRoute,
 }
 export const routeTree = rootRouteImport

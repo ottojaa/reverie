@@ -1,9 +1,7 @@
 import { DocumentGrid } from '@/components/documents';
-import { Button } from '@/components/ui/button';
 import { useDocuments } from '@/lib/api';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
-import { Link } from '@tanstack/react-router';
-import { FolderOpen, Loader2, Upload } from 'lucide-react';
+import { FolderOpen, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 
 export function BrowsePage() {
@@ -31,19 +29,11 @@ export function BrowsePage() {
 
     return (
         <div className="flex flex-1 flex-col p-6">
-            <div className="mb-6 flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold">Browse Files</h1>
-                    <p className="text-muted-foreground">
-                        {data?.total ? `${data.total} ${data.total === 1 ? 'file' : 'files'} in your collection` : 'Navigate through your documents'}
-                    </p>
-                </div>
-                <Link to="/upload">
-                    <Button>
-                        <Upload className="mr-2 size-4" />
-                        Upload
-                    </Button>
-                </Link>
+            <div className="mb-6">
+                <h1 className="text-2xl font-semibold">My Files</h1>
+                <p className="text-muted-foreground">
+                    {data?.total ? `${data.total} ${data.total === 1 ? 'file' : 'files'} in your collection` : 'Navigate through your documents'}
+                </p>
             </div>
 
             {error && (
@@ -62,13 +52,7 @@ export function BrowsePage() {
                     <div className="flex flex-col items-center text-center">
                         <FolderOpen className="size-12 text-muted-foreground/50" />
                         <p className="mt-4 text-lg font-medium">No documents yet</p>
-                        <p className="mt-1 text-sm text-muted-foreground">Upload some documents to get started</p>
-                        <Link to="/upload" className="mt-4">
-                            <Button>
-                                <Upload className="mr-2 size-4" />
-                                Upload Files
-                            </Button>
-                        </Link>
+                        <p className="mt-1 text-sm text-muted-foreground">Drop files here or use the upload button</p>
                     </div>
                 </div>
             ) : (

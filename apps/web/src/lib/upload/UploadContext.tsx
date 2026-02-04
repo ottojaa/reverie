@@ -1,5 +1,5 @@
-import type { JobEvent } from '@reverie/shared';
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
+import type { Job, JobEvent } from '@reverie/shared';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth';
 import { connectSocket, onJobEvents, subscribeToSession, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
@@ -85,11 +85,11 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             const newFiles = new Map(state.files);
             for (const [id, file] of newFiles) {
                 if (file.status === 'error') {
+                    const { error: _, ...rest } = file;
                     newFiles.set(id, {
-                        ...file,
+                        ...rest,
                         status: 'queued',
                         uploadProgress: 0,
-                        error: undefined,
                     });
                 }
             }
@@ -104,7 +104,6 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                     ...file,
                     status: 'queued',
                     uploadProgress: 0,
-                    error: undefined,
                 });
             }
             return { ...state, files: newFiles };
@@ -138,12 +137,13 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                 if (file.status === 'uploading') {
                     const mapping = action.fileDocumentMap.get(file.file.name);
                     if (mapping) {
+                        const { error: _, ...fileRest } = file;
                         newFiles.set(id, {
-                            ...file,
+                            ...fileRest,
                             status: 'processing',
                             uploadProgress: 100,
                             documentId: mapping.documentId,
-                            jobs: mapping.jobs as UploadFile['jobs'],
+                            jobs: mapping.jobs as Job[],
                         });
                         fileIds.push(id);
                     }
@@ -201,7 +201,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
 
                     newFiles.set(id, {
                         ...file,
-                        jobs: updatedJobs,
+                        ...(updatedJobs !== undefined && { jobs: updatedJobs }),
                         processingProgress: event.progress ?? processingProgress,
                         status: allComplete ? 'complete' : 'processing',
                     });
@@ -228,6 +228,12 @@ interface UploadContextType {
     isUploading: boolean;
     /** Current session info */
     session: UploadSession | null;
+    /** Whether the upload modal is open */
+    isModalOpen: boolean;
+    /** Open the upload modal */
+    openModal: () => void;
+    /** Close the upload modal */
+    closeModal: () => void;
     /** Add files to the upload queue */
     addFiles: (files: File[]) => void;
     /** Remove a file from the queue */
@@ -260,12 +266,16 @@ const UploadContext = createContext<UploadContextType | null>(null);
 export function UploadProvider({ children }: { children: ReactNode }) {
     const { accessToken } = useAuth();
     const [state, dispatch] = useReducer(uploadReducer, initialState);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const openModal = useCallback(() => setIsModalOpen(true), []);
+    const closeModal = useCallback(() => setIsModalOpen(false), []);
 
     // Subscribe to WebSocket events when we have a session
     useEffect(() => {
         if (!state.session) return;
 
-        const socket = connectSocket();
+        connectSocket();
         subscribeToSession(state.session.sessionId);
 
         const cleanup = onJobEvents((event) => {
@@ -281,7 +291,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }, [state.session?.sessionId]);
 
     const addFiles = useCallback((files: File[]) => {
+        if (files.length === 0) return;
         dispatch({ type: 'ADD_FILES', files });
+        setIsModalOpen(true);
     }, []);
 
     const removeFile = useCallback((fileId: string) => {
@@ -382,6 +394,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         files,
         isUploading: state.isUploading,
         session: state.session,
+        isModalOpen,
+        openModal,
+        closeModal,
         addFiles,
         removeFile,
         clearCompleted,
