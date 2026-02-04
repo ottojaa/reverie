@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -21,12 +21,15 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(urlError || null);
     const [isLoading, setIsLoading] = useState(false);
+    const prevAuthRef = useRef(isAuthenticated);
 
-    // Redirect if already authenticated
-    if (isAuthenticated) {
-        navigate({ to: '/browse' });
-        return null;
-    }
+    useEffect(() => {
+        if (isAuthenticated && !prevAuthRef.current) {
+            prevAuthRef.current = true;
+            navigate({ to: '/browse', replace: true });
+        }
+        prevAuthRef.current = isAuthenticated;
+    }, [isAuthenticated, navigate]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();

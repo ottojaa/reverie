@@ -1,0 +1,201 @@
+0	2	
+19:18:54.657
+40{"sid":"RnGftvEfIZdwc92DAAAZ"}	32	
+19:18:54.666
+42["subscribe:session",{"session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	77	
+19:18:54.666
+42["job:started",{"type":"job:started","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.795Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:54.796
+42["job:progress",{"type":"job:progress","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.800Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.813
+42["job:started",{"type":"job:started","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.803Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:54.832
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.809Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.832
+42["job:progress",{"type":"job:progress","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:54.809Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.832
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:54.814Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.852
+42["job:started",{"type":"job:started","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.816Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:54.852
+42["job:progress",{"type":"job:progress","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.822Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.852
+42["job:started",{"type":"job:started","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.824Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:54.853
+42["job:progress",{"type":"job:progress","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:54.826Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.853
+42["job:progress",{"type":"job:progress","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.826Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.853
+42["job:progress",{"type":"job:progress","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:54.901Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.903
+42["job:progress",{"type":"job:progress","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:54.927Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.930
+42["job:started",{"type":"job:started","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.940Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:54.952
+42["job:progress",{"type":"job:progress","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.942Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.969
+42["job:progress",{"type":"job:progress","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:54.948Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.987
+42["job:progress",{"type":"job:progress","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:54.961Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:54.987
+42["job:complete",{"type":"job:complete","job_id":"558c889f-70ca-49d2-88e5-fe4139a099e2","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:54.968Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LGEo7BG?%f=zy;?GxtWByDwfxuxu","paths":{"sm":"thumbnails/2a818fba-3db3-4402-9844-50986e2ccfa7/sm.webp","md":"thumbnails/2a818fba-3db3-4402-9844-50986e2ccfa7/md.webp","lg":"thumbnails/2a818fba-3db3-4402-9844-50986e2ccfa7/lg.webp"},"originalDimensions":{"width":289,"height":374}}}]	569	
+19:18:55.009
+42["job:progress",{"type":"job:progress","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:54.981Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.009
+42["job:progress",{"type":"job:progress","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:54.983Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.009
+42["job:progress",{"type":"job:progress","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:54.985Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:55.009
+42["job:complete",{"type":"job:complete","job_id":"604fb3fd-fc50-4667-8d70-eaf5b7224ea8","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:54.988Z","document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:55.028
+42["job:started",{"type":"job:started","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:54.994Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.028
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:54.999Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.028
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.006Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.028
+42["job:progress",{"type":"job:progress","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.034Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.046
+42["job:complete",{"type":"job:complete","job_id":"9cc5da7c-c956-4b72-aa12-0cc6add266ef","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.041Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LBCP:~?=02ixyU.6a1D%I]xu$%IU","paths":{"sm":"thumbnails/2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae/sm.webp","md":"thumbnails/2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae/md.webp","lg":"thumbnails/2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.064
+42["job:started",{"type":"job:started","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.080Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.091
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.089Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.109
+42["job:progress",{"type":"job:progress","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:55.138Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.140
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.162Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.163
+42["subscribe:document",{"document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae"}]	79	
+19:18:55.170
+42["subscribe:document",{"document_id":"2a818fba-3db3-4402-9844-50986e2ccfa7"}]	79	
+19:18:55.170
+42["subscribe:document",{"document_id":"340361b6-20db-44fd-96ee-edd9db5cd742"}]	79	
+19:18:55.170
+42["subscribe:document",{"document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246"}]	79	
+19:18:55.170
+42["subscribe:document",{"document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21"}]	79	
+19:18:55.170
+42["job:started",{"type":"job:started","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.176Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.178
+42["job:started",{"type":"job:started","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.176Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.181
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.178Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.184
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.178Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.184
+42["job:progress",{"type":"job:progress","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.206Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.208
+42["job:progress",{"type":"job:progress","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.206Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.211
+42["job:complete",{"type":"job:complete","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.212Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LNGuj?574T=^?wXTrUiuyFNKwFV=","paths":{"sm":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/sm.webp","md":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/md.webp","lg":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.214
+42["job:complete",{"type":"job:complete","job_id":"3ec81310-6364-466e-b179-067f679c0480","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.212Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LNGuj?574T=^?wXTrUiuyFNKwFV=","paths":{"sm":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/sm.webp","md":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/md.webp","lg":"thumbnails/340361b6-20db-44fd-96ee-edd9db5cd742/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.216
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.269Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.271
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.269Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.275
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:55.344Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.345
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:55.344Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.349
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.392Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.394
+42["job:progress",{"type":"job:progress","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.392Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.397
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:55.402Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.403
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":70,"timestamp":"2026-02-04T17:18:55.402Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.406
+42["job:complete",{"type":"job:complete","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.403Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"L%Hx~V%NWXof_4tRaxj[xuWAWBof","paths":{"sm":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/sm.webp","md":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/md.webp","lg":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.409
+42["job:complete",{"type":"job:complete","job_id":"a5345415-cf43-4da0-9c35-a6b1eef55624","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.403Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"L%Hx~V%NWXof_4tRaxj[xuWAWBof","paths":{"sm":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/sm.webp","md":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/md.webp","lg":"thumbnails/4d0cce7a-a3f7-478c-9f6a-c5c79c65c246/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.409
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.449Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.450
+42["job:progress",{"type":"job:progress","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"processing","progress":90,"timestamp":"2026-02-04T17:18:55.449Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.454
+42["job:complete",{"type":"job:complete","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.457Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LnEV+,%MM{xu_NxvM{oz-=xuaeof","paths":{"sm":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/sm.webp","md":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/md.webp","lg":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.458
+42["job:complete",{"type":"job:complete","job_id":"6dce0e7a-2465-4aae-9ca7-3e7f94deed52","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.457Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"blurhash":"LnEV+,%MM{xu_NxvM{oz-=xuaeof","paths":{"sm":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/sm.webp","md":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/md.webp","lg":"thumbnails/8046ab68-ca24-4da0-a9cf-9d886f488b21/lg.webp"},"originalDimensions":{"width":4096,"height":1856}}}]	571	
+19:18:55.461
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:55.591Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.592
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:55.591Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.595
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:55.592Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:55.598
+42["job:progress",{"type":"job:progress","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:55.592Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:55.598
+42["job:complete",{"type":"job:complete","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.594Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:55.600
+42["job:complete",{"type":"job:complete","job_id":"b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.594Z","document_id":"2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:55.600
+42["job:started",{"type":"job:started","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.598Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.603
+42["job:started",{"type":"job:started","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.598Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.603
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.600Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.606
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.600Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.606
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.603Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.623
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.603Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.623
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:55.751Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.752
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:55.751Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.769
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:55.752Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:55.791
+42["job:progress",{"type":"job:progress","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:55.752Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:55.791
+42["job:complete",{"type":"job:complete","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.754Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:55.791
+42["job:complete",{"type":"job:complete","job_id":"3a5f1800-e552-4949-bd94-47d3f04f3b04","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:55.754Z","document_id":"340361b6-20db-44fd-96ee-edd9db5cd742","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:55.791
+42["job:started",{"type":"job:started","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.759Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.791
+42["job:started",{"type":"job:started","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":0,"timestamp":"2026-02-04T17:18:55.759Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	267	
+19:18:55.791
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.761Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.791
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":10,"timestamp":"2026-02-04T17:18:55.761Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.791
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.763Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.791
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":30,"timestamp":"2026-02-04T17:18:55.763Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:55.791
+42["unsubscribe:document",{"document_id":"340361b6-20db-44fd-96ee-edd9db5cd742"}]	81	
+19:18:55.822
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:56.103Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:56.106
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:56.103Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:56.124
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:56.104Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:56.124
+42["job:progress",{"type":"job:progress","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:56.104Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:56.124
+42["job:complete",{"type":"job:complete","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:56.109Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:56.141
+42["job:complete",{"type":"job:complete","job_id":"fbd70962-7335-4665-acde-696570c797e2","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:56.109Z","document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:56.141
+42["unsubscribe:document",{"document_id":"4d0cce7a-a3f7-478c-9f6a-c5c79c65c246"}]	81	
+19:18:56.157
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:56.354Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:56.356
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":80,"timestamp":"2026-02-04T17:18:56.354Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	270	
+19:18:56.357
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:56.356Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:56.381
+42["job:progress",{"type":"job:progress","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"processing","progress":100,"timestamp":"2026-02-04T17:18:56.356Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832"}]	271	
+19:18:56.402
+42["job:complete",{"type":"job:complete","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:56.361Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:56.402
+42["job:complete",{"type":"job:complete","job_id":"0fa29981-e058-480c-a2d0-d8a740400ac7","status":"complete","progress":100,"timestamp":"2026-02-04T17:18:56.361Z","document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21","session_id":"146ebb99-815c-43f4-841b-995d7f4d0832","result":{"rawText":"","confidence":95,"textDensity":0,"hasMeaningfulText":false,"category":"photo","needsReview":false,"metadata":null}}]	406	
+19:18:56.402
+42["unsubscribe:document",{"document_id":"8046ab68-ca24-4da0-a9cf-9d886f488b21"}]	81	
+19:18:56.423
+2

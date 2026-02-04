@@ -27,9 +27,10 @@ export class UploadService {
 
     /**
      * Upload multiple files (with user context for storage quotas)
+     * @param clientSessionId - Optional client-provided session ID for WebSocket correlation (avoids race with job events)
      */
-    async uploadFiles(files: UploadedFile[], userId: string, folderId?: string): Promise<UploadResult> {
-        const sessionId = randomUUID();
+    async uploadFiles(files: UploadedFile[], userId: string, folderId?: string, clientSessionId?: string): Promise<UploadResult> {
+        const sessionId = clientSessionId ?? randomUUID();
         const documents: Document[] = [];
         const jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
 

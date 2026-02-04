@@ -103,3 +103,9 @@ export const DocumentStatusResponseSchema = z.object({
 });
 
 export type DocumentStatusResponse = z.infer<typeof DocumentStatusResponseSchema>;
+
+export const BatchDeleteDocumentsSchema = z.object({
+    ids: z.array(UuidSchema).min(1).max(100),
+});
+
+export type BatchDeleteDocuments = z.infer<typeof BatchDeleteDocumentsSchema>;

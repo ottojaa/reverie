@@ -1,5 +1,6 @@
-import { DocumentGrid } from '@/components/documents';
+import { DocumentGrid, SelectionBanner } from '@/components/documents';
 import { useDocuments } from '@/lib/api';
+import { SelectionProvider } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { FolderOpen, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -48,7 +49,7 @@ export function BrowsePage() {
                     </div>
                 </div>
             ) : isEmpty ? (
-                <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed">
+                <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed py-8">
                     <div className="flex flex-col items-center text-center">
                         <FolderOpen className="size-12 text-muted-foreground/50" />
                         <p className="mt-4 text-lg font-medium">No documents yet</p>
@@ -56,7 +57,10 @@ export function BrowsePage() {
                     </div>
                 </div>
             ) : (
-                <DocumentGrid documents={documents} isLoading={false} />
+                <SelectionProvider>
+                    <SelectionBanner />
+                    <DocumentGrid documents={documents} isLoading={false} />
+                </SelectionProvider>
             )}
         </div>
     );

@@ -15,14 +15,13 @@ function RootComponent() {
     const isPublicRoute = publicRoutes.some((route) => location.pathname === route || location.pathname.startsWith('/login'));
 
     useEffect(() => {
-        // Don't redirect while loading
         if (isLoading) return;
-
-        // If not authenticated and trying to access protected route, redirect to login
-        if (!isAuthenticated && !isPublicRoute) {
-            navigate({ to: '/login', search: { error: 'unauthorized_access' } });
-        }
-    }, [isAuthenticated, isLoading, isPublicRoute, navigate]);
+        if (isAuthenticated) return;
+        const pathname = location.pathname;
+        const isPublic = publicRoutes.some((route) => pathname === route || pathname.startsWith('/login'));
+        if (isPublic) return;
+        navigate({ to: '/login', search: { error: 'unauthorized_access' }, replace: true });
+    }, [isAuthenticated, isLoading, location.pathname, navigate]);
 
     // Show loading state
     if (isLoading) {

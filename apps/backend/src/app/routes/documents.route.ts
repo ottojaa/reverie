@@ -1,4 +1,12 @@
-import { DocumentListQuerySchema, DocumentSchema, PaginatedResponseSchema, UuidSchema, type Document, type DocumentListQuery } from '@reverie/shared';
+import {
+    BatchDeleteDocumentsSchema,
+    DocumentListQuerySchema,
+    DocumentSchema,
+    PaginatedResponseSchema,
+    UuidSchema,
+    type Document,
+    type DocumentListQuery,
+} from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
@@ -196,23 +204,87 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            // Delete file from storage (with storage usage update)
+            await db.transaction().execute(async (trx) => {
+                await trx
+                    .deleteFrom('processing_jobs')
+                    .where('target_type', '=', 'document')
+                    .where('target_id', '=', request.params.id)
+                    .execute();
+                await trx
+                    .deleteFrom('documents')
+                    .where('id', '=', request.params.id)
+                    .where('user_id', '=', userId)
+                    .execute();
+            });
+
             try {
                 await storageService.deleteFile(document.file_path, userId);
-
-                // Delete thumbnails if they exist
                 if (document.thumbnail_paths) {
                     for (const path of Object.values(document.thumbnail_paths)) {
                         await storageService.deleteFile(path, userId);
                     }
                 }
             } catch (err) {
-                // Log but don't fail if storage delete fails
                 console.error('Failed to delete file from storage:', err);
             }
 
-            // Delete from database (cascade will handle related records)
-            await db.deleteFrom('documents').where('id', '=', request.params.id).where('user_id', '=', userId).execute();
+            reply.status(204).send();
+        },
+    );
+
+    // Batch delete documents (requires authentication)
+    fastify.delete<{
+        Body: { ids: string[] };
+    }>(
+        '/documents',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Delete multiple documents',
+                body: BatchDeleteDocumentsSchema,
+                response: {
+                    204: z.null(),
+                },
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const ids = request.body.ids;
+
+            const documents = await Promise.all(ids.map((id) => uploadService.getDocument(id, userId)));
+            const found = documents.filter((d): d is NonNullable<typeof d> => d != null);
+
+            if (found.length === 0) {
+                return reply.notFound('No documents found');
+            }
+
+            const foundIds = new Set(found.map((d) => d.id));
+
+            await db.transaction().execute(async (trx) => {
+                await trx
+                    .deleteFrom('processing_jobs')
+                    .where('target_type', '=', 'document')
+                    .where('target_id', 'in', Array.from(foundIds))
+                    .execute();
+                await trx
+                    .deleteFrom('documents')
+                    .where('id', 'in', Array.from(foundIds))
+                    .where('user_id', '=', userId)
+                    .execute();
+            });
+
+            for (const document of found) {
+                try {
+                    await storageService.deleteFile(document.file_path, userId);
+                    if (document.thumbnail_paths) {
+                        for (const path of Object.values(document.thumbnail_paths)) {
+                            await storageService.deleteFile(path, userId);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to delete file from storage:', err);
+                }
+            }
 
             reply.status(204).send();
         },

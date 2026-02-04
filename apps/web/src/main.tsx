@@ -4,6 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { AuthProvider } from './lib/auth';
+import { ConfirmProvider } from './lib/confirm';
 import { ThemeProvider } from './lib/theme';
 import { router } from './router';
 import './styles.css';
@@ -24,8 +25,10 @@ root.render(
         <AuthProvider>
             <ThemeProvider>
                 <QueryClientProvider client={queryClient}>
-                    <Toaster />
-                    <RouterProvider router={router} />
+                    <ConfirmProvider>
+                        <Toaster />
+                        <RouterProvider router={router} />
+                    </ConfirmProvider>
                 </QueryClientProvider>
             </ThemeProvider>
         </AuthProvider>

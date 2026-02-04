@@ -1,7 +1,7 @@
 import type { Job, JobEvent } from '@reverie/shared';
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth';
-import { connectSocket, onJobEvents, subscribeToSession, unsubscribeFromSession } from '../socket';
+import { connectSocket, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFiles } from './uploadApi';
 
@@ -20,7 +20,7 @@ type UploadAction =
     | { type: 'RETRY_FAILED' }
     | { type: 'RETRY_FILE'; fileId: string }
     | { type: 'START_UPLOAD' }
-    | { type: 'UPLOAD_PROGRESS'; progress: number }
+    | { type: 'UPLOAD_PROGRESS'; progress: number; loaded: number; total: number }
     | {
           type: 'UPLOAD_SUCCESS';
           sessionId: string;
@@ -33,9 +33,47 @@ type UploadAction =
 // Initial state
 const initialState: UploadState = {
     files: new Map(),
+    pendingJobEvents: new Map(),
     session: null,
     isUploading: false,
+    uploadBytesLoaded: 0,
+    uploadBytesTotal: 0,
 };
+
+function applyJobEventToFile(file: UploadFile, event: JobEvent): UploadFile {
+    if (!file.jobs || file.jobs.length === 0) {
+        return file;
+    }
+
+    let matchedJob = false;
+    const updatedJobs = file.jobs.map((job) => {
+        if (job.id !== event.job_id) {
+            return job;
+        }
+
+        matchedJob = true;
+        const isTerminalEvent = event.type === 'job:complete' || event.type === 'job:failed';
+        const isTerminalStatus = job.status === 'complete' || job.status === 'failed';
+
+        if (!isTerminalEvent && isTerminalStatus) {
+            return job;
+        }
+
+        return { ...job, status: event.status };
+    });
+
+    const completedJobs = updatedJobs.filter((j) => j.status === 'complete').length;
+    const totalJobs = updatedJobs.length || 1;
+    const processingProgress = Math.round((completedJobs / totalJobs) * 100);
+    const allComplete = updatedJobs.every((j) => j.status === 'complete' || j.status === 'failed');
+
+    return {
+        ...file,
+        jobs: updatedJobs,
+        processingProgress: matchedJob ? (event.progress ?? processingProgress) : processingProgress,
+        status: allComplete ? 'complete' : 'processing',
+    };
+}
 
 // Reducer
 function uploadReducer(state: UploadState, action: UploadAction): UploadState {
@@ -116,7 +154,13 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                     newFiles.set(id, { ...file, status: 'uploading', uploadProgress: 0 });
                 }
             }
-            return { ...state, files: newFiles, isUploading: true };
+            return {
+                ...state,
+                files: newFiles,
+                isUploading: true,
+                uploadBytesLoaded: 0,
+                uploadBytesTotal: 0,
+            };
         }
 
         case 'UPLOAD_PROGRESS': {
@@ -126,25 +170,44 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                     newFiles.set(id, { ...file, uploadProgress: action.progress });
                 }
             }
-            return { ...state, files: newFiles };
+            return {
+                ...state,
+                files: newFiles,
+                uploadBytesLoaded: action.loaded,
+                uploadBytesTotal: action.total,
+            };
         }
 
         case 'UPLOAD_SUCCESS': {
             const newFiles = new Map(state.files);
             const fileIds: string[] = [];
+            const pendingJobEvents = new Map(state.pendingJobEvents);
 
             for (const [id, file] of newFiles) {
                 if (file.status === 'uploading') {
                     const mapping = action.fileDocumentMap.get(id); // Look up by file ID
                     if (mapping) {
                         const { error: _, ...fileRest } = file;
-                        newFiles.set(id, {
+                        const jobs = mapping.jobs as Job[];
+                        const hasJobs = jobs.length > 0;
+                        let nextFile: UploadFile = {
                             ...fileRest,
-                            status: 'processing',
+                            status: hasJobs ? 'processing' : 'complete',
                             uploadProgress: 100,
+                            processingProgress: hasJobs ? 0 : 100,
                             documentId: mapping.documentId,
-                            jobs: mapping.jobs as Job[],
-                        });
+                            jobs,
+                        };
+
+                        const pendingForDocument = pendingJobEvents.get(mapping.documentId);
+                        if (pendingForDocument && pendingForDocument.size > 0) {
+                            for (const pendingEvent of pendingForDocument.values()) {
+                                nextFile = applyJobEventToFile(nextFile, pendingEvent);
+                            }
+                            pendingJobEvents.delete(mapping.documentId);
+                        }
+
+                        newFiles.set(id, nextFile);
                         fileIds.push(id);
                     }
                 }
@@ -153,6 +216,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             return {
                 ...state,
                 files: newFiles,
+                pendingJobEvents,
                 isUploading: false,
                 session: {
                     sessionId: action.sessionId,
@@ -179,37 +243,25 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
         case 'JOB_EVENT': {
             const { event } = action;
             const newFiles = new Map(state.files);
+            const pendingJobEvents = new Map(state.pendingJobEvents);
+            let handled = false;
 
             // Find file by document ID
             for (const [id, file] of newFiles) {
                 if (file.documentId === event.document_id) {
-                    // Update job status
-                    const updatedJobs = file.jobs?.map((job) => {
-                        if (job.id === event.job_id) {
-                            return { ...job, status: event.status };
-                        }
-                        return job;
-                    });
-
-                    // Calculate processing progress
-                    const completedJobs = updatedJobs?.filter((j) => j.status === 'complete').length ?? 0;
-                    const totalJobs = updatedJobs?.length ?? 1;
-                    const processingProgress = Math.round((completedJobs / totalJobs) * 100);
-
-                    // Check if all jobs are complete
-                    const allComplete = updatedJobs?.every((j) => j.status === 'complete' || j.status === 'failed');
-
-                    newFiles.set(id, {
-                        ...file,
-                        ...(updatedJobs !== undefined && { jobs: updatedJobs }),
-                        processingProgress: event.progress ?? processingProgress,
-                        status: allComplete ? 'complete' : 'processing',
-                    });
+                    newFiles.set(id, applyJobEventToFile(file, event));
+                    handled = true;
                     break;
                 }
             }
 
-            return { ...state, files: newFiles };
+            if (!handled && event.document_id) {
+                const existing = pendingJobEvents.get(event.document_id) ?? new Map<string, JobEvent>();
+                existing.set(event.job_id, event);
+                pendingJobEvents.set(event.document_id, existing);
+            }
+
+            return { ...state, files: newFiles, pendingJobEvents };
         }
 
         case 'RESET':
@@ -259,36 +311,25 @@ interface UploadContextType {
         complete: number;
         error: number;
     };
+    /** Byte-level upload progress (for phase indicator and smooth progress bar) */
+    uploadBytesLoaded: number;
+    uploadBytesTotal: number;
 }
 
 const UploadContext = createContext<UploadContextType | null>(null);
+
+const noop = () => {};
 
 export function UploadProvider({ children }: { children: ReactNode }) {
     const { accessToken } = useAuth();
     const [state, dispatch] = useReducer(uploadReducer, initialState);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const jobEventsCleanupRef = useRef<() => void>(noop);
+    const sessionIdRef = useRef<string | null>(null);
+    const subscribedDocumentIdsRef = useRef<Set<string>>(new Set());
 
     const openModal = useCallback(() => setIsModalOpen(true), []);
     const closeModal = useCallback(() => setIsModalOpen(false), []);
-
-    // Subscribe to WebSocket events when we have a session
-    useEffect(() => {
-        if (!state.session) return;
-
-        const sessionId = state.session.sessionId;
-
-        connectSocket();
-        subscribeToSession(sessionId);
-
-        const cleanup = onJobEvents((event) => {
-            dispatch({ type: 'JOB_EVENT', event });
-        });
-
-        return () => {
-            cleanup();
-            unsubscribeFromSession(sessionId);
-        };
-    }, [state.session?.sessionId]);
 
     const addFiles = useCallback((files: File[]) => {
         if (files.length === 0) return;
@@ -317,6 +358,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const reset = useCallback(() => {
+        jobEventsCleanupRef.current();
+        if (sessionIdRef.current) {
+            unsubscribeFromSession(sessionIdRef.current);
+            sessionIdRef.current = null;
+        }
+        for (const documentId of subscribedDocumentIdsRef.current) {
+            unsubscribeFromDocument(documentId);
+        }
+        subscribedDocumentIdsRef.current.clear();
         dispatch({ type: 'RESET' });
     }, []);
 
@@ -332,16 +382,32 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            // Generate session ID and subscribe to WebSocket BEFORE upload so we don't miss job events
+            const sessionId = crypto.randomUUID();
+            jobEventsCleanupRef.current();
+            if (sessionIdRef.current) {
+                unsubscribeFromSession(sessionIdRef.current);
+            }
+            sessionIdRef.current = sessionId;
+            connectSocket();
+            subscribeToSession(sessionId);
+            jobEventsCleanupRef.current = onJobEvents((event) => {
+                dispatch({ type: 'JOB_EVENT', event });
+            });
+
             dispatch({ type: 'START_UPLOAD' });
 
             try {
                 const result = await uploadFiles(
                     queuedFiles.map((f) => f.file),
                     accessToken,
-                    folderId,
-                    (loaded, total) => {
-                        const progress = Math.round((loaded / total) * 100);
-                        dispatch({ type: 'UPLOAD_PROGRESS', progress });
+                    {
+                        ...(folderId && { folderId }),
+                        sessionId,
+                        onProgress: (loaded, total) => {
+                            const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                            dispatch({ type: 'UPLOAD_PROGRESS', progress, loaded, total });
+                        },
                     },
                 );
 
@@ -351,16 +417,23 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 for (let i = 0; i < Math.min(result.documents.length, queuedFiles.length); i++) {
                     const doc = result.documents[i];
                     const queuedFile = queuedFiles[i];
-                    
+
                     if (!doc || !queuedFile) continue;
-                    
+
                     const docJobs = result.jobs.filter((j) => j.target_id === doc.id);
-                    
+
                     // Use queued file ID as key for reliable matching
                     fileDocumentMap.set(queuedFile.id, {
                         documentId: doc.id,
                         jobs: docJobs,
                     });
+                }
+
+                for (const doc of result.documents) {
+                    if (!subscribedDocumentIdsRef.current.has(doc.id)) {
+                        subscribeToDocument(doc.id);
+                        subscribedDocumentIdsRef.current.add(doc.id);
+                    }
                 }
 
                 dispatch({
@@ -379,6 +452,16 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     );
 
     const files = useMemo(() => Array.from(state.files.values()), [state.files]);
+
+    useEffect(() => {
+        for (const file of files) {
+            if (!file.documentId) continue;
+            if (file.status !== 'complete' && file.status !== 'error') continue;
+            if (!subscribedDocumentIdsRef.current.has(file.documentId)) continue;
+            unsubscribeFromDocument(file.documentId);
+            subscribedDocumentIdsRef.current.delete(file.documentId);
+        }
+    }, [files]);
 
     const stats = useMemo(() => {
         const counts = {
@@ -413,6 +496,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         startUpload,
         reset,
         stats,
+        uploadBytesLoaded: state.uploadBytesLoaded,
+        uploadBytesTotal: state.uploadBytesTotal,
     };
 
     return <UploadContext.Provider value={value}>{children}</UploadContext.Provider>;

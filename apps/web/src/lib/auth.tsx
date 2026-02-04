@@ -1,5 +1,5 @@
 import type { LoginResponse, User } from '@reverie/shared';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: true,
         isAuthenticated: false,
     });
+    const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
 
     // Initialize auth state from localStorage
     useEffect(() => {
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (storedToken && storedUser) {
             try {
                 const user = JSON.parse(storedUser) as User;
+
                 setState({
                     user,
                     accessToken: storedToken,
@@ -136,26 +138,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const refreshToken = useCallback(async (): Promise<boolean> => {
-        try {
-            const response = await fetch(`${API_BASE}/auth/refresh`, {
-                method: 'POST',
-                credentials: 'include', // Include refresh token cookie
-            });
-
-            if (!response.ok) {
-                return false;
-            }
-
-            const data = await response.json();
-            localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
-            setState((prev) => ({
-                ...prev,
-                accessToken: data.access_token,
-            }));
-            return true;
-        } catch {
-            return false;
+        if (refreshPromiseRef.current) {
+            return refreshPromiseRef.current;
         }
+        const promise = (async (): Promise<boolean> => {
+            try {
+                const response = await fetch(`${API_BASE}/auth/refresh`, {
+                    method: 'POST',
+                    credentials: 'include', // Include refresh token cookie
+                });
+
+                if (!response.ok) {
+                    return false;
+                }
+
+                const data = await response.json();
+                localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
+                setState((prev) => ({
+                    ...prev,
+                    accessToken: data.access_token,
+                }));
+                return true;
+            } catch {
+                return false;
+            } finally {
+                refreshPromiseRef.current = null;
+            }
+        })();
+        refreshPromiseRef.current = promise;
+        return promise;
     }, []);
 
     const loginWithGoogle = () => {

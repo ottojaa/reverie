@@ -1,4 +1,4 @@
-import type { Job, UploadedDocument } from '@reverie/shared';
+import type { Job, JobEvent, UploadedDocument } from '@reverie/shared';
 
 /**
  * Status of a file in the upload queue
@@ -50,10 +50,16 @@ export interface UploadSession {
 export interface UploadState {
     /** All files being tracked */
     files: Map<string, UploadFile>;
+    /** Job events received before document IDs are mapped to files */
+    pendingJobEvents: Map<string, Map<string, JobEvent>>;
     /** Current session (if any) */
     session: UploadSession | null;
     /** Whether an upload is in progress */
     isUploading: boolean;
+    /** Bytes uploaded so far (XHR progress) – for phase indicator and smooth 0–50% */
+    uploadBytesLoaded: number;
+    /** Total bytes to upload (XHR total) */
+    uploadBytesTotal: number;
 }
 
 /**

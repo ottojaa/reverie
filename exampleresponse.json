@@ -1,0 +1,192 @@
+{
+    "session_id": "146ebb99-815c-43f4-841b-995d7f4d0832",
+    "documents": [
+        {
+            "id": "2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae",
+            "original_filename": "IMG20250520114639.jpg",
+            "mime_type": "image/jpeg",
+            "size_bytes": 7839714,
+            "folder_id": null,
+            "file_path": "users/OnqQNATwMCVL/e1/1a/e11ab2a0f70b6a4193b879a5766a7bf3bc1218899176dd6f272604c0ae93f2ca.jpg",
+            "created_at": "2026-02-04T17:18:54.776Z"
+        },
+        {
+            "id": "2a818fba-3db3-4402-9844-50986e2ccfa7",
+            "original_filename": "poe-divine-poe.gif",
+            "mime_type": "image/gif",
+            "size_bytes": 6990619,
+            "folder_id": null,
+            "file_path": "users/OnqQNATwMCVL/14/64/1464d848f635bb8a0712310d0ac278fa04c70e22e6e42c8ae79e33dfb1a986f4.gif",
+            "created_at": "2026-02-04T17:18:54.810Z"
+        },
+        {
+            "id": "340361b6-20db-44fd-96ee-edd9db5cd742",
+            "original_filename": "IMG20250520114210.jpg",
+            "mime_type": "image/jpeg",
+            "size_bytes": 6122400,
+            "folder_id": null,
+            "file_path": "users/OnqQNATwMCVL/7a/1c/7a1cd33a77c55be76d12f85e7663b87a0e34ce019bb513bf768035c000b98cc3.jpg",
+            "created_at": "2026-02-04T17:18:54.921Z"
+        },
+        {
+            "id": "4d0cce7a-a3f7-478c-9f6a-c5c79c65c246",
+            "original_filename": "IMG20250522124907.jpg",
+            "mime_type": "image/jpeg",
+            "size_bytes": 5382910,
+            "folder_id": null,
+            "file_path": "users/OnqQNATwMCVL/b5/6f/b56fe299adb58aeeb3ff9c38277e53f043ff2faa625865612affdfea82108ed1.jpg",
+            "created_at": "2026-02-04T17:18:55.062Z"
+        },
+        {
+            "id": "8046ab68-ca24-4da0-a9cf-9d886f488b21",
+            "original_filename": "IMG20250519180750.jpg",
+            "mime_type": "image/jpeg",
+            "size_bytes": 5131473,
+            "folder_id": null,
+            "file_path": "users/OnqQNATwMCVL/7d/ab/7dab902ccf7adc082f96c78bcb003782e66a658c602ada08ca6d159d6458c6db.jpg",
+            "created_at": "2026-02-04T17:18:55.160Z"
+        }
+    ],
+    "jobs": [
+        {
+            "id": "b4cd7f7c-d2db-4439-9a21-e4b438ee9cf6",
+            "job_type": "ocr",
+            "target_type": "document",
+            "target_id": "2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "9cc5da7c-c956-4b72-aa12-0cc6add266ef",
+            "job_type": "thumbnail",
+            "target_type": "document",
+            "target_id": "2388aa52-4a8f-4fd4-b110-9f15d4aaa2ae",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "604fb3fd-fc50-4667-8d70-eaf5b7224ea8",
+            "job_type": "ocr",
+            "target_type": "document",
+            "target_id": "2a818fba-3db3-4402-9844-50986e2ccfa7",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "558c889f-70ca-49d2-88e5-fe4139a099e2",
+            "job_type": "thumbnail",
+            "target_type": "document",
+            "target_id": "2a818fba-3db3-4402-9844-50986e2ccfa7",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "3a5f1800-e552-4949-bd94-47d3f04f3b04",
+            "job_type": "ocr",
+            "target_type": "document",
+            "target_id": "340361b6-20db-44fd-96ee-edd9db5cd742",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "3ec81310-6364-466e-b179-067f679c0480",
+            "job_type": "thumbnail",
+            "target_type": "document",
+            "target_id": "340361b6-20db-44fd-96ee-edd9db5cd742",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "fbd70962-7335-4665-acde-696570c797e2",
+            "job_type": "ocr",
+            "target_type": "document",
+            "target_id": "4d0cce7a-a3f7-478c-9f6a-c5c79c65c246",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "a5345415-cf43-4da0-9c35-a6b1eef55624",
+            "job_type": "thumbnail",
+            "target_type": "document",
+            "target_id": "4d0cce7a-a3f7-478c-9f6a-c5c79c65c246",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "0fa29981-e058-480c-a2d0-d8a740400ac7",
+            "job_type": "ocr",
+            "target_type": "document",
+            "target_id": "8046ab68-ca24-4da0-a9cf-9d886f488b21",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        },
+        {
+            "id": "6dce0e7a-2465-4aae-9ca7-3e7f94deed52",
+            "job_type": "thumbnail",
+            "target_type": "document",
+            "target_id": "8046ab68-ca24-4da0-a9cf-9d886f488b21",
+            "status": "pending",
+            "priority": 0,
+            "attempts": 0,
+            "error_message": null,
+            "result": null,
+            "created_at": "2026-02-04T17:18:55.168Z",
+            "started_at": null,
+            "completed_at": null
+        }
+    ]
+}

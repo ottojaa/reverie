@@ -27,6 +27,7 @@ export default async function (fastify: FastifyInstance) {
             const parts = request.parts();
             const files: UploadedFile[] = [];
             let folderId: string | undefined;
+            let sessionId: string | undefined;
 
             for await (const part of parts) {
                 if (part.type === 'file') {
@@ -38,6 +39,8 @@ export default async function (fastify: FastifyInstance) {
                     });
                 } else if (part.fieldname === 'folder_id' && part.value) {
                     folderId = String(part.value);
+                } else if (part.fieldname === 'session_id' && part.value) {
+                    sessionId = String(part.value);
                 }
             }
 
@@ -53,7 +56,7 @@ export default async function (fastify: FastifyInstance) {
                 }
             }
 
-            const result = await uploadService.uploadFiles(files, userId, folderId);
+            const result = await uploadService.uploadFiles(files, userId, folderId, sessionId);
 
             return {
                 session_id: result.sessionId,

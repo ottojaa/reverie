@@ -1,22 +1,9 @@
 import { Button } from '@/components/ui/button';
 import type { UploadFile } from '@/lib/upload';
 import { cn } from '@/lib/utils';
-import {
-    AlertCircle,
-    Check,
-    File,
-    FileArchive,
-    FileAudio,
-    FileCode,
-    FileImage,
-    FileSpreadsheet,
-    FileText,
-    FileVideo,
-    Loader2,
-    RefreshCw,
-    X,
-} from 'lucide-react';
+import { AlertCircle, Check, File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, RefreshCw, X } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Spinner } from '../ui/spinner';
 
 interface UploadFileItemProps {
     file: UploadFile;
@@ -76,13 +63,30 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
     const canRemove = file.status === 'queued' || file.status === 'error';
     const canRetry = file.status === 'error';
 
-    const className = 'relative overflow-hidden rounded-lg border bg-card p-4';
+    const isProcessing = file.status === 'processing';
+    const isQueued = file.status === 'queued';
+    const className = cn('relative overflow-hidden rounded-lg border bg-card p-4', isQueued && 'opacity-80');
 
     const content = (
         <>
-            {/* Progress bar background */}
-            {(file.status === 'uploading' || file.status === 'processing') && (
-                <motion.div className="absolute inset-0 bg-primary/5" initial={{ width: 0 }} animate={{ width: `${progress}%` }} />
+            {/* Progress bar background – upload phase only */}
+            {file.status === 'uploading' && (
+                <motion.div
+                    className="absolute inset-0 bg-primary/5"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                />
+            )}
+            {/* Processing: pulsing teal glow */}
+            {isProcessing && (
+                <motion.div
+                    className="pointer-events-none absolute inset-0 rounded-lg"
+                    animate={{
+                        boxShadow: ['0 0 12px rgba(79, 209, 197, 0.12)', '0 0 24px rgba(79, 209, 197, 0.22)', '0 0 12px rgba(79, 209, 197, 0.12)'],
+                    }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                />
             )}
 
             <div className="relative flex items-center gap-4">
@@ -96,6 +100,7 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
                     <p className="truncate font-medium">{file.file.name}</p>
                     <p className="text-sm text-muted-foreground">
                         {formatFileSize(file.file.size)}
+                        {isQueued && ' • Queued'}
                         {file.status === 'uploading' && ` • Uploading ${progress}%`}
                         {file.status === 'processing' && ` • Processing ${progress}%`}
                         {file.status === 'error' && file.error && <span className="text-destructive"> • {file.error}</span>}
@@ -104,22 +109,23 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
 
                 {/* Status indicator */}
                 <div className="shrink-0">
-                    {file.status === 'queued' && <span className="text-sm text-muted-foreground">Queued</span>}
-
-                    {file.status === 'uploading' && <Loader2 className="size-5 animate-spin text-primary" />}
-
-                    {file.status === 'processing' && (
-                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>
-                            <Loader2 className="size-5 text-primary" />
+                    {(file.status === 'uploading' || file.status === 'processing') && (
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: [0, 1.2, 1] }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                            className="p-1"
+                        >
+                            <Spinner className="size-5 text-primary" />
                         </motion.div>
                     )}
 
                     {file.status === 'complete' && (
                         <motion.div
                             initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                            className="rounded-full bg-green-500 p-1"
+                            animate={{ scale: [0, 1.2, 1] }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                            className="rounded-full bg-success p-1"
                         >
                             <Check className="size-4 text-white" />
                         </motion.div>
