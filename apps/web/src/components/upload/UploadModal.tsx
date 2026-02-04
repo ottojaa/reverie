@@ -1,9 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUpload } from '@/lib/upload';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import { UploadFileItem } from './UploadFileItem';
 
 function useOverallProgress() {
@@ -32,6 +34,8 @@ function useOverallProgress() {
 
 export function UploadModal() {
     const { files, isModalOpen, closeModal, startUpload, removeFile, clearCompleted, clearFailed, retryFailed, retryFile, stats, isUploading } = useUpload();
+    const queryClient = useQueryClient();
+    const prevAllComplete = useRef(false);
 
     const { percent, completedCount, total } = useOverallProgress();
 
@@ -41,6 +45,16 @@ export function UploadModal() {
     const allComplete = total > 0 && stats.complete === total;
 
     const uploadStarted = stats.uploading > 0 || stats.processing > 0 || stats.complete > 0;
+
+    useEffect(() => {
+        if (allComplete && !prevAllComplete.current) {
+            const n = stats.complete;
+            closeModal();
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            toast.success(n === 1 ? '1 document uploaded successfully' : `${n} documents uploaded successfully`);
+        }
+        prevAllComplete.current = allComplete;
+    }, [allComplete, stats.complete, closeModal, queryClient]);
 
     if (files.length === 0) {
         return null;

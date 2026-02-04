@@ -34,17 +34,24 @@ export async function startRedisSubscriber(): Promise<void> {
         status: event.status,
       })
 
-      // Broadcast to all clients (for global dashboards)
-      broadcastEvent(event.type, event)
+      // Send to specific rooms based on event metadata
+      let sent = false
 
       // Send to specific session room if session_id is present
       if (event.session_id) {
         sendToSession(event.session_id, event.type, event)
+        sent = true
       }
 
       // Send to specific document room if document_id is present
       if (event.document_id) {
         sendToDocument(event.document_id, event.type, event)
+        sent = true
+      }
+
+      // Broadcast to all clients only if no specific target (for global dashboards)
+      if (!sent) {
+        broadcastEvent(event.type, event)
       }
     } catch (error) {
       console.error('[RedisSubscriber] Failed to parse message:', error)

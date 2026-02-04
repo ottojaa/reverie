@@ -24,7 +24,7 @@ type UploadAction =
     | {
           type: 'UPLOAD_SUCCESS';
           sessionId: string;
-          fileDocumentMap: Map<string, { documentId: string; jobs: Array<{ id: string }> }>;
+          fileDocumentMap: Map<string, { documentId: string; jobs: Array<{ id: string }> }>; // key is file ID
       }
     | { type: 'UPLOAD_ERROR'; error: string }
     | { type: 'JOB_EVENT'; event: JobEvent }
@@ -135,7 +135,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
 
             for (const [id, file] of newFiles) {
                 if (file.status === 'uploading') {
-                    const mapping = action.fileDocumentMap.get(file.file.name);
+                    const mapping = action.fileDocumentMap.get(id); // Look up by file ID
                     if (mapping) {
                         const { error: _, ...fileRest } = file;
                         newFiles.set(id, {
@@ -275,8 +275,10 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!state.session) return;
 
+        const sessionId = state.session.sessionId;
+
         connectSocket();
-        subscribeToSession(state.session.sessionId);
+        subscribeToSession(sessionId);
 
         const cleanup = onJobEvents((event) => {
             dispatch({ type: 'JOB_EVENT', event });
@@ -284,9 +286,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
         return () => {
             cleanup();
-            if (state.session) {
-                unsubscribeFromSession(state.session.sessionId);
-            }
+            unsubscribeFromSession(sessionId);
         };
     }, [state.session?.sessionId]);
 
@@ -345,12 +345,19 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                     },
                 );
 
-                // Map filenames to document IDs and jobs
+                // Map file IDs to document IDs and jobs (using index-based correspondence)
                 const fileDocumentMap = new Map<string, { documentId: string; jobs: Array<{ id: string }> }>();
 
-                for (const doc of result.documents) {
+                for (let i = 0; i < Math.min(result.documents.length, queuedFiles.length); i++) {
+                    const doc = result.documents[i];
+                    const queuedFile = queuedFiles[i];
+                    
+                    if (!doc || !queuedFile) continue;
+                    
                     const docJobs = result.jobs.filter((j) => j.target_id === doc.id);
-                    fileDocumentMap.set(doc.original_filename, {
+                    
+                    // Use queued file ID as key for reliable matching
+                    fileDocumentMap.set(queuedFile.id, {
                         documentId: doc.id,
                         jobs: docJobs,
                     });

@@ -4,6 +4,8 @@ import { io, Socket } from 'socket.io-client';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 let socket: Socket | null = null;
+const subscribedSessions = new Set<string>();
+const subscribedDocuments = new Set<string>();
 
 /**
  * Get or create the Socket.io client instance
@@ -36,12 +38,19 @@ export function disconnectSocket(): void {
     if (socket?.connected) {
         socket.disconnect();
     }
+    subscribedSessions.clear();
+    subscribedDocuments.clear();
 }
 
 /**
  * Subscribe to job events for a specific upload session
  */
 export function subscribeToSession(sessionId: string): void {
+    if (subscribedSessions.has(sessionId)) {
+        console.warn(`[Socket] Already subscribed to session: ${sessionId}`);
+        return;
+    }
+    subscribedSessions.add(sessionId);
     getSocket().emit('subscribe:session', { session_id: sessionId });
 }
 
@@ -49,6 +58,7 @@ export function subscribeToSession(sessionId: string): void {
  * Unsubscribe from a session
  */
 export function unsubscribeFromSession(sessionId: string): void {
+    subscribedSessions.delete(sessionId);
     getSocket().emit('unsubscribe:session', { session_id: sessionId });
 }
 
@@ -56,6 +66,11 @@ export function unsubscribeFromSession(sessionId: string): void {
  * Subscribe to updates for a specific document
  */
 export function subscribeToDocument(documentId: string): void {
+    if (subscribedDocuments.has(documentId)) {
+        console.warn(`[Socket] Already subscribed to document: ${documentId}`);
+        return;
+    }
+    subscribedDocuments.add(documentId);
     getSocket().emit('subscribe:document', { document_id: documentId });
 }
 
@@ -63,6 +78,7 @@ export function subscribeToDocument(documentId: string): void {
  * Unsubscribe from a document
  */
 export function unsubscribeFromDocument(documentId: string): void {
+    subscribedDocuments.delete(documentId);
     getSocket().emit('unsubscribe:document', { document_id: documentId });
 }
 

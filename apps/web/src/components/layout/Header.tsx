@@ -1,30 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useTheme } from '@/lib/theme';
 import { Bell, Menu, Moon, Search, Sun } from 'lucide-react';
-import { useEffect, useState } from 'react';
-
-const THEME_KEY = 'reverie-theme';
-
-function getInitialTheme(): boolean {
-    const stored = localStorage.getItem(THEME_KEY);
-    if (stored !== null) return stored === 'dark';
-    if (typeof window !== 'undefined' && window.matchMedia) {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return true;
-}
 
 interface HeaderProps {
     onMenuClick?: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-    const [isDark, setIsDark] = useState(() => getInitialTheme());
-
-    useEffect(() => {
-        document.documentElement.classList.toggle('dark', isDark);
-        localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
-    }, [isDark]);
+    const { isDark, setIsDark } = useTheme();
 
     return (
         <header className="flex h-14 items-center justify-between gap-2 border-b bg-background px-3 md:px-4">
