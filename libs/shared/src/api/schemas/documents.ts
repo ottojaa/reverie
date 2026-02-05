@@ -109,3 +109,10 @@ export const BatchDeleteDocumentsSchema = z.object({
 });
 
 export type BatchDeleteDocuments = z.infer<typeof BatchDeleteDocumentsSchema>;
+
+export const MoveDocumentsRequestSchema = z.object({
+    document_ids: z.array(UuidSchema).min(1).max(100),
+    folder_id: UuidSchema,
+});
+
+export type MoveDocumentsRequest = z.infer<typeof MoveDocumentsRequestSchema>;

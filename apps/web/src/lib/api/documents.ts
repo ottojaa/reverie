@@ -6,7 +6,7 @@ import { useAuth, useAuthenticatedFetch } from '../auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-interface DocumentsResponse {
+export interface DocumentsResponse {
     items: Document[];
     total: number;
     limit: number;

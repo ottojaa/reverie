@@ -1,8 +1,10 @@
 import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
+import { getFolderService } from '../../services/folder.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
 
 const uploadService = getUploadService();
+const folderService = getFolderService();
 
 export default async function (fastify: FastifyInstance) {
     // Upload images endpoint (requires authentication)
@@ -48,6 +50,9 @@ export default async function (fastify: FastifyInstance) {
                 return reply.badRequest('No files provided');
             }
 
+            // Require a section: use provided folder_id or get/create default section
+            const resolvedFolderId = folderId ?? (await folderService.getOrCreateDefaultSection(userId)).id;
+
             // Optional: Add file size limit (100MB per file)
             const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
             for (const file of files) {
@@ -56,7 +61,7 @@ export default async function (fastify: FastifyInstance) {
                 }
             }
 
-            const result = await uploadService.uploadFiles(files, userId, folderId, sessionId);
+            const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId);
 
             return {
                 session_id: result.sessionId,

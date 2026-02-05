@@ -37,7 +37,9 @@ export function SelectionBanner() {
                     className="overflow-hidden"
                 >
                     <div className="flex items-center justify-between gap-4 border-b border-border bg-elevated py-3">
-                        <span className="text-sm font-medium text-primary">{count} selected</span>
+                        <span className="text-sm font-medium text-primary">
+                            {count} selected
+                        </span>
                         <div className="flex items-center gap-2">
                             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteDocuments.isPending}>
                                 <Trash2 className="size-4" />

@@ -2,10 +2,12 @@ import {
     BatchDeleteDocumentsSchema,
     DocumentListQuerySchema,
     DocumentSchema,
+    MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
     UuidSchema,
     type Document,
     type DocumentListQuery,
+    type MoveDocumentsRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
@@ -15,11 +17,13 @@ import { type Document as DbDocument } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
+import { getFolderService } from '../../services/folder.service';
 import { getStorageService } from '../../services/storage.service';
 import { getUploadService } from '../../services/upload.service';
 
 const uploadService = getUploadService();
 const storageService = getStorageService();
+const folderService = getFolderService();
 
 // OCR Result schema for API responses
 const OcrResultSchema = z.object({
@@ -111,6 +115,45 @@ export default async function (fastify: FastifyInstance) {
                 limit,
                 offset,
             };
+        },
+    );
+
+    // Move documents to a section (requires authentication)
+    fastify.patch<{
+        Body: MoveDocumentsRequest;
+    }>(
+        '/documents/move',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Move documents to a folder/section',
+                body: MoveDocumentsRequestSchema,
+                response: {
+                    204: z.null(),
+                },
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const { document_ids, folder_id } = request.body;
+
+            const folder = await folderService.getFolder(folder_id, userId);
+            if (!folder) {
+                return reply.notFound('Folder not found');
+            }
+
+            if (document_ids.length === 0) {
+                return reply.status(204).send();
+            }
+
+            await db
+                .updateTable('documents')
+                .set({ folder_id, updated_at: new Date() })
+                .where('id', 'in', document_ids)
+                .where('user_id', '=', userId)
+                .execute();
+
+            reply.status(204).send();
         },
     );
 

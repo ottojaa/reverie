@@ -4,6 +4,7 @@ import { useDeleteDocuments } from '@/lib/api/documents';
 import { useConfirm } from '@/lib/confirm';
 import { useSelectionOptional } from '@/lib/selection';
 import { cn } from '@/lib/utils';
+import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
 import { Loader2, Trash2 } from 'lucide-react';
@@ -57,6 +58,19 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
     const isSelected = selection?.isSelected(document.id) ?? false;
+    const selectedIds = selection?.selectedIds ?? new Set<string>();
+
+    // When dragging a selected card, drag all selected documents
+    // When dragging an unselected card, drag just that one
+    const documentIds = isSelected ? Array.from(selectedIds) : [document.id];
+
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: `doc-${document.id}`,
+        data: {
+            type: 'documents' as const,
+            documentIds,
+        },
+    });
 
     const isProcessing = document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
     const isPending = document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
@@ -86,18 +100,24 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div>
-                    <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick}>
+                <div
+                    ref={setNodeRef}
+                    style={{ touchAction: 'none' }}
+                    {...attributes}
+                    {...listeners}
+                >
+                    <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} draggable={false}>
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileHover={{ scale: 1.02, y: -2 }}
+                            animate={{ opacity: isDragging ? 0.5 : 1, scale: isDragging ? 0.98 : 1 }}
+                            whileHover={isDragging ? {} : { scale: 1.02, y: -2 }}
                             transition={{ duration: 0.2 }}
                             className={cn(
                                 'group relative overflow-hidden rounded-md bg-card transition-shadow',
                                 'border border-border/50 shadow-md hover:shadow-lg',
                                 'dark:border-border dark:shadow-none dark:hover:shadow-none',
                                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background dark:ring-offset-background',
+                                isDragging && 'cursor-grabbing',
                                 className,
                             )}
                         >

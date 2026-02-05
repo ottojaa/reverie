@@ -13,8 +13,10 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BrowseIndexRouteImport } from './routes/browse.index'
 import { Route as LoginCallbackRouteImport } from './routes/login.callback'
 import { Route as DocumentIdRouteImport } from './routes/document.$id'
+import { Route as BrowseSectionIdRouteImport } from './routes/browse.$sectionId'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -36,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrowseIndexRoute = BrowseIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BrowseRoute,
+} as any)
 const LoginCallbackRoute = LoginCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -46,31 +53,41 @@ const DocumentIdRoute = DocumentIdRouteImport.update({
   path: '/document/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrowseSectionIdRoute = BrowseSectionIdRouteImport.update({
+  id: '/$sectionId',
+  path: '/$sectionId',
+  getParentRoute: () => BrowseRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
+  '/browse': typeof BrowseRouteWithChildren
   '/login': typeof LoginRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
+  '/browse/': typeof BrowseIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
   '/login': typeof LoginRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
+  '/browse': typeof BrowseIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
+  '/browse': typeof BrowseRouteWithChildren
   '/login': typeof LoginRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
+  '/browse/': typeof BrowseIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -79,29 +96,34 @@ export interface FileRouteTypes {
     | '/browse'
     | '/login'
     | '/settings'
+    | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
+    | '/browse/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/browse'
     | '/login'
     | '/settings'
+    | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
+    | '/browse'
   id:
     | '__root__'
     | '/'
     | '/browse'
     | '/login'
     | '/settings'
+    | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
+    | '/browse/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BrowseRoute: typeof BrowseRoute
+  BrowseRoute: typeof BrowseRouteWithChildren
   LoginRoute: typeof LoginRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   DocumentIdRoute: typeof DocumentIdRoute
@@ -137,6 +159,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/browse/': {
+      id: '/browse/'
+      path: '/'
+      fullPath: '/browse/'
+      preLoaderRoute: typeof BrowseIndexRouteImport
+      parentRoute: typeof BrowseRoute
+    }
     '/login/callback': {
       id: '/login/callback'
       path: '/callback'
@@ -151,8 +180,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/browse/$sectionId': {
+      id: '/browse/$sectionId'
+      path: '/$sectionId'
+      fullPath: '/browse/$sectionId'
+      preLoaderRoute: typeof BrowseSectionIdRouteImport
+      parentRoute: typeof BrowseRoute
+    }
   }
 }
+
+interface BrowseRouteChildren {
+  BrowseSectionIdRoute: typeof BrowseSectionIdRoute
+  BrowseIndexRoute: typeof BrowseIndexRoute
+}
+
+const BrowseRouteChildren: BrowseRouteChildren = {
+  BrowseSectionIdRoute: BrowseSectionIdRoute,
+  BrowseIndexRoute: BrowseIndexRoute,
+}
+
+const BrowseRouteWithChildren =
+  BrowseRoute._addFileChildren(BrowseRouteChildren)
 
 interface LoginRouteChildren {
   LoginCallbackRoute: typeof LoginCallbackRoute
@@ -166,7 +215,7 @@ const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BrowseRoute: BrowseRoute,
+  BrowseRoute: BrowseRouteWithChildren,
   LoginRoute: LoginRouteWithChildren,
   SettingsRoute: SettingsRoute,
   DocumentIdRoute: DocumentIdRoute,

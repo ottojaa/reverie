@@ -34,6 +34,8 @@ export interface FoldersTable {
     name: string;
     path: string;
     description: string | null;
+    emoji: string | null;
+    sort_order: number;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }

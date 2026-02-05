@@ -1,11 +1,19 @@
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { flattenSectionTree, useSections } from '@/lib/sections';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
+import { useParams } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UploadFileItem } from './UploadFileItem';
 
@@ -62,6 +70,23 @@ function useOverallProgress() {
 }
 
 export function UploadModal() {
+    const params = useParams({ strict: false });
+    const currentSectionId = (params as { sectionId?: string }).sectionId;
+    const { data: sectionsTree = [] } = useSections();
+    const flatSections = useMemo(() => flattenSectionTree(sectionsTree), [sectionsTree]);
+    const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
+
+    const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
+
+    useEffect(() => {
+        setSelectedFolderId((prev) => prev ?? defaultSectionId ?? undefined);
+    }, [defaultSectionId]);
+
+    const selectedSection = useMemo(
+        () => flatSections.find((s) => s.id === selectedFolderId),
+        [flatSections, selectedFolderId],
+    );
+
     const { files, isModalOpen, closeModal, startUpload, removeFile, clearCompleted, clearFailed, retryFailed, retryFile, stats, isUploading } = useUpload();
 
     const queryClient = useQueryClient();
@@ -83,12 +108,11 @@ export function UploadModal() {
             clearCompleted();
             clearFailed();
             queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['sections'] });
             toast.success(n === 1 ? '1 document uploaded successfully' : `${n} documents uploaded successfully`);
         }
         prevAllComplete.current = allComplete;
     }, [allComplete, stats.complete, closeModal, queryClient, clearCompleted, clearFailed]);
-
-    console.log({ phase, percent });
 
     if (files.length === 0) {
         return null;
@@ -104,6 +128,29 @@ export function UploadModal() {
                     <DialogTitle>
                         {isUploading ? 'Uploading' : 'Upload'} {files.length} {files.length === 1 ? 'file' : 'files'}
                     </DialogTitle>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">To section:</span>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-1.5">
+                                    <span>{selectedSection?.emoji ?? '📁'}</span>
+                                    <span className="truncate">{selectedSection?.name ?? 'Select section'}</span>
+                                    <ChevronDown className="size-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="max-h-[min(50vh,20rem)] overflow-y-auto">
+                                {flatSections.map((section) => (
+                                    <DropdownMenuItem
+                                        key={section.id}
+                                        onSelect={() => setSelectedFolderId(section.id)}
+                                    >
+                                        <span className="mr-2">{section.emoji ?? '📁'}</span>
+                                        {section.name}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </DialogHeader>
 
                 {/* Linear progress bar (Motion) – only after upload has started */}
@@ -204,7 +251,7 @@ export function UploadModal() {
                                     size="sm"
                                     onClick={() => {
                                         retryFailed();
-                                        setTimeout(() => startUpload(), 0);
+                                        setTimeout(() => startUpload(selectedFolderId), 0);
                                     }}
                                 >
                                     <RefreshCw className="mr-2 size-4" />
@@ -218,7 +265,7 @@ export function UploadModal() {
                             Minimize
                         </Button>
                         {hasQueued && (
-                            <Button size="sm" onClick={() => startUpload()} disabled={isUploading}>
+                            <Button size="sm" onClick={() => startUpload(selectedFolderId)} disabled={isUploading}>
                                 {isUploading ? (
                                     <>
                                         <Loader2 className="mr-2 size-4 animate-spin" />
