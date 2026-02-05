@@ -18,26 +18,32 @@ export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator
             event.preventDefault();
 
             const {
-                current: { items, offset },
+                current: { items },
             } = context;
 
             if (horizontal.includes(event.code) && over?.id) {
-                const { depth, maxDepth, minDepth } = getProjection(items, active.id, over.id, offset, indentationWidth);
+                const overIndex = items.findIndex(({ id }) => id === over.id);
+                const overItem = overIndex >= 0 ? items[overIndex] : null;
+                if (!overItem) return undefined;
+
+                const depthLeft = overItem.depth;
+                const depthRight = overItem.depth + 1;
+                const currentDepth = Math.round(currentCoordinates.x / indentationWidth);
 
                 switch (event.code) {
                     case KeyboardCode.Left:
-                        if (depth > minDepth) {
+                        if (currentDepth > depthLeft) {
                             return {
                                 ...currentCoordinates,
-                                x: currentCoordinates.x - indentationWidth,
+                                x: depthLeft * indentationWidth,
                             };
                         }
                         break;
                     case KeyboardCode.Right:
-                        if (depth < maxDepth) {
+                        if (currentDepth < depthRight) {
                             return {
                                 ...currentCoordinates,
-                                x: currentCoordinates.x + indentationWidth,
+                                x: depthRight * indentationWidth,
                             };
                         }
                         break;
@@ -98,7 +104,8 @@ export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator
                     const activeItem = items[activeIndex];
 
                     if (newItem && activeItem) {
-                        const { depth } = getProjection(items, active.id, closestId, (newItem.depth - activeItem.depth) * indentationWidth, indentationWidth);
+                        const projection = getProjection(items, active.id, closestId, 'center');
+                        const depth = projection?.depth ?? newItem.depth;
                         const isBelow = newIndex > activeIndex;
                         const modifier = isBelow ? 1 : -1;
                         const offset = indicator ? (collisionRect.height - activeRect.height) / 2 : 0;
