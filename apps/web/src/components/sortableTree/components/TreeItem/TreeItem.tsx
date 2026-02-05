@@ -53,7 +53,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                 className={cn(
                     'list-none box-border -mb-px',
                     'pl-(--tree-indent)',
-                    clone && 'inline-block pointer-events-none p-2 w-full opacity-50',
+                    clone && 'inline-block pointer-events-none p-2 w-full opacity-80',
                     isGhostIndicator && 'opacity-100 relative z-1 -mb-px',
                     disableSelection && 'select-none',
                     disableInteraction && 'pointer-events-none',

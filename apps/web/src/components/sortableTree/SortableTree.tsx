@@ -142,6 +142,11 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     const sortedIds = useMemo(() => flattenedItems.map(({ id }) => id), [flattenedItems]);
     const activeItem = activeId ? flattenedItems.find(({ id }) => id === activeId) : null;
     const overItem = overId ? flattenedItems.find(({ id }) => id === overId) : null;
+    
+    // Use adjusted over ID from projection for indicator positioning
+    const indicatorOverId = projected?.adjustedOverId ?? overId;
+    const indicatorOverItem = indicatorOverId ? flattenedItems.find(({ id }) => id === indicatorOverId) : null;
+    const indicatorDropZone = projected?.dropZone ?? dropZone;
 
     useEffect(() => {
         sensorContext.current = {
@@ -185,25 +190,28 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         return () => cancelAnimationFrame(rafId);
     }, [activeId, overId]);
 
-    // Update over rect when overId changes
+    // Update over rect when overId changes (use adjusted overId for positioning)
     useEffect(() => {
         if (!overId) {
             overRectRef.current = null;
             return;
         }
 
-        const element = itemRefsMap.current.get(overId);
+        // Use adjusted overId from projection if available
+        const targetId = projected?.adjustedOverId ?? overId;
+        const element = itemRefsMap.current.get(targetId);
         if (element) {
             overRectRef.current = element.getBoundingClientRect();
         }
-    }, [overId]);
+    }, [overId, projected?.adjustedOverId]);
 
     // Re-measure on scroll to keep indicator position accurate
     useEffect(() => {
         if (!activeId || !overId) return;
 
         const handleScroll = () => {
-            const element = itemRefsMap.current.get(overId);
+            const targetId = projected?.adjustedOverId ?? overId;
+            const element = itemRefsMap.current.get(targetId);
             if (element) {
                 overRectRef.current = element.getBoundingClientRect();
             }
@@ -212,7 +220,7 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         // Listen to scroll on the window and any scroll containers
         window.addEventListener('scroll', handleScroll, true);
         return () => window.removeEventListener('scroll', handleScroll, true);
-    }, [activeId, overId]);
+    }, [activeId, overId, projected?.adjustedOverId]);
 
     const announcements: Announcements = {
         onDragStart({ active }) {
@@ -269,13 +277,13 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
                     />
                 ))}
                 {/* Indicator line for reorder (above/below zones) */}
-                {indicator && overItem && overRectRef.current && dropZone && dropZone !== 'center' && (
+                {indicator && indicatorOverItem && overRectRef.current && indicatorDropZone && indicatorDropZone !== 'center' && (
                     <div
                         style={{
                             position: 'fixed',
-                            left: `${overRectRef.current.left + indentationWidth * overItem.depth}px`,
-                            top: dropZone === 'above' ? `${overRectRef.current.top}px` : `${overRectRef.current.bottom}px`,
-                            width: `${overRectRef.current.width - indentationWidth * overItem.depth}px`,
+                            left: `${overRectRef.current.left + indentationWidth * indicatorOverItem.depth}px`,
+                            top: indicatorDropZone === 'above' ? `${overRectRef.current.top}px` : `${overRectRef.current.bottom}px`,
+                            width: `${overRectRef.current.width - indentationWidth * indicatorOverItem.depth}px`,
                             height: '2px',
                             backgroundColor: '#2389ff',
                             pointerEvents: 'none',
@@ -343,15 +351,18 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     function handleDragEnd({ active, over }: DragEndEvent) {
         resetState();
 
-        if (projected && over && dropZone) {
-            const { depth, parentId } = projected;
+        if (projected && over) {
+            const { depth, parentId, adjustedOverId, dropZone: projectedDropZone } = projected;
             const clonedItems: FlattenedItem[] = JSON.parse(JSON.stringify(flattenTree(items)));
-            const overIndex = clonedItems.findIndex(({ id }) => id === over.id);
+            
+            // Use adjusted over ID if available (for special cases like reordering within parent)
+            const targetOverId = adjustedOverId ?? over.id;
+            const overIndex = clonedItems.findIndex(({ id }) => id === targetOverId);
             const activeIndex = clonedItems.findIndex(({ id }) => id === active.id);
 
             const activeTreeItem = clonedItems[activeIndex];
 
-            if (!activeTreeItem) {
+            if (!activeTreeItem || overIndex === -1) {
                 return;
             }
 
@@ -361,12 +372,12 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
             let targetIndex = overIndex;
 
             // Calculate the correct target index based on drop zone
-            if (dropZone === 'below') {
+            if (projectedDropZone === 'below') {
                 // For 'below', we want to insert after the over item
                 // If moving down in the list, the target is overIndex
                 // If moving up in the list, the target is overIndex + 1
                 targetIndex = activeIndex < overIndex ? overIndex : overIndex + 1;
-            } else if (dropZone === 'center') {
+            } else if (projectedDropZone === 'center') {
                 // For 'center' (nesting), insert as first child
                 // Find the position right after the parent (over item)
                 targetIndex = overIndex + 1;

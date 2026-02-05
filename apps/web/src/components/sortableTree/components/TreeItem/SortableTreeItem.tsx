@@ -11,7 +11,7 @@ interface Props extends TreeItemProps {
     onRegisterNode?(id: UniqueIdentifier, node: HTMLElement | null): void;
 }
 
-const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => (isSorting || wasDragging ? false : true);
+const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => (isSorting || wasDragging ? true : true);
 
 export function SortableTreeItem({ id, depth, onRegisterNode, onRefChange, ...props }: Props) {
     const { attributes, isDragging, isSorting, listeners, setDraggableNodeRef, setDroppableNodeRef, transform, transition } = useSortable({

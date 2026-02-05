@@ -17,8 +17,8 @@ export function getDropZone(pointerY: number, elementTop: number, elementHeight:
     const relativeY = pointerY - elementTop;
     const percentage = relativeY / elementHeight;
 
-    if (percentage < 0.2) return 'above';
-    if (percentage > 0.8) return 'below';
+    if (percentage < 0.1) return 'above';
+    if (percentage > 0.9) return 'below';
     return 'center';
 }
 
@@ -34,6 +34,7 @@ export function getProjectionForDropZone(items: FlattenedItem[], activeId: Uniqu
     }
 
     const overItem = items[overItemIndex]!;
+    const activeItem = items[activeItemIndex]!;
 
     if (dropZone === 'center') {
         // Make it a child of the target
@@ -41,7 +42,24 @@ export function getProjectionForDropZone(items: FlattenedItem[], activeId: Uniqu
             depth: overItem.depth + 1,
             parentId: overItem.id,
             dropZone,
+            adjustedOverId: overId,
         };
+    }
+
+    // Special case: dropping "below" a parent when active item is a child of that parent
+    // This happens when trying to reorder a child to be first within its parent
+    if (dropZone === 'below' && activeItem.parentId === overItem.id) {
+        // Check if there are other children - if so, we want to be before the first child
+        const firstChild = items[overItemIndex + 1];
+        if (firstChild && firstChild.parentId === overItem.id) {
+            // Treat as reordering within parent - show indicator at first child position
+            return {
+                depth: overItem.depth + 1,
+                parentId: overItem.id,
+                dropZone: 'above',
+                adjustedOverId: firstChild.id, // Use first child for indicator positioning
+            };
+        }
     }
 
     // For 'above' and 'below': same level as target (sibling)
@@ -49,6 +67,7 @@ export function getProjectionForDropZone(items: FlattenedItem[], activeId: Uniqu
         depth: overItem.depth,
         parentId: overItem.parentId,
         dropZone,
+        adjustedOverId: overId,
     };
 }
 
