@@ -18,6 +18,7 @@ export interface Props extends Omit<HTMLAttributes<HTMLLIElement>, 'id'> {
     value: UniqueIdentifier;
     onCollapse?(): void;
     onRemove?(): void;
+    onRefChange?(element: HTMLElement | null): void;
     wrapperRef?(node: HTMLLIElement): void;
 }
 
@@ -37,6 +38,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
             collapsed,
             onCollapse,
             onRemove,
+            onRefChange,
             style,
             value,
             wrapperRef,
@@ -70,11 +72,17 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                         'relative flex items-center box-border bg-white border border-[#dedede] text-[#222]',
                         !isGhostIndicator && 'py-2.5 px-2.5',
                         clone && !isGhostIndicator && 'pr-6 rounded shadow-[0px_15px_15px_0_rgba(34,33,81,0.1)]',
-                        isGhostIndicator &&
-                            'p-0 h-1.5 border-[#2389ff] bg-[#56a1f8] before:content-[""] before:absolute before:-left-2 before:-top-1 before:block before:w-3 before:h-3 before:rounded-full before:border before:border-[#2389ff] before:bg-white',
                         ghost && !indicator && '*:shadow-none *:bg-transparent',
+                        isDropTarget && !clone && 'bg-primary/15',
                     )}
-                    ref={ref}
+                    ref={(el) => {
+                        if (typeof ref === 'function') {
+                            ref(el);
+                        } else if (ref) {
+                            ref.current = el;
+                        }
+                        onRefChange?.(el);
+                    }}
                     style={style}
                 >
                     <span

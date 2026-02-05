@@ -1,11 +1,8 @@
 import { closestCorners, DroppableContainer, getFirstCollision, KeyboardCode, KeyboardCoordinateGetter } from '@dnd-kit/core';
 
 import type { SensorContext } from './types';
-import { getProjection } from './utilities';
 
 const directions: string[] = [KeyboardCode.Down, KeyboardCode.Right, KeyboardCode.Up, KeyboardCode.Left];
-
-const horizontal: string[] = [KeyboardCode.Left, KeyboardCode.Right];
 
 export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator: boolean, indentationWidth: number) => KeyboardCoordinateGetter =
     (context, indicator, indentationWidth) =>
@@ -18,31 +15,13 @@ export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator
             event.preventDefault();
 
             const {
-                current: { items, offset },
+                current: { items },
             } = context;
 
-            if (horizontal.includes(event.code) && over?.id) {
-                const { depth, maxDepth, minDepth } = getProjection(items, active.id, over.id, offset, indentationWidth);
-
-                switch (event.code) {
-                    case KeyboardCode.Left:
-                        if (depth > minDepth) {
-                            return {
-                                ...currentCoordinates,
-                                x: currentCoordinates.x - indentationWidth,
-                            };
-                        }
-                        break;
-                    case KeyboardCode.Right:
-                        if (depth < maxDepth) {
-                            return {
-                                ...currentCoordinates,
-                                x: currentCoordinates.x + indentationWidth,
-                            };
-                        }
-                        break;
-                }
-
+            // Left/Right arrows are now disabled for keyboard navigation
+            // since depth changes are only via drop zones (center vs above/below)
+            // In the future, could map Right = move to center zone, Left = unnest
+            if (event.code === KeyboardCode.Left || event.code === KeyboardCode.Right) {
                 return undefined;
             }
 
@@ -94,17 +73,14 @@ export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator
                 if (activeRect && newRect && newDroppable) {
                     const newIndex = items.findIndex(({ id }) => id === closestId);
                     const newItem = items[newIndex];
-                    const activeIndex = items.findIndex(({ id }) => id === active.id);
-                    const activeItem = items[activeIndex];
 
-                    if (newItem && activeItem) {
-                        const { depth } = getProjection(items, active.id, closestId, (newItem.depth - activeItem.depth) * indentationWidth, indentationWidth);
-                        const isBelow = newIndex > activeIndex;
+                    if (newItem) {
+                        const isBelow = newIndex > (items.findIndex(({ id }) => id === active.id) ?? 0);
                         const modifier = isBelow ? 1 : -1;
                         const offset = indicator ? (collisionRect.height - activeRect.height) / 2 : 0;
 
                         const newCoordinates = {
-                            x: newRect.left + depth * indentationWidth,
+                            x: newRect.left + newItem.depth * indentationWidth,
                             y: newRect.top + modifier * offset,
                         };
 

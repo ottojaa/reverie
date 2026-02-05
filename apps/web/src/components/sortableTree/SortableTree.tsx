@@ -25,7 +25,17 @@ import { CSS } from '@dnd-kit/utilities';
 import { SortableTreeItem } from './components';
 import { sortableTreeKeyboardCoordinates } from './keyboardCoordinates';
 import type { FlattenedItem, SensorContext, TreeItems } from './types';
-import { buildTree, flattenTree, getChildCount, getProjection, removeChildrenOf, removeItem, setProperty } from './utilities';
+import {
+    buildTree,
+    flattenTree,
+    getChildCount,
+    getDropZone,
+    getProjectionForDropZone,
+    removeChildrenOf,
+    removeItem,
+    setProperty,
+    type DropZone,
+} from './utilities';
 
 const initialItems: TreeItems = [
     {
@@ -95,11 +105,16 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     const [items, setItems] = useState(() => defaultItems);
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
-    const [offsetLeft, setOffsetLeft] = useState(0);
+    const [dropZone, setDropZone] = useState<DropZone | null>(null);
     const [currentPosition, setCurrentPosition] = useState<{
         parentId: UniqueIdentifier | null;
         overId: UniqueIdentifier;
     } | null>(null);
+
+    // Refs for performance - avoid re-renders on every pointer move
+    const pointerYRef = useRef<number>(0);
+    const overRectRef = useRef<DOMRect | null>(null);
+    const itemRefsMap = useRef<Map<UniqueIdentifier, HTMLElement>>(new Map());
 
     const flattenedItems = useMemo(() => {
         const flattenedTree = flattenTree(items);
@@ -111,10 +126,10 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         return removeChildrenOf(flattenedTree, activeId != null ? [activeId, ...collapsedItems] : collapsedItems);
     }, [activeId, items]);
 
-    const projected = activeId && overId ? getProjection(flattenedItems, activeId, overId, offsetLeft, indentationWidth) : null;
+    const projected = activeId && overId && dropZone ? getProjectionForDropZone(flattenedItems, activeId, overId, dropZone) : null;
     const sensorContext: SensorContext = useRef({
         items: flattenedItems,
-        offset: offsetLeft,
+        offset: 0,
     });
     const [coordinateGetter] = useState(() => sortableTreeKeyboardCoordinates(sensorContext, indicator, indentationWidth));
     const sensors = useSensors(
@@ -126,13 +141,78 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
 
     const sortedIds = useMemo(() => flattenedItems.map(({ id }) => id), [flattenedItems]);
     const activeItem = activeId ? flattenedItems.find(({ id }) => id === activeId) : null;
+    const overItem = overId ? flattenedItems.find(({ id }) => id === overId) : null;
 
     useEffect(() => {
         sensorContext.current = {
             items: flattenedItems,
-            offset: offsetLeft,
+            offset: 0,
         };
-    }, [flattenedItems, offsetLeft]);
+    }, [flattenedItems]);
+
+    // Track pointer Y during drag
+    useEffect(() => {
+        if (!activeId) return;
+
+        const handlePointerMove = (e: PointerEvent) => {
+            pointerYRef.current = e.clientY;
+        };
+
+        document.addEventListener('pointermove', handlePointerMove);
+        return () => document.removeEventListener('pointermove', handlePointerMove);
+    }, [activeId]);
+
+    // rAF loop to compute drop zone efficiently
+    useEffect(() => {
+        if (!activeId || !overId) return;
+
+        let rafId: number;
+        let lastZone: DropZone | null = null;
+
+        const updateDropZone = () => {
+            const rect = overRectRef.current;
+            if (rect) {
+                const newZone = getDropZone(pointerYRef.current, rect.top, rect.height);
+                if (newZone !== lastZone) {
+                    lastZone = newZone;
+                    setDropZone(newZone);
+                }
+            }
+            rafId = requestAnimationFrame(updateDropZone);
+        };
+
+        rafId = requestAnimationFrame(updateDropZone);
+        return () => cancelAnimationFrame(rafId);
+    }, [activeId, overId]);
+
+    // Update over rect when overId changes
+    useEffect(() => {
+        if (!overId) {
+            overRectRef.current = null;
+            return;
+        }
+
+        const element = itemRefsMap.current.get(overId);
+        if (element) {
+            overRectRef.current = element.getBoundingClientRect();
+        }
+    }, [overId]);
+
+    // Re-measure on scroll to keep indicator position accurate
+    useEffect(() => {
+        if (!activeId || !overId) return;
+
+        const handleScroll = () => {
+            const element = itemRefsMap.current.get(overId);
+            if (element) {
+                overRectRef.current = element.getBoundingClientRect();
+            }
+        };
+
+        // Listen to scroll on the window and any scroll containers
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    }, [activeId, overId]);
 
     const announcements: Announcements = {
         onDragStart({ active }) {
@@ -150,6 +230,14 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         onDragCancel({ active }) {
             return `Moving was cancelled. ${active.id} was dropped in its original position.`;
         },
+    };
+
+    const registerItemRef = (id: UniqueIdentifier, element: HTMLElement | null) => {
+        if (element) {
+            itemRefsMap.current.set(id, element);
+        } else {
+            itemRefsMap.current.delete(id);
+        }
     };
 
     return (
@@ -170,14 +258,44 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
                         key={id}
                         id={id}
                         value={id}
-                        depth={id === activeId && projected ? projected.depth : depth}
+                        depth={depth}
                         indentationWidth={indentationWidth}
                         indicator={indicator}
                         collapsed={Boolean(collapsed && children.length)}
                         onCollapse={collapsible && children.length ? () => handleCollapse(id) : () => {}}
                         onRemove={removable ? () => handleRemove(id) : () => {}}
+                        isDropTarget={overId === id && dropZone === 'center'}
+                        onRefChange={(el) => registerItemRef(id, el)}
                     />
                 ))}
+                {/* Indicator line for reorder (above/below zones) */}
+                {indicator && overItem && overRectRef.current && dropZone && dropZone !== 'center' && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            left: `${overRectRef.current.left + indentationWidth * overItem.depth}px`,
+                            top: dropZone === 'above' ? `${overRectRef.current.top}px` : `${overRectRef.current.bottom}px`,
+                            width: `${overRectRef.current.width - indentationWidth * overItem.depth}px`,
+                            height: '2px',
+                            backgroundColor: '#2389ff',
+                            pointerEvents: 'none',
+                            zIndex: 100,
+                        }}
+                    >
+                        <div
+                            style={{
+                                position: 'absolute',
+                                left: '-8px',
+                                top: '-4px',
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '50%',
+                                border: '2px solid #2389ff',
+                                backgroundColor: 'white',
+                            }}
+                        />
+                    </div>
+                )}
                 {createPortal(
                     <DragOverlay dropAnimation={dropAnimationConfig} modifiers={indicator ? [adjustTranslate] : []}>
                         {activeId && activeItem ? (
@@ -200,6 +318,7 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     function handleDragStart({ active: { id: activeId } }: DragStartEvent) {
         setActiveId(activeId);
         setOverId(activeId);
+        setDropZone('center'); // Default to center
 
         const activeItem = flattenedItems.find(({ id }) => id === activeId);
 
@@ -213,8 +332,8 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         document.body.style.setProperty('cursor', 'grabbing');
     }
 
-    function handleDragMove({ delta }: DragMoveEvent) {
-        setOffsetLeft(delta.x);
+    function handleDragMove(_event: DragMoveEvent) {
+        // No longer tracking horizontal offset
     }
 
     function handleDragOver({ over }: DragOverEvent) {
@@ -224,7 +343,7 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     function handleDragEnd({ active, over }: DragEndEvent) {
         resetState();
 
-        if (projected && over) {
+        if (projected && over && dropZone) {
             const { depth, parentId } = projected;
             const clonedItems: FlattenedItem[] = JSON.parse(JSON.stringify(flattenTree(items)));
             const overIndex = clonedItems.findIndex(({ id }) => id === over.id);
@@ -236,9 +355,25 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
                 return;
             }
 
+            // Update the active item's depth and parent
             clonedItems[activeIndex] = { ...activeTreeItem, depth, parentId };
 
-            const sortedItems = arrayMove(clonedItems, activeIndex, overIndex);
+            let targetIndex = overIndex;
+
+            // Calculate the correct target index based on drop zone
+            if (dropZone === 'below') {
+                // For 'below', we want to insert after the over item
+                // If moving down in the list, the target is overIndex
+                // If moving up in the list, the target is overIndex + 1
+                targetIndex = activeIndex < overIndex ? overIndex : overIndex + 1;
+            } else if (dropZone === 'center') {
+                // For 'center' (nesting), insert as first child
+                // Find the position right after the parent (over item)
+                targetIndex = overIndex + 1;
+            }
+            // For 'above', targetIndex is already overIndex
+
+            const sortedItems = arrayMove(clonedItems, activeIndex, targetIndex);
             const newItems = buildTree(sortedItems);
 
             setItems(newItems);
@@ -252,8 +387,10 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
     function resetState() {
         setOverId(null);
         setActiveId(null);
-        setOffsetLeft(0);
+        setDropZone(null);
         setCurrentPosition(null);
+        pointerYRef.current = 0;
+        overRectRef.current = null;
 
         document.body.style.setProperty('cursor', '');
     }
@@ -283,37 +420,17 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
                 }
             }
 
-            const clonedItems: FlattenedItem[] = JSON.parse(JSON.stringify(flattenTree(items)));
-            const overIndex = clonedItems.findIndex(({ id }) => id === overId);
-            const activeIndex = clonedItems.findIndex(({ id }) => id === activeId);
-            const sortedItems = arrayMove(clonedItems, activeIndex, overIndex);
-
-            const previousItem = sortedItems[overIndex - 1];
-            const nextItem = sortedItems[overIndex + 1];
-
-            let announcement;
             const movedVerb = eventName === 'onDragEnd' ? 'dropped' : 'moved';
             const nestedVerb = eventName === 'onDragEnd' ? 'dropped' : 'nested';
+            const overItemName = flattenedItems.find(({ id }) => id === overId)?.id;
 
-            if (!previousItem && nextItem) {
-                announcement = `${activeId} was ${movedVerb} before ${nextItem.id}.`;
-            } else if (previousItem) {
-                if (projected.depth > previousItem.depth) {
-                    announcement = `${activeId} was ${nestedVerb} under ${previousItem.id}.`;
-                } else {
-                    let previousSibling: FlattenedItem | undefined = previousItem;
-                    while (previousSibling && projected.depth < previousSibling.depth) {
-                        const parentId: UniqueIdentifier | null = previousSibling.parentId;
-                        previousSibling = sortedItems.find(({ id }) => id === parentId);
-                    }
-
-                    if (previousSibling) {
-                        announcement = `${activeId} was ${movedVerb} after ${previousSibling.id}.`;
-                    }
-                }
+            if (projected.dropZone === 'center') {
+                return `${activeId} was ${nestedVerb} under ${overItemName}.`;
+            } else if (projected.dropZone === 'above') {
+                return `${activeId} was ${movedVerb} before ${overItemName}.`;
+            } else {
+                return `${activeId} was ${movedVerb} after ${overItemName}.`;
             }
-
-            return announcement;
         }
 
         return;

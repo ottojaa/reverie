@@ -5,10 +5,54 @@ import type { FlattenedItem, TreeItem, TreeItems } from './types';
 
 export const iOS = /iPad|iPhone|iPod/.test(navigator.platform);
 
-function getDragDepth(offset: number, indentationWidth: number) {
-    return Math.round(offset / indentationWidth);
+export type DropZone = 'above' | 'center' | 'below';
+
+/**
+ * Determine drop zone based on pointer Y position relative to element
+ * - Top 20% = above (sibling before)
+ * - Middle 60% = center (become child)
+ * - Bottom 20% = below (sibling after)
+ */
+export function getDropZone(pointerY: number, elementTop: number, elementHeight: number): DropZone {
+    const relativeY = pointerY - elementTop;
+    const percentage = relativeY / elementHeight;
+
+    if (percentage < 0.2) return 'above';
+    if (percentage > 0.8) return 'below';
+    return 'center';
 }
 
+/**
+ * Calculate projection based on drop zone instead of drag offset
+ */
+export function getProjectionForDropZone(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dropZone: DropZone) {
+    const overItemIndex = items.findIndex(({ id }) => id === overId);
+    const activeItemIndex = items.findIndex(({ id }) => id === activeId);
+
+    if (overItemIndex === -1 || activeItemIndex === -1) {
+        return null;
+    }
+
+    const overItem = items[overItemIndex]!;
+
+    if (dropZone === 'center') {
+        // Make it a child of the target
+        return {
+            depth: overItem.depth + 1,
+            parentId: overItem.id,
+            dropZone,
+        };
+    }
+
+    // For 'above' and 'below': same level as target (sibling)
+    return {
+        depth: overItem.depth,
+        parentId: overItem.parentId,
+        dropZone,
+    };
+}
+
+// Legacy function kept for backward compatibility during migration
 export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dragOffset: number, indentationWidth: number) {
     const overItemIndex = items.findIndex(({ id }) => id === overId);
     const activeItemIndex = items.findIndex(({ id }) => id === activeId);
@@ -52,6 +96,10 @@ export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier
 
         return newParent ?? null;
     }
+}
+
+function getDragDepth(offset: number, indentationWidth: number) {
+    return Math.round(offset / indentationWidth);
 }
 
 function getProjectedDepth(activeItem: FlattenedItem | undefined, dragDepth: number) {
