@@ -258,3 +258,35 @@ export function removeChildrenOf(items: FlattenedItem[], ids: UniqueIdentifier[]
         return true;
     });
 }
+
+/**
+ * From a tree, compute sort_order for every node (index among siblings).
+ * Used to persist section order via useReorderSections.
+ */
+export function treeItemsToOrderUpdates(treeItems: TreeItems): Array<{ id: string; sort_order: number }> {
+    const updates: Array<{ id: string; sort_order: number }> = [];
+    function walk(nodes: TreeItem[]) {
+        nodes.forEach((node, index) => {
+            updates.push({ id: String(node.id), sort_order: index });
+            walk(node.children);
+        });
+    }
+    walk(treeItems);
+    return updates;
+}
+
+/**
+ * From a tree, compute parentId for every node (null for root).
+ * Used to detect parent_id changes for useUpdateFolder.
+ */
+export function treeItemsToParentMap(treeItems: TreeItems): Map<string, string | null> {
+    const map = new Map<string, string | null>();
+    function walk(nodes: TreeItem[], parentId: string | null) {
+        nodes.forEach((node) => {
+            map.set(String(node.id), parentId);
+            walk(node.children, String(node.id));
+        });
+    }
+    walk(treeItems, null);
+    return map;
+}

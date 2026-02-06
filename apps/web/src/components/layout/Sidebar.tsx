@@ -1,14 +1,17 @@
 import { CreateSectionModal } from '@/components/sections';
 import { useConfirm } from '@/lib/confirm';
 import { useSectionEdit } from '@/lib/SectionEditContext';
-import { useDeleteFolder, useSections } from '@/lib/sections';
+import { sectionsToParentMap, useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useParams } from '@tanstack/react-router';
 import { Settings } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { SortableTree } from '../sortableTree/SortableTree';
+import type { TreeItems } from '../sortableTree/types';
+import { treeItemsToOrderUpdates, treeItemsToParentMap } from '../sortableTree/utilities';
+import { Skeleton } from '../ui/skeleton';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -21,33 +24,12 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     const { data: sections = [], isLoading } = useSections();
     const confirm = useConfirm();
     const deleteFolder = useDeleteFolder();
+    const reorderSections = useReorderSections();
+    const updateFolder = useUpdateFolder();
 
     const { openEdit } = useSectionEdit();
     const [createModalParent, setCreateModalParent] = useState<string | null | undefined>(undefined);
     const navRef = useRef<HTMLElement>(null);
-    const [dropIndicatorLocalY, setDropIndicatorLocalY] = useState<number>(0);
-    const [showDropIndicator, setShowDropIndicator] = useState(false);
-    /** Viewport Y reported by SectionTree from measured DOM boundaries (stable per gap) */
-    const [dropIndicatorViewportY, setDropIndicatorViewportY] = useState<number | null>(null);
-
-    useLayoutEffect(() => {
-        if (dropIndicatorViewportY == null || !navRef.current) {
-            setShowDropIndicator(false);
-            return;
-        }
-        const sync = () => {
-            const nav = navRef.current;
-            if (!nav) return;
-            const r = nav.getBoundingClientRect();
-            const localY = dropIndicatorViewportY - r.top + nav.scrollTop;
-            setDropIndicatorLocalY(localY);
-            setShowDropIndicator(true);
-        };
-        sync();
-        const nav = navRef.current;
-        nav.addEventListener('scroll', sync);
-        return () => nav.removeEventListener('scroll', sync);
-    }, [dropIndicatorViewportY]);
 
     const handleAddSubSection = (parentId: string | null) => {
         setCreateModalParent(parentId);
@@ -65,6 +47,18 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             variant: 'destructive',
         });
         if (ok) deleteFolder.mutate(section.id);
+    };
+
+    const handleSectionsChange = (newItems: TreeItems) => {
+        const orderUpdates = treeItemsToOrderUpdates(newItems);
+        const newParentMap = treeItemsToParentMap(newItems);
+        const currentParentMap = sectionsToParentMap(sections);
+        newParentMap.forEach((newParentId, id) => {
+            if (currentParentMap.get(id) !== newParentId) {
+                updateFolder.mutate({ id, data: { parent_id: newParentId } });
+            }
+        });
+        reorderSections.mutate(orderUpdates);
     };
 
     const navContent = (
@@ -93,20 +87,30 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 >
                     All Documents
                 </Link>
-                <div
-                    className="absolute left-3 right-3 z-10 h-0.5 rounded-full bg-primary transition-opacity duration-75"
-                    style={{
-                        top: dropIndicatorLocalY,
-                        opacity: showDropIndicator ? 1 : 0,
-                        pointerEvents: 'none',
-                    }}
-                />
+
                 {isLoading ? (
-                    <div className="py-2 text-sm text-muted-foreground">Loading sections…</div>
+                    <div className="space-y-0.5">
+                        {[0, 1, 2, 3, 4].map((i) => (
+                            <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ paddingLeft: 8 + (i % 2) * 20 }}>
+                                <Skeleton className="size-4 shrink-0 rounded" />
+                                <Skeleton className="size-4 shrink-0 rounded" />
+                                <Skeleton className="h-4 flex-1 max-w-[120px]" />
+                            </div>
+                        ))}
+                    </div>
                 ) : sections.length === 0 ? (
                     <div className="py-2 text-sm text-muted-foreground">No sections yet</div>
                 ) : (
-                    <SortableTree />
+                    <SortableTree
+                        sections={sections}
+                        currentSectionId={currentSectionId}
+                        indentationWidth={20}
+                        collapsible
+                        onSectionsChange={handleSectionsChange}
+                        onEditSection={handleEditSection}
+                        onAddSubSection={(section) => handleAddSubSection(section.id)}
+                        onDeleteSection={handleDeleteSection}
+                    />
                 )}
                 <button
                     type="button"

@@ -10,6 +10,7 @@ import {
     KeyboardSensor,
     MeasuringStrategy,
     PointerSensor,
+    TouchSensor,
     UniqueIdentifier,
     closestCenter,
     defaultDropAnimation,
@@ -20,49 +21,20 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { findSectionById } from '@/lib/sections';
 import { CSS } from '@dnd-kit/utilities';
+import type { FolderWithChildren } from '@reverie/shared';
 import { SortableTreeItem } from './components';
 import { sortableTreeKeyboardCoordinates } from './keyboardCoordinates';
-import type { DropZone, FlattenedItem, SensorContext, TreeItems } from './types';
-import {
-    extractItem,
-    flattenTree,
-    getChildCount,
-    getDescendantIds,
-    getDropZone,
-    getProjection,
-    insertItem,
-    removeChildrenOf,
-    removeItem,
-    setProperty,
-} from './utilities';
+import type { DropZone, FlattenedItem, SensorContext, TreeItem, TreeItems } from './types';
+import { extractItem, flattenTree, getChildCount, getDropZone, getProjection, insertItem, removeChildrenOf, removeItem, setProperty } from './utilities';
 
-const initialItems: TreeItems = [
-    {
-        id: 'Home',
-        children: [],
-    },
-    {
-        id: 'Collections',
-        children: [
-            { id: 'Spring', children: [] },
-            { id: 'Summer', children: [] },
-            { id: 'Fall', children: [] },
-            { id: 'Winter', children: [] },
-        ],
-    },
-    {
-        id: 'About Us',
-        children: [],
-    },
-    {
-        id: 'My Account',
-        children: [
-            { id: 'Addresses', children: [] },
-            { id: 'Order History', children: [] },
-        ],
-    },
-];
+function sectionsToTreeItems(sections: FolderWithChildren[]): TreeItems {
+    return sections.map((s) => ({
+        id: s.id,
+        children: sectionsToTreeItems(s.children),
+    })) as TreeItems;
+}
 
 const measuring = {
     droppable: {
@@ -95,14 +67,40 @@ const dropAnimationConfig: DropAnimation = {
 
 interface Props {
     collapsible?: boolean;
+    currentSectionId?: string | undefined;
     defaultItems?: TreeItems;
     indentationWidth?: number;
     indicator?: boolean;
+    onAddSubSection?: (section: FolderWithChildren) => void;
+    onDeleteSection?: (section: FolderWithChildren) => void;
+    onEditSection?: (section: FolderWithChildren) => void;
+    onSectionsChange?: (newItems: TreeItems) => void;
     removable?: boolean;
+    sections?: FolderWithChildren[] | null;
 }
 
-export function SortableTree({ collapsible, defaultItems = initialItems, indicator = true, indentationWidth = 30, removable }: Props) {
-    const [items, setItems] = useState(() => defaultItems);
+export function SortableTree({
+    collapsible,
+    currentSectionId,
+    defaultItems = [],
+    indicator = true,
+    indentationWidth = 30,
+    onAddSubSection,
+    onDeleteSection,
+    onEditSection,
+    onSectionsChange,
+    removable,
+    sections,
+}: Props) {
+    const initialItemsFromSections = sections && sections.length > 0 ? sectionsToTreeItems(sections) : defaultItems;
+    const [items, setItems] = useState(() => initialItemsFromSections);
+
+    useEffect(() => {
+        if (sections && sections.length > 0) {
+            setItems(sectionsToTreeItems(sections));
+        }
+    }, [sections]);
+
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
     const [dropZone, setDropZone] = useState<DropZone | null>(null);
@@ -122,16 +120,18 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         return removeChildrenOf(flattenedTree, activeId != null ? [activeId, ...collapsedItems] : collapsedItems);
     }, [activeId, items]);
 
-    const highlightedIds = useMemo(() => {
-        if (dropZone !== 'center' || !overId) return new Set<UniqueIdentifier>();
-        return getDescendantIds(items, overId);
-    }, [dropZone, overId, items]);
+    const highlightedId = useMemo(() => {
+        if (dropZone !== 'center' || !overId) return null;
+        return overId;
+    }, [dropZone, overId]);
+
     const sensorContext: SensorContext = useRef({
         items: flattenedItems,
     });
     const [coordinateGetter] = useState(() => sortableTreeKeyboardCoordinates(sensorContext, indicator, indentationWidth));
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, { activationConstraint: { delay: 100, tolerance: 10 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 10 } }),
         useSensor(KeyboardSensor, {
             coordinateGetter,
         }),
@@ -164,6 +164,8 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
         },
     };
 
+    console.log(flattenedItems);
+
     return (
         <DndContext
             accessibility={{ announcements }}
@@ -177,33 +179,48 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
             onDragCancel={handleDragCancel}
         >
             <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
-                {flattenedItems.map(({ id, children, collapsed, depth }) => (
-                    <SortableTreeItem
-                        key={id}
-                        id={id}
-                        value={id}
-                        depth={depth}
-                        indentationWidth={indentationWidth}
-                        indicator={indicator}
-                        collapsed={Boolean(collapsed && children.length)}
-                        onCollapse={collapsible && children.length ? () => handleCollapse(id) : () => {}}
-                        onRemove={removable ? () => handleRemove(id) : () => {}}
-                        dropZone={id === overId ? dropZone : null}
-                        isHighlighted={highlightedIds.has(id)}
-                    />
-                ))}
+                {flattenedItems.map(({ id, children, collapsed, depth }) => {
+                    const section = sections ? (findSectionById(sections, String(id)) ?? undefined) : undefined;
+                    return (
+                        <SortableTreeItem
+                            key={id}
+                            id={id}
+                            value={id}
+                            depth={depth}
+                            indentationWidth={indentationWidth}
+                            indicator={indicator}
+                            collapsed={Boolean(collapsed && children.length)}
+                            onCollapse={collapsible && children.length ? () => handleCollapse(id) : () => {}}
+                            onRemove={removable ? () => handleRemove(id) : () => {}}
+                            dropZone={id === overId ? dropZone : null}
+                            isHighlighted={highlightedId === id}
+                            {...(section !== undefined && { section })}
+                            {...(currentSectionId !== undefined && { currentSectionId })}
+                            {...(onEditSection !== undefined && { onEditSection })}
+                            {...(onAddSubSection !== undefined && { onAddSubSection })}
+                            {...(onDeleteSection !== undefined && { onDeleteSection })}
+                        />
+                    );
+                })}
                 {createPortal(
                     <DragOverlay dropAnimation={dropAnimationConfig}>
-                        {activeId && activeItem ? (
-                            <SortableTreeItem
-                                id={activeId}
-                                depth={activeItem.depth}
-                                clone
-                                childCount={getChildCount(items, activeId) + 1}
-                                value={activeId.toString()}
-                                indentationWidth={indentationWidth}
-                            />
-                        ) : null}
+                        {activeId && activeItem
+                            ? (() => {
+                                  const overlaySection = sections ? (findSectionById(sections, String(activeId)) ?? undefined) : undefined;
+                                  return (
+                                      <SortableTreeItem
+                                          id={activeId}
+                                          depth={activeItem.depth}
+                                          clone
+                                          childCount={getChildCount(items, activeId) + 1}
+                                          value={activeId.toString()}
+                                          indentationWidth={indentationWidth}
+                                          {...(overlaySection !== undefined && { section: overlaySection })}
+                                          {...(currentSectionId !== undefined && { currentSectionId })}
+                                      />
+                                  );
+                              })()
+                            : null}
                     </DragOverlay>,
                     document.body,
                 )}
@@ -250,6 +267,7 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
 
         if (finalProjected && over) {
             const overItem = flattenedItems.find(({ id }) => id === over.id);
+
             if (!overItem) return;
 
             const { tree: treeWithoutActive, item: activeTreeItem } = extractItem(items, active.id);
@@ -273,7 +291,23 @@ export function SortableTree({ collapsible, defaultItems = initialItems, indicat
                     afterId: over.id,
                 });
             }
+
             setItems(newItems);
+
+            // For debugging:
+            const recursiveMap = (items: TreeItems) => {
+                return items.map((item: TreeItem) => ({
+                    ...item,
+                    sectionName: sections ? (findSectionById(sections, String(item.id))?.name ?? undefined) : undefined,
+                    children: item.children.length > 0 ? recursiveMap(item.children) : [],
+                }));
+            };
+
+            console.log({ newItems: recursiveMap(newItems) });
+
+            if (sections && onSectionsChange) {
+                onSectionsChange(newItems);
+            }
         }
     }
 

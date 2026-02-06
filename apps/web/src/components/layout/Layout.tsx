@@ -1,10 +1,9 @@
-import { flattenTree } from '@/components/sections';
 import { GlobalDropzone, UploadFAB, UploadModal } from '@/components/upload';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
-import { useMoveDocuments, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
+import { useSections } from '@/lib/sections';
 import { MeasuringStrategy } from '@dnd-kit/core';
 import type { FolderWithChildren } from '@reverie/shared';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 
@@ -30,12 +29,6 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const { data: sections = [] } = useSections();
-    const moveDocuments = useMoveDocuments();
-    const reorderSections = useReorderSections();
-    const updateFolder = useUpdateFolder();
-
-    // Flatten sections for projection calculation
-    const flattenedSections = useMemo(() => flattenTree(sections), [sections]);
 
     return (
         <SectionEditProvider>
