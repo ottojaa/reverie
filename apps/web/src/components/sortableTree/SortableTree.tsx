@@ -21,13 +21,25 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { usePrefetchDocuments } from '@/lib/api/documents';
 import { findSectionById } from '@/lib/sections';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { SortableTreeItem } from './components';
 import { sortableTreeKeyboardCoordinates } from './keyboardCoordinates';
-import type { DropZone, FlattenedItem, SensorContext, TreeItem, TreeItems } from './types';
-import { extractItem, flattenTree, getChildCount, getDropZone, getProjection, insertItem, removeChildrenOf, removeItem, setProperty } from './utilities';
+import type { DropZone, FlattenedItem, SensorContext, TreeItems } from './types';
+import {
+    extractItem,
+    flattenTree,
+    getChildCount,
+    getDropZone,
+    getProjection,
+    getTreeIds,
+    insertItem,
+    removeChildrenOf,
+    removeItem,
+    setProperty,
+} from './utilities';
 
 function sectionsToTreeItems(sections: FolderWithChildren[]): TreeItems {
     return sections.map((s) => ({
@@ -94,13 +106,22 @@ export function SortableTree({
 }: Props) {
     const initialItemsFromSections = sections && sections.length > 0 ? sectionsToTreeItems(sections) : defaultItems;
     const [items, setItems] = useState(() => initialItemsFromSections);
+    const itemsRef = useRef(items);
+    itemsRef.current = items;
 
     useEffect(() => {
-        if (sections && sections.length > 0) {
-            setItems(sectionsToTreeItems(sections));
+        if (!sections || sections.length === 0) return;
+        const sectionsTree = sectionsToTreeItems(sections);
+        const currentIds = getTreeIds(itemsRef.current);
+        const newIds = getTreeIds(sectionsTree);
+        // Only overwrite when structure changed (add/remove nodes). Same ids = reorder only → keep local order.
+        if (currentIds.size === newIds.size && [...currentIds].every((id) => newIds.has(id))) {
+            return;
         }
+        setItems(sectionsTree);
     }, [sections]);
 
+    const prefetchDocuments = usePrefetchDocuments();
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
     const [dropZone, setDropZone] = useState<DropZone | null>(null);
@@ -164,8 +185,6 @@ export function SortableTree({
         },
     };
 
-    console.log(flattenedItems);
-
     return (
         <DndContext
             accessibility={{ announcements }}
@@ -194,6 +213,7 @@ export function SortableTree({
                             onRemove={removable ? () => handleRemove(id) : () => {}}
                             dropZone={id === overId ? dropZone : null}
                             isHighlighted={highlightedId === id}
+                            onSectionHover={prefetchDocuments}
                             {...(section !== undefined && { section })}
                             {...(currentSectionId !== undefined && { currentSectionId })}
                             {...(onEditSection !== undefined && { onEditSection })}
@@ -293,17 +313,6 @@ export function SortableTree({
             }
 
             setItems(newItems);
-
-            // For debugging:
-            const recursiveMap = (items: TreeItems) => {
-                return items.map((item: TreeItem) => ({
-                    ...item,
-                    sectionName: sections ? (findSectionById(sections, String(item.id))?.name ?? undefined) : undefined,
-                    children: item.children.length > 0 ? recursiveMap(item.children) : [],
-                }));
-            };
-
-            console.log({ newItems: recursiveMap(newItems) });
 
             if (sections && onSectionsChange) {
                 onSectionsChange(newItems);

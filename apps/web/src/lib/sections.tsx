@@ -207,9 +207,7 @@ export function useReorderSections() {
             }
             toast.error('Failed to reorder sections');
         },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['sections'] });
-        },
+        // Don't invalidate on success: refetch can return stale order and overwrite optimistic UI
     });
 }
 

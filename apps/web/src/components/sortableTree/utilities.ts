@@ -91,6 +91,19 @@ export function flattenTree(items: TreeItems): FlattenedItem[] {
     return flatten(items);
 }
 
+/** Set of all node ids in the tree (for structure comparison). */
+export function getTreeIds(items: TreeItems): Set<UniqueIdentifier> {
+    const ids = new Set<UniqueIdentifier>();
+    function walk(nodes: TreeItems) {
+        for (const node of nodes) {
+            ids.add(node.id);
+            walk(node.children);
+        }
+    }
+    walk(items);
+    return ids;
+}
+
 export function buildTree(flattenedItems: FlattenedItem[]): TreeItems {
     const root: TreeItem = { id: 'root', children: [] };
     const nodes: Record<string, TreeItem> = { [root.id]: root };

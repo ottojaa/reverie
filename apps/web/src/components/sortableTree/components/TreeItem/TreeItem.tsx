@@ -6,6 +6,8 @@ import { ChevronDown, ChevronRight, FolderPlus, MoreHorizontal, Pencil, Trash2 }
 import { motion } from 'motion/react';
 import React, { forwardRef, useRef } from 'react';
 
+const PREFETCH_HOVER_MS = 80;
+
 import { UniqueIdentifier } from '@dnd-kit/core';
 
 export type DropZoneProp = 'above' | 'center' | 'below' | null;
@@ -32,6 +34,8 @@ export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
     onDeleteSection?(section: FolderWithChildren): void;
     onEditSection?(section: FolderWithChildren): void;
     onRemove?(): void;
+    /** Called after hover for PREFETCH_HOVER_MS; use to prefetch section documents. */
+    onSectionHover?(sectionId: string): void;
     wrapperRef?(node: HTMLLIElement): void;
 }
 
@@ -60,6 +64,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
             onDeleteSection,
             onEditSection,
             onRemove,
+            onSectionHover,
             section,
             style,
             value,
@@ -69,6 +74,21 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
         ref,
     ) => {
         const triggerRef = useRef<HTMLDivElement>(null);
+        const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+        const handleSectionMouseEnter = () => {
+            if (!section?.id || !onSectionHover) return;
+            prefetchTimeoutRef.current = setTimeout(() => {
+                prefetchTimeoutRef.current = null;
+                onSectionHover(section.id);
+            }, PREFETCH_HOVER_MS);
+        };
+        const handleSectionMouseLeave = () => {
+            if (prefetchTimeoutRef.current) {
+                clearTimeout(prefetchTimeoutRef.current);
+                prefetchTimeoutRef.current = null;
+            }
+        };
         const showIndicatorAbove = indicator && dropZone === 'above';
         const showIndicatorBelow = indicator && dropZone === 'below';
         const showCenterHighlight = isHighlighted || dropZone === 'center';
@@ -135,6 +155,8 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                                     ref={ref}
                                     style={{ ...style, position: 'relative' }}
                                     {...handleProps}
+                                    onMouseEnter={section ? handleSectionMouseEnter : undefined}
+                                    onMouseLeave={section ? handleSectionMouseLeave : undefined}
                                 >
                                     {section ? (
                                         <>
@@ -224,6 +246,8 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                             ref={ref}
                             style={{ ...style, paddingLeft: contentPaddingLeft, position: 'relative' }}
                             {...handleProps}
+                            onMouseEnter={section ? handleSectionMouseEnter : undefined}
+                            onMouseLeave={section ? handleSectionMouseLeave : undefined}
                         >
                             {section ? (
                                 <>
