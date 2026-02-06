@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { useDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
-import { SelectionProvider } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { Link } from '@tanstack/react-router';
 import { FolderOpen, Pencil } from 'lucide-react';
@@ -121,10 +120,10 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                     </div>
                 </div>
             ) : (
-                <SelectionProvider>
+                <>
                     <SelectionBanner />
                     <DocumentGrid documents={documents} isLoading={false} />
-                </SelectionProvider>
+                </>
             )}
         </div>
     );

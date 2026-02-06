@@ -135,7 +135,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                     className="overflow-hidden"
                     initial={false}
                     animate={{ height: showIndicatorAbove ? INDICATOR_HEIGHT : 0, opacity: showIndicatorAbove ? 1 : 0 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    transition={{ duration: 0.15, ease: 'easeOut', delay: 0.1 }}
                 >
                     <div className={cn('-mb-px', indicatorLineClassName)} />
                 </motion.div>

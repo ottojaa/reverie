@@ -100,12 +100,7 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div
-                    ref={setNodeRef}
-                    style={{ touchAction: 'none' }}
-                    {...attributes}
-                    {...listeners}
-                >
+                <div ref={setNodeRef} style={{ touchAction: 'none' }} {...attributes} {...listeners}>
                     <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} draggable={false}>
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}

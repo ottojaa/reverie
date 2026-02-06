@@ -7,7 +7,9 @@ import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useParams } from '@tanstack/react-router';
 import { Settings } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import type { MutableRefObject } from 'react';
 import { useRef, useState } from 'react';
+import type { SortableTreeHandlers } from './Layout';
 import { SortableTree } from '../sortableTree/SortableTree';
 import type { TreeItems } from '../sortableTree/types';
 import { treeItemsToOrderUpdates, treeItemsToParentMap } from '../sortableTree/utilities';
@@ -16,9 +18,10 @@ import { Skeleton } from '../ui/skeleton';
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
+    sortableTreeHandlersRef?: MutableRefObject<SortableTreeHandlers | null>;
 }
 
-export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: SidebarProps) {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sections = [], isLoading } = useSections();
@@ -110,6 +113,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                         onEditSection={handleEditSection}
                         onAddSubSection={(section) => handleAddSubSection(section.id)}
                         onDeleteSection={handleDeleteSection}
+                        {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
                 )}
                 <button

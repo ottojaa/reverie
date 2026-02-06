@@ -1,25 +1,22 @@
 import { GlobalDropzone, UploadFAB, UploadModal } from '@/components/upload';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
-import { useSections } from '@/lib/sections';
-import { MeasuringStrategy } from '@dnd-kit/core';
-import type { FolderWithChildren } from '@reverie/shared';
-import { ReactNode, useState } from 'react';
+import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
+import { SelectionProvider } from '@/lib/selection';
+import { DndContext, pointerWithin } from '@dnd-kit/core';
+import type { Announcements, DragCancelEvent, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import { ReactNode, useRef, useState } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 
-const INDENTATION_WIDTH = 20;
-
-const measuring = {
-    droppable: {
-        strategy: MeasuringStrategy.Always,
-    },
-};
-
-interface DragData {
-    type: 'documents' | 'section';
-    documentIds?: string[];
-    section?: FolderWithChildren;
-    parentId?: string | null;
+export interface SortableTreeHandlers {
+    handleDragStart: (event: DragStartEvent) => void;
+    handleDragOver: (event: DragOverEvent) => void;
+    handleDragMove: (event: DragMoveEvent) => void;
+    handleDragEnd: (event: DragEndEvent) => void;
+    handleDragCancel: (event: DragCancelEvent) => void;
+    resetState: () => void;
+    sensors?: ReturnType<typeof useDefaultSensors>;
+    announcements?: Announcements;
 }
 
 interface LayoutProps {
@@ -28,30 +25,52 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const { data: sections = [] } = useSections();
+    const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
+    const defaultSensors = useDefaultSensors();
+
+    const defaultAnnouncements: Announcements = {
+        onDragStart: () => 'Picked up.',
+        onDragMove: () => undefined,
+        onDragOver: () => undefined,
+        onDragEnd: () => 'Dropped.',
+        onDragCancel: () => 'Moving cancelled.',
+    };
 
     return (
         <SectionEditProvider>
-            <div className="flex h-screen overflow-hidden bg-background">
-                <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                <div className="flex flex-1 flex-col overflow-hidden">
-                    <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
-                    <GlobalDropzone>
-                        <main className="flex-1 overflow-auto">{children}</main>
-                    </GlobalDropzone>
-                </div>
-                <UploadFAB />
-                <UploadModal />
-            </div>
+            <SelectionProvider>
+                <DndContext
+                    sensors={defaultSensors}
+                    collisionDetection={pointerWithin}
+                    measuring={dndMeasuring}
+                    accessibility={{
+                        get announcements() {
+                            return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
+                        },
+                    }}
+                    onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
+                    onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
+                    onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
+                    onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
+                    onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
+                >
+                    <div className="flex h-screen overflow-hidden bg-background">
+                    <Sidebar
+                        isOpen={isSidebarOpen}
+                        onClose={() => setIsSidebarOpen(false)}
+                        sortableTreeHandlersRef={sortableTreeHandlersRef}
+                    />
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
+                        <GlobalDropzone>
+                            <main className="flex-1 overflow-auto">{children}</main>
+                        </GlobalDropzone>
+                    </div>
+                    <UploadFAB />
+                    <UploadModal />
+                    </div>
+                </DndContext>
+            </SelectionProvider>
         </SectionEditProvider>
     );
-}
-
-function findSection(sections: FolderWithChildren[], id: string): FolderWithChildren | null {
-    for (const section of sections) {
-        if (section.id === id) return section;
-        const found = findSection(section.children, id);
-        if (found) return found;
-    }
-    return null;
 }
