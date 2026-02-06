@@ -1,7 +1,5 @@
 import type { UniqueIdentifier } from '@dnd-kit/core';
 import { AnimateLayoutChanges, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { CSSProperties } from 'react';
 
 import { iOS } from '../../utilities';
 import { TreeItem, Props as TreeItemProps } from './TreeItem';
@@ -13,16 +11,11 @@ interface Props extends TreeItemProps {
 
 const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => (isSorting || wasDragging ? true : true);
 
-export function SortableTreeItem({ id, depth, onRegisterNode, onRefChange, ...props }: Props) {
-    const { attributes, isDragging, isSorting, listeners, setDraggableNodeRef, setDroppableNodeRef, transform, transition } = useSortable({
+export function SortableTreeItem({ id, depth, onRegisterNode, dropZone, isHighlighted, ...props }: Props) {
+    const { attributes, isDragging, isSorting, listeners, setDraggableNodeRef, setDroppableNodeRef } = useSortable({
         id,
         animateLayoutChanges,
     });
-    const style: CSSProperties = {
-        transform: CSS.Translate.toString(transform),
-        transition,
-    };
-
     const wrapperRef = (node: HTMLLIElement | null) => {
         setDroppableNodeRef(node);
         onRegisterNode?.(id, node);
@@ -32,16 +25,16 @@ export function SortableTreeItem({ id, depth, onRegisterNode, onRefChange, ...pr
         <TreeItem
             ref={setDraggableNodeRef}
             wrapperRef={wrapperRef}
-            style={style}
             depth={depth}
             ghost={isDragging}
             disableSelection={iOS}
             disableInteraction={isSorting}
+            dropZone={dropZone}
+            isHighlighted={isHighlighted}
             handleProps={{
                 ...attributes,
                 ...listeners,
             }}
-            {...(onRefChange && { onRefChange })}
             {...props}
         />
     );

@@ -1,4 +1,4 @@
-import { DocumentGrid, SelectionBanner } from '@/components/documents';
+import { DocumentGrid, DocumentSkeleton, SelectionBanner } from '@/components/documents';
 import { Button } from '@/components/ui/button';
 import { useDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
@@ -6,8 +6,10 @@ import { useCurrentSection } from '@/lib/sections';
 import { SelectionProvider } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { Link } from '@tanstack/react-router';
-import { FolderOpen, Loader2, Pencil } from 'lucide-react';
-import { useMemo } from 'react';
+import { FolderOpen, Pencil } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+
+const SKELETON_DELAY_MS = 200;
 
 export interface BrowsePageProps {
     sectionId?: string;
@@ -23,6 +25,17 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
 
     const documents = data?.items ?? [];
     const isEmpty = !isLoading && documents.length === 0;
+
+    // Only show skeleton if loading lasts longer than SKELETON_DELAY_MS (avoids flash on fast loads)
+    const [showSkeleton, setShowSkeleton] = useState(false);
+    useEffect(() => {
+        if (!isLoading) {
+            setShowSkeleton(false);
+            return;
+        }
+        const t = setTimeout(() => setShowSkeleton(true), SKELETON_DELAY_MS);
+        return () => clearTimeout(t);
+    }, [isLoading]);
 
     // Subscribe to real-time updates for documents that are still processing
     const processingDocumentIds = useMemo(
@@ -86,11 +99,16 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
             )}
 
             {isLoading ? (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center text-center">
-                        <Loader2 className="size-12 animate-spin text-muted-foreground/50" />
-                        <p className="mt-4 text-lg font-medium">Loading documents...</p>
-                    </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    {Array.from({ length: 12 }).map((_, i) =>
+                        showSkeleton ? (
+                            <DocumentSkeleton key={i} />
+                        ) : (
+                            <div key={i} className="opacity-0 pointer-events-none" aria-hidden>
+                                <DocumentSkeleton />
+                            </div>
+                        ),
+                    )}
                 </div>
             ) : isEmpty ? (
                 <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed py-8">

@@ -61,7 +61,7 @@ export const sortableTreeKeyboardCoordinates: (context: SensorContext, indicator
             });
             let closestId = getFirstCollision(collisions, 'id');
 
-            if (closestId === over?.id && collisions.length > 1) {
+            if (closestId === over?.id && collisions?.[1]) {
                 closestId = collisions[1].id;
             }
 

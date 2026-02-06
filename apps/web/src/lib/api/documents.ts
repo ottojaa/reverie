@@ -1,6 +1,6 @@
-import type { Document } from '@reverie/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { type Document } from '@reverie/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAuth, useAuthenticatedFetch } from '../auth';
 
@@ -21,16 +21,15 @@ interface UseDocumentsOptions {
 
 type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
-async function fetchDocumentsWithAuth(
-    authFetch: AuthFetch,
-    options: UseDocumentsOptions = {},
-): Promise<DocumentsResponse> {
+async function fetchDocumentsWithAuth(authFetch: AuthFetch, options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
     const params = new URLSearchParams();
     if (options.folderId) params.set('folder_id', options.folderId);
     if (options.limit) params.set('limit', String(options.limit));
     if (options.offset) params.set('offset', String(options.offset));
+
     const url = `${API_BASE}/documents${params.toString() ? `?${params}` : ''}`;
     const response = await authFetch(url, { credentials: 'include' });
+
     if (!response.ok) throw new Error('Failed to fetch documents');
     return response.json();
 }
@@ -47,6 +46,24 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
         queryFn: () => fetchDocumentsWithAuth(authFetch, options),
         enabled: isAuthenticated,
     });
+}
+
+/**
+ * Prefetch documents for a section (e.g. on sidebar hover)
+ */
+export function usePrefetchDocuments() {
+    const queryClient = useQueryClient();
+    const authFetch = useAuthenticatedFetch();
+    return useCallback(
+        (folderId: string | null | undefined) => {
+            const options = { limit: 50, ...(folderId && { folderId }) };
+            queryClient.prefetchQuery({
+                queryKey: ['documents', options],
+                queryFn: () => fetchDocumentsWithAuth(authFetch, options),
+            });
+        },
+        [queryClient, authFetch],
+    );
 }
 
 async function fetchDocumentWithAuth(authFetch: AuthFetch, documentId: string): Promise<Document> {
@@ -111,9 +128,7 @@ export function useDeleteDocuments() {
             return { previous };
         },
         onSuccess: (_, ids) => {
-            toast.success(
-                ids.length === 1 ? 'Document deleted' : `${ids.length} documents deleted`,
-            );
+            toast.success(ids.length === 1 ? 'Document deleted' : `${ids.length} documents deleted`);
         },
         onError: (_, __, context) => {
             if (context?.previous) {

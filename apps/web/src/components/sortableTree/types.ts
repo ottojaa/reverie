@@ -15,7 +15,8 @@ export interface FlattenedItem extends TreeItem {
     index: number;
 }
 
+export type DropZone = 'above' | 'center' | 'below';
+
 export type SensorContext = RefObject<{
     items: FlattenedItem[];
-    offset: number;
 }>;

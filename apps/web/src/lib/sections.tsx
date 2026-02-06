@@ -1,8 +1,8 @@
 import type { Folder, FolderWithChildren } from '@reverie/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useAuth, useAuthenticatedFetch } from './auth';
 import type { DocumentsResponse } from './api/documents';
+import { useAuth, useAuthenticatedFetch } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -31,6 +31,21 @@ export function findSectionById(tree: FolderWithChildren[], id: string | null): 
 }
 
 /**
+ * Build a map of folder id -> parent_id (null for root). Used to detect parent changes on reorder.
+ */
+export function sectionsToParentMap(tree: FolderWithChildren[]): Map<string, string | null> {
+    const map = new Map<string, string | null>();
+    function walk(nodes: FolderWithChildren[], parentId: string | null) {
+        for (const node of nodes) {
+            map.set(node.id, parentId);
+            walk(node.children, node.id);
+        }
+    }
+    walk(tree, null);
+    return map;
+}
+
+/**
  * Flatten tree to ordered list (depth-first) for sortable ids
  */
 export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildren[] {
@@ -48,10 +63,7 @@ export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildr
 /**
  * Deep clone the tree and apply sort order updates to siblings
  */
-function applyReorderToTree(
-    tree: FolderWithChildren[],
-    updates: Array<{ id: string; sort_order: number }>,
-): FolderWithChildren[] {
+function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: string; sort_order: number }>): FolderWithChildren[] {
     const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
 
     function processNodes(nodes: FolderWithChildren[]): FolderWithChildren[] {
@@ -80,11 +92,7 @@ function applyReorderToTree(
 /**
  * Move a section to a new parent in the tree
  */
-function moveSectionInTree(
-    tree: FolderWithChildren[],
-    sectionId: string,
-    newParentId: string | null,
-): FolderWithChildren[] {
+function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
     let movedSection: FolderWithChildren | null = null;
 
     // First pass: remove the section from its current location and capture it
@@ -166,10 +174,7 @@ async function reorderSectionsWithAuth(authFetch: AuthFetch, updates: Array<{ id
     if (!response.ok) throw new Error('Failed to reorder sections');
 }
 
-async function moveDocumentsWithAuth(
-    authFetch: AuthFetch,
-    data: { document_ids: string[]; folder_id: string },
-): Promise<void> {
+async function moveDocumentsWithAuth(authFetch: AuthFetch, data: { document_ids: string[]; folder_id: string }): Promise<void> {
     const response = await authFetch(`${API_BASE}/documents/move`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -202,16 +207,11 @@ export function useReorderSections() {
             }
             toast.error('Failed to reorder sections');
         },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['sections'] });
-        },
+        // Don't invalidate on success: refetch can return stale order and overwrite optimistic UI
     });
 }
 
-async function createFolderWithAuth(
-    authFetch: AuthFetch,
-    data: { name: string; parent_id?: string; description?: string; emoji?: string },
-): Promise<Folder> {
+async function createFolderWithAuth(authFetch: AuthFetch, data: { name: string; parent_id?: string; description?: string; emoji?: string }): Promise<Folder> {
     const response = await authFetch(`${API_BASE}/folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -249,8 +249,7 @@ export function useCreateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
     return useMutation({
-        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string }) =>
-            createFolderWithAuth(authFetch, data),
+        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string }) => createFolderWithAuth(authFetch, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
@@ -262,13 +261,8 @@ export function useUpdateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
     return useMutation({
-        mutationFn: ({
-            id,
-            data,
-        }: {
-            id: string;
-            data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null };
-        }) => updateFolderWithAuth(authFetch, id, data),
+        mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
+            updateFolderWithAuth(authFetch, id, data),
         onMutate: async ({ id, data }) => {
             // Only do optimistic update for parent_id changes (drag reparenting)
             if (data.parent_id === undefined) return;
@@ -320,9 +314,7 @@ export function useMoveDocuments() {
                 if (!old) return old;
                 return {
                     ...old,
-                    items: old.items.map((doc) =>
-                        document_ids.includes(doc.id) ? { ...doc, folder_id } : doc,
-                    ),
+                    items: old.items.map((doc) => (document_ids.includes(doc.id) ? { ...doc, folder_id } : doc)),
                 };
             });
             return { previous };

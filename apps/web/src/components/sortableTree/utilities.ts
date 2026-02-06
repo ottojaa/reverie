@@ -1,148 +1,84 @@
 import type { UniqueIdentifier } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
 
-import type { FlattenedItem, TreeItem, TreeItems } from './types';
+import type { DropZone, FlattenedItem, TreeItem, TreeItems } from './types';
 
 export const iOS = /iPad|iPhone|iPod/.test(navigator.platform);
 
-export type DropZone = 'above' | 'center' | 'below';
-
 /**
- * Determine drop zone based on pointer Y position relative to element
- * - Top 20% = above (sibling before)
- * - Middle 60% = center (become child)
- * - Bottom 20% = below (sibling after)
+ * Determine drop zone based on pointer Y position relative to element.
+ * Top 15% = above, middle 70% = center, bottom 15% = below.
  */
 export function getDropZone(pointerY: number, elementTop: number, elementHeight: number): DropZone {
     const relativeY = pointerY - elementTop;
     const percentage = relativeY / elementHeight;
-
-    if (percentage < 0.1) return 'above';
-    if (percentage > 0.9) return 'below';
+    if (percentage < 0.15) return 'above';
+    if (percentage > 0.85) return 'below';
     return 'center';
 }
 
-/**
- * Calculate projection based on drop zone instead of drag offset
- */
-export function getProjectionForDropZone(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dropZone: DropZone) {
-    const overItemIndex = items.findIndex(({ id }) => id === overId);
-    const activeItemIndex = items.findIndex(({ id }) => id === activeId);
+export interface ProjectionResult {
+    depth: number;
+    parentId: UniqueIdentifier | null;
+}
 
-    if (overItemIndex === -1 || activeItemIndex === -1) {
-        return null;
-    }
+/**
+ * Calculate where the dragged item will end up based on drop zone.
+ * Center or below-when-next-is-child: become first child of over item.
+ * Above or below-sibling: become sibling.
+ */
+export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dropZone: DropZone): ProjectionResult | null {
+    const overItemIndex = items.findIndex(({ id }) => id === overId);
+    if (overItemIndex === -1) return null;
 
     const overItem = items[overItemIndex]!;
-    const activeItem = items[activeItemIndex]!;
+    const nextItem = items[overItemIndex + 1];
 
     if (dropZone === 'center') {
-        // Make it a child of the target
         return {
             depth: overItem.depth + 1,
             parentId: overItem.id,
-            dropZone,
-            adjustedOverId: overId,
         };
     }
 
-    // Special case: dropping "below" a parent when active item is a child of that parent
-    // This happens when trying to reorder a child to be first within its parent
-    if (dropZone === 'below' && activeItem.parentId === overItem.id) {
-        // Check if there are other children - if so, we want to be before the first child
-        const firstChild = items[overItemIndex + 1];
-        if (firstChild && firstChild.parentId === overItem.id) {
-            // Treat as reordering within parent - show indicator at first child position
-            return {
-                depth: overItem.depth + 1,
-                parentId: overItem.id,
-                dropZone: 'above',
-                adjustedOverId: firstChild.id, // Use first child for indicator positioning
-            };
-        }
+    if (dropZone === 'above') {
+        return {
+            depth: overItem.depth,
+            parentId: overItem.parentId,
+        };
     }
 
-    // For 'above' and 'below': same level as target (sibling)
+    // dropZone === 'below'
+    const nextIsChildOfOver = nextItem != null && nextItem.parentId === overId;
+    if (nextIsChildOfOver) {
+        return {
+            depth: overItem.depth + 1,
+            parentId: overItem.id,
+        };
+    }
+
     return {
         depth: overItem.depth,
         parentId: overItem.parentId,
-        dropZone,
-        adjustedOverId: overId,
     };
 }
 
-// Legacy function kept for backward compatibility during migration
-export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dragOffset: number, indentationWidth: number) {
-    const overItemIndex = items.findIndex(({ id }) => id === overId);
-    const activeItemIndex = items.findIndex(({ id }) => id === activeId);
-    const activeItem = items[activeItemIndex];
-    const newItems = arrayMove(items, activeItemIndex, overItemIndex);
-    const previousItem = newItems[overItemIndex - 1];
-    const nextItem = newItems[overItemIndex + 1];
-    const dragDepth = getDragDepth(dragOffset, indentationWidth);
-    const projectedDepth = getProjectedDepth(activeItem, dragDepth);
-    const maxDepth = getMaxDepth({
-        previousItem,
-    });
-    const minDepth = getMinDepth({ nextItem });
-    let depth = projectedDepth;
+/**
+ * Collect id and all descendant ids for an item in the tree (for highlight set).
+ */
+export function getDescendantIds(items: TreeItems, itemId: UniqueIdentifier): Set<UniqueIdentifier> {
+    const set = new Set<UniqueIdentifier>();
+    const item = findItemDeep(items, itemId);
+    if (!item) return set;
 
-    if (projectedDepth >= maxDepth) {
-        depth = maxDepth;
-    } else if (projectedDepth < minDepth) {
-        depth = minDepth;
-    }
-
-    return { depth, maxDepth, minDepth, parentId: getParentId() };
-
-    function getParentId() {
-        if (depth === 0 || !previousItem) {
-            return null;
+    set.add(itemId);
+    function walk(nodes: TreeItem[]) {
+        for (const node of nodes) {
+            set.add(node.id);
+            walk(node.children);
         }
-
-        if (depth === previousItem.depth) {
-            return previousItem.parentId;
-        }
-
-        if (depth > previousItem.depth) {
-            return previousItem.id;
-        }
-
-        const newParent = newItems
-            .slice(0, overItemIndex)
-            .reverse()
-            .find((item) => item.depth === depth)?.parentId;
-
-        return newParent ?? null;
     }
-}
-
-function getDragDepth(offset: number, indentationWidth: number) {
-    return Math.round(offset / indentationWidth);
-}
-
-function getProjectedDepth(activeItem: FlattenedItem | undefined, dragDepth: number) {
-    if (!activeItem) {
-        return 0;
-    }
-
-    return activeItem.depth + dragDepth;
-}
-
-function getMaxDepth({ previousItem }: { previousItem: FlattenedItem | undefined }) {
-    if (previousItem) {
-        return previousItem.depth + 1;
-    }
-
-    return 0;
-}
-
-function getMinDepth({ nextItem }: { nextItem: FlattenedItem | undefined }) {
-    if (nextItem) {
-        return nextItem.depth;
-    }
-
-    return 0;
+    walk(item.children);
+    return set;
 }
 
 function flatten(items: TreeItems, parentId: UniqueIdentifier | null = null, depth = 0): FlattenedItem[] {
@@ -153,6 +89,19 @@ function flatten(items: TreeItems, parentId: UniqueIdentifier | null = null, dep
 
 export function flattenTree(items: TreeItems): FlattenedItem[] {
     return flatten(items);
+}
+
+/** Set of all node ids in the tree (for structure comparison). */
+export function getTreeIds(items: TreeItems): Set<UniqueIdentifier> {
+    const ids = new Set<UniqueIdentifier>();
+    function walk(nodes: TreeItems) {
+        for (const node of nodes) {
+            ids.add(node.id);
+            walk(node.children);
+        }
+    }
+    walk(items);
+    return ids;
 }
 
 export function buildTree(flattenedItems: FlattenedItem[]): TreeItems {
@@ -216,6 +165,67 @@ export function removeItem(items: TreeItems, id: UniqueIdentifier) {
     return newItems;
 }
 
+/**
+ * Remove item from tree and return the removed item (with children), or undefined if not found.
+ */
+export function extractItem(items: TreeItems, id: UniqueIdentifier): { tree: TreeItems; item: TreeItem | undefined } {
+    let extracted: TreeItem | undefined;
+    function remove(nodes: TreeItems): TreeItems {
+        return nodes.flatMap((node) => {
+            if (node.id === id) {
+                extracted = JSON.parse(JSON.stringify(node)) as TreeItem;
+                return [];
+            }
+            return [{ ...node, children: remove(node.children) }];
+        });
+    }
+    const tree = remove(items);
+    return { tree, item: extracted };
+}
+
+export interface InsertOptions {
+    parentId: UniqueIdentifier | null;
+    beforeId?: UniqueIdentifier;
+    afterId?: UniqueIdentifier;
+}
+
+/**
+ * Insert item as first child of parentId (root if null), or before/after a sibling.
+ */
+export function insertItem(items: TreeItems, item: TreeItem, options: InsertOptions): TreeItems {
+    const { parentId, beforeId, afterId } = options;
+
+    function insertInto(nodes: TreeItems, parent: UniqueIdentifier | null): TreeItems {
+        if (parent !== parentId) {
+            return nodes.map((node) => ({ ...node, children: insertInto(node.children, node.id) }));
+        }
+
+        if (beforeId != null) {
+            const idx = nodes.findIndex((n) => n.id === beforeId);
+            if (idx === -1) {
+                return nodes.map((node) => ({ ...node, children: insertInto(node.children, node.id) }));
+            }
+            const next = [...nodes];
+            next.splice(idx, 0, item);
+            return next;
+        }
+
+        if (afterId != null) {
+            const idx = nodes.findIndex((n) => n.id === afterId);
+            if (idx === -1) {
+                return nodes.map((node) => ({ ...node, children: insertInto(node.children, node.id) }));
+            }
+            const next = [...nodes];
+            next.splice(idx + 1, 0, item);
+            return next;
+        }
+
+        return [item, ...nodes];
+    }
+
+    return insertInto(items, null);
+}
+
 export function setProperty<T extends keyof TreeItem>(items: TreeItems, id: UniqueIdentifier, property: T, setter: (value: TreeItem[T]) => TreeItem[T]) {
     for (const item of items) {
         if (item.id === id) {
@@ -260,4 +270,36 @@ export function removeChildrenOf(items: FlattenedItem[], ids: UniqueIdentifier[]
 
         return true;
     });
+}
+
+/**
+ * From a tree, compute sort_order for every node (index among siblings).
+ * Used to persist section order via useReorderSections.
+ */
+export function treeItemsToOrderUpdates(treeItems: TreeItems): Array<{ id: string; sort_order: number }> {
+    const updates: Array<{ id: string; sort_order: number }> = [];
+    function walk(nodes: TreeItem[]) {
+        nodes.forEach((node, index) => {
+            updates.push({ id: String(node.id), sort_order: index });
+            walk(node.children);
+        });
+    }
+    walk(treeItems);
+    return updates;
+}
+
+/**
+ * From a tree, compute parentId for every node (null for root).
+ * Used to detect parent_id changes for useUpdateFolder.
+ */
+export function treeItemsToParentMap(treeItems: TreeItems): Map<string, string | null> {
+    const map = new Map<string, string | null>();
+    function walk(nodes: TreeItem[], parentId: string | null) {
+        nodes.forEach((node) => {
+            map.set(String(node.id), parentId);
+            walk(node.children, String(node.id));
+        });
+    }
+    walk(treeItems, null);
+    return map;
 }
