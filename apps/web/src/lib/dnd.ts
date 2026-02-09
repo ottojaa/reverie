@@ -1,11 +1,4 @@
-import {
-    KeyboardSensor,
-    MeasuringStrategy,
-    PointerSensor,
-    TouchSensor,
-    useSensor,
-    useSensors,
-} from '@dnd-kit/core';
+import { KeyboardSensor, MeasuringStrategy, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 
 export const dndMeasuring = {
     droppable: {
@@ -13,7 +6,7 @@ export const dndMeasuring = {
     },
 };
 
-const activationConstraint = { delay: 100, tolerance: 10 };
+const activationConstraint = { delay: 200, tolerance: 10 };
 
 /** No-op keyboard coordinate getter so sensors array length stays 3 (matches tree's Pointer + Touch + Keyboard). */
 function noopKeyboardCoordinateGetter() {

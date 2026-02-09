@@ -16,7 +16,7 @@ import {
     useSensors,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -106,7 +106,7 @@ interface Props {
     onSectionsChange?: (newItems: TreeItems) => void;
     removable?: boolean;
     sections?: FolderWithChildren[] | null;
-    treeDndHandlersRef?: MutableRefObject<SortableTreeHandlers | null>;
+    treeDndHandlersRef?: RefObject<SortableTreeHandlers | null>;
 }
 
 export function SortableTree({
@@ -173,14 +173,13 @@ export function SortableTree({
         return projection != null && projection.depth >= maxDepth;
     }, [maxDepth, projection]);
 
-
     const sensorContext: SensorContext = useRef({
         items: flattenedItems,
     });
     const [coordinateGetter] = useState(() => sortableTreeKeyboardCoordinates(sensorContext, indicator, indentationWidth));
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { delay: 100, tolerance: 10 } }),
-        useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 10 } }),
+        useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 10 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 10 } }),
         useSensor(KeyboardSensor, {
             coordinateGetter,
         }),
@@ -238,9 +237,8 @@ export function SortableTree({
                     activeDragData?.type === 'documents'
                         ? overId === id
                         : Boolean(projection?.indicatorHostId === id && projection?.indicatorType === 'background-highlight');
-                const indicatorType = activeDragData?.type === 'documents' ? null : (projection?.indicatorHostId === id ? projection.indicatorType : null);
-                const indicatorLineEdge =
-                    indicatorType === 'line' && projection?.indicatorHostId === id ? projection.indicatorLineEdge : undefined;
+                const indicatorType = activeDragData?.type === 'documents' ? null : projection?.indicatorHostId === id ? projection.indicatorType : null;
+                const indicatorLineEdge = indicatorType === 'line' && projection?.indicatorHostId === id ? projection.indicatorLineEdge : undefined;
                 return (
                     <SortableTreeItem
                         key={id}

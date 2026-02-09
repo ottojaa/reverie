@@ -37,14 +37,14 @@ export class UploadService {
         // Get user storage context once for all files
         const userContext = await this.storageService.getUserStorageContext(userId);
 
-        for (const file of files) {
+        const promises = files.map(async (file) => {
             const result = await this.uploadSingleFile(file, userId, userContext, folderId, sessionId);
             documents.push(result.document);
             jobs.push(...result.jobs);
-
-            // Update context's used bytes for accurate quota checking on subsequent files
             userContext.storageUsedBytes += file.buffer.length;
-        }
+        });
+
+        await Promise.all(promises);
 
         return {
             sessionId,

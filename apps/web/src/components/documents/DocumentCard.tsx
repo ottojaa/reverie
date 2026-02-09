@@ -6,12 +6,14 @@ import { useSelectionOptional } from '@/lib/selection';
 import { cn } from '@/lib/utils';
 import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface DocumentCardProps {
     document: Document;
+    /** Ordered list of document ids (e.g. from grid); required for shift+click range selection */
+    orderedIds?: string[];
     className?: string;
 }
 
@@ -53,10 +55,11 @@ function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): s
     return null;
 }
 
-export function DocumentCard({ document, className }: DocumentCardProps) {
+export function DocumentCard({ document, orderedIds = [], className }: DocumentCardProps) {
     const selection = useSelectionOptional();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
+    const navigate = useNavigate();
     const isSelected = selection?.isSelected(document.id) ?? false;
     const selectedIds = selection?.selectedIds ?? new Set<string>();
 
@@ -81,10 +84,27 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
     const thumbnailUrl = getThumbnailUrl(document);
 
     const handleClick = (e: React.MouseEvent) => {
-        if (e.metaKey || e.ctrlKey) {
+        if (!selection) return;
+        if (e.shiftKey) {
             e.preventDefault();
-            selection?.toggle(document.id);
+            const anchor = selection.anchorId;
+            if (anchor != null && orderedIds.length > 0) {
+                selection.selectRange(anchor, document.id, orderedIds);
+            } else {
+                selection.selectOnly(document.id);
+            }
+        } else if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            selection.toggle(document.id);
+        } else {
+            e.preventDefault();
+            selection.selectOnly(document.id);
         }
+    };
+
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        navigate({ to: '/document/$id', params: { id: document.id } });
     };
 
     const handleDelete = async () => {
@@ -101,7 +121,7 @@ export function DocumentCard({ document, className }: DocumentCardProps) {
         <ContextMenu>
             <ContextMenuTrigger asChild>
                 <div ref={setNodeRef} style={{ touchAction: 'none' }} {...attributes} {...listeners}>
-                    <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} draggable={false}>
+                    <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} onDoubleClick={handleDoubleClick} draggable={false}>
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: isDragging ? 0.5 : 1, scale: isDragging ? 0.98 : 1 }}

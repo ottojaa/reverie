@@ -41,8 +41,6 @@ export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
 }
 
 const INDICATOR_HEIGHT = 8;
-const indicatorLineClassName = 'min-h-[6px] border-primary bg-primary/30 relative ';
-const indicatorLineClassNameForbidden = 'min-h-[6px] border-destructive bg-destructive/30 relative ';
 
 export const TreeItem = forwardRef<HTMLDivElement, Props>(
     (
@@ -97,7 +95,6 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
         const lineAtTop = indicatorLineEdge !== 'bottom';
         const showCenterHighlight = isHighlighted && !isDropDisabled;
         const showCenterDropForbidden = isHighlighted && isDropDisabled;
-        const indicatorLineClass = isDropDisabled ? indicatorLineClassNameForbidden : indicatorLineClassName;
         const hasChildren = section ? section.children.length > 0 : false;
         const isExpanded = !collapsed;
         const isActive = section && currentSectionId === section.id;
@@ -139,17 +136,31 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
             >
                 {indicator && (
                     <motion.div
-                        className="overflow-hidden shrink-0"
+                        className="shrink-0 overflow-hidden"
                         style={{ order: lineAtTop ? -1 : 1 }}
                         initial={false}
-                        animate={{
-                            height: showLine ? INDICATOR_HEIGHT : 0,
-                            opacity: showLine ? 1 : 0,
-                            width: showLine ? '100%' : 0,
-                        }}
-                        transition={{ duration: 0.15, ease: 'easeOut', delay: lineAtTop ? 0.1 : 0 }}
+                        animate={{ height: showLine ? INDICATOR_HEIGHT : 0 }}
+                        transition={{ duration: 0.2, ease: 'easeOut', delay: lineAtTop ? 0.05 : 0 }}
                     >
-                        <div className={cn(lineAtTop ? '-mb-px' : '-mt-px', indicatorLineClass)} />
+                        <motion.svg
+                            className={cn('block w-full', isDropDisabled ? 'text-destructive' : 'text-primary')}
+                            viewBox="0 0 100 10"
+                            preserveAspectRatio="none"
+                            height={INDICATOR_HEIGHT}
+                        >
+                            <motion.line
+                                x1={lineAtTop ? 100 : 0}
+                                y1={5}
+                                x2={lineAtTop ? 0 : 100}
+                                y2={5}
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                pathLength={1}
+                                initial={false}
+                                animate={{ pathLength: showLine ? 1 : 0 }}
+                                transition={{ duration: 0.2, ease: 'easeOut', delay: lineAtTop ? 0.05 : 0 }}
+                            />
+                        </motion.svg>
                     </motion.div>
                 )}
                 {section && !clone ? (
@@ -254,16 +265,21 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                     </ContextMenu>
                 ) : (
                     <div className="relative" title={showCenterDropForbidden ? 'Maximum folder depth reached' : undefined}>
-                        <motion.div
-                            className={cn(
-                                'absolute inset-0 rounded-md',
-                                showCenterDropForbidden ? 'border border-dashed border-destructive/50 bg-destructive/15' : 'bg-primary/20',
-                            )}
-                            initial={false}
-                            animate={{ opacity: showCenterHighlight || showCenterDropForbidden ? 1 : 0 }}
-                            transition={{ duration: 0.15, ease: 'easeOut' }}
-                            aria-hidden
-                        />
+                        <motion.svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+                            <motion.line
+                                x1={lineAtTop ? 100 : 0}
+                                y1={50}
+                                x2={lineAtTop ? 0 : 100}
+                                y2={50}
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                pathLength={1}
+                                className={showCenterDropForbidden ? 'text-destructive' : 'text-primary'}
+                                initial={false}
+                                animate={{ pathLength: showCenterHighlight || showCenterDropForbidden ? 1 : 0 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                            />
+                        </motion.svg>
                         <div
                             className={cn(rowClassName, (showCenterHighlight || showCenterDropForbidden) && 'text-primary')}
                             ref={ref}
