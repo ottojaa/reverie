@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Play, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface DocumentCardProps {
@@ -161,6 +161,14 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
                                             className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
                                             loading="lazy"
                                         />
+                                        {/* Play icon overlay for videos */}
+                                        {document.mime_type.startsWith('video/') && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
+                                                    <Play className="size-8 text-foreground fill-foreground" />
+                                                </div>
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     /* File type icon for non-thumbnail files */

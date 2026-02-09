@@ -68,7 +68,7 @@ export function getFileCategory(mimeType: string): FileCategory {
  */
 export function canGenerateThumbnail(mimeType: string): boolean {
     const category = getFileCategory(mimeType);
-    return category === 'image' || category === 'pdf';
+    return category === 'image' || category === 'pdf' || category === 'video';
 }
 
 export interface UserStorageContext {

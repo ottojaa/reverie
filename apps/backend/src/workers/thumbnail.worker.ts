@@ -1,5 +1,9 @@
+import { spawn } from 'child_process';
 import { encode } from 'blurhash';
 import { Job, Worker } from 'bullmq';
+import { mkdtemp, unlink, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import sharp from 'sharp';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
@@ -39,6 +43,58 @@ async function renderPdfFirstPage(pdfBuffer: Buffer): Promise<Buffer> {
     return firstPage;
 }
 
+const VIDEO_MIME_TO_EXT: Record<string, string> = {
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/x-matroska': '.mkv',
+};
+
+/**
+ * Extract a single frame from video buffer using ffmpeg (must be on PATH)
+ */
+async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<Buffer> {
+    const ext = VIDEO_MIME_TO_EXT[mimeType] ?? '.bin';
+    const tmpDir = await mkdtemp(join(tmpdir(), 'reverie-video-'));
+    const inputPath = join(tmpDir, `video${ext}`);
+
+    try {
+        await writeFile(inputPath, videoBuffer);
+
+        const chunks: Buffer[] = [];
+        const ffmpeg = spawn(
+            'ffmpeg',
+            ['-ss', '0.5', '-i', inputPath, '-vframes', '1', '-f', 'image2', 'pipe:1', '-y'],
+            { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+
+        ffmpeg.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+        const stderrChunks: Buffer[] = [];
+        ffmpeg.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg.on('error', (err) => reject(err));
+            ffmpeg.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject(new Error(`ffmpeg exited ${code}: ${Buffer.concat(stderrChunks).toString('utf8').slice(-500)}`));
+            });
+        });
+
+        const out = Buffer.concat(chunks);
+        if (out.length === 0) {
+            throw new NonRetryableJobError('ffmpeg produced no output');
+        }
+        return out;
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new NonRetryableJobError(`ffmpeg not found or failed to extract video frame: ${msg}`);
+    } finally {
+        await unlink(inputPath).catch(() => {});
+    }
+}
+
 /**
  * Get image buffer for thumbnail generation based on file type
  */
@@ -58,19 +114,33 @@ async function getImageBuffer(fileBuffer: Buffer, mimeType: string): Promise<{ i
             imageBuffer: pngBuffer,
             originalDimensions: { width: metadata.width, height: metadata.height },
         };
-    } else {
-        // For images, use buffer directly
-        const metadata = await sharp(fileBuffer).metadata();
+    }
+
+    if (category === 'video') {
+        const pngBuffer = await renderVideoFrame(fileBuffer, mimeType);
+        const metadata = await sharp(pngBuffer).metadata();
 
         if (!metadata.width || !metadata.height) {
-            throw new NonRetryableJobError('Could not read image dimensions');
+            throw new NonRetryableJobError('Could not get video frame dimensions');
         }
 
         return {
-            imageBuffer: fileBuffer,
+            imageBuffer: pngBuffer,
             originalDimensions: { width: metadata.width, height: metadata.height },
         };
     }
+
+    // For images, use buffer directly
+    const metadata = await sharp(fileBuffer).metadata();
+
+    if (!metadata.width || !metadata.height) {
+        throw new NonRetryableJobError('Could not read image dimensions');
+    }
+
+    return {
+        imageBuffer: fileBuffer,
+        originalDimensions: { width: metadata.width, height: metadata.height },
+    };
 }
 
 /**
