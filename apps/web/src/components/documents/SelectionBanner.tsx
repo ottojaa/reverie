@@ -36,7 +36,7 @@ export function SelectionBanner() {
                     transition={{ type: 'spring', stiffness: 180, damping: 21 }}
                     className="overflow-hidden absolute bottom-0 left-0 right-0 z-1 flex justify-center w-full bg-background"
                 >
-                    <div className="flex items-center justify-between gap-4 border-b border-border bg-elevated py-3">
+                    <div className="flex items-center justify-between gap-4 border-b border-border py-3">
                         <span className="text-sm font-medium text-primary">{count} selected</span>
                         <div className="flex items-center gap-2">
                             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteDocuments.isPending}>
