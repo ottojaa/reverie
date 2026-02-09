@@ -16,15 +16,22 @@ export function getDropZone(pointerY: number, elementTop: number, elementHeight:
     return 'center';
 }
 
+export type IndicatorType = 'line' | 'background-highlight';
+export type IndicatorLineEdge = 'top' | 'bottom';
+
 export interface ProjectionResult {
     depth: number;
     parentId: UniqueIdentifier | null;
+    indicatorHostId: UniqueIdentifier;
+    indicatorType: IndicatorType;
+    indicatorLineEdge: IndicatorLineEdge;
 }
 
 /**
  * Calculate where the dragged item will end up based on drop zone.
  * Center or below-when-next-is-child: become first child of over item.
  * Above or below-sibling: become sibling.
+ * Also returns canonical indicator host/type so the same logical drop always shows the same indicator.
  */
 export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier, overId: UniqueIdentifier, dropZone: DropZone): ProjectionResult | null {
     const overItemIndex = items.findIndex(({ id }) => id === overId);
@@ -37,6 +44,9 @@ export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier
         return {
             depth: overItem.depth + 1,
             parentId: overItem.id,
+            indicatorHostId: overId,
+            indicatorType: 'background-highlight',
+            indicatorLineEdge: 'top',
         };
     }
 
@@ -44,6 +54,9 @@ export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier
         return {
             depth: overItem.depth,
             parentId: overItem.parentId,
+            indicatorHostId: overId,
+            indicatorType: 'line',
+            indicatorLineEdge: 'top',
         };
     }
 
@@ -53,12 +66,22 @@ export function getProjection(items: FlattenedItem[], activeId: UniqueIdentifier
         return {
             depth: overItem.depth + 1,
             parentId: overItem.id,
+            indicatorHostId: nextItem!.id,
+            indicatorType: 'line',
+            indicatorLineEdge: 'top',
         };
     }
+
+    // Below over, not as child: sibling below. Line on top of next = same as line below over. If no next, line at bottom of over.
+    const lineHostId = nextItem != null ? nextItem.id : overId;
+    const lineEdge: IndicatorLineEdge = nextItem != null ? 'top' : 'bottom';
 
     return {
         depth: overItem.depth,
         parentId: overItem.parentId,
+        indicatorHostId: lineHostId,
+        indicatorType: 'line',
+        indicatorLineEdge: lineEdge,
     };
 }
 

@@ -9,8 +9,7 @@ import React, { forwardRef, useRef } from 'react';
 const PREFETCH_HOVER_MS = 80;
 
 import { UniqueIdentifier } from '@dnd-kit/core';
-
-export type DropZoneProp = 'above' | 'center' | 'below' | null;
+import type { IndicatorLineEdge, IndicatorType } from '../../utilities';
 
 export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
     childCount?: number;
@@ -20,11 +19,13 @@ export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
     depth: number;
     disableInteraction?: boolean;
     disableSelection?: boolean;
-    dropZone?: DropZoneProp | undefined;
     ghost?: boolean;
     handleProps?: Record<string, unknown>;
     indicator?: boolean;
     indentationWidth: number;
+    indicatorLineEdge?: IndicatorLineEdge | undefined;
+    indicatorType?: IndicatorType | null;
+    isDropDisabled?: boolean;
     isDropTarget?: boolean;
     isHighlighted?: boolean | undefined;
     section?: FolderWithChildren | undefined;
@@ -41,6 +42,7 @@ export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
 
 const INDICATOR_HEIGHT = 8;
 const indicatorLineClassName = 'min-h-[6px] border-primary bg-primary/30 relative ';
+const indicatorLineClassNameForbidden = 'min-h-[6px] border-destructive bg-destructive/30 relative ';
 
 export const TreeItem = forwardRef<HTMLDivElement, Props>(
     (
@@ -52,11 +54,13 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
             depth,
             disableSelection,
             disableInteraction,
-            dropZone,
             ghost,
             handleProps,
             indentationWidth,
             indicator,
+            indicatorLineEdge,
+            indicatorType,
+            isDropDisabled,
             isDropTarget,
             isHighlighted,
             onAddSubSection,
@@ -89,9 +93,11 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                 prefetchTimeoutRef.current = null;
             }
         };
-        const showIndicatorAbove = indicator && dropZone === 'above';
-        const showIndicatorBelow = indicator && dropZone === 'below';
-        const showCenterHighlight = isHighlighted || dropZone === 'center';
+        const showLine = indicator && indicatorType === 'line';
+        const lineAtTop = indicatorLineEdge !== 'bottom';
+        const showCenterHighlight = isHighlighted && !isDropDisabled;
+        const showCenterDropForbidden = isHighlighted && isDropDisabled;
+        const indicatorLineClass = isDropDisabled ? indicatorLineClassNameForbidden : indicatorLineClassName;
         const hasChildren = section ? section.children.length > 0 : false;
         const isExpanded = !collapsed;
         const isActive = section && currentSectionId === section.id;
@@ -118,7 +124,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
         return (
             <li
                 className={cn(
-                    'list-none box-border -mb-px',
+                    'list-none box-border -mb-px flex flex-col',
                     clone && 'inline-block pointer-events-none w-full opacity-50',
                     ghost && !clone && 'opacity-30',
                     disableSelection && 'select-none',
@@ -131,27 +137,41 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                 {...restProps}
                 {...restHandleProps}
             >
-                <motion.div
-                    className="overflow-hidden"
-                    initial={false}
-                    animate={{ height: showIndicatorAbove ? INDICATOR_HEIGHT : 0, opacity: showIndicatorAbove ? 1 : 0 }}
-                    transition={{ duration: 0.15, ease: 'easeOut', delay: 0.1 }}
-                >
-                    <div className={cn('-mb-px', indicatorLineClassName)} />
-                </motion.div>
+                {indicator && (
+                    <motion.div
+                        className="overflow-hidden shrink-0"
+                        style={{ order: lineAtTop ? -1 : 1 }}
+                        initial={false}
+                        animate={{
+                            height: showLine ? INDICATOR_HEIGHT : 0,
+                            opacity: showLine ? 1 : 0,
+                            width: showLine ? '100%' : 0,
+                        }}
+                        transition={{ duration: 0.15, ease: 'easeOut', delay: lineAtTop ? 0.1 : 0 }}
+                    >
+                        <div className={cn(lineAtTop ? '-mb-px' : '-mt-px', indicatorLineClass)} />
+                    </motion.div>
+                )}
                 {section && !clone ? (
                     <ContextMenu>
                         <ContextMenuTrigger asChild>
-                            <div ref={triggerRef} className="relative w-full outline-none">
+                            <div
+                                ref={triggerRef}
+                                className="relative w-full outline-none"
+                                title={showCenterDropForbidden ? 'Maximum folder depth reached' : undefined}
+                            >
                                 <motion.div
-                                    className="absolute inset-0 rounded-md bg-primary/20"
+                                    className={cn(
+                                        'absolute inset-0 rounded-md',
+                                        showCenterDropForbidden ? 'border border-dashed border-destructive/50 bg-destructive/15' : 'bg-primary/20',
+                                    )}
                                     initial={false}
-                                    animate={{ opacity: showCenterHighlight ? 1 : 0 }}
+                                    animate={{ opacity: showCenterHighlight || showCenterDropForbidden ? 1 : 0 }}
                                     transition={{ duration: 0.15, ease: 'easeOut' }}
                                     aria-hidden
                                 />
                                 <div
-                                    className={cn(rowClassName, showCenterHighlight && 'text-primary')}
+                                    className={cn(rowClassName, (showCenterHighlight || showCenterDropForbidden) && 'text-primary')}
                                     ref={ref}
                                     style={{ ...style, position: 'relative' }}
                                     {...handleProps}
@@ -233,16 +253,19 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                         </ContextMenuContent>
                     </ContextMenu>
                 ) : (
-                    <div className="relative">
+                    <div className="relative" title={showCenterDropForbidden ? 'Maximum folder depth reached' : undefined}>
                         <motion.div
-                            className="absolute inset-0 rounded-md bg-primary/20"
+                            className={cn(
+                                'absolute inset-0 rounded-md',
+                                showCenterDropForbidden ? 'border border-dashed border-destructive/50 bg-destructive/15' : 'bg-primary/20',
+                            )}
                             initial={false}
-                            animate={{ opacity: showCenterHighlight ? 1 : 0 }}
+                            animate={{ opacity: showCenterHighlight || showCenterDropForbidden ? 1 : 0 }}
                             transition={{ duration: 0.15, ease: 'easeOut' }}
                             aria-hidden
                         />
                         <div
-                            className={cn(rowClassName, showCenterHighlight && 'text-primary')}
+                            className={cn(rowClassName, (showCenterHighlight || showCenterDropForbidden) && 'text-primary')}
                             ref={ref}
                             style={{ ...style, paddingLeft: contentPaddingLeft, position: 'relative' }}
                             {...handleProps}
@@ -319,14 +342,6 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                         </div>
                     </div>
                 )}
-                <motion.div
-                    className="overflow-hidden"
-                    initial={false}
-                    animate={{ height: showIndicatorBelow ? INDICATOR_HEIGHT : 0, opacity: showIndicatorBelow ? 1 : 0 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                >
-                    <div className={cn('-mt-px', indicatorLineClassName)} />
-                </motion.div>
             </li>
         );
     },

@@ -99,6 +99,7 @@ interface Props {
     defaultItems?: TreeItems;
     indentationWidth?: number;
     indicator?: boolean;
+    maxDepth?: number;
     onAddSubSection?: (section: FolderWithChildren) => void;
     onDeleteSection?: (section: FolderWithChildren) => void;
     onEditSection?: (section: FolderWithChildren) => void;
@@ -114,6 +115,7 @@ export function SortableTree({
     defaultItems = [],
     indicator = true,
     indentationWidth = 30,
+    maxDepth = 3,
     onAddSubSection,
     onDeleteSection,
     onEditSection,
@@ -162,12 +164,15 @@ export function SortableTree({
         return removeChildrenOf(flattenedTree, activeId != null ? [activeId, ...collapsedItems] : collapsedItems);
     }, [activeId, items]);
 
-    const highlightedId = useMemo(() => {
-        if (!overId) return null;
-        if (activeDragData?.type === 'documents') return overId;
-        if (dropZone !== 'center') return null;
-        return overId;
-    }, [activeDragData?.type, dropZone, overId]);
+    const projection = useMemo(() => {
+        if (activeDragData?.type === 'documents' || !activeId || !overId || dropZone == null) return null;
+        return getProjection(flattenedItems, activeId, overId, dropZone);
+    }, [activeDragData?.type, activeId, dropZone, flattenedItems, overId]);
+
+    const dropDisabledByDepth = useMemo(() => {
+        return projection != null && projection.depth >= maxDepth;
+    }, [maxDepth, projection]);
+
 
     const sensorContext: SensorContext = useRef({
         items: flattenedItems,
@@ -229,6 +234,13 @@ export function SortableTree({
         <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
             {flattenedItems.map(({ id, children, collapsed, depth }) => {
                 const section = sections ? (findSectionById(sections, String(id)) ?? undefined) : undefined;
+                const isHighlighted =
+                    activeDragData?.type === 'documents'
+                        ? overId === id
+                        : Boolean(projection?.indicatorHostId === id && projection?.indicatorType === 'background-highlight');
+                const indicatorType = activeDragData?.type === 'documents' ? null : (projection?.indicatorHostId === id ? projection.indicatorType : null);
+                const indicatorLineEdge =
+                    indicatorType === 'line' && projection?.indicatorHostId === id ? projection.indicatorLineEdge : undefined;
                 return (
                     <SortableTreeItem
                         key={id}
@@ -240,8 +252,10 @@ export function SortableTree({
                         collapsed={Boolean(collapsed && children.length)}
                         onCollapse={collapsible && children.length ? () => handleCollapse(id) : () => {}}
                         onRemove={removable ? () => handleRemove(id) : () => {}}
-                        dropZone={id === overId ? (activeDragData?.type === 'documents' ? 'center' : dropZone) : null}
-                        isHighlighted={highlightedId === id}
+                        isDropDisabled={id === overId && dropDisabledByDepth}
+                        isHighlighted={isHighlighted}
+                        indicatorType={indicatorType}
+                        indicatorLineEdge={indicatorLineEdge}
                         onSectionHover={prefetchDocuments}
                         {...(section !== undefined && { section })}
                         {...(currentSectionId !== undefined && { currentSectionId })}
@@ -347,6 +361,10 @@ export function SortableTree({
         resetState();
 
         if (finalProjected && over) {
+            if (finalProjected.depth >= maxDepth) {
+                toast.error('Maximum folder depth reached');
+                return;
+            }
             const overItem = flattenedItems.find(({ id }) => id === over.id);
 
             if (!overItem) return;
