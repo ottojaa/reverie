@@ -280,6 +280,23 @@ export function getChildCount(items: TreeItems, id: UniqueIdentifier) {
     return item ? countChildren(item.children) : 0;
 }
 
+/**
+ * Max depth of the subtree below this item (0 = leaf, 1 = has children, 2 = has grandchildren, etc).
+ * Uses flattened list so it works regardless of id type; in depth-first order all descendants follow the item.
+ */
+export function getMaxDepthBelowFromFlattened(flattened: FlattenedItem[], id: UniqueIdentifier): number {
+    const idx = flattened.findIndex((item) => String(item.id) === String(id));
+    if (idx === -1) return 0;
+    const activeDepth = flattened[idx]!.depth;
+    let maxDescendantDepth = -1;
+    for (let i = idx + 1; i < flattened.length; i++) {
+        const d = flattened[i]!.depth;
+        if (d <= activeDepth) break;
+        if (d > maxDescendantDepth) maxDescendantDepth = d;
+    }
+    return maxDescendantDepth < 0 ? 0 : maxDescendantDepth - activeDepth;
+}
+
 export function removeChildrenOf(items: FlattenedItem[], ids: UniqueIdentifier[]) {
     const excludeParentIds = [...ids];
 

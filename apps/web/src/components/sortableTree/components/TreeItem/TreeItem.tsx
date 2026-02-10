@@ -17,6 +17,7 @@ export interface Props extends Omit<React.HTMLAttributes<HTMLLIElement>, 'id'> {
     collapsed?: boolean;
     currentSectionId?: string | undefined;
     depth: number;
+    maxDepth: number;
     disableInteraction?: boolean;
     disableSelection?: boolean;
     ghost?: boolean;
@@ -50,6 +51,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
             collapsed,
             currentSectionId,
             depth,
+            maxDepth,
             disableSelection,
             disableInteraction,
             ghost,
@@ -115,6 +117,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
               );
 
         const contentPaddingLeft = clone ? 8 : depth * indentationWidth + 8;
+        const dropDisabledByDepth = depth >= maxDepth;
         const { onDrag: _onDrag, ...restProps } = props;
         const { onDrag: _handleDrag, ...restHandleProps } = (handleProps ?? {}) as Record<string, unknown> & { onDrag?: unknown };
 
@@ -252,7 +255,7 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
                                 <Pencil className="size-4" />
                                 Edit
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => section && onAddSubSection?.(section)}>
+                            <ContextMenuItem onSelect={() => section && onAddSubSection?.(section)} disabled={dropDisabledByDepth}>
                                 <FolderPlus className="size-4" />
                                 Add subsection
                             </ContextMenuItem>

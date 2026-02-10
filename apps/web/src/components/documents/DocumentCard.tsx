@@ -6,9 +6,13 @@ import { useSelectionOptional } from '@/lib/selection';
 import { cn } from '@/lib/utils';
 import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { useRef } from 'react';
 import { Loader2, Play, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
+
+const DOUBLE_TAP_MS = 400;
 
 interface DocumentCardProps {
     document: Document;
@@ -60,6 +64,8 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const lastTapRef = useRef<{ id: string; time: number } | null>(null);
     const isSelected = selection?.isSelected(document.id) ?? false;
     const selectedIds = selection?.selectedIds ?? new Set<string>();
 
@@ -84,6 +90,20 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
     const thumbnailUrl = getThumbnailUrl(document);
 
     const handleClick = (e: React.MouseEvent) => {
+        const isSimpleClick = !e.shiftKey && !e.metaKey && !e.ctrlKey;
+        if (isSimpleClick) {
+            const now = Date.now();
+            const prev = lastTapRef.current;
+            if (prev?.id === document.id && now - prev.time < DOUBLE_TAP_MS) {
+                lastTapRef.current = null;
+                e.preventDefault();
+                e.stopPropagation();
+                queryClient.setQueryData(['document', document.id], document);
+                navigate({ to: '/document/$id', params: { id: document.id } });
+                return;
+            }
+            lastTapRef.current = { id: document.id, time: now };
+        }
         if (!selection) return;
         if (e.shiftKey) {
             e.preventDefault();
@@ -104,6 +124,8 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
 
     const handleDoubleClick = (e: React.MouseEvent) => {
         e.preventDefault();
+        // Seed the single-document query cache so the viewer loads instantly
+        queryClient.setQueryData(['document', document.id], document);
         navigate({ to: '/document/$id', params: { id: document.id } });
     };
 

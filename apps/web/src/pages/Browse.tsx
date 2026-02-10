@@ -1,5 +1,6 @@
 import { DocumentGrid, DocumentSkeleton, SelectionBanner } from '@/components/documents';
 import { Button } from '@/components/ui/button';
+import { UploadFAB } from '@/components/upload';
 import { useDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
@@ -125,6 +126,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                     <DocumentGrid documents={documents} isLoading={false} />
                 </>
             )}
+            <UploadFAB />
         </div>
     );
 }

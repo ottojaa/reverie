@@ -35,6 +35,7 @@ import {
     flattenTree,
     getChildCount,
     getDropZone,
+    getMaxDepthBelowFromFlattened,
     getProjection,
     getTreeIds,
     insertItem,
@@ -154,15 +155,16 @@ export function SortableTree({
     } | null>(null);
     const overRectRef = useRef<{ top: number; height: number } | null>(null);
 
+    const fullFlattened = useMemo(() => flattenTree(items), [items]);
+
     const flattenedItems = useMemo(() => {
-        const flattenedTree = flattenTree(items);
-        const collapsedItems = flattenedTree.reduce<UniqueIdentifier[]>(
+        const collapsedItems = fullFlattened.reduce<UniqueIdentifier[]>(
             (acc, { children, collapsed, id }) => (collapsed && children.length ? [...acc, id] : acc),
             [],
         );
 
-        return removeChildrenOf(flattenedTree, activeId != null ? [activeId, ...collapsedItems] : collapsedItems);
-    }, [activeId, items]);
+        return removeChildrenOf(fullFlattened, activeId != null ? [activeId, ...collapsedItems] : collapsedItems);
+    }, [activeId, fullFlattened]);
 
     const projection = useMemo(() => {
         if (activeDragData?.type === 'documents' || !activeId || !overId || dropZone == null) return null;
@@ -170,8 +172,11 @@ export function SortableTree({
     }, [activeDragData?.type, activeId, dropZone, flattenedItems, overId]);
 
     const dropDisabledByDepth = useMemo(() => {
-        return projection != null && projection.depth >= maxDepth;
-    }, [maxDepth, projection]);
+        if (projection == null || activeId == null) return false;
+        const subtreeDepth = getMaxDepthBelowFromFlattened(fullFlattened, activeId);
+
+        return projection.depth + subtreeDepth >= maxDepth;
+    }, [activeId, fullFlattened, maxDepth, projection]);
 
     const sensorContext: SensorContext = useRef({
         items: flattenedItems,
@@ -245,6 +250,7 @@ export function SortableTree({
                         id={id}
                         value={id}
                         depth={depth}
+                        maxDepth={maxDepth}
                         indentationWidth={indentationWidth}
                         indicator={indicator}
                         collapsed={Boolean(collapsed && children.length)}
@@ -279,6 +285,7 @@ export function SortableTree({
                                     clone
                                     childCount={getChildCount(items, activeId) + 1}
                                     value={activeId.toString()}
+                                    maxDepth={maxDepth}
                                     indentationWidth={indentationWidth}
                                     {...(overlaySection !== undefined && { section: overlaySection })}
                                     {...(currentSectionId !== undefined && { currentSectionId })}
@@ -334,6 +341,12 @@ export function SortableTree({
 
     function handleDragEnd({ active, over }: DragEndEvent) {
         const dragData = active.data.current;
+
+        if (active.id === over?.id || dropDisabledByDepth) {
+            resetState();
+            return;
+        }
+
         const isTreeItem = over && flattenedItems.some(({ id }) => id === over.id);
         if (dragData?.type === 'documents' && isTreeItem && over) {
             const documentIds = Array.isArray(dragData.documentIds) ? dragData.documentIds : [];
@@ -359,7 +372,8 @@ export function SortableTree({
         resetState();
 
         if (finalProjected && over) {
-            if (finalProjected.depth >= maxDepth) {
+            const activeSubtreeDepth = activeId ? getMaxDepthBelowFromFlattened(fullFlattened, activeId) : 0;
+            if (finalProjected.depth + activeSubtreeDepth > maxDepth) {
                 toast.error('Maximum folder depth reached');
                 return;
             }

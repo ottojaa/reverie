@@ -1,9 +1,9 @@
-import { GlobalDropzone, UploadFAB, UploadModal } from '@/components/upload';
+import { GlobalDropzone, UploadModal } from '@/components/upload';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
 import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
 import { SelectionProvider } from '@/lib/selection';
-import { DndContext, pointerWithin } from '@dnd-kit/core';
 import type { Announcements, DragCancelEvent, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import { DndContext, pointerWithin } from '@dnd-kit/core';
 import { ReactNode, useRef, useState } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
@@ -55,19 +55,14 @@ export function Layout({ children }: LayoutProps) {
                     onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
                 >
                     <div className="flex h-screen overflow-hidden bg-background">
-                    <Sidebar
-                        isOpen={isSidebarOpen}
-                        onClose={() => setIsSidebarOpen(false)}
-                        sortableTreeHandlersRef={sortableTreeHandlersRef}
-                    />
-                    <div className="flex flex-1 flex-col overflow-hidden">
-                        <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
-                        <GlobalDropzone>
-                            <main className="flex-1 overflow-auto">{children}</main>
-                        </GlobalDropzone>
-                    </div>
-                    <UploadFAB />
-                    <UploadModal />
+                        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
+                        <div className="flex flex-1 flex-col overflow-hidden">
+                            <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
+                            <GlobalDropzone>
+                                <main className="flex-1 overflow-auto">{children}</main>
+                            </GlobalDropzone>
+                        </div>
+                        <UploadModal />
                     </div>
                 </DndContext>
             </SelectionProvider>

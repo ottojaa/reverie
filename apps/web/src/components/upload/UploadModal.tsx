@@ -1,16 +1,11 @@
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { flattenSectionTree, useSections } from '@/lib/sections';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
-import { useParams } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -78,14 +73,11 @@ export function UploadModal() {
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
 
-    useEffect(() => {
-        setSelectedFolderId((prev) => prev ?? defaultSectionId ?? undefined);
-    }, [defaultSectionId]);
+    const selectedSection = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
 
-    const selectedSection = useMemo(
-        () => flatSections.find((s) => s.id === selectedFolderId),
-        [flatSections, selectedFolderId],
-    );
+    useEffect(() => {
+        setSelectedFolderId(currentSectionId);
+    }, [currentSectionId]);
 
     const { files, isModalOpen, closeModal, startUpload, removeFile, clearCompleted, clearFailed, retryFailed, retryFile, stats, isUploading } = useUpload();
 
@@ -140,10 +132,7 @@ export function UploadModal() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="max-h-[min(50vh,20rem)] overflow-y-auto">
                                 {flatSections.map((section) => (
-                                    <DropdownMenuItem
-                                        key={section.id}
-                                        onSelect={() => setSelectedFolderId(section.id)}
-                                    >
+                                    <DropdownMenuItem key={section.id} onSelect={() => setSelectedFolderId(section.id)}>
                                         <span className="mr-2">{section.emoji ?? '📁'}</span>
                                         {section.name}
                                     </DropdownMenuItem>

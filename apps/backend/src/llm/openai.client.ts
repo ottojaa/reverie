@@ -53,13 +53,13 @@ export async function callChatCompletion(prompt: LlmPrompt, model?: string): Pro
     const client = getOpenAIClient();
 
     const response = await client.chat.completions.create({
-        model: model || env.OPENAI_MODEL,
+        model: 'gpt-5-nano',
         messages: [
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },
         ],
         max_tokens: prompt.maxTokens,
-        temperature: env.OPENAI_TEMPERATURE,
+        temperature: 0.3,
         response_format: { type: 'json_object' },
     });
 

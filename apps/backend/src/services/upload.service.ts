@@ -1,9 +1,49 @@
 import { randomUUID } from 'crypto';
+import { extname } from 'path';
 import { db } from '../db/kysely';
 import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { canGenerateThumbnail, getStorageService, type UserStorageContext } from './storage.service';
+
+/**
+ * Extension-to-MIME fallback for files where the browser reports a generic type
+ * (e.g. application/octet-stream). Only covers types commonly misreported.
+ */
+const EXTENSION_MIME_MAP: Record<string, string> = {
+    // Video
+    '.mov': 'video/quicktime',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mkv': 'video/x-matroska',
+    '.m4v': 'video/x-m4v',
+    // Audio
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.m4a': 'audio/mp4',
+    // Image (rare misdetections)
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    // Documents
+    '.pdf': 'application/pdf',
+};
+
+/**
+ * Correct generic/missing MIME types using file extension.
+ * Trusts the browser-reported type unless it's a catch-all like application/octet-stream.
+ */
+function correctMimeType(filename: string, reportedMime: string): string {
+    if (reportedMime && reportedMime !== 'application/octet-stream') {
+        return reportedMime;
+    }
+    const ext = extname(filename).toLowerCase();
+    return EXTENSION_MIME_MAP[ext] ?? reportedMime;
+}
 
 export interface UploadedFile {
     buffer: Buffer;
@@ -63,8 +103,11 @@ export class UploadService {
         folderId: string | undefined,
         sessionId: string,
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
+        // Correct generic MIME types (e.g. application/octet-stream for .mov files)
+        const mimeType = correctMimeType(file.filename, file.mimetype);
+
         // Process and store the file (with user context for quotas)
-        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, file.mimetype, userContext);
+        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
 
         // Check for duplicate by hash (scoped to user)
         const existing = await db.selectFrom('documents').selectAll().where('file_hash', '=', processed.hash).where('user_id', '=', userId).executeTakeFirst();
@@ -78,7 +121,7 @@ export class UploadService {
         }
 
         // Determine if we can generate thumbnails for this file type
-        const canThumbnail = canGenerateThumbnail(file.mimetype);
+        const canThumbnail = canGenerateThumbnail(mimeType);
 
         // Create document record (with user_id)
         const newDocument: NewDocument = {
@@ -87,7 +130,7 @@ export class UploadService {
             file_path: processed.storagePath,
             file_hash: processed.hash,
             original_filename: file.filename,
-            mime_type: file.mimetype,
+            mime_type: mimeType,
             size_bytes: file.buffer.length,
             width: processed.width,
             height: processed.height,

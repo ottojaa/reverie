@@ -1,4 +1,4 @@
-import { type Document } from '@reverie/shared';
+import { type Document, type FolderWithChildren } from '@reverie/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -116,7 +116,10 @@ export function useDeleteDocuments() {
         mutationFn: (ids: string[]) => deleteDocumentsWithAuth(authFetch, ids),
         onMutate: async (ids) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
+            await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
+            const previousSections = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
+
             queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
                 if (!old) return old;
                 return {
@@ -125,7 +128,29 @@ export function useDeleteDocuments() {
                     total: old.total - ids.length,
                 };
             });
-            return { previous };
+
+            if (previousSections) {
+                const decrements = new Map<string, number>();
+                for (const [, data] of previous) {
+                    const res = data as DocumentsResponse | undefined;
+                    if (!res?.items) continue;
+                    for (const id of ids) {
+                        const doc = res.items.find((d) => d.id === id);
+                        const fid = doc?.folder_id ?? null;
+                        if (fid) decrements.set(fid, (decrements.get(fid) ?? 0) + 1);
+                    }
+                }
+                if (decrements.size > 0) {
+                    const decrementFolderCount = (nodes: FolderWithChildren[]): FolderWithChildren[] =>
+                        nodes.map((node) => ({
+                            ...node,
+                            document_count: Math.max(0, node.document_count - (decrements.get(node.id) ?? 0)),
+                            children: decrementFolderCount(node.children),
+                        }));
+                    queryClient.setQueryData(['sections', 'tree'], decrementFolderCount(previousSections));
+                }
+            }
+            return { previous, previousSections };
         },
         onSuccess: (_, ids) => {
             toast.success(ids.length === 1 ? 'Document deleted' : `${ids.length} documents deleted`);
@@ -135,6 +160,9 @@ export function useDeleteDocuments() {
                 context.previous.forEach(([queryKey, data]) => {
                     queryClient.setQueryData(queryKey, data);
                 });
+            }
+            if (context?.previousSections != null) {
+                queryClient.setQueryData(['sections', 'tree'], context.previousSections);
             }
             toast.error('Failed to delete documents');
         },

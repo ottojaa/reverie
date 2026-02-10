@@ -7,6 +7,7 @@ import { TreeItem, Props as TreeItemProps } from './TreeItem';
 
 interface Props extends TreeItemProps {
     id: UniqueIdentifier;
+    maxDepth: number;
     indicatorType?: IndicatorType | null;
     indicatorLineEdge?: IndicatorLineEdge | undefined;
     onRegisterNode?(id: UniqueIdentifier, node: HTMLElement | null): void;
@@ -14,16 +15,7 @@ interface Props extends TreeItemProps {
 
 const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => (isSorting || wasDragging ? true : true);
 
-export function SortableTreeItem({
-    id,
-    depth,
-    onRegisterNode,
-    indicatorType,
-    indicatorLineEdge,
-    isDropDisabled,
-    isHighlighted,
-    ...props
-}: Props) {
+export function SortableTreeItem({ id, depth, maxDepth, onRegisterNode, indicatorType, indicatorLineEdge, isDropDisabled, isHighlighted, ...props }: Props) {
     const { attributes, isDragging, isSorting, listeners, setDraggableNodeRef, setDroppableNodeRef } = useSortable({
         id,
         animateLayoutChanges,
@@ -38,6 +30,7 @@ export function SortableTreeItem({
             ref={setDraggableNodeRef}
             wrapperRef={wrapperRef}
             depth={depth}
+            maxDepth={maxDepth}
             ghost={isDragging}
             disableSelection={iOS}
             disableInteraction={isSorting}
