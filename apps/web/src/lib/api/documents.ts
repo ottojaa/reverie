@@ -1,5 +1,6 @@
 import { type Document, type FolderWithChildren } from '@reverie/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { useAuth, useAuthenticatedFetch } from '../auth';
@@ -28,7 +29,7 @@ async function fetchDocumentsWithAuth(authFetch: AuthFetch, options: UseDocument
 
     if (options.limit) params.set('limit', String(options.limit));
 
-    if (options.offset) params.set('offset', String(options.offset));
+    if (options.offset !== undefined && options.offset > 0) params.set('offset', String(options.offset));
 
     const url = `${API_BASE}/documents${params.toString() ? `?${params}` : ''}`;
     const response = await authFetch(url, { credentials: 'include' });
@@ -48,6 +49,38 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
     return useQuery({
         queryKey: ['documents', options],
         queryFn: () => fetchDocumentsWithAuth(authFetch, options),
+        enabled: isAuthenticated,
+    });
+}
+
+const DEFAULT_PAGE_SIZE = 24;
+
+/**
+ * Infinite scroll documents (offset-based pagination, use in Browse)
+ */
+export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
+    const { isAuthenticated } = useAuth();
+    const authFetch = useAuthenticatedFetch();
+
+    const stableOptions = {
+        folderId: options.folderId ?? null,
+        limit: options.limit ?? DEFAULT_PAGE_SIZE,
+    };
+
+    return useInfiniteQuery({
+        queryKey: ['documents', 'infinite', stableOptions],
+        queryFn: ({ pageParam }) =>
+            fetchDocumentsWithAuth(authFetch, {
+                ...stableOptions,
+                offset: pageParam as number,
+            }),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) => {
+            const nextOffset = lastPage.offset + lastPage.limit;
+
+            return nextOffset < lastPage.total ? nextOffset : undefined;
+        },
+
         enabled: isAuthenticated,
     });
 }
@@ -132,13 +165,30 @@ export function useDeleteDocuments() {
             const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
             const previousSections = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
-            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
+            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | InfiniteData<DocumentsResponse> | undefined) => {
                 if (!old) return old;
 
+                const infinite = old as { pages?: DocumentsResponse[]; pageParams?: unknown[] };
+
+                if (infinite.pages) {
+                    const pages = infinite.pages.map((page) => ({
+                        ...page,
+                        items: page.items.filter((d) => !ids.includes(d.id)),
+                    }));
+
+                    if (pages[0]) {
+                        pages[0].total = Math.max(0, (infinite.pages[0]?.total ?? 0) - ids.length);
+                    }
+
+                    return { ...infinite, pages };
+                }
+
+                const single = old as DocumentsResponse;
+
                 return {
-                    ...old,
-                    items: old.items.filter((d) => !ids.includes(d.id)),
-                    total: old.total - ids.length,
+                    ...single,
+                    items: single.items.filter((d) => !ids.includes(d.id)),
+                    total: single.total - ids.length,
                 };
             });
 
@@ -146,12 +196,15 @@ export function useDeleteDocuments() {
                 const decrements = new Map<string, number>();
 
                 for (const [, data] of previous) {
-                    const res = data as DocumentsResponse | undefined;
-
-                    if (!res?.items) continue;
+                    const res = data as DocumentsResponse | InfiniteData<DocumentsResponse> | undefined;
+                    const items = !res
+                        ? []
+                        : 'pages' in res && Array.isArray(res.pages)
+                          ? (res as InfiniteData<DocumentsResponse>).pages.flatMap((p) => p.items)
+                          : (res as DocumentsResponse).items ?? [];
 
                     for (const id of ids) {
-                        const doc = res.items.find((d) => d.id === id);
+                        const doc = items.find((d) => d.id === id);
                         const fid = doc?.folder_id ?? null;
 
                         if (fid) decrements.set(fid, (decrements.get(fid) ?? 0) + 1);

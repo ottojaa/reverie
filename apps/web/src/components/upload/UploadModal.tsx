@@ -10,6 +10,7 @@ import { AlertCircle, CheckCircle2, ChevronDown, Loader2, RefreshCw, Upload } fr
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { SectionIcon } from '../ui/SectionIcon';
 import { UploadFileItem } from './UploadFileItem';
 
 const UPLOAD_WEIGHT = 50;
@@ -133,7 +134,7 @@ export function UploadModal() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm" className="gap-1.5">
-                                    <span>{selectedSection?.emoji ?? '📁'}</span>
+                                    <SectionIcon value={selectedSection?.emoji} />
                                     <span className="truncate">{selectedSection?.name ?? 'Select section'}</span>
                                     <ChevronDown className="size-4" />
                                 </Button>
@@ -141,7 +142,7 @@ export function UploadModal() {
                             <DropdownMenuContent align="start" className="max-h-[min(50vh,20rem)] overflow-y-auto">
                                 {flatSections.map((section) => (
                                     <DropdownMenuItem key={section.id} onSelect={() => setSelectedFolderId(section.id)}>
-                                        <span className="mr-2">{section.emoji ?? '📁'}</span>
+                                        <SectionIcon value={section.emoji} />
                                         {section.name}
                                     </DropdownMenuItem>
                                 ))}
@@ -187,7 +188,7 @@ export function UploadModal() {
                 </AnimatePresence>
 
                 {/* File list – margin on wrapper, exit animates height + margin so gap collapses cleanly */}
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="min-h-0 max-h-80 overflow-y-auto">
                     <AnimatePresence initial={false}>
                         {files.map((file) => (
                             <motion.div
