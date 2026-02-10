@@ -23,14 +23,18 @@ type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
 async function fetchDocumentsWithAuth(authFetch: AuthFetch, options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
     const params = new URLSearchParams();
+
     if (options.folderId) params.set('folder_id', options.folderId);
+
     if (options.limit) params.set('limit', String(options.limit));
+
     if (options.offset) params.set('offset', String(options.offset));
 
     const url = `${API_BASE}/documents${params.toString() ? `?${params}` : ''}`;
     const response = await authFetch(url, { credentials: 'include' });
 
     if (!response.ok) throw new Error('Failed to fetch documents');
+
     return response.json();
 }
 
@@ -54,6 +58,7 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
 export function usePrefetchDocuments() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useCallback(
         (folderId: string | null | undefined) => {
             const options = { limit: 50, ...(folderId && { folderId }) };
@@ -68,7 +73,9 @@ export function usePrefetchDocuments() {
 
 async function fetchDocumentWithAuth(authFetch: AuthFetch, documentId: string): Promise<Document> {
     const response = await authFetch(`${API_BASE}/documents/${documentId}`, { credentials: 'include' });
+
     if (!response.ok) throw new Error('Failed to fetch document');
+
     return response.json();
 }
 
@@ -88,20 +95,25 @@ export function useDocument(documentId: string) {
 
 async function deleteDocumentsWithAuth(authFetch: AuthFetch, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
+
     if (ids.length === 1) {
         const response = await authFetch(`${API_BASE}/documents/${ids[0]}`, {
             method: 'DELETE',
             credentials: 'include',
         });
+
         if (!response.ok) throw new Error('Failed to delete document');
+
         return;
     }
+
     const response = await authFetch(`${API_BASE}/documents`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ ids }),
     });
+
     if (!response.ok) throw new Error('Failed to delete documents');
 }
 
@@ -122,6 +134,7 @@ export function useDeleteDocuments() {
 
             queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
                 if (!old) return old;
+
                 return {
                     ...old,
                     items: old.items.filter((d) => !ids.includes(d.id)),
@@ -131,15 +144,20 @@ export function useDeleteDocuments() {
 
             if (previousSections) {
                 const decrements = new Map<string, number>();
+
                 for (const [, data] of previous) {
                     const res = data as DocumentsResponse | undefined;
+
                     if (!res?.items) continue;
+
                     for (const id of ids) {
                         const doc = res.items.find((d) => d.id === id);
                         const fid = doc?.folder_id ?? null;
+
                         if (fid) decrements.set(fid, (decrements.get(fid) ?? 0) + 1);
                     }
                 }
+
                 if (decrements.size > 0) {
                     const decrementFolderCount = (nodes: FolderWithChildren[]): FolderWithChildren[] =>
                         nodes.map((node) => ({
@@ -150,6 +168,7 @@ export function useDeleteDocuments() {
                     queryClient.setQueryData(['sections', 'tree'], decrementFolderCount(previousSections));
                 }
             }
+
             return { previous, previousSections };
         },
         onSuccess: (_, ids) => {
@@ -161,9 +180,11 @@ export function useDeleteDocuments() {
                     queryClient.setQueryData(queryKey, data);
                 });
             }
+
             if (context?.previousSections != null) {
                 queryClient.setQueryData(['sections', 'tree'], context.previousSections);
             }
+
             toast.error('Failed to delete documents');
         },
         onSettled: (_, __, ids) => {

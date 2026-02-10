@@ -18,6 +18,7 @@ export const db = new Kysely<Database>({
 export async function checkDbConnection(): Promise<boolean> {
     try {
         await sql`SELECT 1`.execute(db);
+
         return true;
     } catch {
         return false;

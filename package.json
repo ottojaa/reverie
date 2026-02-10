@@ -4,10 +4,13 @@
     "license": "MIT",
     "scripts": {
         "format": "nx format:write",
-        "format:check": "nx format:check"
+        "format:check": "nx format:check",
+        "lint": "nx run-many -t lint typecheck",
+        "lint:fix": "nx run-many -t lint -- --fix"
     },
     "private": true,
     "devDependencies": {
+        "@eslint/js": "^9.15.0",
         "@nx/esbuild": "22.4.0",
         "@nx/eslint": "^22.4.0",
         "@nx/js": "22.4.0",
@@ -24,12 +27,16 @@
         "@types/node": "20.19.9",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
+        "@typescript-eslint/parser": "^8.18.0",
         "@vitejs/plugin-react": "^4.2.0",
         "@vitest/ui": "^4.0.0",
         "concurrently": "^9.2.1",
         "electron": "^40.0.0",
         "electron-builder": "^26.4.0",
         "esbuild": "^0.19.2",
+        "eslint": "^9.15.0",
+        "eslint-config-prettier": "^10.1.5",
+        "globals": "^15.14.0",
         "jiti": "2.4.2",
         "jsdom": "~22.1.0",
         "nx": "22.4.0",

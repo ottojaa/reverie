@@ -36,6 +36,7 @@ interface CreateUserOptions {
  */
 function parseQuota(quotaStr: string): number {
     const match = quotaStr.match(/^(\d+(?:\.\d+)?)\s*(GB|TB)$/i);
+
     if (!match) {
         throw new Error(`Invalid quota format: "${quotaStr}". Use format like "500GB" or "1TB"`);
     }
@@ -173,6 +174,7 @@ function parseArgs(): CreateUserOptions {
             case '-h':
                 printUsage();
                 process.exit(0);
+                break;
             default:
                 console.error(`Unknown flag: ${flag}`);
                 printUsage();

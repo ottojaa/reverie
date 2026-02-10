@@ -48,6 +48,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
         if (existing) {
             const metadata = existing.metadata as OcrMetadata | null;
+
             return {
                 rawText: existing.raw_text,
                 confidenceScore: existing.confidence_score ?? 0,
@@ -72,6 +73,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 4. Validate image
     const validation = await validateImageForOcr(imageBuffer);
+
     if (!validation.valid) {
         throw new Error(validation.error);
     }
@@ -136,6 +138,7 @@ async function handleNonImageFile(documentId: string, mimeType: string): Promise
     // For text-based files (txt, md, csv), text extraction happens in upload service
     // For PDFs and Office docs, future implementation will handle them
     const textTypes = ['text/plain', 'text/markdown', 'text/csv'];
+
     if (textTypes.includes(mimeType)) {
         // These have text but don't need OCR
         result.hasMeaningfulText = true;

@@ -1,11 +1,4 @@
-import {
-    Drawer,
-    DrawerClose,
-    DrawerContent,
-    DrawerDescription,
-    DrawerHeader,
-    DrawerTitle,
-} from '@/components/ui/drawer';
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { FileTypeIcon, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
@@ -20,8 +13,11 @@ interface DocumentDetailsDrawerProps {
 
 function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
+
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
@@ -74,10 +70,9 @@ function StatusBadge({ status }: { status: string }) {
         pending: 'bg-warning/15 text-warning',
         failed: 'bg-destructive/15 text-destructive',
     };
+
     return (
-        <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', styles[status] ?? 'bg-muted text-muted-foreground')}>
-            {status}
-        </span>
+        <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', styles[status] ?? 'bg-muted text-muted-foreground')}>{status}</span>
     );
 }
 
@@ -108,19 +103,9 @@ function DrawerBody({ document }: { document: Document }) {
             </motion.div>
 
             <div className="space-y-0.5 divide-y divide-border/30">
-                <DetailRow
-                    icon={<FileType className="size-3.5" />}
-                    label="Type"
-                    value={document.mime_type}
-                    delay={nextDelay()}
-                />
+                <DetailRow icon={<FileType className="size-3.5" />} label="Type" value={document.mime_type} delay={nextDelay()} />
 
-                <DetailRow
-                    icon={<Hash className="size-3.5" />}
-                    label="Size"
-                    value={formatFileSize(document.size_bytes)}
-                    delay={nextDelay()}
-                />
+                <DetailRow icon={<Hash className="size-3.5" />} label="Size" value={formatFileSize(document.size_bytes)} delay={nextDelay()} />
 
                 {document.width != null && document.height != null && (
                     <DetailRow
@@ -144,37 +129,17 @@ function DrawerBody({ document }: { document: Document }) {
                     />
                 )}
 
-                <DetailRow
-                    icon={<Calendar className="size-3.5" />}
-                    label="Uploaded"
-                    value={formatDate(document.created_at)}
-                    delay={nextDelay()}
-                />
+                <DetailRow icon={<Calendar className="size-3.5" />} label="Uploaded" value={formatDate(document.created_at)} delay={nextDelay()} />
 
-                <DetailRow
-                    icon={<Clock className="size-3.5" />}
-                    label="Last modified"
-                    value={formatDate(document.updated_at)}
-                    delay={nextDelay()}
-                />
+                <DetailRow icon={<Clock className="size-3.5" />} label="Last modified" value={formatDate(document.updated_at)} delay={nextDelay()} />
 
                 {document.extracted_date && (
-                    <DetailRow
-                        icon={<Calendar className="size-3.5" />}
-                        label="Document date"
-                        value={document.extracted_date}
-                        delay={nextDelay()}
-                    />
+                    <DetailRow icon={<Calendar className="size-3.5" />} label="Document date" value={document.extracted_date} delay={nextDelay()} />
                 )}
             </div>
 
             {/* Processing status */}
-            <motion.div
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: nextDelay(), duration: 0.25 }}
-                className="mt-5"
-            >
+            <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: nextDelay(), duration: 0.25 }} className="mt-5">
                 <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Processing</p>
                 <div className="flex flex-wrap gap-2">
                     <div className="flex items-center gap-1.5">
@@ -202,9 +167,7 @@ function DrawerBody({ document }: { document: Document }) {
                     </div>
                     <p className="text-sm leading-relaxed text-foreground/90">{document.llm_summary}</p>
                     {document.llm_processed_at && (
-                        <p className="mt-2 text-[10px] text-muted-foreground/50">
-                            Generated {formatDate(document.llm_processed_at)}
-                        </p>
+                        <p className="mt-2 text-[10px] text-muted-foreground/50">Generated {formatDate(document.llm_processed_at)}</p>
                     )}
                 </motion.div>
             )}

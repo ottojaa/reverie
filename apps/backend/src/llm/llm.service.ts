@@ -234,6 +234,7 @@ async function updateSearchIndex(documentId: string, summary: string, entities: 
 
     // Store LLM search terms in document tags for faceted search
     const tagsToAdd = [...entities, ...topics].filter(Boolean);
+
     if (tagsToAdd.length > 0) {
         const existingTags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
 
@@ -285,7 +286,7 @@ export async function batchProcessDocuments(documentIds: string[]): Promise<Map<
         try {
             const result = await processDocument(documentId);
             results.set(documentId, result);
-        } catch (error) {
+        } catch (_error) {
             results.set(documentId, {
                 success: false,
                 reason: 'llm_disabled', // Using existing type, but represents error

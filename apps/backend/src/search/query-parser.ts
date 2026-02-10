@@ -71,20 +71,24 @@ function tokenize(query: string): Token[] {
         while (i < chars.length && /\s/.test(chars[i] ?? '')) {
             i++;
         }
+
         if (i >= chars.length) break;
 
         // Check for negation
         const negated = chars[i] === '-';
+
         if (negated) i++;
 
         // Check for quoted string
         if (chars[i] === '"') {
             i++; // Skip opening quote
             let value = '';
+
             while (i < chars.length && chars[i] !== '"') {
                 value += chars[i] ?? '';
                 i++;
             }
+
             i++; // Skip closing quote
             tokens.push({ type: 'quoted', value, negated });
             continue;
@@ -92,6 +96,7 @@ function tokenize(query: string): Token[] {
 
         // Read until whitespace or end
         let word = '';
+
         while (i < chars.length && !/\s/.test(chars[i] ?? '')) {
             word += chars[i] ?? '';
             i++;
@@ -99,6 +104,7 @@ function tokenize(query: string): Token[] {
 
         // Check if it's a filter (key:value)
         const colonIndex = word.indexOf(':');
+
         if (colonIndex > 0) {
             const key = word.slice(0, colonIndex).toLowerCase();
             let value = word.slice(colonIndex + 1);
@@ -107,8 +113,10 @@ function tokenize(query: string): Token[] {
             if (value.startsWith('"') && !value.endsWith('"')) {
                 // Read until closing quote
                 value = value.slice(1); // Remove opening quote
+
                 while (i < chars.length && chars[i - 1] !== '"') {
                     const currentChar = chars[i] ?? '';
+
                     if (/\s/.test(currentChar)) {
                         value += currentChar;
                         i++;
@@ -118,6 +126,7 @@ function tokenize(query: string): Token[] {
                             value += chars[i] ?? '';
                             i++;
                         }
+
                         if (chars[i] === '"') {
                             i++; // Skip closing quote
                             break;
@@ -142,6 +151,7 @@ function tokenize(query: string): Token[] {
  */
 function parseSize(value: string): { min?: number; max?: number } {
     const match = value.match(/^([<>])?(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?$/i);
+
     if (!match || !match[2]) return {};
 
     const operator = match[1];
@@ -155,6 +165,7 @@ function parseSize(value: string): { min?: number; max?: number } {
     } else if (operator === '<') {
         return { max: bytes };
     }
+
     // Exact size (treat as approximate range)
     return { min: bytes * 0.9, max: bytes * 1.1 };
 }
@@ -165,15 +176,18 @@ function parseSize(value: string): { min?: number; max?: number } {
 function parseDateValue(value: string): DateRange {
     // Check for relative dates
     const relative = RELATIVE_DATES[value.toLowerCase()];
+
     if (relative) {
         return { relative };
     }
 
     // Check for year range: 2022-2025
     const yearRangeMatch = value.match(/^(\d{4})-(\d{4})$/);
+
     if (yearRangeMatch && yearRangeMatch[1] && yearRangeMatch[2]) {
         const startYear = yearRangeMatch[1];
         const endYear = yearRangeMatch[2];
+
         return {
             start: new Date(`${startYear}-01-01`),
             end: new Date(`${endYear}-12-31T23:59:59.999Z`),
@@ -182,12 +196,14 @@ function parseDateValue(value: string): DateRange {
 
     // Check for month range: 2024-01..2024-06
     const monthRangeMatch = value.match(/^(\d{4}-\d{2})\.\.(\d{4}-\d{2})$/);
+
     if (monthRangeMatch && monthRangeMatch[1] && monthRangeMatch[2]) {
         const startMonth = monthRangeMatch[1];
         const endMonth = monthRangeMatch[2];
         const endDate = new Date(`${endMonth}-01`);
         endDate.setMonth(endDate.getMonth() + 1);
         endDate.setDate(0); // Last day of end month
+
         return {
             start: new Date(`${startMonth}-01`),
             end: endDate,
@@ -196,8 +212,10 @@ function parseDateValue(value: string): DateRange {
 
     // Check for single year: 2024
     const yearMatch = value.match(/^(\d{4})$/);
+
     if (yearMatch && yearMatch[1]) {
         const year = yearMatch[1];
+
         return {
             start: new Date(`${year}-01-01`),
             end: new Date(`${year}-12-31T23:59:59.999Z`),
@@ -206,8 +224,10 @@ function parseDateValue(value: string): DateRange {
 
     // Check for single date: 2024-07-15
     const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+
     if (dateMatch && dateMatch[1]) {
         const dateStr = dateMatch[1];
+
         return {
             start: new Date(dateStr),
             end: new Date(`${dateStr}T23:59:59.999Z`),
@@ -231,13 +251,16 @@ export function resolveRelativeDate(relative: DateRange['relative']): { start: D
                 start: today,
                 end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1),
             };
+
         case 'yesterday': {
             const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+
             return {
                 start: yesterday,
                 end: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1),
             };
         }
+
         case 'last-week':
             return {
                 start: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000),
@@ -280,16 +303,20 @@ export function parseQuery(query: string): ParsedQuery {
             case 'in': {
                 // Scoped text search: in:filename, in:content, in:summary
                 const scope = token.value.toLowerCase();
+
                 if (['filename', 'content', 'summary', 'all'].includes(scope)) {
                     parsed.searchScope = scope as ParsedQuery['searchScope'];
                 }
+
                 break;
             }
 
             case 'type': {
                 // File type: type:photo, type:document
                 const types = TYPE_ALIASES[token.value.toLowerCase()] || [token.value.toLowerCase()];
+
                 if (!target.types) target.types = [];
+
                 target.types.push(...types);
                 break;
             }
@@ -297,6 +324,7 @@ export function parseQuery(query: string): ParsedQuery {
             case 'format': {
                 // File format: format:pdf, format:jpg
                 if (!target.formats) target.formats = [];
+
                 target.formats.push(token.value.toLowerCase());
                 break;
             }
@@ -304,6 +332,7 @@ export function parseQuery(query: string): ParsedQuery {
             case 'category': {
                 // Document category: category:stock_statement
                 if (!target.categories) target.categories = [];
+
                 target.categories.push(token.value.toLowerCase());
                 break;
             }
@@ -323,6 +352,7 @@ export function parseQuery(query: string): ParsedQuery {
             case 'folder': {
                 // Folder filter: folder:/vacation/2024, folder:receipts
                 if (!target.folders) target.folders = [];
+
                 target.folders.push(token.value);
                 break;
             }
@@ -330,6 +360,7 @@ export function parseQuery(query: string): ParsedQuery {
             case 'has': {
                 // Property filter: has:text, has:summary, has:thumbnail
                 const prop = token.value.toLowerCase();
+
                 if (prop === 'text') {
                     target.hasText = !token.negated;
                 } else if (prop === 'summary') {
@@ -337,28 +368,36 @@ export function parseQuery(query: string): ParsedQuery {
                 } else if (prop === 'thumbnail') {
                     target.hasThumbnail = !token.negated;
                 }
+
                 break;
             }
 
             case 'size': {
                 // Size filter: size:>10MB, size:<100KB
                 const sizeRange = parseSize(token.value);
+
                 if (sizeRange.min) target.sizeMin = sizeRange.min;
+
                 if (sizeRange.max) target.sizeMax = sizeRange.max;
+
                 break;
             }
 
             case 'tag': {
                 // Tag filter: tag:important, tag:tax
                 if (!target.tags) target.tags = [];
+
                 target.tags.push(token.value.toLowerCase());
                 break;
             }
 
             case 'entity':
+            // falls through
+
             case 'company': {
                 // Entity filter: entity:Apple, company:"John Smith"
                 if (!target.entities) target.entities = [];
+
                 target.entities.push(token.value);
                 break;
             }
@@ -409,6 +448,7 @@ export function validateQuery(parsed: ParsedQuery): string[] {
     if (parsed.sizeMin && parsed.sizeMin < 0) {
         errors.push('Size cannot be negative');
     }
+
     if (parsed.sizeMax && parsed.sizeMax < 0) {
         errors.push('Size cannot be negative');
     }

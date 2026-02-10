@@ -21,9 +21,11 @@ const SelectionContext = createContext<SelectionContextValue | null>(null);
 
 export function useSelection(): SelectionContextValue {
     const ctx = useContext(SelectionContext);
+
     if (!ctx) {
         throw new Error('useSelection must be used within SelectionProvider');
     }
+
     return ctx;
 }
 
@@ -40,8 +42,10 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     const toggle = useCallback((id: string) => {
         setSelectedIds((prev) => {
             const next = new Set(prev);
+
             if (next.has(id)) next.delete(id);
             else next.add(id);
+
             return next;
         });
     }, []);
@@ -49,8 +53,10 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     const select = useCallback((id: string) => {
         setSelectedIds((prev) => {
             if (prev.has(id)) return prev;
+
             const next = new Set(prev);
             next.add(id);
+
             return next;
         });
     }, []);
@@ -59,6 +65,7 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
         setSelectedIds((prev) => {
             const next = new Set(prev);
             ids.forEach((id) => next.add(id));
+
             return next;
         });
     }, []);
@@ -66,8 +73,10 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     const deselect = useCallback((id: string) => {
         setSelectedIds((prev) => {
             if (!prev.has(id)) return prev;
+
             const next = new Set(prev);
             next.delete(id);
+
             return next;
         });
     }, []);
@@ -89,7 +98,9 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     const selectRange = useCallback((anchor: string, endId: string, orderedIds: string[]) => {
         const a = orderedIds.indexOf(anchor);
         const b = orderedIds.indexOf(endId);
+
         if (a === -1 || b === -1) return;
+
         const [lo, hi] = a <= b ? [a, b] : [b, a];
         const range = orderedIds.slice(lo, hi + 1);
         setSelectedIds(new Set(range));

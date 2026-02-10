@@ -116,9 +116,13 @@ export function getFileTypeConfig(mimeType: string): FileTypeConfig {
  */
 export function getFileExtension(filename: string): string {
     const parts = filename.split('.');
+
     if (parts.length > 1) {
-        return parts[parts.length - 1].toUpperCase();
+        const last = parts[parts.length - 1];
+
+        return last !== undefined ? last.toUpperCase() : '';
     }
+
     return '';
 }
 

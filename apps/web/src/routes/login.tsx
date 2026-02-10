@@ -28,6 +28,7 @@ function LoginPage() {
             prevAuthRef.current = true;
             navigate({ to: '/browse', replace: true });
         }
+
         prevAuthRef.current = isAuthenticated;
     }, [isAuthenticated, navigate]);
 
@@ -48,6 +49,7 @@ function LoginPage() {
 
     const getErrorMessage = (errorCode: string | null): string => {
         if (!errorCode) return '';
+
         switch (errorCode) {
             case 'unauthorized_access':
                 return 'Please sign in to continue.';

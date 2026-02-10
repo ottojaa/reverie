@@ -27,6 +27,7 @@ export function useDocumentStatus(documentId: string | undefined) {
                     if (old.ocr_status === 'processing') {
                         updates.ocr_status = event.status;
                     }
+
                     if (old.thumbnail_status === 'processing') {
                         updates.thumbnail_status = event.status;
                     }
@@ -34,6 +35,7 @@ export function useDocumentStatus(documentId: string | undefined) {
                     if (old.ocr_status === 'pending') {
                         updates.ocr_status = 'processing';
                     }
+
                     if (old.thumbnail_status === 'pending') {
                         updates.thumbnail_status = 'processing';
                     }
@@ -53,7 +55,7 @@ export function useDocumentStatus(documentId: string | undefined) {
     useEffect(() => {
         if (!documentId) return;
 
-        const socket = connectSocket();
+        connectSocket();
         subscribeToDocument(documentId);
 
         const cleanup = onJobEvents(updateDocument);
@@ -87,7 +89,7 @@ export function useDocumentsStatus(documentIds: string[]) {
     useEffect(() => {
         if (documentIds.length === 0) return;
 
-        const socket = connectSocket();
+        connectSocket();
 
         // Subscribe to all document IDs
         for (const id of documentIds) {
@@ -98,6 +100,7 @@ export function useDocumentsStatus(documentIds: string[]) {
 
         return () => {
             cleanup();
+
             for (const id of documentIds) {
                 unsubscribeFromDocument(id);
             }

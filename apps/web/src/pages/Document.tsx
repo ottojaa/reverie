@@ -12,6 +12,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function buildFileUrl(fileUrl: string | null): string | null {
     if (!fileUrl) return null;
+
     // Signed URLs from the API are relative paths
     return fileUrl.startsWith('http') ? fileUrl : `${API_BASE}${fileUrl}`;
 }
@@ -27,6 +28,7 @@ function useDynamicViewer(mimeType: string | undefined, filename?: string) {
     useEffect(() => {
         if (!mimeType) {
             setViewer(null);
+
             return;
         }
 

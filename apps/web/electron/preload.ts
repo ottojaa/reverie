@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Example IPC communication methods
     send: (channel: string, data: unknown) => {
         const validChannels = ['upload-file', 'open-folder'];
+
         if (validChannels.includes(channel)) {
             ipcRenderer.send(channel, data);
         }
@@ -16,8 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     receive: (channel: string, func: (...args: unknown[]) => void) => {
         const validChannels = ['file-uploaded', 'folder-opened'];
+
         if (validChannels.includes(channel)) {
-            ipcRenderer.on(channel, (_, ...args) => func(...args));
+            ipcRenderer.on(channel, (_event, ...eventArgs) => func(...eventArgs));
         }
     },
 });

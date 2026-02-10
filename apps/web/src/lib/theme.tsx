@@ -4,11 +4,15 @@ const THEME_KEY = 'reverie-theme';
 
 function getInitialTheme(): boolean {
     if (typeof window === 'undefined') return true;
+
     const stored = localStorage.getItem(THEME_KEY);
+
     if (stored !== null) return stored === 'dark';
+
     if (window.matchMedia) {
         return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
+
     return true;
 }
 
@@ -28,11 +32,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }, [isDark]);
 
     const value: ThemeContextValue = { isDark, setIsDark };
+
     return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
     const ctx = useContext(ThemeContext);
+
     if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
+
     return ctx;
 }

@@ -1,10 +1,10 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
-import { SectionIcon } from '@/components/ui/SectionIcon';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 

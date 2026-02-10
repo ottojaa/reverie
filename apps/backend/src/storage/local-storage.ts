@@ -8,9 +8,9 @@ import { env } from '../config/env';
 import type { IStorageProvider, StorageMetadata, StorageResult } from './storage.interface';
 
 export class LocalStorageProvider implements IStorageProvider {
-    constructor(private readonly rootPath: string) {}
+    constructor(private readonly _rootPath: string) {}
 
-    async store(file: Buffer, storagePath: string, metadata?: StorageMetadata): Promise<StorageResult> {
+    async store(file: Buffer, storagePath: string, _metadata?: StorageMetadata): Promise<StorageResult> {
         const absolutePath = this.getAbsolutePath(storagePath);
 
         const dir = path.dirname(absolutePath);
@@ -53,8 +53,10 @@ export class LocalStorageProvider implements IStorageProvider {
 
     async exists(storagePath: string): Promise<boolean> {
         const absolutePath = this.getAbsolutePath(storagePath);
+
         try {
             await access(absolutePath);
+
             return true;
         } catch {
             return false;
@@ -92,7 +94,8 @@ export class LocalStorageProvider implements IStorageProvider {
     }
 
     getAbsolutePath(storagePath: string): string {
-        console.log('getAbsolutePath', this.rootPath, storagePath);
-        return path.join(this.rootPath, storagePath);
+        console.log('getAbsolutePath', this._rootPath, storagePath);
+
+        return path.join(this._rootPath, storagePath);
     }
 }

@@ -28,6 +28,7 @@ interface IconSelectorProps extends Omit<React.ComponentPropsWithoutRef<typeof P
 
 function IconRenderer({ name }: { name: SectionIconName }) {
     const iconName: keyof typeof dynamicIconImports = name in dynamicIconImports ? (name as keyof typeof dynamicIconImports) : 'file-text';
+
     return <DynamicIcon name={iconName} className="size-5 text-current" />;
 }
 
@@ -62,20 +63,25 @@ export function IconSelector({
 
     const filteredIcons = useMemo(() => {
         if (search.trim() === '') return ICONS_AVAILABLE;
+
         const results = fuseInstance.search(search.trim().toLowerCase());
+
         return results.map((r) => r.item);
     }, [search, fuseInstance]);
 
     const categorizedIcons = useMemo(() => {
         if (search.trim() !== '') return [{ name: 'Results', icons: filteredIcons }];
+
         const categories = new Map<string, IconData[]>();
         filteredIcons.forEach((icon) => {
             const cats = icon.categories?.length ? icon.categories : ['Other'];
             cats.forEach((cat) => {
                 if (!categories.has(cat)) categories.set(cat, []);
+
                 categories.get(cat)!.push(icon);
             });
         });
+
         return Array.from(categories.entries())
             .map(([name, icons]) => ({ name, icons }))
             .sort((a, b) => a.name.localeCompare(b.name));
@@ -85,6 +91,7 @@ export function IconSelector({
         const items: Array<{ type: 'category'; categoryIndex: number } | { type: 'row'; categoryIndex: number; rowIndex: number; icons: IconData[] }> = [];
         categorizedIcons.forEach((category, categoryIndex) => {
             items.push({ type: 'category', categoryIndex });
+
             for (let i = 0; i < category.icons.length; i += 5) {
                 items.push({
                     type: 'row',
@@ -94,6 +101,7 @@ export function IconSelector({
                 });
             }
         });
+
         return items;
     }, [categorizedIcons]);
 
@@ -122,8 +130,10 @@ export function IconSelector({
     const handleSelect = useCallback(
         (name: SectionIconName) => {
             if (value === undefined) setSelectedIcon(name);
+
             onValueChange?.(name);
             onOpenChange?.(false);
+
             if (open === undefined) setIsOpen(false);
         },
         [value, onValueChange, onOpenChange, open],
@@ -132,7 +142,9 @@ export function IconSelector({
     const handleOpenChange = useCallback(
         (next: boolean) => {
             if (open === undefined) setIsOpen(next);
+
             onOpenChange?.(next);
+
             if (!next) {
                 setInputValue('');
                 setScrollReady(false);
@@ -154,11 +166,7 @@ export function IconSelector({
         <Popover modal open={open ?? isOpen} onOpenChange={handleOpenChange} {...props}>
             <PopoverTrigger asChild>
                 {children ?? (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className={cn('h-9 justify-center', displayValue ? 'w-9 p-0' : 'min-w-9 px-3')}
-                    >
+                    <Button type="button" variant="outline" className={cn('h-9 justify-center', displayValue ? 'w-9 p-0' : 'min-w-9 px-3')}>
                         {displayValue ? <IconRenderer name={displayValue} /> : <span className="text-xs text-muted-foreground">{triggerPlaceholder}</span>}
                     </Button>
                 )}
@@ -168,6 +176,7 @@ export function IconSelector({
                 <div
                     ref={(el) => {
                         (parentRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+
                         if (el && isOpenState) requestAnimationFrame(() => setScrollReady(true));
                     }}
                     className="h-60 overflow-y-auto overflow-x-hidden rounded-md border border-border bg-background"
@@ -179,7 +188,9 @@ export function IconSelector({
                         <div className="w-full" style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
                             {virtualizer.getVirtualItems().map((virtualItem) => {
                                 const item = virtualItems[virtualItem.index];
+
                                 if (!item) return null;
+
                                 const style: React.CSSProperties = {
                                     position: 'absolute',
                                     top: 0,
@@ -188,6 +199,7 @@ export function IconSelector({
                                     height: `${virtualItem.size}px`,
                                     transform: `translateY(${virtualItem.start}px)`,
                                 };
+
                                 if (item.type === 'category') {
                                     return (
                                         <div
@@ -199,6 +211,7 @@ export function IconSelector({
                                         </div>
                                     );
                                 }
+
                                 return (
                                     <div key={virtualItem.key} style={style} className="grid grid-cols-5 gap-1 p-1">
                                         {item.icons.map((icon) => (

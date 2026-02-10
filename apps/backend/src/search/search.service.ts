@@ -30,15 +30,18 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     if (query.category) {
         parsed.categories = parsed.categories ? [...parsed.categories, query.category] : [query.category];
     }
+
     if (query.folder_id) {
         parsed.folderIds = parsed.folderIds ? [...parsed.folderIds, query.folder_id] : [query.folder_id];
     }
+
     if (query.date_from) {
         parsed.extractedDateRange = {
             ...parsed.extractedDateRange,
             start: new Date(query.date_from),
         };
     }
+
     if (query.date_to) {
         parsed.extractedDateRange = {
             ...parsed.extractedDateRange,
@@ -48,6 +51,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     // Validate the parsed query
     const errors = validateQuery(parsed);
+
     if (errors.length > 0) {
         throw new Error(`Invalid query: ${errors.join(', ')}`);
     }
@@ -86,6 +90,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     // Add relevance score if text search
     let finalQuery = resultsQuery;
+
     if (parsed.fullText) {
         const tsQuery = sql`plainto_tsquery('english', ${parsed.fullText})`;
         finalQuery = resultsQuery.select(sql<number>`COALESCE(ts_rank(ocr.text_vector, ${tsQuery}), 0)`.as('relevance'));
@@ -122,6 +127,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     // Generate snippets if text search
     let snippetMap = new Map<string, string>();
+
     if (parsed.fullText && documentIds.length > 0) {
         snippetMap = await generateSnippets(documentIds, parsed.fullText);
     }
@@ -131,10 +137,12 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         documentIds.length > 0 ? await db.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', documentIds).execute() : [];
 
     const tagMap = new Map<string, string[]>();
+
     for (const row of tagRows) {
         if (!tagMap.has(row.document_id)) {
             tagMap.set(row.document_id, []);
         }
+
         tagMap.get(row.document_id)!.push(row.tag);
     }
 
@@ -144,6 +152,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         rows.map(async (row) => {
             // Generate snippet
             let snippet: string | null = null;
+
             if (parsed.fullText) {
                 // Try OCR text snippet first
                 snippet = snippetMap.get(row.id) ?? null;
@@ -203,6 +212,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
  */
 export async function getFacetsOnly(query: string, userId: string): Promise<SearchFacets> {
     const parsed = parseQuery(query);
+
     return generateFacets(parsed, userId);
 }
 

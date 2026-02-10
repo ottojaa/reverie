@@ -67,9 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!response.ok) {
                 // Token is invalid, try to refresh
                 const refreshed = await refreshToken();
+
                 if (!refreshed) {
                     clearAuthState();
                 }
+
                 return;
             }
 
@@ -141,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (refreshPromiseRef.current) {
             return refreshPromiseRef.current;
         }
+
         const promise = (async (): Promise<boolean> => {
             try {
                 const response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -158,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     ...prev,
                     accessToken: data.access_token,
                 }));
+
                 return true;
             } catch {
                 return false;
@@ -166,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         })();
         refreshPromiseRef.current = promise;
+
         return promise;
     }, []);
 
@@ -191,9 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
     const context = useContext(AuthContext);
+
     if (!context) {
         throw new Error('useAuth must be used within an AuthProvider');
     }
+
     return context;
 }
 
@@ -206,6 +213,7 @@ export function useAuthenticatedFetch() {
     return useCallback(
         async (url: string, options: RequestInit = {}) => {
             const headers = new Headers(options.headers);
+
             if (accessToken) {
                 headers.set('Authorization', `Bearer ${accessToken}`);
             }
@@ -219,9 +227,11 @@ export function useAuthenticatedFetch() {
             // If unauthorized, try to refresh token
             if (response.status === 401) {
                 const refreshed = await refreshToken();
+
                 if (refreshed) {
                     // Retry with new token
                     const newToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+
                     if (newToken) {
                         headers.set('Authorization', `Bearer ${newToken}`);
                         response = await fetch(url, {

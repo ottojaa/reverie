@@ -13,7 +13,7 @@ export const Route = createFileRoute('/login/callback')({
 
 function LoginCallbackPage() {
     const navigate = useNavigate();
-    const { access_token, expires_in } = useSearch({ from: '/login/callback' });
+    const { access_token } = useSearch({ from: '/login/callback' });
 
     useEffect(() => {
         if (access_token) {
@@ -31,6 +31,7 @@ function LoginCallbackPage() {
                     if (data.user) {
                         localStorage.setItem('reverie_user', JSON.stringify(data.user));
                     }
+
                     // Redirect to browse page
                     navigate({ to: '/browse' });
                 })

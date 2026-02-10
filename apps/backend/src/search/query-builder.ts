@@ -52,11 +52,7 @@ type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr', obj
 /**
  * Apply date range filter to query
  */
-function applyDateRangeFilter<T extends SearchQueryBase>(
-    query: T,
-    dateRange: DateRange | undefined,
-    column: 'd.created_at' | 'd.extracted_date',
-): T {
+function applyDateRangeFilter<T extends SearchQueryBase>(query: T, dateRange: DateRange | undefined, column: 'd.created_at' | 'd.extracted_date'): T {
     if (!dateRange) return query;
 
     let start = dateRange.start;
@@ -72,6 +68,7 @@ function applyDateRangeFilter<T extends SearchQueryBase>(
     if (start) {
         query = query.where(column, '>=', start) as T;
     }
+
     if (end) {
         query = query.where(column, '<=', end) as T;
     }
@@ -115,7 +112,12 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
     // Negated tags
     if (negations.tags?.length) {
         const tagsArray = negations.tags;
-        query = query.where(sql<SqlBool>`d.id NOT IN (SELECT document_id FROM document_tags WHERE tag = ANY(ARRAY[${sql.join(tagsArray.map((t) => sql`${t}`), sql`, `)}]::text[]))`) as T;
+        query = query.where(
+            sql<SqlBool>`d.id NOT IN (SELECT document_id FROM document_tags WHERE tag = ANY(ARRAY[${sql.join(
+                tagsArray.map((t) => sql`${t}`),
+                sql`, `,
+            )}]::text[]))`,
+        ) as T;
     }
 
     // Negated categories
@@ -130,8 +132,10 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
                 if (folder.startsWith('/')) {
                     return eb('f.path' as any, '!=', folder);
                 }
+
                 return sql<SqlBool>`f.path NOT ILIKE ${`%${folder}%`}`;
             });
+
             return eb.and(conditions);
         }) as T;
     }
@@ -142,12 +146,7 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
 /**
  * Build the main search query from ParsedQuery
  */
-export function buildSearchQuery(
-    baseQuery: SearchQueryBase,
-    parsed: ParsedQuery,
-    userId: string,
-    options: SearchQueryOptions,
-): SearchQueryBase {
+export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery, userId: string, options: SearchQueryOptions): SearchQueryBase {
     let query = baseQuery;
 
     // Always filter by user
@@ -186,7 +185,10 @@ export function buildSearchQuery(
             query = query.where('d.has_meaningful_text', '=', false);
         } else if (uniqueCategories.length > 0) {
             query = query.where((eb) =>
-                eb.or([eb('d.document_category' as any, 'in', uniqueCategories), ...(parsed.types!.includes('photo') ? [eb('d.has_meaningful_text' as any, '=', false)] : [])]),
+                eb.or([
+                    eb('d.document_category' as any, 'in', uniqueCategories),
+                    ...(parsed.types!.includes('photo') ? [eb('d.has_meaningful_text' as any, '=', false)] : []),
+                ]),
             );
         }
     }
@@ -217,9 +219,11 @@ export function buildSearchQuery(
                     // Exact path match
                     return eb('f.path' as any, '=', folder);
                 }
+
                 // Partial match
                 return sql<SqlBool>`f.path ILIKE ${'%' + folder + '%'}`;
             });
+
             return eb.or(conditions);
         });
     }
@@ -256,6 +260,7 @@ export function buildSearchQuery(
     if (parsed.sizeMin !== undefined) {
         query = query.where('d.size_bytes', '>=', parsed.sizeMin);
     }
+
     if (parsed.sizeMax !== undefined) {
         query = query.where('d.size_bytes', '<=', parsed.sizeMax);
     }
@@ -273,6 +278,7 @@ export function buildSearchQuery(
         query = query.where((eb) => {
             const conditions = parsed.entities!.map((entity) => {
                 const tsQuery = sql`to_tsquery('english', ${entity.replace(/\s+/g, ' & ')})`;
+
                 return eb.or([
                     // Check JSONB companies array
                     sql<SqlBool>`ocr.metadata->'companies' ? ${entity}`,
@@ -282,6 +288,7 @@ export function buildSearchQuery(
                     sql<SqlBool>`d.llm_metadata->'keyEntities' ? ${entity}`,
                 ]);
             });
+
             return eb.and(conditions);
         });
     }
@@ -330,7 +337,12 @@ export function buildCountQuery(
     });
 
     // Replace select with count
-    return query.clearSelect().clearOrderBy().clearLimit().clearOffset().select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<
+    return query
+        .clearSelect()
+        .clearOrderBy()
+        .clearLimit()
+        .clearOffset()
+        .select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<
         Database & { d: Database['documents']; f: Database['folders']; ocr: Database['ocr_results'] },
         'd' | 'f' | 'ocr',
         { count: number }

@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { SectionIconName } from '@/components/ui/icons-data';
 import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
-import type { SectionIconName } from '@/components/ui/icons-data';
 import { useCreateFolder } from '@/lib/sections';
 import { useEffect, useState } from 'react';
 
@@ -40,7 +40,9 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
         if (!name.trim()) return;
+
         createFolder.mutate(
             {
                 name: name.trim(),
@@ -71,12 +73,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                     {isSection && (
                         <div>
                             <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
-                            <IconSelector
-                                value={icon}
-                                onValueChange={setIcon}
-                                triggerPlaceholder="Select icon"
-                                searchPlaceholder="Search icons…"
-                            />
+                            <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="Select icon" searchPlaceholder="Search icons…" />
                         </div>
                     )}
                     <div>

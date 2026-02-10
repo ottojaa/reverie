@@ -31,9 +31,7 @@ async function main() {
     const icons = iconsJson
         .filter((icon) => icon.endsWith('.json'))
         .map((icon) => {
-            const iconData = JSON.parse(
-                fs.readFileSync(path.join(TEMP_DIR, 'icons', icon), 'utf-8')
-            );
+            const iconData = JSON.parse(fs.readFileSync(path.join(TEMP_DIR, 'icons', icon), 'utf-8'));
             return {
                 name: icon.replace('.json', ''),
                 tags: iconData.tags ?? [],
@@ -49,7 +47,7 @@ async function main() {
     "name": "${icon.name}",
     "categories": [${(icon.categories ?? []).map((c) => `"${c}"`).join(',')}],
     "tags": [${(icon.tags ?? []).map((t) => `"${t.replace(/"/g, '\\"')}"`).join(',')}]
-  }`
+  }`,
       )
       .join(',\n  ')}
 ] as const;

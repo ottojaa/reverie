@@ -47,9 +47,13 @@ export interface ThumbnailResult {
  */
 export function getFileCategory(mimeType: string): FileCategory {
     if (mimeType.startsWith('image/')) return 'image';
+
     if (mimeType === 'application/pdf') return 'pdf';
+
     if (mimeType.startsWith('video/')) return 'video';
+
     if (mimeType.startsWith('audio/')) return 'audio';
+
     if (
         mimeType.startsWith('application/vnd.ms-') ||
         mimeType.startsWith('application/vnd.openxmlformats-officedocument') ||
@@ -60,6 +64,7 @@ export function getFileCategory(mimeType: string): FileCategory {
     ) {
         return 'document';
     }
+
     return 'other';
 }
 
@@ -68,6 +73,7 @@ export function getFileCategory(mimeType: string): FileCategory {
  */
 export function canGenerateThumbnail(mimeType: string): boolean {
     const category = getFileCategory(mimeType);
+
     return category === 'image' || category === 'pdf' || category === 'video';
 }
 
@@ -114,6 +120,7 @@ export class StorageService {
      */
     checkStorageQuota(context: UserStorageContext, fileSize: number): void {
         const newUsed = context.storageUsedBytes + fileSize;
+
         if (newUsed > context.storageQuotaBytes) {
             const availableBytes = context.storageQuotaBytes - context.storageUsedBytes;
             throw new StorageError(`Storage quota exceeded. Available: ${this.formatBytes(availableBytes)}, ` + `Required: ${this.formatBytes(fileSize)}`);
@@ -138,8 +145,11 @@ export class StorageService {
      */
     private formatBytes(bytes: number): string {
         if (bytes < 1024) return `${bytes} B`;
+
         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+
         if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
         return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
     }
 
@@ -301,6 +311,7 @@ export class StorageService {
      */
     async fileExistsByHash(hash: string, extension: string): Promise<boolean> {
         const path = generateStoragePath(hash, extension);
+
         return this.storage.exists(path);
     }
 
@@ -320,6 +331,7 @@ export class StorageService {
             try {
                 const metadata = await this.storage.getMetadata(path);
                 await this.storage.delete(path);
+
                 // Reduce storage usage (negative delta)
                 if (metadata.contentLength) {
                     await this.updateStorageUsage(userId, -metadata.contentLength);
@@ -358,5 +370,6 @@ export function getStorageService(): StorageService {
     if (!storageServiceInstance) {
         storageServiceInstance = new StorageService();
     }
+
     return storageServiceInstance;
 }

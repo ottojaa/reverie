@@ -14,7 +14,9 @@ type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
 async function fetchSectionTreeWithAuth(authFetch: AuthFetch): Promise<FolderWithChildren[]> {
     const response = await authFetch(`${API_BASE}/folders/tree`, { credentials: 'include' });
+
     if (!response.ok) throw new Error('Failed to fetch sections');
+
     return response.json();
 }
 
@@ -23,11 +25,15 @@ async function fetchSectionTreeWithAuth(authFetch: AuthFetch): Promise<FolderWit
  */
 export function findSectionById(tree: FolderWithChildren[], id: string | null): FolderWithChildren | null {
     if (!id) return null;
+
     for (const node of tree) {
         if (node.id === id) return node;
+
         const found = findSectionById(node.children, id);
+
         if (found) return found;
     }
+
     return null;
 }
 
@@ -36,13 +42,16 @@ export function findSectionById(tree: FolderWithChildren[], id: string | null): 
  */
 export function sectionsToParentMap(tree: FolderWithChildren[]): Map<string, string | null> {
     const map = new Map<string, string | null>();
+
     function walk(nodes: FolderWithChildren[], parentId: string | null) {
         for (const node of nodes) {
             map.set(node.id, parentId);
             walk(node.children, node.id);
         }
     }
+
     walk(tree, null);
+
     return map;
 }
 
@@ -51,13 +60,16 @@ export function sectionsToParentMap(tree: FolderWithChildren[]): Map<string, str
  */
 export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildren[] {
     const out: FolderWithChildren[] = [];
+
     function walk(nodes: FolderWithChildren[]) {
         for (const n of nodes) {
             out.push(n);
             walk(n.children);
         }
     }
+
     walk(tree);
+
     return out;
 }
 
@@ -66,17 +78,22 @@ export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildr
  */
 function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: string; sort_order: number }>): FolderWithChildren[] {
     const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
+
     return produce(tree, (draft) => {
         function processNodes(nodes: FolderWithChildren[]) {
             const needsSort = nodes.some((n) => updateMap.has(n.id));
             nodes.forEach((node) => processNodes(node.children));
+
             if (!needsSort) return;
+
             nodes.sort((a, b) => {
                 const orderA = updateMap.get(a.id) ?? a.sort_order;
                 const orderB = updateMap.get(b.id) ?? b.sort_order;
+
                 return orderA - orderB;
             });
         }
+
         processNodes(draft);
     });
 }
@@ -94,13 +111,18 @@ function patchFolderInTree(
             for (const node of nodes) {
                 if (node.id === folderId) {
                     if (patch.name !== undefined) node.name = patch.name;
+
                     if (patch.description !== undefined) node.description = patch.description;
+
                     if (patch.emoji !== undefined) node.emoji = patch.emoji;
+
                     return;
                 }
+
                 walk(node.children);
             }
         }
+
         walk(draft);
     });
 }
@@ -113,16 +135,21 @@ export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string,
     const treeWithoutSection = produce(tree, (draft) => {
         function remove(nodes: FolderWithChildren[]): boolean {
             const idx = nodes.findIndex((n) => n.id === sectionId);
+
             if (idx !== -1) {
                 movedSection = nodes[idx] as FolderWithChildren;
                 nodes.splice(idx, 1);
+
                 return true;
             }
+
             for (const node of nodes) {
                 if (remove(node.children)) return true;
             }
+
             return false;
         }
+
         remove(draft);
     });
 
@@ -133,19 +160,26 @@ export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string,
     return produce(treeWithoutSection, (draft) => {
         if (newParentId === null) {
             draft.push(updatedSection);
+
             return;
         }
+
         function addToParent(nodes: FolderWithChildren[]): boolean {
             const target = nodes.find((n) => n.id === newParentId);
+
             if (target) {
                 target.children.push(updatedSection);
+
                 return true;
             }
+
             for (const node of nodes) {
                 if (addToParent(node.children)) return true;
             }
+
             return false;
         }
+
         addToParent(draft);
     });
 }
@@ -167,7 +201,9 @@ export function useSections() {
  */
 export function useCurrentSection(sectionId: string | undefined) {
     const { data: tree } = useSections();
+
     if (!tree || !sectionId) return null;
+
     return findSectionById(tree, sectionId);
 }
 
@@ -178,6 +214,7 @@ async function reorderSectionsWithAuth(authFetch: AuthFetch, updates: Array<{ id
         credentials: 'include',
         body: JSON.stringify({ updates }),
     });
+
     if (!response.ok) throw new Error('Failed to reorder sections');
 }
 
@@ -188,6 +225,7 @@ async function moveDocumentsWithAuth(authFetch: AuthFetch, data: { document_ids:
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to move documents');
 }
 
@@ -212,6 +250,7 @@ export function useReorderSections() {
             if (context?.previous) {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
+
             toast.error('Failed to reorder sections');
         },
         // Don't invalidate on success: refetch can return stale order and overwrite optimistic UI
@@ -228,7 +267,9 @@ async function createFolderWithAuth(
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to create section');
+
     return response.json();
 }
 
@@ -243,7 +284,9 @@ async function updateFolderWithAuth(
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to update section');
+
     return response.json();
 }
 
@@ -252,12 +295,14 @@ async function deleteFolderWithAuth(authFetch: AuthFetch, id: string): Promise<v
         method: 'DELETE',
         credentials: 'include',
     });
+
     if (!response.ok) throw new Error('Failed to delete section');
 }
 
 export function useCreateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
         mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' }) =>
             createFolderWithAuth(authFetch, data),
@@ -270,6 +315,7 @@ export function useCreateFolder() {
 
 export function useCreateCategory() {
     const createFolder = useCreateFolder();
+
     return {
         ...createFolder,
         mutate: (data: { name: string; description?: string; emoji?: string }, options?: Parameters<typeof createFolder.mutate>[1]) =>
@@ -280,23 +326,28 @@ export function useCreateCategory() {
 export function useUpdateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
             updateFolderWithAuth(authFetch, id, data),
         onMutate: async ({ id, data }) => {
             const hasOrderChange = data.parent_id !== undefined;
             const hasMetadataChange = data.name !== undefined || data.description !== undefined || data.emoji !== undefined;
+
             if (!hasOrderChange && !hasMetadataChange) return;
 
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
+
             if (!previous) return { previous };
 
             function applyOptimisticUpdate(tree: FolderWithChildren[]): FolderWithChildren[] {
                 let result = tree;
+
                 if (hasOrderChange) {
                     result = moveSectionInTree(result, id, data.parent_id ?? null);
                 }
+
                 if (hasMetadataChange) {
                     result = patchFolderInTree(result, id, {
                         ...(data.name !== undefined && { name: data.name }),
@@ -304,17 +355,20 @@ export function useUpdateFolder() {
                         ...(data.emoji !== undefined && { emoji: data.emoji }),
                     });
                 }
+
                 return result;
             }
 
             const optimistic = applyOptimisticUpdate(previous);
             queryClient.setQueryData(['sections', 'tree'], optimistic);
+
             return { previous };
         },
         onError: (_, __, context) => {
             if (context?.previous) {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
+
             toast.error('Failed to update section');
         },
         onSettled: () => {
@@ -326,6 +380,7 @@ export function useUpdateFolder() {
 export function useDeleteFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
         mutationFn: (id: string) => deleteFolderWithAuth(authFetch, id),
         onSuccess: () => {
@@ -346,11 +401,13 @@ export function useMoveDocuments() {
             const previous = queryClient.getQueriesData<DocumentsResponse>({ queryKey: ['documents'] });
             queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
                 if (!old) return old;
+
                 return {
                     ...old,
                     items: old.items.map((doc) => (document_ids.includes(doc.id) ? { ...doc, folder_id } : doc)),
                 };
             });
+
             return { previous };
         },
         onError: (_, __, context) => {
@@ -359,6 +416,7 @@ export function useMoveDocuments() {
                     queryClient.setQueryData(queryKey, data);
                 });
             }
+
             toast.error('Failed to move documents');
         },
         onSettled: () => {

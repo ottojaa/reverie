@@ -81,6 +81,7 @@ function sampleDistributed(text: string, maxChars: number): PreparedText {
     const spacing = Math.floor(text.length / numSnippets);
 
     const snippets: string[] = [];
+
     for (let i = 0; i < numSnippets; i++) {
         const start = i * spacing;
         const snippet = text.slice(start, start + snippetSize);

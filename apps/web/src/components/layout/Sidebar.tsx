@@ -64,6 +64,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             confirmText: 'Delete',
             variant: 'destructive',
         });
+
         if (ok) deleteFolder.mutate(section.id);
     };
 
@@ -72,6 +73,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
         if (sectionCount === 0) {
             deleteFolder.mutate(category.id);
+
             return;
         }
 
@@ -81,6 +83,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             confirmText: 'Delete',
             variant: 'destructive',
         });
+
         if (ok) deleteFolder.mutate(category.id);
     };
 
@@ -89,6 +92,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
         if (parentChanges?.length) {
             await Promise.all(parentChanges.map(({ id, parent_id }) => updateFolder.mutateAsync({ id, data: { parent_id } })));
         }
+
         reorderSections.mutate(orderUpdates);
     };
 

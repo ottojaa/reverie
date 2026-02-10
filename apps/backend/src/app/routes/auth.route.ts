@@ -158,8 +158,9 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (_request, reply) {
             reply.clearCookie('refresh_token', { path: '/auth' });
+
             return { success: true };
         },
     );
@@ -236,13 +237,16 @@ export default async function (fastify: FastifyInstance) {
             async function (request, reply) {
                 const oauth2 = (fastify as unknown as { googleOAuth2?: { generateAuthorizationUri: (req: unknown, reply: unknown) => Promise<string> } })
                     .googleOAuth2;
+
                 if (!oauth2) {
                     return reply.status(500).send({
                         error: 'google_oauth_not_configured',
                         message: 'Google OAuth not configured',
                     });
                 }
+
                 const authorizationUri = await oauth2.generateAuthorizationUri(request, reply);
+
                 return reply.redirect(authorizationUri);
             },
         );
@@ -294,6 +298,7 @@ export default async function (fastify: FastifyInstance) {
                         // User not found - redirect to error page
                         // In production, redirect to frontend with error
                         const errorUrl = `${env.CORS_ORIGIN}/login?error=google_account_not_linked`;
+
                         return reply.redirect(errorUrl);
                     }
 
@@ -308,10 +313,12 @@ export default async function (fastify: FastifyInstance) {
 
                     // Redirect to frontend with access token
                     const successUrl = `${env.CORS_ORIGIN}/login/callback?access_token=${result.tokens.access_token}&expires_in=${result.tokens.expires_in}`;
+
                     return reply.redirect(successUrl);
                 } catch (err) {
                     console.error('Google OAuth error:', err);
                     const errorUrl = `${env.CORS_ORIGIN}/login?error=google_auth_failed`;
+
                     return reply.redirect(errorUrl);
                 }
             },

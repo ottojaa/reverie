@@ -33,6 +33,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const folders = await folderService.listChildren(null, userId);
+
             return folders.map(serializeFolder);
         },
     );
@@ -52,6 +53,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const tree = await folderService.getSectionTree(userId);
+
             return tree.map((node) => serializeFolderWithChildren(node));
         },
     );
@@ -97,9 +99,11 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const folder = await folderService.getFolder(request.params.id, userId);
+
             if (!folder) {
                 return reply.notFound('Folder not found');
             }
+
             return serializeFolder(folder);
         },
     );
@@ -123,6 +127,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const children = await folderService.listChildren(request.params.id, userId);
+
             return children.map(serializeFolder);
         },
     );
@@ -148,6 +153,7 @@ export default async function (fastify: FastifyInstance) {
             const { name, parent_id, description, emoji, type } = request.body;
             const folder = await folderService.createFolder(userId, name, parent_id, description, emoji, type);
             reply.status(201);
+
             return serializeFolder(folder);
         },
     );
@@ -173,6 +179,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const folder = await folderService.updateFolder(request.params.id, userId, request.body);
+
             return serializeFolder(folder);
         },
     );

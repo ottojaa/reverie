@@ -83,10 +83,10 @@ export function CategorizedSections({
     useEffect(() => {
         const currentIds = new Set(categoriesRef.current.flatMap((c) => [c.id, ...c.children.map((s) => s.id)]));
         const newIds = new Set(sections.flatMap((c) => [c.id, ...c.children.map((s) => s.id)]));
-        const structureChanged =
-            currentIds.size !== newIds.size || [...currentIds].some((id) => !newIds.has(id));
+        const structureChanged = currentIds.size !== newIds.size || [...currentIds].some((id) => !newIds.has(id));
 
         const shouldSync = !activeDragData || structureChanged;
+
         if (shouldSync) {
             setCategories(sections);
         }
@@ -122,6 +122,7 @@ export function CategorizedSections({
     function handleDragOver({ active, over }: DragOverEvent) {
         if (!over) {
             setHighlightedSectionId(null);
+
             return;
         }
 
@@ -136,12 +137,14 @@ export function CategorizedSections({
             } else {
                 // Check if over.id matches a section via FOLDER_DROP_PREFIX
                 const folderId = String(over.id).startsWith(FOLDER_DROP_PREFIX) ? String(over.id).slice(FOLDER_DROP_PREFIX.length) : null;
+
                 if (folderId) {
                     setHighlightedSectionId(folderId);
                 } else {
                     setHighlightedSectionId(null);
                 }
             }
+
             return;
         }
 
@@ -159,6 +162,7 @@ export function CategorizedSections({
 
             if (targetCategoryId) {
                 const sourceCategoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
+
                 if (sourceCategoryId && sourceCategoryId !== targetCategoryId) {
                     // Move section to new category
                     setCategories((prev) => moveSectionBetweenCategories(prev, activeSectionId, sourceCategoryId, targetCategoryId));
@@ -192,7 +196,9 @@ export function CategorizedSections({
                     },
                 );
             }
+
             resetState();
+
             return;
         }
 
@@ -209,6 +215,7 @@ export function CategorizedSections({
                     const prev = categoriesRef.current;
                     const oldIndex = prev.findIndex((c) => c.id === activeCatId);
                     const newIndex = prev.findIndex((c) => c.id === overCatId);
+
                     if (oldIndex !== -1 && newIndex !== -1) {
                         const copy = [...prev];
                         const [moved] = copy.splice(oldIndex, 1);
@@ -220,6 +227,7 @@ export function CategorizedSections({
             }
 
             resetState();
+
             return;
         }
 
@@ -230,16 +238,21 @@ export function CategorizedSections({
 
             if (overData?.type === 'section' && activeSectionId !== String(over.id)) {
                 const categoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
+
                 if (categoryId) {
                     const prev = categoriesRef.current;
                     const newCategories = prev.map((cat) => {
                         if (cat.id !== categoryId) return cat;
+
                         const children = [...cat.children];
                         const oldIndex = children.findIndex((s) => s.id === activeSectionId);
                         const newIndex = children.findIndex((s) => s.id === String(over.id));
+
                         if (oldIndex === -1 || newIndex === -1) return cat;
+
                         const [moved] = children.splice(oldIndex, 1);
                         children.splice(newIndex, 0, moved!);
+
                         return { ...cat, children };
                     });
                     setCategories(newCategories);
@@ -251,6 +264,7 @@ export function CategorizedSections({
             }
 
             resetState();
+
             return;
         }
 
@@ -268,23 +282,29 @@ export function CategorizedSections({
     }
 
     /** Build order updates and parent changes from a categories array (use computed state, not ref). */
-    function buildOrderAndParentUpdates(cats: FolderWithChildren[]): { orderUpdates: Array<{ id: string; sort_order: number }>; parentChanges: Array<{ id: string; parent_id: string }> } {
+    function buildOrderAndParentUpdates(cats: FolderWithChildren[]): {
+        orderUpdates: Array<{ id: string; sort_order: number }>;
+        parentChanges: Array<{ id: string; parent_id: string }>;
+    } {
         const orderUpdates: Array<{ id: string; sort_order: number }> = [];
         const parentChanges: Array<{ id: string; parent_id: string }> = [];
         cats.forEach((cat, catIndex) => {
             orderUpdates.push({ id: cat.id, sort_order: catIndex });
             cat.children.forEach((sec, secIndex) => {
                 orderUpdates.push({ id: sec.id, sort_order: secIndex });
+
                 if (sec.parent_id !== cat.id) {
                     parentChanges.push({ id: sec.id, parent_id: cat.id });
                 }
             });
         });
+
         return { orderUpdates, parentChanges };
     }
 
     function persistOrderFrom(cats: FolderWithChildren[]) {
         if (!onSectionsChange) return;
+
         const { orderUpdates, parentChanges } = buildOrderAndParentUpdates(cats);
         onSectionsChange(orderUpdates, parentChanges.length > 0 ? parentChanges : undefined);
     }
@@ -292,6 +312,7 @@ export function CategorizedSections({
     // Register handlers on the shared ref for Layout's DndContext
     useEffect(() => {
         if (!treeDndHandlersRef) return;
+
         treeDndHandlersRef.current = {
             handleDragStart,
             handleDragOver,
@@ -300,6 +321,7 @@ export function CategorizedSections({
             handleDragCancel,
             resetState,
         };
+
         return () => {
             treeDndHandlersRef.current = null;
         };
@@ -384,6 +406,7 @@ function findParentCategoryId(categories: FolderWithChildren[], sectionId: strin
             return cat.id;
         }
     }
+
     return null;
 }
 
@@ -392,9 +415,13 @@ function moveSectionBetweenCategories(categories: FolderWithChildren[], sectionI
     let movedSection: FolderWithChildren | null = null;
     const withoutSection = categories.map((cat) => {
         if (cat.id !== fromCategoryId) return cat;
+
         const child = cat.children.find((s) => s.id === sectionId);
+
         if (child) movedSection = child;
+
         const children = cat.children.filter((s) => s.id !== sectionId);
+
         return { ...cat, children };
     });
 
@@ -402,6 +429,7 @@ function moveSectionBetweenCategories(categories: FolderWithChildren[], sectionI
 
     return withoutSection.map((cat) => {
         if (cat.id !== toCategoryId) return cat;
+
         return { ...cat, children: [...cat.children, movedSection!] };
     });
 }

@@ -43,6 +43,7 @@ async function initializeWorker(): Promise<Worker> {
         });
 
         workerInstance = worker;
+
         return worker;
     })();
 

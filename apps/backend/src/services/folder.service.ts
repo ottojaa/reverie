@@ -6,26 +6,23 @@ export class FolderService {
     /**
      * Create a new folder (scoped to user)
      */
-    async createFolder(
-        userId: string,
-        name: string,
-        parentId?: string,
-        description?: string,
-        emoji?: string | null,
-        type?: FolderType,
-    ): Promise<Folder> {
+    async createFolder(userId: string, name: string, parentId?: string, description?: string, emoji?: string | null, type?: FolderType): Promise<Folder> {
         const folderType: FolderType = type ?? 'section';
 
         // Enforce two-level hierarchy
         if (folderType === 'category' && parentId) {
             throw new ConflictError('Categories must be root-level (no parent)');
         }
+
         if (folderType === 'section' && !parentId) {
             throw new ConflictError('Sections must have a parent category');
         }
+
         if (folderType === 'section' && parentId) {
             const parent = await this.getFolder(parentId, userId);
+
             if (!parent) throw new NotFoundError('Folder', parentId);
+
             if (parent.type !== 'category') {
                 throw new ConflictError('Sections can only be nested under categories');
             }
@@ -33,11 +30,14 @@ export class FolderService {
 
         // Build path
         let path = `/${name}`;
+
         if (parentId) {
             const parent = await this.getFolder(parentId, userId);
+
             if (!parent) {
                 throw new NotFoundError('Folder', parentId);
             }
+
             path = `${parent.path}/${name}`;
         }
 
@@ -56,7 +56,7 @@ export class FolderService {
             .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
             .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
             .executeTakeFirst();
-        const sort_order = (Number(maxOrder?.max_order ?? -1) ?? -1) + 1;
+        const sort_order = (Number(maxOrder?.max_order ?? -1) || -1) + 1;
 
         const newFolder: NewFolder = {
             user_id: userId,
@@ -110,13 +110,16 @@ export class FolderService {
         const buildTree = async (parentId: string | null): Promise<Array<Folder & { children: unknown[]; document_count: number }>> => {
             const folders = await this.listChildren(parentId, userId);
             const result: Array<Folder & { children: unknown[]; document_count: number }> = [];
+
             for (const folder of folders) {
                 const document_count = await this.getDocumentCount(folder.id, userId);
                 const children = await buildTree(folder.id);
                 result.push({ ...folder, children, document_count });
             }
+
             return result;
         };
+
         return buildTree(null) as Promise<
             Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>
         >;
@@ -129,6 +132,7 @@ export class FolderService {
             .where('folder_id', '=', folderId)
             .where('user_id', '=', userId)
             .executeTakeFirst();
+
         return Number(r?.count ?? 0);
     }
 
@@ -137,8 +141,11 @@ export class FolderService {
      */
     async getFolderWithCount(id: string, userId: string): Promise<(Folder & { document_count: number }) | undefined> {
         const folder = await this.getFolder(id, userId);
+
         if (!folder) return undefined;
+
         const document_count = await this.getDocumentCount(id, userId);
+
         return { ...folder, document_count };
     }
 
@@ -147,6 +154,7 @@ export class FolderService {
      */
     async reorderSections(userId: string, updates: Array<{ id: string; sort_order: number }>): Promise<void> {
         if (updates.length === 0) return;
+
         await db.transaction().execute(async (trx) => {
             for (const { id, sort_order } of updates) {
                 await trx.updateTable('folders').set({ sort_order }).where('id', '=', id).where('user_id', '=', userId).execute();
@@ -173,6 +181,7 @@ export class FolderService {
         // No sections exist; create a default category + section
         const categories = await this.listChildren(null, userId);
         let category: Folder;
+
         if (categories.length > 0) {
             category = categories[0]!;
         } else {
@@ -196,6 +205,7 @@ export class FolderService {
         },
     ): Promise<Folder> {
         const folder = await this.getFolder(id, userId);
+
         if (!folder) {
             throw new NotFoundError('Folder', id);
         }
@@ -204,6 +214,7 @@ export class FolderService {
 
         if (update.parent_id !== undefined) {
             const newParentId = update.parent_id ?? null;
+
             if (newParentId === id) {
                 throw new ConflictError('Folder cannot be its own parent');
             }
@@ -212,12 +223,16 @@ export class FolderService {
             if (folder.type === 'category' && newParentId !== null) {
                 throw new ConflictError('Categories must remain at root level');
             }
+
             if (folder.type === 'section') {
                 if (newParentId === null) {
                     throw new ConflictError('Sections must have a parent category');
                 }
+
                 const newParent = await this.getFolder(newParentId, userId);
+
                 if (!newParent) throw new NotFoundError('Folder', newParentId);
+
                 if (newParent.type !== 'category') {
                     throw new ConflictError('Sections can only be moved to categories');
                 }
@@ -225,11 +240,14 @@ export class FolderService {
 
             if (newParentId) {
                 const newParent = await this.getFolder(newParentId, userId);
+
                 if (!newParent) throw new NotFoundError('Folder', newParentId);
+
                 if (newParent.path.startsWith(folder.path + '/')) {
                     throw new ConflictError('Cannot move folder inside its own descendant');
                 }
             }
+
             const newPath = newParentId ? `${(await this.getFolder(newParentId, userId))!.path}/${folder.name}` : `/${folder.name}`;
             const existing = await db
                 .selectFrom('folders')
@@ -238,9 +256,11 @@ export class FolderService {
                 .where('user_id', '=', userId)
                 .where('id', '!=', id)
                 .executeTakeFirst();
+
             if (existing) {
                 throw new ConflictError(`Folder already exists at path: ${newPath}`);
             }
+
             const maxOrder = await db
                 .selectFrom('folders')
                 .select(db.fn.max('sort_order').as('max_order'))
@@ -250,7 +270,7 @@ export class FolderService {
                 .executeTakeFirst();
             updateData.parent_id = newParentId;
             updateData.path = newPath;
-            updateData.sort_order = (Number(maxOrder?.max_order ?? -1) ?? -1) + 1;
+            updateData.sort_order = (Number(maxOrder?.max_order ?? -1) || -1) + 1;
         }
 
         if (update.name !== undefined && update.name !== folder.name) {
@@ -263,9 +283,11 @@ export class FolderService {
                 .where('user_id', '=', userId)
                 .where('id', '!=', id)
                 .executeTakeFirst();
+
             if (existing) {
                 throw new ConflictError(`Folder already exists at path: ${newPath}`);
             }
+
             updateData.name = update.name;
             updateData.path = newPath;
         }
@@ -290,6 +312,7 @@ export class FolderService {
      */
     async deleteFolder(id: string, userId: string): Promise<void> {
         const folder = await this.getFolder(id, userId);
+
         if (!folder) {
             throw new NotFoundError('Folder', id);
         }
@@ -306,5 +329,6 @@ export function getFolderService(): FolderService {
     if (!folderServiceInstance) {
         folderServiceInstance = new FolderService();
     }
+
     return folderServiceInstance;
 }

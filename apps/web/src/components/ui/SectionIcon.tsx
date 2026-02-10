@@ -15,7 +15,9 @@ function isLucideIconName(name: string): name is keyof typeof dynamicIconImports
 /** Short string (e.g. 1–2 chars) likely legacy emoji; render as text. */
 function isLegacyEmoji(value: string): boolean {
     if (value.length <= 0 || value.length > 4) return false;
+
     const codePoints = [...value];
+
     return codePoints.length <= 2;
 }
 
@@ -23,6 +25,7 @@ export function SectionIcon({ value, className }: SectionIconProps) {
     if (value == null || value === '') {
         return <FileText className={cn('size-4 shrink-0 text-current', className)} aria-hidden />;
     }
+
     if (isLegacyEmoji(value)) {
         return (
             <span className={cn('inline-flex shrink-0 text-base leading-none', className)} aria-hidden>
@@ -30,14 +33,10 @@ export function SectionIcon({ value, className }: SectionIconProps) {
             </span>
         );
     }
+
     if (isLucideIconName(value)) {
-        return (
-            <DynamicIcon
-                name={value}
-                className={cn('size-4 shrink-0 text-current', className)}
-                aria-hidden
-            />
-        );
+        return <DynamicIcon name={value} className={cn('size-4 shrink-0 text-current', className)} aria-hidden />;
     }
+
     return <FileText className={cn('size-4 shrink-0 text-current', className)} aria-hidden />;
 }

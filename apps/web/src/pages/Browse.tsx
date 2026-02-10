@@ -32,9 +32,12 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     useEffect(() => {
         if (!isLoading) {
             setShowSkeleton(false);
+
             return;
         }
+
         const t = setTimeout(() => setShowSkeleton(true), SKELETON_DELAY_MS);
+
         return () => clearTimeout(t);
     }, [isLoading]);
 
@@ -89,9 +92,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                         <h1 className="flex items-center gap-2 text-2xl font-semibold">
-                            {section?.emoji && (
-                                <SectionIcon value={section.emoji} className="size-7" />
-                            )}
+                            {section?.emoji && <SectionIcon value={section.emoji} className="size-7" />}
                             {title}
                         </h1>
                         {section?.description && <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>}

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 
 function toSectionIconName(emoji: string | null): SectionIconName | null {
     if (emoji == null || emoji === '') return null;
+
     return emoji in dynamicIconImports ? (emoji as SectionIconName) : null;
 }
 
@@ -36,7 +37,9 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
         if (!section || !name.trim()) return;
+
         updateFolder.mutate(
             {
                 id: section.id,
@@ -67,18 +70,9 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
                     <div>
                         <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
                         <div className="flex items-center gap-2">
-                            <IconSelector
-                                value={icon}
-                                onValueChange={setIcon}
-                                triggerPlaceholder="No icon"
-                                searchPlaceholder="Search icons…"
-                            />
+                            <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="No icon" searchPlaceholder="Search icons…" />
                             {icon != null && (
-                                <button
-                                    type="button"
-                                    className="text-xs text-muted-foreground underline hover:text-foreground"
-                                    onClick={() => setIcon(null)}
-                                >
+                                <button type="button" className="text-xs text-muted-foreground underline hover:text-foreground" onClick={() => setIcon(null)}>
                                     Clear icon
                                 </button>
                             )}

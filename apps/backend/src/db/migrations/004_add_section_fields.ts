@@ -6,10 +6,7 @@ import { Kysely, sql } from 'kysely';
  * Adds emoji and sort_order to support reorganisable sections (Notion-like).
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
-    await db.schema
-        .alterTable('folders')
-        .addColumn('emoji', 'varchar(8)')
-        .execute();
+    await db.schema.alterTable('folders').addColumn('emoji', 'varchar(8)').execute();
 
     await db.schema
         .alterTable('folders')

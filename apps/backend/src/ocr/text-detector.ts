@@ -78,6 +78,7 @@ function checkForGibberish(text: string): boolean {
 
     // Check for unrealistic consonant clusters
     const consonantClusters = text.match(/[bcdfghjklmnpqrstvwxz]{5,}/gi) || [];
+
     if (consonantClusters.length > text.length / 50) return true;
 
     // Check for common English words
@@ -122,6 +123,7 @@ function checkForGibberish(text: string): boolean {
     ]);
 
     let commonWordCount = 0;
+
     for (const word of words) {
         if (commonWords.has(word)) {
             commonWordCount++;
