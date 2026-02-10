@@ -36,6 +36,7 @@ async function renderPdfFirstPage(pdfBuffer: Buffer): Promise<Buffer> {
 
     // Get first page
     const firstPage = await document.getPage(1);
+
     if (!firstPage) {
         throw new NonRetryableJobError('PDF has no pages');
     }
@@ -63,11 +64,7 @@ async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<
         await writeFile(inputPath, videoBuffer);
 
         const chunks: Buffer[] = [];
-        const ffmpeg = spawn(
-            'ffmpeg',
-            ['-ss', '0.5', '-i', inputPath, '-vframes', '1', '-f', 'image2', 'pipe:1', '-y'],
-            { stdio: ['ignore', 'pipe', 'pipe'] },
-        );
+        const ffmpeg = spawn('ffmpeg', ['-ss', '0.5', '-i', inputPath, '-vframes', '1', '-f', 'image2', 'pipe:1', '-y'], { stdio: ['ignore', 'pipe', 'pipe'] });
 
         ffmpeg.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
 
@@ -83,9 +80,11 @@ async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<
         });
 
         const out = Buffer.concat(chunks);
+
         if (out.length === 0) {
             throw new NonRetryableJobError('ffmpeg produced no output');
         }
+
         return out;
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -195,6 +194,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     const paths = thumbnails.reduce(
         (acc, { size, path }) => {
             acc[size as keyof typeof THUMBNAIL_SIZES] = path;
+
             return acc;
         },
         {} as { sm: string; md: string; lg: string },

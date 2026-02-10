@@ -7,5 +7,6 @@ export const Route = createFileRoute('/browse/$sectionId')({
 
 function BrowseSectionPage() {
     const { sectionId } = Route.useParams();
+
     return <BrowsePage sectionId={sectionId} />;
 }

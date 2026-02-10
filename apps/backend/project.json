@@ -5,6 +5,13 @@
     "sourceRoot": "apps/backend/src",
     "tags": [],
     "targets": {
+        "lint": {
+            "executor": "@nx/eslint:lint",
+            "outputs": ["{options.outputFile}"],
+            "options": {
+                "lintFilePatterns": ["apps/backend/**/*.ts"]
+            }
+        },
         "build": {
             "executor": "@nx/esbuild:esbuild",
             "outputs": ["{options.outputPath}"],

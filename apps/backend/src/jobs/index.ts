@@ -1,4 +1,2 @@
-export * from './job.types'
-export * from './job.service'
-
-
+export * from './job.types';
+export * from './job.service';

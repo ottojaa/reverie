@@ -47,6 +47,7 @@ export function extractDates(text: string): Date[] {
     // Helper to add date if valid and not duplicate
     const addDate = (date: Date) => {
         const key = date.toISOString().split('T')[0] ?? '';
+
         if (key && !seenDates.has(key) && isValidDate(date)) {
             seenDates.add(key);
             dates.push(date);
@@ -61,6 +62,7 @@ export function extractDates(text: string): Date[] {
         const year = match[1];
         const month = match[2];
         const day = match[3];
+
         if (year && month && day) {
             addDate(new Date(safeParseInt(year), safeParseInt(month) - 1, safeParseInt(day)));
         }
@@ -71,6 +73,7 @@ export function extractDates(text: string): Date[] {
         const month = match[1];
         const day = match[2];
         const year = match[3];
+
         if (month && day && year) {
             addDate(new Date(safeParseInt(year), safeParseInt(month) - 1, safeParseInt(day)));
         }
@@ -81,6 +84,7 @@ export function extractDates(text: string): Date[] {
         const day = match[1];
         const month = match[2];
         const year = match[3];
+
         if (day && month && year) {
             addDate(new Date(safeParseInt(year), safeParseInt(month) - 1, safeParseInt(day)));
         }
@@ -91,8 +95,10 @@ export function extractDates(text: string): Date[] {
         const monthName = match[1];
         const day = match[2];
         const year = match[3];
+
         if (monthName && day && year) {
             const month = MONTH_MAP[monthName.toLowerCase()];
+
             if (month) {
                 addDate(new Date(safeParseInt(year), month - 1, safeParseInt(day)));
             }
@@ -103,8 +109,10 @@ export function extractDates(text: string): Date[] {
         const monthName = match[1];
         const day = match[2];
         const year = match[3];
+
         if (monthName && day && year) {
             const month = MONTH_MAP[monthName.toLowerCase()];
+
             if (month) {
                 addDate(new Date(safeParseInt(year), month - 1, safeParseInt(day)));
             }
@@ -115,8 +123,10 @@ export function extractDates(text: string): Date[] {
         const day = match[1];
         const monthName = match[2];
         const year = match[3];
+
         if (day && monthName && year) {
             const month = MONTH_MAP[monthName.toLowerCase()];
+
             if (month) {
                 addDate(new Date(safeParseInt(year), month - 1, safeParseInt(day)));
             }
@@ -138,6 +148,7 @@ export function extractDates(text: string): Date[] {
  */
 function determinePrimaryDate(dates: Date[], text: string): Date | undefined {
     if (dates.length === 0) return undefined;
+
     if (dates.length === 1) return dates[0];
 
     // Get first 500 characters (top of document)
@@ -173,6 +184,7 @@ export function extractCompanies(text: string): string[] {
     // Helper to add/count company
     const addCompany = (name: string) => {
         const normalized = name.trim();
+
         if (normalized.length > 2) {
             companyCounts.set(normalized, (companyCounts.get(normalized) || 0) + 1);
         }
@@ -206,6 +218,7 @@ export function extractCompanies(text: string): string[] {
     // Match stock tickers
     for (const match of text.matchAll(COMPANY_PATTERNS.ticker)) {
         const ticker = match[1];
+
         if (ticker && STOCK_TICKERS.has(ticker)) {
             addCompany(ticker);
         }
@@ -228,6 +241,7 @@ export function extractCurrencyValues(text: string): CurrencyValue[] {
     // Helper to safely extract match
     const extractValue = (match: RegExpMatchArray, currency: string) => {
         const val = match[1];
+
         if (val) {
             values.push({ amount: parseNumber(val), currency });
         }
@@ -277,8 +291,10 @@ export function extractPercentages(text: string): number[] {
 
     for (const match of text.matchAll(PERCENTAGE_PATTERNS.standard)) {
         const val = match[1];
+
         if (val) {
             const value = parseNumber(val);
+
             if (value >= 0 && value <= 10000) {
                 // Reasonable percentage range
                 percentages.push(value);
@@ -288,8 +304,10 @@ export function extractPercentages(text: string): number[] {
 
     for (const match of text.matchAll(PERCENTAGE_PATTERNS.labeled)) {
         const val = match[1];
+
         if (val) {
             const value = parseNumber(val);
+
             if (value >= 0 && value <= 10000) {
                 percentages.push(value);
             }

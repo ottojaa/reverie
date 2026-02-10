@@ -75,12 +75,15 @@ export default async function (fastify: FastifyInstance) {
             if (folder_id) {
                 query = query.where('folder_id', '=', folder_id);
             }
+
             if (category) {
                 query = query.where('document_category', '=', category);
             }
+
             if (date_from) {
                 query = query.where('extracted_date', '>=', new Date(date_from));
             }
+
             if (date_to) {
                 query = query.where('extracted_date', '<=', new Date(date_to));
             }
@@ -91,12 +94,15 @@ export default async function (fastify: FastifyInstance) {
             if (folder_id) {
                 countQuery = countQuery.where('folder_id', '=', folder_id);
             }
+
             if (category) {
                 countQuery = countQuery.where('document_category', '=', category);
             }
+
             if (date_from) {
                 countQuery = countQuery.where('extracted_date', '>=', new Date(date_from));
             }
+
             if (date_to) {
                 countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
             }
@@ -138,8 +144,13 @@ export default async function (fastify: FastifyInstance) {
             const { document_ids, folder_id } = request.body;
 
             const folder = await folderService.getFolder(folder_id, userId);
+
             if (!folder) {
                 return reply.notFound('Folder not found');
+            }
+
+            if (folder.type !== 'section') {
+                return reply.badRequest('Documents can only be moved to sections, not categories');
             }
 
             if (document_ids.length === 0) {
@@ -175,6 +186,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -184,6 +196,7 @@ export default async function (fastify: FastifyInstance) {
             }
 
             const thumbnailPath = document.thumbnail_paths[request.params.size];
+
             if (!thumbnailPath) {
                 return reply.notFound('Thumbnail size not available');
             }
@@ -192,6 +205,7 @@ export default async function (fastify: FastifyInstance) {
                 const buffer = await storageService.readFile(thumbnailPath);
                 reply.header('Content-Type', 'image/webp');
                 reply.header('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+
                 return reply.send(buffer);
             } catch {
                 return reply.notFound('Thumbnail file not found');
@@ -218,9 +232,11 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
+
             return await serializeDocument(document);
         },
     );
@@ -243,25 +259,19 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
 
             await db.transaction().execute(async (trx) => {
-                await trx
-                    .deleteFrom('processing_jobs')
-                    .where('target_type', '=', 'document')
-                    .where('target_id', '=', request.params.id)
-                    .execute();
-                await trx
-                    .deleteFrom('documents')
-                    .where('id', '=', request.params.id)
-                    .where('user_id', '=', userId)
-                    .execute();
+                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', request.params.id).execute();
+                await trx.deleteFrom('documents').where('id', '=', request.params.id).where('user_id', '=', userId).execute();
             });
 
             try {
                 await storageService.deleteFile(document.file_path, userId);
+
                 if (document.thumbnail_paths) {
                     for (const path of Object.values(document.thumbnail_paths)) {
                         await storageService.deleteFile(path, userId);
@@ -304,21 +314,14 @@ export default async function (fastify: FastifyInstance) {
             const foundIds = new Set(found.map((d) => d.id));
 
             await db.transaction().execute(async (trx) => {
-                await trx
-                    .deleteFrom('processing_jobs')
-                    .where('target_type', '=', 'document')
-                    .where('target_id', 'in', Array.from(foundIds))
-                    .execute();
-                await trx
-                    .deleteFrom('documents')
-                    .where('id', 'in', Array.from(foundIds))
-                    .where('user_id', '=', userId)
-                    .execute();
+                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', 'in', Array.from(foundIds)).execute();
+                await trx.deleteFrom('documents').where('id', 'in', Array.from(foundIds)).where('user_id', '=', userId).execute();
             });
 
             for (const document of found) {
                 try {
                     await storageService.deleteFile(document.file_path, userId);
+
                     if (document.thumbnail_paths) {
                         for (const path of Object.values(document.thumbnail_paths)) {
                             await storageService.deleteFile(path, userId);
@@ -362,6 +365,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -420,6 +424,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -473,6 +478,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -545,6 +551,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -589,6 +596,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -670,6 +678,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -683,6 +692,7 @@ export default async function (fastify: FastifyInstance) {
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             const eligibility = checkLlmEligibility(document, ocrResult);
+
             if (!eligibility.eligible) {
                 return {
                     job_id: '',
@@ -735,6 +745,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -775,6 +786,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request, reply) {
             const userId = request.user.id;
             const document = await uploadService.getDocument(request.params.id, userId);
+
             if (!document) {
                 return reply.notFound('Document not found');
             }
@@ -850,6 +862,7 @@ export default async function (fastify: FastifyInstance) {
             for (const documentId of document_ids) {
                 // Verify document belongs to user
                 const document = await uploadService.getDocument(documentId, userId);
+
                 if (!document) {
                     skipped.push({ document_id: documentId, reason: 'not_found' });
                     continue;
@@ -865,6 +878,7 @@ export default async function (fastify: FastifyInstance) {
                 const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst();
 
                 const eligibility = checkLlmEligibility(document, ocrResult);
+
                 if (!eligibility.eligible) {
                     skipped.push({ document_id: documentId, reason: eligibility.reason ?? 'not_eligible' });
                     continue;
@@ -905,6 +919,7 @@ async function serializeDocument(doc: DbDocument): Promise<Document> {
 
     // Generate signed URLs for thumbnails if they exist
     let thumbnailUrls: Document['thumbnail_urls'] = null;
+
     if (doc.thumbnail_paths) {
         thumbnailUrls = {
             sm: await storageService.getFileUrl(doc.thumbnail_paths.sm),

@@ -26,8 +26,11 @@ interface DocumentCardProps {
  */
 function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
+
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
@@ -36,6 +39,7 @@ function formatFileSize(bytes: number): string {
  */
 function formatDate(dateString: string): string {
     const date = new Date(dateString);
+
     return date.toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -50,12 +54,15 @@ function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): s
     // Use pre-signed URLs from the API response
     if (document.thumbnail_urls) {
         const url = document.thumbnail_urls[size];
+
         if (url) {
             // Signed URLs are relative, prepend API base
             const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
             return `${API_BASE}${url}`;
         }
     }
+
     return null;
 }
 
@@ -91,23 +98,30 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
 
     const handleClick = (e: React.MouseEvent) => {
         const isSimpleClick = !e.shiftKey && !e.metaKey && !e.ctrlKey;
+
         if (isSimpleClick) {
             const now = Date.now();
             const prev = lastTapRef.current;
+
             if (prev?.id === document.id && now - prev.time < DOUBLE_TAP_MS) {
                 lastTapRef.current = null;
                 e.preventDefault();
                 e.stopPropagation();
                 queryClient.setQueryData(['document', document.id], document);
                 navigate({ to: '/document/$id', params: { id: document.id } });
+
                 return;
             }
+
             lastTapRef.current = { id: document.id, time: now };
         }
+
         if (!selection) return;
+
         if (e.shiftKey) {
             e.preventDefault();
             const anchor = selection.anchorId;
+
             if (anchor != null && orderedIds.length > 0) {
                 selection.selectRange(anchor, document.id, orderedIds);
             } else {
@@ -136,6 +150,7 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
             confirmText: 'Delete',
             variant: 'destructive',
         });
+
         if (confirmed) deleteDocuments.mutate([document.id]);
     };
 

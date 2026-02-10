@@ -47,6 +47,7 @@ export function classifyDocument(text: string, metadata: ExtractedMetadata, hasM
             // Count occurrences of each keyword
             const regex = new RegExp(keyword.toLowerCase(), 'gi');
             const matches = normalizedText.match(regex);
+
             if (matches) {
                 score += matches.length * weight;
             }
@@ -80,6 +81,7 @@ export function classifyDocument(text: string, metadata: ExtractedMetadata, hasM
 
     // Return highest scoring category, or 'other' if no strong matches
     const topScore = scores[0];
+
     if (topScore && topScore.score >= 2) {
         return topScore.category;
     }
@@ -125,6 +127,7 @@ export function classifyNonTextImage(imageSize: ImageSize, filename: string): Do
  */
 function boostScore(scores: CategoryScore[], category: DocumentCategory, boost: number): void {
     const existing = scores.find((s) => s.category === category);
+
     if (existing) {
         existing.score += boost;
     } else {

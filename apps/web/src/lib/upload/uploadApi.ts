@@ -25,6 +25,7 @@ export async function uploadFiles(
     if (folderId) {
         formData.append('folder_id', folderId);
     }
+
     formData.append('session_id', sessionId);
 
     return new Promise((resolve, reject) => {

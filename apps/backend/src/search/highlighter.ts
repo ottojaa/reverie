@@ -63,6 +63,7 @@ export async function generateSnippets(documentIds: string[], searchTerms: strin
         .execute();
 
     const snippetMap = new Map<string, string>();
+
     for (const row of results) {
         snippetMap.set(row.document_id, row.snippet);
     }
@@ -103,6 +104,7 @@ export function generateSummarySnippet(summary: string, searchTerms: string, max
 
     for (const term of terms) {
         const index = summary.toLowerCase().indexOf(term);
+
         if (index !== -1 && (bestStart === 0 || index < bestStart)) {
             bestStart = Math.max(0, index - 50);
         }
@@ -114,6 +116,7 @@ export function generateSummarySnippet(summary: string, searchTerms: string, max
     // Clean up start/end
     if (bestStart > 0) {
         const spaceIndex = snippet.indexOf(' ');
+
         if (spaceIndex > 0 && spaceIndex < 20) {
             snippet = '...' + snippet.slice(spaceIndex + 1);
         } else {
@@ -123,6 +126,7 @@ export function generateSummarySnippet(summary: string, searchTerms: string, max
 
     if (bestStart + maxLength < summary.length) {
         const lastSpaceIndex = snippet.lastIndexOf(' ');
+
         if (lastSpaceIndex > snippet.length - 30) {
             snippet = snippet.slice(0, lastSpaceIndex) + '...';
         } else {

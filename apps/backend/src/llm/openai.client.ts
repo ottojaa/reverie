@@ -23,6 +23,7 @@ export function getOpenAIClient(): OpenAI {
             apiKey: env.OPENAI_API_KEY,
         });
     }
+
     return openaiClient;
 }
 
@@ -49,7 +50,7 @@ export interface ChatCompletionResult {
 /**
  * Call OpenAI Chat Completion API for text summarization
  */
-export async function callChatCompletion(prompt: LlmPrompt, model?: string): Promise<ChatCompletionResult> {
+export async function callChatCompletion(prompt: LlmPrompt, _model?: string): Promise<ChatCompletionResult> {
     const client = getOpenAIClient();
 
     const response = await client.chat.completions.create({
@@ -64,6 +65,7 @@ export async function callChatCompletion(prompt: LlmPrompt, model?: string): Pro
     });
 
     const content = response.choices[0]?.message?.content;
+
     if (!content) {
         throw new Error('OpenAI returned empty response');
     }
@@ -84,9 +86,11 @@ export function parseJsonResponse<T>(content: string): T {
     } catch {
         // Try to extract JSON from markdown code blocks
         const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+
         if (jsonMatch?.[1]) {
             return JSON.parse(jsonMatch[1].trim()) as T;
         }
+
         throw new Error(`Failed to parse JSON response: ${content.substring(0, 200)}`);
     }
 }
@@ -157,6 +161,7 @@ Respond in JSON format:
     });
 
     const content = response.choices[0]?.message?.content;
+
     if (!content) {
         throw new Error('OpenAI Vision returned empty response');
     }

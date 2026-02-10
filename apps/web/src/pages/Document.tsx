@@ -12,6 +12,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function buildFileUrl(fileUrl: string | null): string | null {
     if (!fileUrl) return null;
+
     // Signed URLs from the API are relative paths
     return fileUrl.startsWith('http') ? fileUrl : `${API_BASE}${fileUrl}`;
 }
@@ -27,6 +28,7 @@ function useDynamicViewer(mimeType: string | undefined, filename?: string) {
     useEffect(() => {
         if (!mimeType) {
             setViewer(null);
+
             return;
         }
 
@@ -101,8 +103,7 @@ export function DocumentPage() {
             >
                 {ViewerComponent && fileUrl ? (
                     <ViewerComponent document={document} fileUrl={fileUrl} />
-                ) : fileUrl && !ViewerComponent ? /* Viewer chunk still loading — show nothing; entrance animation covers this brief gap */
-                null : (
+                ) : fileUrl && !ViewerComponent /* Viewer chunk still loading — show nothing; entrance animation covers this brief gap */ ? null : (
                     <div className="flex flex-1 items-center justify-center">
                         <p className="text-sm text-muted-foreground">No preview available</p>
                     </div>

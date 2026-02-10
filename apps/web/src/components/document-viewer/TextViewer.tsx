@@ -19,6 +19,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
         fetch(fileUrl, { credentials: 'include' })
             .then((res) => {
                 if (!res.ok) throw new Error(`Failed to load (${res.status})`);
+
                 return res.text();
             })
             .then((text) => {
@@ -39,9 +40,11 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
     const toggleEdit = useCallback(() => {
         setIsEditing((prev) => {
             const next = !prev;
+
             if (next) {
                 requestAnimationFrame(() => textareaRef.current?.focus());
             }
+
             return next;
         });
     }, []);
@@ -75,12 +78,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="flex h-full w-full flex-col"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="flex h-full w-full flex-col">
             {/* Edit toggle bar */}
             <div className="flex items-center justify-between border-b border-border/50 bg-card/50 px-4 py-2 backdrop-blur-sm">
                 <span className="text-xs text-muted-foreground">
@@ -90,9 +88,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                     onClick={toggleEdit}
                     className={cn(
                         'rounded-md px-3 py-1 text-xs font-medium transition-colors',
-                        isEditing
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-secondary text-muted-foreground hover:text-foreground',
+                        isEditing ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground',
                     )}
                 >
                     {isEditing ? 'Viewing' : 'Edit'}
@@ -113,11 +109,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                 </div>
 
                 {/* Content — this is the only scrollable area */}
-                <div
-                    ref={contentRef}
-                    className="flex-1 overflow-auto"
-                    onScroll={handleContentScroll}
-                >
+                <div ref={contentRef} className="flex-1 overflow-auto" onScroll={handleContentScroll}>
                     {isEditing ? (
                         <textarea
                             ref={textareaRef}
@@ -127,9 +119,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                             className="min-h-full w-full resize-none bg-transparent p-4 font-mono text-sm leading-6 text-foreground outline-none"
                         />
                     ) : (
-                        <pre className="whitespace-pre-wrap wrap-break-word p-4 font-mono text-sm leading-6 text-foreground">
-                            {content}
-                        </pre>
+                        <pre className="whitespace-pre-wrap wrap-break-word p-4 font-mono text-sm leading-6 text-foreground">{content}</pre>
                     )}
                 </div>
             </div>

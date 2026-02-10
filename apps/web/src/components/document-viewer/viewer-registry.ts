@@ -75,13 +75,16 @@ export function getViewerEntry(mimeType: string): ViewerEntry | null {
 export function getViewerLoader(mimeType: string, filename?: string): () => Promise<{ default: ViewerComponent }> {
     // 1. Try MIME-based match first
     const entry = getViewerEntry(mimeType);
+
     if (entry) return entry.load;
 
     // 2. Fallback: try extension-based detection (handles application/octet-stream etc.)
     if (filename) {
         const ext = filename.split('.').pop()?.toLowerCase();
+
         if (ext) {
             const fallback = extensionFallbacks[ext];
+
             if (fallback) return fallback;
         }
     }

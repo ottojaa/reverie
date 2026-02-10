@@ -62,23 +62,11 @@ export default function PDFViewer({ fileUrl }: ViewerProps) {
             >
                 {/* Page navigation */}
                 <div className="flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => goToPage(pageNumber - 1)}
-                        disabled={pageNumber <= 1}
-                    >
+                    <Button variant="ghost" size="icon-sm" onClick={() => goToPage(pageNumber - 1)} disabled={pageNumber <= 1}>
                         <ChevronLeft className="size-4" />
                     </Button>
-                    <span className="min-w-20 text-center text-xs text-muted-foreground">
-                        {isLoaded ? `${pageNumber} / ${numPages}` : '...'}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => goToPage(pageNumber + 1)}
-                        disabled={pageNumber >= numPages}
-                    >
+                    <span className="min-w-20 text-center text-xs text-muted-foreground">{isLoaded ? `${pageNumber} / ${numPages}` : '...'}</span>
+                    <Button variant="ghost" size="icon-sm" onClick={() => goToPage(pageNumber + 1)} disabled={pageNumber >= numPages}>
                         <ChevronRight className="size-4" />
                     </Button>
                 </div>
@@ -90,9 +78,7 @@ export default function PDFViewer({ fileUrl }: ViewerProps) {
                     <Button variant="ghost" size="icon-sm" onClick={zoomOut} disabled={scale <= ZOOM_MIN}>
                         <Minus className="size-3.5" />
                     </Button>
-                    <span className="min-w-12 text-center text-xs text-muted-foreground">
-                        {Math.round(scale * 100)}%
-                    </span>
+                    <span className="min-w-12 text-center text-xs text-muted-foreground">{Math.round(scale * 100)}%</span>
                     <Button variant="ghost" size="icon-sm" onClick={zoomIn} disabled={scale >= ZOOM_MAX}>
                         <Plus className="size-3.5" />
                     </Button>
@@ -101,9 +87,7 @@ export default function PDFViewer({ fileUrl }: ViewerProps) {
 
             {/* PDF document area */}
             <div className={cn('flex flex-1 items-start justify-center overflow-auto p-6', !isLoaded && 'items-center')}>
-                {!isLoaded && (
-                    <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-                )}
+                {!isLoaded && <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />}
                 <Document
                     file={fileUrl}
                     onLoadSuccess={onDocumentLoadSuccess}
@@ -117,12 +101,7 @@ export default function PDFViewer({ fileUrl }: ViewerProps) {
                         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                         className="shadow-2xl"
                     >
-                        <Page
-                            pageNumber={pageNumber}
-                            scale={scale}
-                            renderTextLayer
-                            renderAnnotationLayer
-                        />
+                        <Page pageNumber={pageNumber} scale={scale} renderTextLayer renderAnnotationLayer />
                     </motion.div>
                 </Document>
             </div>

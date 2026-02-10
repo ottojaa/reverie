@@ -36,8 +36,11 @@ export async function publishJobStarted(jobId: string, documentId?: string, sess
         progress: 0,
         timestamp: new Date().toISOString(),
     };
+
     if (documentId) event.document_id = documentId;
+
     if (sessionId) event.session_id = sessionId;
+
     await publishJobEvent(event);
 }
 
@@ -52,8 +55,11 @@ export async function publishJobProgress(jobId: string, progress: number, docume
         progress,
         timestamp: new Date().toISOString(),
     };
+
     if (documentId) event.document_id = documentId;
+
     if (sessionId) event.session_id = sessionId;
+
     await publishJobEvent(event);
 }
 
@@ -68,9 +74,13 @@ export async function publishJobComplete(jobId: string, result?: unknown, docume
         progress: 100,
         timestamp: new Date().toISOString(),
     };
+
     if (documentId) event.document_id = documentId;
+
     if (sessionId) event.session_id = sessionId;
+
     if (result !== undefined) event.result = result;
+
     await publishJobEvent(event);
 }
 
@@ -86,8 +96,11 @@ export async function publishJobFailed(jobId: string, errorMessage: string, docu
         error_message: errorMessage,
         timestamp: new Date().toISOString(),
     };
+
     if (documentId) event.document_id = documentId;
+
     if (sessionId) event.session_id = sessionId;
+
     await publishJobEvent(event);
 }
 

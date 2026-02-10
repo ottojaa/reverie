@@ -85,7 +85,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
                     sessionId: job.data.sessionId,
                     // Type will be determined by eligibility check in LLM worker
                 },
-                llmJobId
+                llmJobId,
             );
             logger.info('Queued LLM job', { documentId, llmJobId });
         } else {

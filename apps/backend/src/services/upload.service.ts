@@ -41,7 +41,9 @@ function correctMimeType(filename: string, reportedMime: string): string {
     if (reportedMime && reportedMime !== 'application/octet-stream') {
         return reportedMime;
     }
+
     const ext = extname(filename).toLowerCase();
+
     return EXTENSION_MIME_MAP[ext] ?? reportedMime;
 }
 
@@ -248,5 +250,6 @@ export function getUploadService(): UploadService {
     if (!uploadServiceInstance) {
         uploadServiceInstance = new UploadService();
     }
+
     return uploadServiceInstance;
 }

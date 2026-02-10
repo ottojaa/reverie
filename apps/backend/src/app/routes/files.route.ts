@@ -34,6 +34,7 @@ const MIME_TYPES: Record<string, string> = {
 
 function getMimeType(filePath: string): string {
     const ext = extname(filePath).toLowerCase();
+
     return MIME_TYPES[ext] || 'application/octet-stream';
 }
 
@@ -63,6 +64,7 @@ export default async function (fastify: FastifyInstance) {
             // Check expiration
             const expiresTimestamp = parseInt(expires, 10);
             const now = Math.floor(Date.now() / 1000);
+
             if (isNaN(expiresTimestamp) || now > expiresTimestamp) {
                 return reply.status(410).send({ error: 'URL has expired' });
             }
@@ -88,7 +90,7 @@ export default async function (fastify: FastifyInstance) {
                 reply.header('X-Content-Type-Options', 'nosniff');
 
                 return reply.send(buffer);
-            } catch (error) {
+            } catch (_error) {
                 return reply.status(404).send({ error: 'File not found' });
             }
         },

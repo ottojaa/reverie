@@ -52,6 +52,7 @@ export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | 
                 processingType: 'vision_describe',
             };
         }
+
         return {
             eligible: false,
             reason: 'no_text_no_vision',
@@ -70,6 +71,7 @@ export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | 
                 processingType: 'vision_describe',
             };
         }
+
         return {
             eligible: false,
             reason: 'no_text_content',
@@ -92,6 +94,7 @@ export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | 
     // Eligible for text summary
     // Note: We never skip due to size - we sample instead
     const warnings: string[] = [];
+
     if (textLength > env.LLM_MAX_INPUT_CHARS) {
         warnings.push(`Text will be sampled from ${textLength} to ~${env.LLM_MAX_INPUT_CHARS} chars`);
     }
@@ -108,9 +111,13 @@ export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | 
  */
 export function getFileCategory(mimeType: string): FileCategory {
     if (mimeType.startsWith('image/')) return 'image';
+
     if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'media';
+
     if (mimeType === 'application/pdf') return 'document';
+
     if (mimeType.startsWith('application/vnd.openxmlformats')) return 'document'; // Office docs
+
     if (mimeType === 'text/plain' || mimeType === 'text/markdown' || mimeType === 'text/csv') return 'text';
 
     // Code files

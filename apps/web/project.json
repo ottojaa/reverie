@@ -5,6 +5,13 @@
     "sourceRoot": "apps/web/src",
     "tags": [],
     "targets": {
+        "lint": {
+            "executor": "@nx/eslint:lint",
+            "outputs": ["{options.outputFile}"],
+            "options": {
+                "lintFilePatterns": ["apps/web/**/*.{ts,tsx}"]
+            }
+        },
         "build": {
             "executor": "@nx/vite:build",
             "outputs": ["{options.outputPath}"],

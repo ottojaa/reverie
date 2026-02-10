@@ -13,6 +13,7 @@ export function getStorage(): IStorageProvider {
     if (!storageInstance) {
         storageInstance = createStorage();
     }
+
     return storageInstance;
 }
 

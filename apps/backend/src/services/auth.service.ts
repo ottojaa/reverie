@@ -18,7 +18,7 @@ export interface AuthenticatedUser {
 }
 
 export class AuthService {
-    constructor(private fastify: FastifyInstance) {}
+    constructor(private readonly fastify: FastifyInstance) {}
 
     /**
      * Hash a password using bcrypt
@@ -83,6 +83,7 @@ export class AuthService {
     async verifyRefreshToken(token: string): Promise<{ sub: string; email: string } | null> {
         try {
             const decoded = this.fastify.jwt.verify<{ sub: string; email: string }>(token);
+
             return decoded;
         } catch {
             return null;
@@ -104,6 +105,7 @@ export class AuthService {
         }
 
         const isValid = await this.verifyPassword(password, user.password_hash);
+
         if (!isValid) {
             return null;
         }
@@ -112,6 +114,7 @@ export class AuthService {
         await db.updateTable('users').set({ last_login_at: new Date() }).where('id', '=', user.id).execute();
 
         const tokens = this.generateTokens(user);
+
         return { user, tokens };
     }
 
@@ -129,6 +132,7 @@ export class AuthService {
         await db.updateTable('users').set({ last_login_at: new Date() }).where('id', '=', user.id).execute();
 
         const tokens = this.generateTokens(user);
+
         return { user, tokens };
     }
 
@@ -143,6 +147,7 @@ export class AuthService {
         }
 
         const isValid = await this.verifyPassword(currentPassword, user.password_hash);
+
         if (!isValid) {
             return false;
         }
@@ -160,6 +165,7 @@ export class AuthService {
     async linkGoogleAccount(userId: string, googleId: string): Promise<boolean> {
         try {
             await db.updateTable('users').set({ google_id: googleId }).where('id', '=', userId).execute();
+
             return true;
         } catch {
             return false;
@@ -171,6 +177,7 @@ export class AuthService {
      */
     private parseExpiresIn(duration: string): number {
         const match = duration.match(/^(\d+)([smhd])$/);
+
         if (!match) {
             return 900; // default 15 minutes
         }

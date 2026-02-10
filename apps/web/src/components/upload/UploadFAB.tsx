@@ -23,9 +23,11 @@ export function UploadFAB() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selected = e.target.files;
+
         if (selected?.length) {
             addFiles(Array.from(selected));
         }
+
         e.target.value = '';
     };
 

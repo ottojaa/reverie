@@ -1,5 +1,6 @@
 import type { Folder, FolderWithChildren } from '@reverie/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { produce } from 'immer';
 import { toast } from 'sonner';
 import type { DocumentsResponse } from './api/documents';
 import { useAuth, useAuthenticatedFetch } from './auth';
@@ -13,7 +14,9 @@ type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
 async function fetchSectionTreeWithAuth(authFetch: AuthFetch): Promise<FolderWithChildren[]> {
     const response = await authFetch(`${API_BASE}/folders/tree`, { credentials: 'include' });
+
     if (!response.ok) throw new Error('Failed to fetch sections');
+
     return response.json();
 }
 
@@ -22,11 +25,15 @@ async function fetchSectionTreeWithAuth(authFetch: AuthFetch): Promise<FolderWit
  */
 export function findSectionById(tree: FolderWithChildren[], id: string | null): FolderWithChildren | null {
     if (!id) return null;
+
     for (const node of tree) {
         if (node.id === id) return node;
+
         const found = findSectionById(node.children, id);
+
         if (found) return found;
     }
+
     return null;
 }
 
@@ -35,13 +42,16 @@ export function findSectionById(tree: FolderWithChildren[], id: string | null): 
  */
 export function sectionsToParentMap(tree: FolderWithChildren[]): Map<string, string | null> {
     const map = new Map<string, string | null>();
+
     function walk(nodes: FolderWithChildren[], parentId: string | null) {
         for (const node of nodes) {
             map.set(node.id, parentId);
             walk(node.children, node.id);
         }
     }
+
     walk(tree, null);
+
     return map;
 }
 
@@ -50,13 +60,16 @@ export function sectionsToParentMap(tree: FolderWithChildren[]): Map<string, str
  */
 export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildren[] {
     const out: FolderWithChildren[] = [];
+
     function walk(nodes: FolderWithChildren[]) {
         for (const n of nodes) {
             out.push(n);
             walk(n.children);
         }
     }
+
     walk(tree);
+
     return out;
 }
 
@@ -66,81 +79,107 @@ export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildr
 function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: string; sort_order: number }>): FolderWithChildren[] {
     const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
 
-    function processNodes(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        // Check if any of these nodes need reordering
-        const needsSort = nodes.some((n) => updateMap.has(n.id));
+    return produce(tree, (draft) => {
+        function processNodes(nodes: FolderWithChildren[]) {
+            const needsSort = nodes.some((n) => updateMap.has(n.id));
+            nodes.forEach((node) => processNodes(node.children));
 
-        let result = nodes.map((node) => ({
-            ...node,
-            children: processNodes(node.children),
-        }));
+            if (!needsSort) return;
 
-        if (needsSort) {
-            result = result.sort((a, b) => {
+            nodes.sort((a, b) => {
                 const orderA = updateMap.get(a.id) ?? a.sort_order;
                 const orderB = updateMap.get(b.id) ?? b.sort_order;
+
                 return orderA - orderB;
             });
         }
 
-        return result;
-    }
+        processNodes(draft);
+    });
+}
 
-    return processNodes(tree);
+/**
+ * Patch a folder's properties (name, description, emoji) in the tree
+ */
+function patchFolderInTree(
+    tree: FolderWithChildren[],
+    folderId: string,
+    patch: { name?: string; description?: string | null; emoji?: string | null },
+): FolderWithChildren[] {
+    return produce(tree, (draft) => {
+        function walk(nodes: FolderWithChildren[]) {
+            for (const node of nodes) {
+                if (node.id === folderId) {
+                    if (patch.name !== undefined) node.name = patch.name;
+
+                    if (patch.description !== undefined) node.description = patch.description;
+
+                    if (patch.emoji !== undefined) node.emoji = patch.emoji;
+
+                    return;
+                }
+
+                walk(node.children);
+            }
+        }
+
+        walk(draft);
+    });
 }
 
 /**
  * Move a section to a new parent in the tree
  */
-function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
-    let movedSection: FolderWithChildren | null = null;
+export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
+    return produce(tree, (draft) => {
+        function remove(nodes: FolderWithChildren[]): FolderWithChildren | null {
+            const idx = nodes.findIndex((n) => n.id === sectionId);
 
-    // First pass: remove the section from its current location and capture it
-    function removeSection(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        return nodes
-            .filter((node) => {
-                if (node.id === sectionId) {
-                    movedSection = { ...node };
-                    return false;
-                }
-                return true;
-            })
-            .map((node) => ({
-                ...node,
-                children: removeSection(node.children),
-            }));
-    }
+            if (idx !== -1) {
+                const [removed] = nodes.splice(idx, 1);
 
-    const treeWithoutSection = removeSection(tree);
-
-    if (!movedSection) return tree; // Section not found
-
-    // Update the section's parent_id - capture in a const for TypeScript narrowing
-    const captured = movedSection as FolderWithChildren;
-    const updatedSection: FolderWithChildren = { ...captured, parent_id: newParentId };
-
-    // Second pass: add the section to its new parent
-    if (newParentId === null) {
-        // Add to root level
-        return [...treeWithoutSection, updatedSection];
-    }
-
-    function addToParent(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        return nodes.map((node) => {
-            if (node.id === newParentId) {
-                return {
-                    ...node,
-                    children: [...node.children, updatedSection],
-                };
+                return removed ?? null;
             }
-            return {
-                ...node,
-                children: addToParent(node.children),
-            };
-        });
-    }
 
-    return addToParent(treeWithoutSection);
+            for (const node of nodes) {
+                const found = remove(node.children);
+
+                if (found) return found;
+            }
+
+            return null;
+        }
+
+        const movedSection = remove(draft);
+
+        if (!movedSection) return;
+
+        movedSection.parent_id = newParentId;
+
+        if (newParentId === null) {
+            draft.push(movedSection);
+
+            return;
+        }
+
+        function addToParent(nodes: FolderWithChildren[], section: FolderWithChildren): boolean {
+            const target = nodes.find((n) => n.id === newParentId);
+
+            if (target) {
+                target.children.push(section);
+
+                return true;
+            }
+
+            for (const node of nodes) {
+                if (addToParent(node.children, section)) return true;
+            }
+
+            return false;
+        }
+
+        addToParent(draft, movedSection);
+    });
 }
 
 export function useSections() {
@@ -160,7 +199,9 @@ export function useSections() {
  */
 export function useCurrentSection(sectionId: string | undefined) {
     const { data: tree } = useSections();
+
     if (!tree || !sectionId) return null;
+
     return findSectionById(tree, sectionId);
 }
 
@@ -171,6 +212,7 @@ async function reorderSectionsWithAuth(authFetch: AuthFetch, updates: Array<{ id
         credentials: 'include',
         body: JSON.stringify({ updates }),
     });
+
     if (!response.ok) throw new Error('Failed to reorder sections');
 }
 
@@ -181,6 +223,7 @@ async function moveDocumentsWithAuth(authFetch: AuthFetch, data: { document_ids:
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to move documents');
 }
 
@@ -205,20 +248,26 @@ export function useReorderSections() {
             if (context?.previous) {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
+
             toast.error('Failed to reorder sections');
         },
         // Don't invalidate on success: refetch can return stale order and overwrite optimistic UI
     });
 }
 
-async function createFolderWithAuth(authFetch: AuthFetch, data: { name: string; parent_id?: string; description?: string; emoji?: string }): Promise<Folder> {
+async function createFolderWithAuth(
+    authFetch: AuthFetch,
+    data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' },
+): Promise<Folder> {
     const response = await authFetch(`${API_BASE}/folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to create section');
+
     return response.json();
 }
 
@@ -233,7 +282,9 @@ async function updateFolderWithAuth(
         credentials: 'include',
         body: JSON.stringify(data),
     });
+
     if (!response.ok) throw new Error('Failed to update section');
+
     return response.json();
 }
 
@@ -242,14 +293,17 @@ async function deleteFolderWithAuth(authFetch: AuthFetch, id: string): Promise<v
         method: 'DELETE',
         credentials: 'include',
     });
+
     if (!response.ok) throw new Error('Failed to delete section');
 }
 
 export function useCreateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
-        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string }) => createFolderWithAuth(authFetch, data),
+        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' }) =>
+            createFolderWithAuth(authFetch, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
@@ -257,23 +311,54 @@ export function useCreateFolder() {
     });
 }
 
+export function useCreateCategory() {
+    const createFolder = useCreateFolder();
+
+    return {
+        ...createFolder,
+        mutate: (data: { name: string; description?: string; emoji?: string }, options?: Parameters<typeof createFolder.mutate>[1]) =>
+            createFolder.mutate({ ...data, type: 'category' as const }, options),
+    };
+}
+
 export function useUpdateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
             updateFolderWithAuth(authFetch, id, data),
         onMutate: async ({ id, data }) => {
-            // Only do optimistic update for parent_id changes (drag reparenting)
-            if (data.parent_id === undefined) return;
+            const hasOrderChange = data.parent_id !== undefined;
+            const hasMetadataChange = data.name !== undefined || data.description !== undefined || data.emoji !== undefined;
+
+            if (!hasOrderChange && !hasMetadataChange) return;
 
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
-            if (previous) {
-                const optimistic = moveSectionInTree(previous, id, data.parent_id);
-                queryClient.setQueryData(['sections', 'tree'], optimistic);
+            if (!previous) return { previous };
+
+            function applyOptimisticUpdate(tree: FolderWithChildren[]): FolderWithChildren[] {
+                let result = tree;
+
+                if (hasOrderChange) {
+                    result = moveSectionInTree(result, id, data.parent_id ?? null);
+                }
+
+                if (hasMetadataChange) {
+                    result = patchFolderInTree(result, id, {
+                        ...(data.name !== undefined && { name: data.name }),
+                        ...(data.description !== undefined && { description: data.description }),
+                        ...(data.emoji !== undefined && { emoji: data.emoji }),
+                    });
+                }
+
+                return result;
             }
+
+            const optimistic = applyOptimisticUpdate(previous);
+            queryClient.setQueryData(['sections', 'tree'], optimistic);
 
             return { previous };
         },
@@ -281,6 +366,7 @@ export function useUpdateFolder() {
             if (context?.previous) {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
+
             toast.error('Failed to update section');
         },
         onSettled: () => {
@@ -292,6 +378,7 @@ export function useUpdateFolder() {
 export function useDeleteFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
+
     return useMutation({
         mutationFn: (id: string) => deleteFolderWithAuth(authFetch, id),
         onSuccess: () => {
@@ -312,11 +399,13 @@ export function useMoveDocuments() {
             const previous = queryClient.getQueriesData<DocumentsResponse>({ queryKey: ['documents'] });
             queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
                 if (!old) return old;
+
                 return {
                     ...old,
                     items: old.items.map((doc) => (document_ids.includes(doc.id) ? { ...doc, folder_id } : doc)),
                 };
             });
+
             return { previous };
         },
         onError: (_, __, context) => {
@@ -325,6 +414,7 @@ export function useMoveDocuments() {
                     queryClient.setQueryData(queryKey, data);
                 });
             }
+
             toast.error('Failed to move documents');
         },
         onSettled: () => {

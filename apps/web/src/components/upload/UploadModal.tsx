@@ -17,15 +17,20 @@ const PROCESSING_WEIGHT = 50;
 
 function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
+
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function useOverallProgress() {
     const { files, isUploading, uploadBytesLoaded, uploadBytesTotal } = useUpload();
+
     return useMemo(() => {
         const total = files.length;
+
         if (total === 0) {
             return {
                 percent: 0,
@@ -42,6 +47,7 @@ function useOverallProgress() {
         if (isUploading && uploadBytesTotal > 0) {
             const uploadRatio = uploadBytesLoaded / uploadBytesTotal;
             const percent = Math.min(100, uploadRatio * UPLOAD_WEIGHT);
+
             return {
                 percent,
                 completedCount,
@@ -54,6 +60,7 @@ function useOverallProgress() {
         // Phase 2: Processing (50% → 100%) – per-file completion
         const processingRatio = completedCount / total;
         const percent = UPLOAD_WEIGHT + processingRatio * PROCESSING_WEIGHT;
+
         return {
             percent,
             completedCount,
@@ -68,7 +75,7 @@ export function UploadModal() {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sectionsTree = [] } = useSections();
-    const flatSections = useMemo(() => flattenSectionTree(sectionsTree), [sectionsTree]);
+    const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'section'), [sectionsTree]);
     const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
@@ -103,6 +110,7 @@ export function UploadModal() {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
             toast.success(n === 1 ? '1 document uploaded successfully' : `${n} documents uploaded successfully`);
         }
+
         prevAllComplete.current = allComplete;
     }, [allComplete, stats.complete, closeModal, queryClient, clearCompleted, clearFailed]);
 

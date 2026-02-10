@@ -159,6 +159,7 @@ export function buildFallbackSummary(document: Document, ocrResult?: OcrResult |
     // Text preview
     if (ocrResult?.raw_text) {
         const preview = ocrResult.raw_text.slice(0, 200).replace(/\s+/g, ' ').trim();
+
         if (preview) {
             parts.push(`Preview: "${preview}..."`);
         }

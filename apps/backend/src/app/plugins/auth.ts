@@ -1,7 +1,7 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
 import fastifyOauth2 from '@fastify/oauth2';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { env } from '../../config/env.js';
 
@@ -17,7 +17,8 @@ export interface AuthUser {
     email: string;
 }
 
-// Extend Fastify types
+// Extend Fastify types (interface names in augmentation are flagged by no-unused-vars)
+/* eslint-disable no-unused-vars */
 declare module 'fastify' {
     interface FastifyInstance {
         authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -32,7 +33,7 @@ declare module '@fastify/jwt' {
     }
 }
 
-export default fp(async function (fastify: FastifyInstance) {
+export default fp(async function (fastify) {
     // Register cookie plugin (for refresh tokens)
     await fastify.register(fastifyCookie, {
         secret: env.JWT_SECRET, // for signed cookies
@@ -77,7 +78,7 @@ export default fp(async function (fastify: FastifyInstance) {
                 id: decoded.sub,
                 email: decoded.email,
             };
-        } catch (err) {
+        } catch (_err) {
             reply.status(401).send({
                 error: 'token_invalid',
                 message: 'Invalid or expired token',

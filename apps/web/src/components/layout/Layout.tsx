@@ -2,7 +2,7 @@ import { GlobalDropzone, UploadModal } from '@/components/upload';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
 import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
 import { SelectionProvider } from '@/lib/selection';
-import type { Announcements, DragCancelEvent, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import type { Announcements, DragCancelEvent, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { DndContext, pointerWithin } from '@dnd-kit/core';
 import { ReactNode, useRef, useState } from 'react';
 import { Header } from './Header';
@@ -11,7 +11,7 @@ import { Sidebar } from './Sidebar';
 export interface SortableTreeHandlers {
     handleDragStart: (event: DragStartEvent) => void;
     handleDragOver: (event: DragOverEvent) => void;
-    handleDragMove: (event: DragMoveEvent) => void;
+    handleDragMove: (...args: unknown[]) => void;
     handleDragEnd: (event: DragEndEvent) => void;
     handleDragCancel: (event: DragCancelEvent) => void;
     resetState: () => void;

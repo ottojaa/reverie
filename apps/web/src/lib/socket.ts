@@ -17,6 +17,7 @@ export function getSocket(): Socket {
             autoConnect: false,
         });
     }
+
     return socket;
 }
 
@@ -25,9 +26,11 @@ export function getSocket(): Socket {
  */
 export function connectSocket(): Socket {
     const s = getSocket();
+
     if (!s.connected) {
         s.connect();
     }
+
     return s;
 }
 
@@ -38,6 +41,7 @@ export function disconnectSocket(): void {
     if (socket?.connected) {
         socket.disconnect();
     }
+
     subscribedSessions.clear();
     subscribedDocuments.clear();
 }
@@ -48,8 +52,10 @@ export function disconnectSocket(): void {
 export function subscribeToSession(sessionId: string): void {
     if (subscribedSessions.has(sessionId)) {
         console.warn(`[Socket] Already subscribed to session: ${sessionId}`);
+
         return;
     }
+
     subscribedSessions.add(sessionId);
     getSocket().emit('subscribe:session', { session_id: sessionId });
 }
@@ -68,8 +74,10 @@ export function unsubscribeFromSession(sessionId: string): void {
 export function subscribeToDocument(documentId: string): void {
     if (subscribedDocuments.has(documentId)) {
         console.warn(`[Socket] Already subscribed to document: ${documentId}`);
+
         return;
     }
+
     subscribedDocuments.add(documentId);
     getSocket().emit('subscribe:document', { document_id: documentId });
 }

@@ -24,6 +24,7 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             // Skip if it was a drag gesture
             if (hasDragged.current) {
                 hasDragged.current = false;
+
                 return;
             }
 
@@ -33,11 +34,13 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             } else {
                 // Zoom towards click point
                 const rect = containerRef.current?.getBoundingClientRect();
+
                 if (rect) {
                     const cx = e.clientX - rect.left - rect.width / 2;
                     const cy = e.clientY - rect.top - rect.height / 2;
                     setTranslate({ x: -cx, y: -cy });
                 }
+
                 setScale(2.5);
             }
         },
@@ -53,10 +56,13 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             const pinchDelta = -e.deltaY * 0.01;
             setScale((prev) => {
                 const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev * (1 + pinchDelta)));
+
                 if (next <= MIN_SCALE + 0.05) {
                     setTranslate({ x: 0, y: 0 });
+
                     return MIN_SCALE;
                 }
+
                 return next;
             });
         } else {
@@ -64,7 +70,9 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
             setScale((prev) => {
                 const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev + delta));
+
                 if (next === MIN_SCALE) setTranslate({ x: 0, y: 0 });
+
                 return next;
             });
         }
@@ -73,6 +81,7 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
     const handlePointerDown = useCallback(
         (e: React.PointerEvent) => {
             if (!isZoomed) return;
+
             isDragging.current = true;
             hasDragged.current = false;
             dragStart.current = { x: e.clientX, y: e.clientY, tx: translate.x, ty: translate.y };
@@ -81,19 +90,19 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
         [isZoomed, translate],
     );
 
-    const handlePointerMove = useCallback(
-        (e: React.PointerEvent) => {
-            if (!isDragging.current) return;
-            const dx = e.clientX - dragStart.current.x;
-            const dy = e.clientY - dragStart.current.y;
-            // Only count as a real drag after 3px threshold
-            if (Math.abs(dx) + Math.abs(dy) > 3) {
-                hasDragged.current = true;
-            }
-            setTranslate({ x: dragStart.current.tx + dx, y: dragStart.current.ty + dy });
-        },
-        [],
-    );
+    const handlePointerMove = useCallback((e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+
+        const dx = e.clientX - dragStart.current.x;
+        const dy = e.clientY - dragStart.current.y;
+
+        // Only count as a real drag after 3px threshold
+        if (Math.abs(dx) + Math.abs(dy) > 3) {
+            hasDragged.current = true;
+        }
+
+        setTranslate({ x: dragStart.current.tx + dx, y: dragStart.current.ty + dy });
+    }, []);
 
     const handlePointerUp = useCallback(() => {
         isDragging.current = false;

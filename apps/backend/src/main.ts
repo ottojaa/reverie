@@ -36,6 +36,7 @@ async function main() {
         logger: envToLogger[env.NODE_ENV],
         serverFactory: (handler) => {
             httpServer.on('request', handler);
+
             return httpServer;
         },
     });
@@ -70,6 +71,7 @@ async function main() {
     try {
         // Check database connection
         const dbConnected = await checkDbConnection();
+
         if (!dbConnected) {
             server.log.warn('Database connection failed - some features may be unavailable');
         } else {

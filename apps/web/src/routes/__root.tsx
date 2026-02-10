@@ -16,10 +16,14 @@ function RootComponent() {
 
     useEffect(() => {
         if (isLoading) return;
+
         if (isAuthenticated) return;
+
         const pathname = location.pathname;
         const isPublic = publicRoutes.some((route) => pathname === route || pathname.startsWith('/login'));
+
         if (isPublic) return;
+
         navigate({ to: '/login', search: { error: 'unauthorized_access' }, replace: true });
     }, [isAuthenticated, isLoading, location.pathname, navigate]);
 

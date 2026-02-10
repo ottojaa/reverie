@@ -1,0 +1,20 @@
+{
+    "$schema": "../../node_modules/nx/schemas/project-schema.json",
+    "name": "@reverie/shared",
+    "projectType": "library",
+    "sourceRoot": "libs/shared/src",
+    "targets": {
+        "typecheck": {
+            "options": {
+                "command": "tsc --build --noEmit"
+            }
+        },
+        "lint": {
+            "executor": "@nx/eslint:lint",
+            "outputs": ["{options.outputFile}"],
+            "options": {
+                "lintFilePatterns": ["libs/shared/**/*.ts"]
+            }
+        }
+    }
+}

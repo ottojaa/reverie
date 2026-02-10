@@ -19,9 +19,7 @@ export default function FallbackViewer({ document, fileUrl }: ViewerProps) {
 
                 <div>
                     <p className="text-sm font-medium text-foreground">{document.original_filename}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        Preview not available for this file type
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Preview not available for this file type</p>
                 </div>
 
                 <Button variant="secondary" asChild>

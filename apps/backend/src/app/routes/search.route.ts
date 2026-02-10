@@ -54,11 +54,13 @@ export default async function (fastify: FastifyInstance) {
 
             try {
                 const response = await search(request.query, { userId });
+
                 return response;
             } catch (error) {
                 if (error instanceof Error && error.message.startsWith('Invalid query:')) {
                     return reply.badRequest(error.message);
                 }
+
                 throw error;
             }
         },
@@ -89,6 +91,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const facets = await getFacetsOnly(request.query.q, userId);
+
             return { facets };
         },
     );
@@ -120,6 +123,7 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const suggestions = await suggest(request.query, userId);
+
             return suggestions;
         },
     );

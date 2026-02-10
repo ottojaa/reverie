@@ -19,7 +19,9 @@ export function SelectionBanner() {
             cancelText: 'Cancel',
             variant: 'destructive',
         });
+
         if (!confirmed) return;
+
         const ids = Array.from(selectedIds);
         deleteDocuments.mutate(ids, {
             onSuccess: () => clear(),
