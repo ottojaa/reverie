@@ -1,6 +1,7 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { cn } from '@/lib/utils';
+import type { AnimateLayoutChanges } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
@@ -16,12 +17,16 @@ interface SectionItemProps {
     onDeleteSection?: ((section: FolderWithChildren) => void) | undefined;
 }
 
+const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) =>
+    !(isSorting || wasDragging);
+
 export function SectionItem({ section, currentSectionId, isHighlighted, onEditSection, onDeleteSection }: SectionItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: section.id,
         data: { type: 'section' as const, section },
+        animateLayoutChanges,
     });
 
     const style = {

@@ -6,7 +6,6 @@ import { useDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
-import { Link } from '@tanstack/react-router';
 import { FolderOpen, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -71,13 +70,12 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
         <div className="flex flex-1 flex-col p-6">
             <div className="mb-6">
                 {sectionId && (
-                    <nav className="mb-1 flex justify-between items-center text-sm text-muted-foreground gap-2">
+                    <nav className="mb-1 flex justify-between items-center text-sm gap-2">
                         <div className="items-center gap-2">
-                            <Link to="/browse" className="hover:text-foreground">
-                                All Documents
-                            </Link>
-                            <span>/</span>
-                            <span className="text-foreground">{section?.name ?? 'Section'}</span>
+                            <h1 className="flex items-center gap-2 text-2xl font-semibold">
+                                {section?.emoji && <SectionIcon value={section.emoji} className="size-7" />}
+                                {title}
+                            </h1>
                         </div>
                         <div>
                             {section && (
@@ -91,12 +89,8 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 )}
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        <h1 className="flex items-center gap-2 text-2xl font-semibold">
-                            {section?.emoji && <SectionIcon value={section.emoji} className="size-7" />}
-                            {title}
-                        </h1>
                         {section?.description && <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>}
-                        <p className="text-primary mt-2">{subtitle}</p>
+                        <p className="text-primary mt-2 text-sm">{subtitle}</p>
                     </div>
                 </div>
             </div>

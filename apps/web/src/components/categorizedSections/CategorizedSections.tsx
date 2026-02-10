@@ -1,19 +1,21 @@
 import type { SortableTreeHandlers } from '@/components/layout/Layout';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { FOLDER_DROP_PREFIX, useMoveDocuments } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
-import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import { DragOverlay, defaultDropAnimation } from '@dnd-kit/core';
+import type { DragEndEvent, DragOverEvent, DragStartEvent, DropAnimation } from '@dnd-kit/core';
+import { defaultDropAnimation, DragOverlay } from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
+import { produce } from 'immer';
+import { Plus } from 'lucide-react';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import { SectionIcon } from '@/components/ui/SectionIcon';
-import { CategoryItem, categoryIdToSortableId, sortableIdToCategoryId } from './CategoryItem';
+import { categoryIdToSortableId, CategoryItem, sortableIdToCategoryId } from './CategoryItem';
 import { SectionItem } from './SectionItem';
 
 interface CategorizedSectionsProps {
@@ -34,12 +36,11 @@ type ActiveDragData =
     | { type: 'documents'; documentIds: string[] }
     | null;
 
-const dropAnimationConfig = {
-    keyframes({
-        transform,
-    }: {
-        transform: { initial: { x: number; y: number; scaleX: number; scaleY: number }; final: { x: number; y: number; scaleX: number; scaleY: number } };
-    }) {
+/** Delay before clearing overlay so drop animation can complete (default 250ms + buffer). */
+const DROP_ANIMATION_DURATION_MS = 300;
+
+const dropAnimationConfig: DropAnimation = {
+    keyframes({ transform }) {
         return [
             { opacity: 1, transform: CSS.Transform.toString(transform.initial) },
             {
@@ -52,8 +53,8 @@ const dropAnimationConfig = {
             },
         ];
     },
-    easing: 'ease-out' as const,
-    sideEffects({ active }: { active: { node: HTMLElement } }) {
+    easing: 'ease-out',
+    sideEffects({ active }) {
         active.node.animate([{ opacity: 0 }, { opacity: 1 }], {
             duration: defaultDropAnimation.duration,
             easing: defaultDropAnimation.easing,
@@ -91,6 +92,7 @@ export function CategorizedSections({
             setCategories(sections);
         }
     }, [sections, activeDragData]);
+
     const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
 
     const moveDocuments = useMoveDocuments();
@@ -110,9 +112,13 @@ export function CategorizedSections({
 
         if (data?.type === 'category') {
             setActiveDragData({ type: 'category', category: data.category });
-        } else if (data?.type === 'section') {
+        }
+
+        if (data?.type === 'section') {
             setActiveDragData({ type: 'section', section: data.section });
-        } else if (data?.type === 'documents' && Array.isArray(data.documentIds)) {
+        }
+
+        if (data?.type === 'documents' && Array.isArray(data.documentIds)) {
             setActiveDragData({ type: 'documents', documentIds: data.documentIds });
         }
 
@@ -129,150 +135,132 @@ export function CategorizedSections({
         const activeData = active.data.current;
         const overData = over.data.current;
 
-        // Document drag → highlight section
         if (activeData?.type === 'documents') {
-            // Check if hovering over a section (not a category)
-            if (overData?.type === 'section') {
-                setHighlightedSectionId(String(over.id));
-            } else {
-                // Check if over.id matches a section via FOLDER_DROP_PREFIX
-                const folderId = String(over.id).startsWith(FOLDER_DROP_PREFIX) ? String(over.id).slice(FOLDER_DROP_PREFIX.length) : null;
-
-                if (folderId) {
-                    setHighlightedSectionId(folderId);
-                } else {
-                    setHighlightedSectionId(null);
-                }
-            }
+            setHighlightedSectionId(getDocumentDropHighlightId(String(over.id), overData));
 
             return;
         }
 
-        // Section drag → move between categories on hover
-        if (activeData?.type === 'section' && overData) {
-            const activeSectionId = String(active.id);
-            let targetCategoryId: string | null = null;
+        if (activeData?.type !== 'section' || !overData) return;
 
-            if (overData.type === 'category') {
-                targetCategoryId = overData.category.id;
-            } else if (overData.type === 'section') {
-                // Find which category this section belongs to
-                targetCategoryId = findParentCategoryId(categoriesRef.current, String(over.id));
-            }
+        const activeSectionId = String(active.id);
+        const targetCategoryId = overData.type === 'category' ? overData.category.id : findParentCategoryId(categoriesRef.current, String(over.id));
 
-            if (targetCategoryId) {
-                const sourceCategoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
+        if (!targetCategoryId) return;
 
-                if (sourceCategoryId && sourceCategoryId !== targetCategoryId) {
-                    // Move section to new category
-                    setCategories((prev) => moveSectionBetweenCategories(prev, activeSectionId, sourceCategoryId, targetCategoryId));
-                }
-            }
-        }
+        const sourceCategoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
+
+        if (!sourceCategoryId || sourceCategoryId === targetCategoryId) return;
+
+        setCategories((prev) => moveSectionBetweenCategories(prev, activeSectionId, sourceCategoryId, targetCategoryId));
     }
 
     function handleDragEnd({ active, over }: DragEndEvent) {
         const activeData = active.data.current;
 
-        // Document drop → move to section
         if (activeData?.type === 'documents' && over) {
-            const overData = over.data.current;
-            let targetSectionId: string | null = null;
-
-            if (overData?.type === 'section') {
-                targetSectionId = String(over.id);
-            }
-
-            if (targetSectionId && activeData.documentIds.length > 0) {
-                moveDocuments.mutate(
-                    { document_ids: activeData.documentIds, folder_id: targetSectionId },
-                    {
-                        onSuccess: () => {
-                            selection?.clear();
-                            toast.success(
-                                activeData.documentIds.length === 1 ? '1 file moved successfully' : `${activeData.documentIds.length} files moved successfully`,
-                            );
-                        },
-                    },
-                );
-            }
-
-            resetState();
+            handleDocumentDropEnd(activeData as { type: 'documents'; documentIds: string[] }, over);
+            setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
 
             return;
         }
 
-        // Category reorder — compute new order and persist from that (ref is still stale here)
         if (activeData?.type === 'category' && over) {
-            const overSortableId = String(over.id);
-            const activeSortableId = String(active.id);
-
-            if (activeSortableId !== overSortableId) {
-                const activeCatId = sortableIdToCategoryId(activeSortableId);
-                const overCatId = sortableIdToCategoryId(overSortableId);
-
-                if (activeCatId && overCatId) {
-                    const prev = categoriesRef.current;
-                    const oldIndex = prev.findIndex((c) => c.id === activeCatId);
-                    const newIndex = prev.findIndex((c) => c.id === overCatId);
-
-                    if (oldIndex !== -1 && newIndex !== -1) {
-                        const copy = [...prev];
-                        const [moved] = copy.splice(oldIndex, 1);
-                        copy.splice(newIndex, 0, moved!);
-                        setCategories(copy);
-                        persistOrderFrom(copy);
-                    }
-                }
-            }
-
-            resetState();
+            handleCategoryReorderEnd(active.id, over.id);
+            setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
 
             return;
         }
 
-        // Section reorder or cross-category move — persist from computed/current state
         if (activeData?.type === 'section' && over) {
-            const activeSectionId = String(active.id);
-            const overData = over.data.current;
-
-            if (overData?.type === 'section' && activeSectionId !== String(over.id)) {
-                const categoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
-
-                if (categoryId) {
-                    const prev = categoriesRef.current;
-                    const newCategories = prev.map((cat) => {
-                        if (cat.id !== categoryId) return cat;
-
-                        const children = [...cat.children];
-                        const oldIndex = children.findIndex((s) => s.id === activeSectionId);
-                        const newIndex = children.findIndex((s) => s.id === String(over.id));
-
-                        if (oldIndex === -1 || newIndex === -1) return cat;
-
-                        const [moved] = children.splice(oldIndex, 1);
-                        children.splice(newIndex, 0, moved!);
-
-                        return { ...cat, children };
-                    });
-                    setCategories(newCategories);
-                    persistOrderFrom(newCategories);
-                }
-            } else {
-                // Cross-category move already applied in handleDragOver; persist current state
-                persistOrderFrom(categoriesRef.current);
-            }
-
-            resetState();
+            handleSectionReorderEnd(active.id, over);
+            setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
 
             return;
         }
 
-        resetState();
+        setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
+    }
+
+    function handleDocumentDropEnd(activeData: { type: 'documents'; documentIds: string[] }, over: { id: string | number; data?: { current?: unknown } }) {
+        const targetSectionId = (over.data?.current as { type?: string })?.type === 'section' ? String(over.id) : null;
+
+        if (!targetSectionId || activeData.documentIds.length === 0) return;
+
+        moveDocuments.mutate(
+            { document_ids: activeData.documentIds, folder_id: targetSectionId },
+            {
+                onSuccess: () => {
+                    selection?.clear();
+                    toast.success(
+                        activeData.documentIds.length === 1 ? '1 file moved successfully' : `${activeData.documentIds.length} files moved successfully`,
+                    );
+                },
+            },
+        );
+    }
+
+    function handleCategoryReorderEnd(activeId: string | number, overId: string | number) {
+        const activeSortableId = String(activeId);
+        const overSortableId = String(overId);
+
+        if (activeSortableId === overSortableId) return;
+
+        const activeCatId = sortableIdToCategoryId(activeSortableId);
+        const overCatId = sortableIdToCategoryId(overSortableId);
+
+        if (!activeCatId || !overCatId) return;
+
+        const prev = categoriesRef.current;
+        const oldIndex = prev.findIndex((c) => c.id === activeCatId);
+        const newIndex = prev.findIndex((c) => c.id === overCatId);
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        const next = produce(prev, (draft) => {
+            const [moved] = draft.splice(oldIndex, 1);
+            draft.splice(newIndex, 0, moved!);
+        });
+        setCategories(next);
+        persistOrderFrom(next);
+    }
+
+    function handleSectionReorderEnd(activeId: string | number, over: { id: string | number; data?: { current?: unknown } }) {
+        const activeSectionId = String(activeId);
+        const isOverSection = (over.data?.current as { type?: string })?.type === 'section';
+        const needsReorder = isOverSection && activeSectionId !== String(over.id);
+
+        if (!needsReorder) {
+            persistOrderFrom(categoriesRef.current);
+
+            return;
+        }
+
+        const categoryId = findParentCategoryId(categoriesRef.current, activeSectionId);
+
+        if (!categoryId) return;
+
+        const prev = categoriesRef.current;
+        const next = produce(prev, (draft) => {
+            const cat = draft.find((c) => c.id === categoryId);
+
+            if (!cat) return;
+
+            const oldIndex = cat.children.findIndex((s) => s.id === activeSectionId);
+            const newIndex = cat.children.findIndex((s) => s.id === String(over.id));
+
+            if (oldIndex === -1 || newIndex === -1) return;
+
+            const [moved] = cat.children.splice(oldIndex, 1);
+            cat.children.splice(newIndex, 0, moved!);
+        });
+
+        setCategories(next);
+        persistOrderFrom(next);
     }
 
     function handleDragCancel() {
-        resetState();
+        setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
     }
 
     function resetState() {
@@ -288,24 +276,24 @@ export function CategorizedSections({
     } {
         const orderUpdates: Array<{ id: string; sort_order: number }> = [];
         const parentChanges: Array<{ id: string; parent_id: string }> = [];
-        cats.forEach((cat, catIndex) => {
+
+        for (const [catIndex, cat] of cats.entries()) {
             orderUpdates.push({ id: cat.id, sort_order: catIndex });
-            cat.children.forEach((sec, secIndex) => {
+
+            for (const [secIndex, sec] of cat.children.entries()) {
                 orderUpdates.push({ id: sec.id, sort_order: secIndex });
 
-                if (sec.parent_id !== cat.id) {
-                    parentChanges.push({ id: sec.id, parent_id: cat.id });
-                }
-            });
-        });
+                if (sec.parent_id !== cat.id) parentChanges.push({ id: sec.id, parent_id: cat.id });
+            }
+        }
 
         return { orderUpdates, parentChanges };
     }
 
-    function persistOrderFrom(cats: FolderWithChildren[]) {
+    function persistOrderFrom(categories: FolderWithChildren[]) {
         if (!onSectionsChange) return;
 
-        const { orderUpdates, parentChanges } = buildOrderAndParentUpdates(cats);
+        const { orderUpdates, parentChanges } = buildOrderAndParentUpdates(categories);
         onSectionsChange(orderUpdates, parentChanges.length > 0 ? parentChanges : undefined);
     }
 
@@ -369,7 +357,7 @@ export function CategorizedSections({
             </SortableContext>
 
             {createPortal(
-                <DragOverlay dropAnimation={dropAnimationConfig}>
+                <DragOverlay dropAnimation={dropAnimationConfig} modifiers={[snapCenterToCursor]}>
                     {activeDragData?.type === 'documents' ? (
                         <div className="rounded-md border border-primary/50 bg-primary/15 px-3 py-2 text-sm font-medium text-primary shadow-md">
                             {activeDragData.documentIds.length === 1 ? '1 document' : `${activeDragData.documentIds.length} documents`}
@@ -400,36 +388,32 @@ export function CategorizedSections({
 
 // ---- Helpers ----
 
-function findParentCategoryId(categories: FolderWithChildren[], sectionId: string): string | null {
-    for (const cat of categories) {
-        if (cat.children.some((s) => s.id === sectionId)) {
-            return cat.id;
-        }
-    }
+function getDocumentDropHighlightId(overId: string, overData: unknown): string | null {
+    const isOverSection = overData && typeof overData === 'object' && 'type' in overData && overData.type === 'section';
 
-    return null;
+    if (isOverSection) return String(overId);
+
+    return String(overId).startsWith(FOLDER_DROP_PREFIX) ? String(overId).slice(FOLDER_DROP_PREFIX.length) : null;
+}
+
+function findParentCategoryId(categories: FolderWithChildren[], sectionId: string): string | null {
+    const cat = categories.find((c) => c.children.some((s) => s.id === sectionId));
+
+    return cat?.id ?? null;
 }
 
 function moveSectionBetweenCategories(categories: FolderWithChildren[], sectionId: string, fromCategoryId: string, toCategoryId: string): FolderWithChildren[] {
-    // Two-pass: extract section first so order of categories in array doesn't matter (e.g. empty target before source)
-    let movedSection: FolderWithChildren | null = null;
-    const withoutSection = categories.map((cat) => {
-        if (cat.id !== fromCategoryId) return cat;
+    return produce(categories, (draft) => {
+        const from = draft.find((c) => c.id === fromCategoryId);
+        const to = draft.find((c) => c.id === toCategoryId);
 
-        const child = cat.children.find((s) => s.id === sectionId);
+        if (!from || !to) return;
 
-        if (child) movedSection = child;
+        const idx = from.children.findIndex((s) => s.id === sectionId);
 
-        const children = cat.children.filter((s) => s.id !== sectionId);
+        if (idx === -1) return;
 
-        return { ...cat, children };
-    });
-
-    if (!movedSection) return categories;
-
-    return withoutSection.map((cat) => {
-        if (cat.id !== toCategoryId) return cat;
-
-        return { ...cat, children: [...cat.children, movedSection!] };
+        const [moved] = from.children.splice(idx, 1);
+        to.children.push(moved!);
     });
 }

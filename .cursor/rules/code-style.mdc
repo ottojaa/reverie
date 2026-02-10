@@ -1,6 +1,6 @@
 ---
-name: code-style
 description: Enforces readable, maintainable code patterns. Use when writing or refactoring TypeScript/JavaScript. Applies to all edits unless overridden.
+alwaysApply: true
 ---
 
 # Code Style
@@ -50,9 +50,7 @@ function handleRequest(req: Request) {
 }
 
 function doWork(req: Request) {
-    if (!isValid(req)) {
-        return invalid();
-    }
+    // ...logic
 
     // inner functions are fine as well, if they don't need to be extracted to a helper function
     const handleThing = () => {

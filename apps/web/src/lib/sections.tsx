@@ -131,56 +131,54 @@ function patchFolderInTree(
  * Move a section to a new parent in the tree
  */
 export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
-    let movedSection: FolderWithChildren | null = null;
-    const treeWithoutSection = produce(tree, (draft) => {
-        function remove(nodes: FolderWithChildren[]): boolean {
+    return produce(tree, (draft) => {
+        function remove(nodes: FolderWithChildren[]): FolderWithChildren | null {
             const idx = nodes.findIndex((n) => n.id === sectionId);
 
             if (idx !== -1) {
-                movedSection = nodes[idx] as FolderWithChildren;
-                nodes.splice(idx, 1);
+                const [removed] = nodes.splice(idx, 1);
 
-                return true;
+                return removed ?? null;
             }
 
             for (const node of nodes) {
-                if (remove(node.children)) return true;
+                const found = remove(node.children);
+
+                if (found) return found;
             }
 
-            return false;
+            return null;
         }
 
-        remove(draft);
-    });
+        const movedSection = remove(draft);
 
-    if (!movedSection) return tree;
+        if (!movedSection) return;
 
-    const updatedSection: FolderWithChildren = { ...(movedSection as FolderWithChildren), parent_id: newParentId };
+        movedSection.parent_id = newParentId;
 
-    return produce(treeWithoutSection, (draft) => {
         if (newParentId === null) {
-            draft.push(updatedSection);
+            draft.push(movedSection);
 
             return;
         }
 
-        function addToParent(nodes: FolderWithChildren[]): boolean {
+        function addToParent(nodes: FolderWithChildren[], section: FolderWithChildren): boolean {
             const target = nodes.find((n) => n.id === newParentId);
 
             if (target) {
-                target.children.push(updatedSection);
+                target.children.push(section);
 
                 return true;
             }
 
             for (const node of nodes) {
-                if (addToParent(node.children)) return true;
+                if (addToParent(node.children, section)) return true;
             }
 
             return false;
         }
 
-        addToParent(draft);
+        addToParent(draft, movedSection);
     });
 }
 
