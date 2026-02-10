@@ -48,6 +48,19 @@ function handleRequest(req: Request) {
         return invalid();
     }
 }
+
+function doWork(req: Request) {
+    if (!isValid(req)) {
+        return invalid();
+    }
+
+    // inner functions are fine as well, if they don't need to be extracted to a helper function
+    const handleThing = () => {
+        // do something
+    };
+
+    return handleThing();
+}
 ```
 
 ## Immutability
