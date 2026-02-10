@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -50,9 +51,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
                     {...attributes}
                     {...listeners}
                 >
-                    <span className="shrink-0 text-base leading-none" aria-hidden>
-                        {section.emoji ?? '📄'}
-                    </span>
+                    <SectionIcon value={section.emoji} />
                     <Link
                         to="/browse/$sectionId"
                         params={{ sectionId: section.id }}

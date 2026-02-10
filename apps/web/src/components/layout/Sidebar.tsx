@@ -129,8 +129,6 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                             </div>
                         ))}
                     </div>
-                ) : sections.length === 0 ? (
-                    <div className="py-2 text-sm text-muted-foreground">No sections yet</div>
                 ) : (
                     <CategorizedSections
                         sections={sections}

@@ -101,8 +101,7 @@ export function DocumentPage() {
             >
                 {ViewerComponent && fileUrl ? (
                     <ViewerComponent document={document} fileUrl={fileUrl} />
-                ) : fileUrl && !ViewerComponent ? /* Viewer chunk still loading — show nothing; entrance animation covers this brief gap */
-                null : (
+                ) : fileUrl && !ViewerComponent /* Viewer chunk still loading — show nothing; entrance animation covers this brief gap */ ? null : (
                     <div className="flex flex-1 items-center justify-center">
                         <p className="text-sm text-muted-foreground">No preview available</p>
                     </div>

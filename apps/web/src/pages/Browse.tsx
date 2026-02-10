@@ -1,5 +1,6 @@
 import { DocumentGrid, DocumentSkeleton, SelectionBanner } from '@/components/documents';
 import { Button } from '@/components/ui/button';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { UploadFAB } from '@/components/upload';
 import { useDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
@@ -54,7 +55,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
 
     useDocumentsStatus(processingDocumentIds);
 
-    const title = section ? `${section.emoji ?? ''} ${section.name}`.trim() : 'My Files';
+    const title = section ? section.name : 'My Files';
     const subtitle = section
         ? data?.total
             ? `${data.total} ${data.total === 1 ? 'file' : 'files'} in this section`
@@ -87,7 +88,12 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 )}
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        <h1 className="text-2xl font-semibold">{title}</h1>
+                        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+                            {section?.emoji && (
+                                <SectionIcon value={section.emoji} className="size-7" />
+                            )}
+                            {title}
+                        </h1>
                         {section?.description && <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>}
                         <p className="text-primary mt-2">{subtitle}</p>
                     </div>

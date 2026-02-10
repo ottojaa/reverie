@@ -1,0 +1,78 @@
+---
+name: code-style
+description: Enforces readable, maintainable code patterns. Use when writing or refactoring TypeScript/JavaScript. Applies to all edits unless overridden.
+---
+
+# Code Style
+
+Always apply these stylistic preferences when writing or modifying code.
+
+## Control Flow
+
+**Prefer early returns.** Exit early from functions when preconditions fail or edge cases are handled. Reduces nesting and makes the primary path obvious.
+
+```typescript
+// Prefer
+function process(value: string | null) {
+    if (!value) return;
+    // main logic
+}
+
+// Avoid
+function process(value: string | null) {
+    if (value) {
+        // main logic
+    }
+}
+```
+
+**Avoid nested conditionals.** Flatten control flow with early returns or extract logic into named helper functions. Deep nesting obscures intent; flat structures read top-to-bottom.
+
+```typescript
+// Prefer: inner helpers or early returns
+function handleRequest(req: Request) {
+    if (!validate(req)) return invalid();
+    if (!auth(req)) return unauth();
+    return doWork(req);
+}
+
+// Avoid: nested if/else pyramids
+function handleRequest(req: Request) {
+    if (validate(req)) {
+        if (auth(req)) {
+            return doWork(req);
+        } else {
+            return unauth();
+        }
+    } else {
+        return invalid();
+    }
+}
+```
+
+## Immutability
+
+**Prefer Immer over manual object spreads** for nested updates. Immer produces immutable updates with mutable-looking syntax; avoids verbose spread chains and reduces boilerplate for deep updates.
+
+```typescript
+// Prefer
+const next = produce(state, (draft) => {
+    draft.user.profile.name = 'Jane';
+    draft.items.push(newItem);
+});
+
+// Avoid: brittle deep spreads
+const next = {
+    ...state,
+    user: {
+        ...state.user,
+        profile: {
+            ...state.user.profile,
+            name: 'Jane',
+        },
+    },
+    items: [...state.items, newItem],
+};
+```
+
+Use shallow spreads only for simple, one-level updates where Immer would add unnecessary overhead.

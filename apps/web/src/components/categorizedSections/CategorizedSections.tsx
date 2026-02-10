@@ -10,7 +10,9 @@ import { Link } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { CategoryItem, categoryIdToSortableId, sortableIdToCategoryId } from './CategoryItem';
 import { SectionItem } from './SectionItem';
 
@@ -74,28 +76,21 @@ export function CategorizedSections({
     const [categories, setCategories] = useState<FolderWithChildren[]>(() => sections);
     const categoriesRef = useRef(categories);
     categoriesRef.current = categories;
-
-    // Sync when server data changes (new items added/removed)
-    useEffect(() => {
-        const currentIds = new Set(categoriesRef.current.map((c) => c.id));
-        const newIds = new Set(sections.map((c) => c.id));
-        const currentChildIds = new Set(categoriesRef.current.flatMap((c) => c.children.map((s) => s.id)));
-        const newChildIds = new Set(sections.flatMap((c) => c.children.map((s) => s.id)));
-
-        // Re-sync if structure changed (added/removed categories or sections)
-        const structureChanged =
-            currentIds.size !== newIds.size ||
-            [...currentIds].some((id) => !newIds.has(id)) ||
-            currentChildIds.size !== newChildIds.size ||
-            [...currentChildIds].some((id) => !newChildIds.has(id));
-
-        if (structureChanged) {
-            setCategories(sections);
-        }
-    }, [sections]);
-
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     const [activeDragData, setActiveDragData] = useState<ActiveDragData>(null);
+
+    // Sync when parent data changes: always when not dragging; when dragging, only if structure changed
+    useEffect(() => {
+        const currentIds = new Set(categoriesRef.current.flatMap((c) => [c.id, ...c.children.map((s) => s.id)]));
+        const newIds = new Set(sections.flatMap((c) => [c.id, ...c.children.map((s) => s.id)]));
+        const structureChanged =
+            currentIds.size !== newIds.size || [...currentIds].some((id) => !newIds.has(id));
+
+        const shouldSync = !activeDragData || structureChanged;
+        if (shouldSync) {
+            setCategories(sections);
+        }
+    }, [sections, activeDragData]);
     const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
 
     const moveDocuments = useMoveDocuments();
@@ -336,7 +331,14 @@ export function CategorizedSections({
                                     />
                                 ))}
                                 {category.children.length === 0 && !collapsed[category.id] && (
-                                    <div className="px-6 py-1.5 text-xs text-muted-foreground/60 italic">No sections</div>
+                                    <button
+                                        type="button"
+                                        className="flex w-full items-center gap-2 rounded-md px-6 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                        onClick={() => onAddSection?.(category)}
+                                    >
+                                        <Plus className="size-4 shrink-0" />
+                                        Add section
+                                    </button>
                                 )}
                             </SortableContext>
                         </CategoryItem>
@@ -356,9 +358,7 @@ export function CategorizedSections({
                         </div>
                     ) : activeDragData?.type === 'section' ? (
                         <div className="flex items-center gap-2 rounded-md bg-sidebar-accent px-2 py-1.5 shadow-lg">
-                            <span className="shrink-0 text-base leading-none" aria-hidden>
-                                {activeDragData.section.emoji ?? '📄'}
-                            </span>
+                            <SectionIcon value={activeDragData.section.emoji} />
                             <Link
                                 to="/browse/$sectionId"
                                 params={{ sectionId: activeDragData.section.id }}

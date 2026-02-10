@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
-import { ChevronDown, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
@@ -77,6 +77,20 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                             {category.name}
                         </span>
 
+                        {/* Add section */}
+                        <button
+                            type="button"
+                            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                            aria-label="Add section"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onAddSection?.(category);
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                        >
+                            <Plus className="size-3.5" />
+                        </button>
                         {/* Actions button */}
                         <button
                             type="button"
@@ -97,10 +111,6 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                     <ContextMenuItem onSelect={() => onRename?.(category)}>
                         <Pencil className="size-4" />
                         Rename
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => onAddSection?.(category)}>
-                        <FolderPlus className="size-4" />
-                        Add section
                     </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem variant="destructive" onSelect={() => onDelete?.(category)}>

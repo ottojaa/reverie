@@ -1,12 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
+import type { SectionIconName } from '@/components/ui/icons-data';
 import { useUpdateFolder } from '@/lib/sections';
-import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
+import { dynamicIconImports } from 'lucide-react/dynamic';
 import { useEffect, useState } from 'react';
 
-const EMOJI_OPTIONS = ['📁', '📂', '📄', '📑', '📋', '📌', '🗂️', '📊', '📈', '🏷️', '📝', '📎', '✏️'];
+function toSectionIconName(emoji: string | null): SectionIconName | null {
+    if (emoji == null || emoji === '') return null;
+    return emoji in dynamicIconImports ? (emoji as SectionIconName) : null;
+}
 
 export interface EditSectionModalProps {
     open: boolean;
@@ -18,14 +23,14 @@ export interface EditSectionModalProps {
 export function EditSectionModal({ open, onOpenChange, section, onSuccess }: EditSectionModalProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [emoji, setEmoji] = useState<string | null>(null);
+    const [icon, setIcon] = useState<SectionIconName | null>(null);
     const updateFolder = useUpdateFolder();
 
     useEffect(() => {
         if (section) {
             setName(section.name);
             setDescription(section.description ?? '');
-            setEmoji(section.emoji ?? null);
+            setIcon(toSectionIconName(section.emoji ?? null));
         }
     }, [section]);
 
@@ -38,7 +43,7 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
                 data: {
                     name: name.trim(),
                     description: description.trim() || null,
-                    emoji: emoji ?? null,
+                    emoji: icon ?? null,
                 },
             },
             {
@@ -60,31 +65,23 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div>
-                        <label className="mb-1.5 block text-sm font-medium">Emoji (optional)</label>
-                        <div className="flex flex-wrap gap-1.5">
-                            {EMOJI_OPTIONS.map((e) => (
+                        <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
+                        <div className="flex items-center gap-2">
+                            <IconSelector
+                                value={icon}
+                                onValueChange={setIcon}
+                                triggerPlaceholder="No icon"
+                                searchPlaceholder="Search icons…"
+                            />
+                            {icon != null && (
                                 <button
-                                    key={e}
                                     type="button"
-                                    className={cn(
-                                        'flex size-8 items-center justify-center rounded-md border text-lg transition-colors',
-                                        emoji === e ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted',
-                                    )}
-                                    onClick={() => setEmoji(e)}
+                                    className="text-xs text-muted-foreground underline hover:text-foreground"
+                                    onClick={() => setIcon(null)}
                                 >
-                                    {e}
+                                    Clear icon
                                 </button>
-                            ))}
-                            <button
-                                type="button"
-                                className={cn(
-                                    'flex size-8 items-center justify-center rounded-md border text-sm transition-colors',
-                                    emoji === null ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted',
-                                )}
-                                onClick={() => setEmoji(null)}
-                            >
-                                None
-                            </button>
+                            )}
                         </div>
                     </div>
                     <div>

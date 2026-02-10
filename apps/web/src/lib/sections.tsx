@@ -1,5 +1,6 @@
 import type { Folder, FolderWithChildren } from '@reverie/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { produce } from 'immer';
 import { toast } from 'sonner';
 import type { DocumentsResponse } from './api/documents';
 import { useAuth, useAuthenticatedFetch } from './auth';
@@ -65,28 +66,43 @@ export function flattenSectionTree(tree: FolderWithChildren[]): FolderWithChildr
  */
 function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: string; sort_order: number }>): FolderWithChildren[] {
     const updateMap = new Map(updates.map((u) => [u.id, u.sort_order]));
-
-    function processNodes(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        // Check if any of these nodes need reordering
-        const needsSort = nodes.some((n) => updateMap.has(n.id));
-
-        let result = nodes.map((node) => ({
-            ...node,
-            children: processNodes(node.children),
-        }));
-
-        if (needsSort) {
-            result = result.sort((a, b) => {
+    return produce(tree, (draft) => {
+        function processNodes(nodes: FolderWithChildren[]) {
+            const needsSort = nodes.some((n) => updateMap.has(n.id));
+            nodes.forEach((node) => processNodes(node.children));
+            if (!needsSort) return;
+            nodes.sort((a, b) => {
                 const orderA = updateMap.get(a.id) ?? a.sort_order;
                 const orderB = updateMap.get(b.id) ?? b.sort_order;
                 return orderA - orderB;
             });
         }
+        processNodes(draft);
+    });
+}
 
-        return result;
-    }
-
-    return processNodes(tree);
+/**
+ * Patch a folder's properties (name, description, emoji) in the tree
+ */
+function patchFolderInTree(
+    tree: FolderWithChildren[],
+    folderId: string,
+    patch: { name?: string; description?: string | null; emoji?: string | null },
+): FolderWithChildren[] {
+    return produce(tree, (draft) => {
+        function walk(nodes: FolderWithChildren[]) {
+            for (const node of nodes) {
+                if (node.id === folderId) {
+                    if (patch.name !== undefined) node.name = patch.name;
+                    if (patch.description !== undefined) node.description = patch.description;
+                    if (patch.emoji !== undefined) node.emoji = patch.emoji;
+                    return;
+                }
+                walk(node.children);
+            }
+        }
+        walk(draft);
+    });
 }
 
 /**
@@ -94,53 +110,44 @@ function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: str
  */
 export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
     let movedSection: FolderWithChildren | null = null;
-
-    // First pass: remove the section from its current location and capture it
-    function removeSection(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        return nodes
-            .filter((node) => {
-                if (node.id === sectionId) {
-                    movedSection = { ...node };
-                    return false;
-                }
+    const treeWithoutSection = produce(tree, (draft) => {
+        function remove(nodes: FolderWithChildren[]): boolean {
+            const idx = nodes.findIndex((n) => n.id === sectionId);
+            if (idx !== -1) {
+                movedSection = nodes[idx] as FolderWithChildren;
+                nodes.splice(idx, 1);
                 return true;
-            })
-            .map((node) => ({
-                ...node,
-                children: removeSection(node.children),
-            }));
-    }
-
-    const treeWithoutSection = removeSection(tree);
-
-    if (!movedSection) return tree; // Section not found
-
-    // Update the section's parent_id - capture in a const for TypeScript narrowing
-    const captured = movedSection as FolderWithChildren;
-    const updatedSection: FolderWithChildren = { ...captured, parent_id: newParentId };
-
-    // Second pass: add the section to its new parent
-    if (newParentId === null) {
-        // Add to root level
-        return [...treeWithoutSection, updatedSection];
-    }
-
-    function addToParent(nodes: FolderWithChildren[]): FolderWithChildren[] {
-        return nodes.map((node) => {
-            if (node.id === newParentId) {
-                return {
-                    ...node,
-                    children: [...node.children, updatedSection],
-                };
             }
-            return {
-                ...node,
-                children: addToParent(node.children),
-            };
-        });
-    }
+            for (const node of nodes) {
+                if (remove(node.children)) return true;
+            }
+            return false;
+        }
+        remove(draft);
+    });
 
-    return addToParent(treeWithoutSection);
+    if (!movedSection) return tree;
+
+    const updatedSection: FolderWithChildren = { ...(movedSection as FolderWithChildren), parent_id: newParentId };
+
+    return produce(treeWithoutSection, (draft) => {
+        if (newParentId === null) {
+            draft.push(updatedSection);
+            return;
+        }
+        function addToParent(nodes: FolderWithChildren[]): boolean {
+            const target = nodes.find((n) => n.id === newParentId);
+            if (target) {
+                target.children.push(updatedSection);
+                return true;
+            }
+            for (const node of nodes) {
+                if (addToParent(node.children)) return true;
+            }
+            return false;
+        }
+        addToParent(draft);
+    });
 }
 
 export function useSections() {
@@ -277,17 +284,31 @@ export function useUpdateFolder() {
         mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
             updateFolderWithAuth(authFetch, id, data),
         onMutate: async ({ id, data }) => {
-            // Only do optimistic update for parent_id changes (drag reparenting)
-            if (data.parent_id === undefined) return;
+            const hasOrderChange = data.parent_id !== undefined;
+            const hasMetadataChange = data.name !== undefined || data.description !== undefined || data.emoji !== undefined;
+            if (!hasOrderChange && !hasMetadataChange) return;
 
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
+            if (!previous) return { previous };
 
-            if (previous) {
-                const optimistic = moveSectionInTree(previous, id, data.parent_id);
-                queryClient.setQueryData(['sections', 'tree'], optimistic);
+            function applyOptimisticUpdate(tree: FolderWithChildren[]): FolderWithChildren[] {
+                let result = tree;
+                if (hasOrderChange) {
+                    result = moveSectionInTree(result, id, data.parent_id ?? null);
+                }
+                if (hasMetadataChange) {
+                    result = patchFolderInTree(result, id, {
+                        ...(data.name !== undefined && { name: data.name }),
+                        ...(data.description !== undefined && { description: data.description }),
+                        ...(data.emoji !== undefined && { emoji: data.emoji }),
+                    });
+                }
+                return result;
             }
 
+            const optimistic = applyOptimisticUpdate(previous);
+            queryClient.setQueryData(['sections', 'tree'], optimistic);
             return { previous };
         },
         onError: (_, __, context) => {

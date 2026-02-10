@@ -10,7 +10,7 @@ export const FolderSchema = z.object({
     name: z.string().min(1).max(255),
     path: z.string(),
     description: z.string().nullable(),
-    emoji: z.string().max(8).nullable(),
+    emoji: z.string().max(48).nullable(),
     sort_order: z.number(),
     type: FolderTypeSchema,
     created_at: z.string().datetime(),
@@ -23,7 +23,7 @@ export const CreateFolderRequestSchema = z.object({
     name: z.string().min(1).max(255),
     parent_id: UuidSchema.optional(),
     description: z.string().optional(),
-    emoji: z.string().max(8).optional(),
+    emoji: z.string().max(48).optional(),
     type: FolderTypeSchema.optional(),
 });
 
@@ -32,7 +32,7 @@ export type CreateFolderRequest = z.infer<typeof CreateFolderRequestSchema>;
 export const UpdateFolderRequestSchema = z.object({
     name: z.string().min(1).max(255).optional(),
     description: z.string().nullable().optional(),
-    emoji: z.string().max(8).nullable().optional(),
+    emoji: z.string().max(48).nullable().optional(),
     parent_id: UuidSchema.nullable().optional(),
 });
 

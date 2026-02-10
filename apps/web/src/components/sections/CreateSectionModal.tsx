@@ -1,13 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
+import type { SectionIconName } from '@/components/ui/icons-data';
 import { useCreateFolder } from '@/lib/sections';
-import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
-const EMOJI_OPTIONS = ['📁', '📂', '📄', '📑', '📋', '📌', '📎', '🗂️', '📊', '📈', '🏷️', '📝', '📎', '✏️', '📌'];
-
 export type CreateFolderMode = 'category' | 'section';
+
+const DEFAULT_SECTION_ICON: SectionIconName = 'folder';
 
 export interface CreateSectionModalProps {
     open: boolean;
@@ -20,7 +21,7 @@ export interface CreateSectionModalProps {
 export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'section', onSuccess }: CreateSectionModalProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [emoji, setEmoji] = useState<string | null>(mode === 'category' ? null : '📁');
+    const [icon, setIcon] = useState<SectionIconName | null>(mode === 'category' ? null : DEFAULT_SECTION_ICON);
     const createFolder = useCreateFolder();
 
     // Reset form when modal opens or mode changes
@@ -28,7 +29,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
         if (open) {
             setName('');
             setDescription('');
-            setEmoji(mode === 'category' ? null : '📁');
+            setIcon(mode === 'category' ? null : DEFAULT_SECTION_ICON);
         }
     }, [open, mode]);
 
@@ -46,13 +47,13 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                 ...(isCategory ? { type: 'category' as const } : { type: 'section' as const }),
                 ...(parentId && { parent_id: parentId }),
                 ...(description.trim() && { description: description.trim() }),
-                ...(emoji && { emoji }),
+                ...(icon && { emoji: icon }),
             },
             {
                 onSuccess: () => {
                     setName('');
                     setDescription('');
-                    setEmoji(isCategory ? null : '📁');
+                    setIcon(isCategory ? null : DEFAULT_SECTION_ICON);
                     onOpenChange(false);
                     onSuccess?.();
                 },
@@ -69,22 +70,13 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     {isSection && (
                         <div>
-                            <label className="mb-1.5 block text-sm font-medium">Emoji (optional)</label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {EMOJI_OPTIONS.map((e) => (
-                                    <button
-                                        key={e}
-                                        type="button"
-                                        className={cn(
-                                            'flex size-8 items-center justify-center rounded-md border text-lg transition-colors',
-                                            emoji === e ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted',
-                                        )}
-                                        onClick={() => setEmoji(e)}
-                                    >
-                                        {e}
-                                    </button>
-                                ))}
-                            </div>
+                            <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
+                            <IconSelector
+                                value={icon}
+                                onValueChange={setIcon}
+                                triggerPlaceholder="Select icon"
+                                searchPlaceholder="Search icons…"
+                            />
                         </div>
                     )}
                     <div>
