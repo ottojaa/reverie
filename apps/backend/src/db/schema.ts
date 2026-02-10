@@ -27,6 +27,8 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 
 // Folders table
+export type FolderType = 'category' | 'section';
+
 export interface FoldersTable {
     id: Generated<string>;
     user_id: string;
@@ -36,6 +38,7 @@ export interface FoldersTable {
     description: string | null;
     emoji: string | null;
     sort_order: number;
+    type: FolderType;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }

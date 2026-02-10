@@ -51,7 +51,16 @@ export default async function (fastify: FastifyInstance) {
             }
 
             // Require a section: use provided folder_id or get/create default section
-            const resolvedFolderId = folderId ?? (await folderService.getOrCreateDefaultSection(userId)).id;
+            let resolvedFolderId: string;
+            if (folderId) {
+                const folder = await folderService.getFolder(folderId, userId);
+                if (!folder || folder.type !== 'section') {
+                    return reply.badRequest('Folder not found or documents can only be uploaded to sections');
+                }
+                resolvedFolderId = folder.id;
+            } else {
+                resolvedFolderId = (await folderService.getOrCreateDefaultSection(userId)).id;
+            }
 
             // Optional: Add file size limit (100MB per file)
             const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB

@@ -92,7 +92,7 @@ function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: str
 /**
  * Move a section to a new parent in the tree
  */
-function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
+export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string, newParentId: string | null): FolderWithChildren[] {
     let movedSection: FolderWithChildren | null = null;
 
     // First pass: remove the section from its current location and capture it
@@ -211,7 +211,10 @@ export function useReorderSections() {
     });
 }
 
-async function createFolderWithAuth(authFetch: AuthFetch, data: { name: string; parent_id?: string; description?: string; emoji?: string }): Promise<Folder> {
+async function createFolderWithAuth(
+    authFetch: AuthFetch,
+    data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' },
+): Promise<Folder> {
     const response = await authFetch(`${API_BASE}/folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -249,12 +252,22 @@ export function useCreateFolder() {
     const queryClient = useQueryClient();
     const authFetch = useAuthenticatedFetch();
     return useMutation({
-        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string }) => createFolderWithAuth(authFetch, data),
+        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' }) =>
+            createFolderWithAuth(authFetch, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
         onError: () => toast.error('Failed to create section'),
     });
+}
+
+export function useCreateCategory() {
+    const createFolder = useCreateFolder();
+    return {
+        ...createFolder,
+        mutate: (data: { name: string; description?: string; emoji?: string }, options?: Parameters<typeof createFolder.mutate>[1]) =>
+            createFolder.mutate({ ...data, type: 'category' as const }, options),
+    };
 }
 
 export function useUpdateFolder() {

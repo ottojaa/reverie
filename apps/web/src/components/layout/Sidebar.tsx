@@ -1,7 +1,8 @@
-import { CreateSectionModal } from '@/components/sections';
+import { CategorizedSections } from '@/components/categorizedSections';
+import { CreateSectionModal, type CreateFolderMode } from '@/components/sections';
 import { useConfirm } from '@/lib/confirm';
 import { useSectionEdit } from '@/lib/SectionEditContext';
-import { sectionsToParentMap, useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
+import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useParams } from '@tanstack/react-router';
@@ -9,11 +10,8 @@ import { Settings } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { MutableRefObject } from 'react';
 import { useRef, useState } from 'react';
-import type { SortableTreeHandlers } from './Layout';
-import { SortableTree } from '../sortableTree/SortableTree';
-import type { TreeItems } from '../sortableTree/types';
-import { treeItemsToOrderUpdates, treeItemsToParentMap } from '../sortableTree/utilities';
 import { Skeleton } from '../ui/skeleton';
+import type { SortableTreeHandlers } from './Layout';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -31,36 +29,66 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const updateFolder = useUpdateFolder();
 
     const { openEdit } = useSectionEdit();
-    const [createModalParent, setCreateModalParent] = useState<string | null | undefined>(undefined);
+
+    // Create modal state
+    const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [createModalMode, setCreateModalMode] = useState<CreateFolderMode>('section');
+    const [createModalParent, setCreateModalParent] = useState<string | null>(null);
+
     const navRef = useRef<HTMLElement>(null);
 
-    const handleAddSubSection = (parentId: string | null) => {
-        setCreateModalParent(parentId);
+    const openCreateCategory = () => {
+        setCreateModalMode('category');
+        setCreateModalParent(null);
+        setCreateModalOpen(true);
+    };
+
+    const openCreateSection = (categoryId: string) => {
+        setCreateModalMode('section');
+        setCreateModalParent(categoryId);
+        setCreateModalOpen(true);
     };
 
     const handleEditSection = (section: FolderWithChildren) => {
         openEdit(section);
     };
 
+    const handleEditCategory = (category: FolderWithChildren) => {
+        openEdit(category);
+    };
+
     const handleDeleteSection = async (section: FolderWithChildren) => {
         const ok = await confirm({
             title: 'Delete section?',
-            description: `"${section.name}" and its sub-sections will be deleted. Documents inside will remain but will no longer be in a section.`,
+            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a section.`,
             confirmText: 'Delete',
             variant: 'destructive',
         });
         if (ok) deleteFolder.mutate(section.id);
     };
 
-    const handleSectionsChange = (newItems: TreeItems) => {
-        const orderUpdates = treeItemsToOrderUpdates(newItems);
-        const newParentMap = treeItemsToParentMap(newItems);
-        const currentParentMap = sectionsToParentMap(sections);
-        newParentMap.forEach((newParentId, id) => {
-            if (currentParentMap.get(id) !== newParentId) {
-                updateFolder.mutate({ id, data: { parent_id: newParentId } });
-            }
+    const handleDeleteCategory = async (category: FolderWithChildren) => {
+        const sectionCount = category.children.length;
+
+        if (sectionCount === 0) {
+            deleteFolder.mutate(category.id);
+            return;
+        }
+
+        const ok = await confirm({
+            title: 'Delete category?',
+            description: `"${category.name}" and its ${sectionCount} section${sectionCount !== 1 ? 's' : ''} will be deleted. Documents inside sections will remain but will no longer be in a section.`,
+            confirmText: 'Delete',
+            variant: 'destructive',
         });
+        if (ok) deleteFolder.mutate(category.id);
+    };
+
+    const handleSectionsChange = async (orderUpdates: Array<{ id: string; sort_order: number }>, parentChanges?: Array<{ id: string; parent_id: string }>) => {
+        // Persist parent changes first so backend has correct parent_id before reorder
+        if (parentChanges?.length) {
+            await Promise.all(parentChanges.map(({ id, parent_id }) => updateFolder.mutateAsync({ id, data: { parent_id } })));
+        }
         reorderSections.mutate(orderUpdates);
     };
 
@@ -104,25 +132,25 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 ) : sections.length === 0 ? (
                     <div className="py-2 text-sm text-muted-foreground">No sections yet</div>
                 ) : (
-                    <SortableTree
+                    <CategorizedSections
                         sections={sections}
-                        currentSectionId={currentSectionId}
-                        indentationWidth={20}
-                        collapsible
+                        {...(currentSectionId !== undefined && { currentSectionId })}
                         onSectionsChange={handleSectionsChange}
                         onEditSection={handleEditSection}
-                        onAddSubSection={(section) => handleAddSubSection(section.id)}
+                        onEditCategory={handleEditCategory}
+                        onAddSection={(category) => openCreateSection(category.id)}
                         onDeleteSection={handleDeleteSection}
+                        onDeleteCategory={handleDeleteCategory}
                         {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
                 )}
                 <button
                     type="button"
                     className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    onClick={() => setCreateModalParent(null)}
+                    onClick={openCreateCategory}
                 >
                     <span className="text-base">+</span>
-                    New section
+                    New category
                 </button>
             </nav>
 
@@ -138,11 +166,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 </Link>
             </div>
 
-            <CreateSectionModal
-                open={createModalParent !== undefined}
-                onOpenChange={(open) => !open && setCreateModalParent(undefined)}
-                parentId={createModalParent ?? null}
-            />
+            <CreateSectionModal open={createModalOpen} onOpenChange={setCreateModalOpen} parentId={createModalParent} mode={createModalMode} />
         </>
     );
 

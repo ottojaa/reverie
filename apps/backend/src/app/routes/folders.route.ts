@@ -145,8 +145,8 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const { name, parent_id, description, emoji } = request.body;
-            const folder = await folderService.createFolder(userId, name, parent_id, description, emoji);
+            const { name, parent_id, description, emoji, type } = request.body;
+            const folder = await folderService.createFolder(userId, name, parent_id, description, emoji, type);
             reply.status(201);
             return serializeFolder(folder);
         },
@@ -209,18 +209,17 @@ function serializeFolder(folder: import('../../db/schema').Folder): Folder {
         description: folder.description,
         emoji: folder.emoji,
         sort_order: folder.sort_order,
+        type: folder.type,
         created_at: folder.created_at.toISOString(),
         updated_at: folder.updated_at.toISOString(),
     };
 }
 
-function serializeFolderWithChildren(
-    node: import('../../db/schema').Folder & { children: unknown[]; document_count: number },
-): FolderWithChildren {
+function serializeFolderWithChildren(node: import('../../db/schema').Folder & { children: unknown[]; document_count: number }): FolderWithChildren {
     return {
         ...serializeFolder(node),
-        children: (node.children as Array<import('../../db/schema').Folder & { children: unknown[]; document_count: number }>).map(
-            (child) => serializeFolderWithChildren(child),
+        children: (node.children as Array<import('../../db/schema').Folder & { children: unknown[]; document_count: number }>).map((child) =>
+            serializeFolderWithChildren(child),
         ),
         document_count: node.document_count,
     };

@@ -1,6 +1,6 @@
 import { ConflictError, NotFoundError } from '@reverie/shared';
 import { db } from '../db/kysely';
-import type { Folder, FolderUpdate, NewFolder } from '../db/schema';
+import type { Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
 
 export class FolderService {
     /**
@@ -12,7 +12,25 @@ export class FolderService {
         parentId?: string,
         description?: string,
         emoji?: string | null,
+        type?: FolderType,
     ): Promise<Folder> {
+        const folderType: FolderType = type ?? 'section';
+
+        // Enforce two-level hierarchy
+        if (folderType === 'category' && parentId) {
+            throw new ConflictError('Categories must be root-level (no parent)');
+        }
+        if (folderType === 'section' && !parentId) {
+            throw new ConflictError('Sections must have a parent category');
+        }
+        if (folderType === 'section' && parentId) {
+            const parent = await this.getFolder(parentId, userId);
+            if (!parent) throw new NotFoundError('Folder', parentId);
+            if (parent.type !== 'category') {
+                throw new ConflictError('Sections can only be nested under categories');
+            }
+        }
+
         // Build path
         let path = `/${name}`;
         if (parentId) {
@@ -48,6 +66,7 @@ export class FolderService {
             description: description ?? null,
             emoji: emoji ?? null,
             sort_order,
+            type: folderType,
         };
 
         return db.insertInto('folders').values(newFolder).returningAll().executeTakeFirstOrThrow();
@@ -85,7 +104,9 @@ export class FolderService {
     /**
      * Get full section tree (root folders with nested children and document_count)
      */
-    async getSectionTree(userId: string): Promise<Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>> {
+    async getSectionTree(
+        userId: string,
+    ): Promise<Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>> {
         const buildTree = async (parentId: string | null): Promise<Array<Folder & { children: unknown[]; document_count: number }>> => {
             const folders = await this.listChildren(parentId, userId);
             const result: Array<Folder & { children: unknown[]; document_count: number }> = [];
@@ -128,25 +149,37 @@ export class FolderService {
         if (updates.length === 0) return;
         await db.transaction().execute(async (trx) => {
             for (const { id, sort_order } of updates) {
-                await trx
-                    .updateTable('folders')
-                    .set({ sort_order })
-                    .where('id', '=', id)
-                    .where('user_id', '=', userId)
-                    .execute();
+                await trx.updateTable('folders').set({ sort_order }).where('id', '=', id).where('user_id', '=', userId).execute();
             }
         });
     }
 
     /**
-     * Get or create the default section for a user (e.g. "My Documents")
+     * Get or create the default section for a user.
+     * Returns a section (not a category) where documents can be stored.
      */
     async getOrCreateDefaultSection(userId: string): Promise<Folder> {
-        const rootFolders = await this.listChildren(null, userId);
-        if (rootFolders.length > 0) {
-            return rootFolders[0]!;
+        // Find an existing section
+        const existingSection = await db
+            .selectFrom('folders')
+            .selectAll()
+            .where('user_id', '=', userId)
+            .where('type', '=', 'section')
+            .orderBy('sort_order', 'asc')
+            .executeTakeFirst();
+
+        if (existingSection) return existingSection;
+
+        // No sections exist; create a default category + section
+        const categories = await this.listChildren(null, userId);
+        let category: Folder;
+        if (categories.length > 0) {
+            category = categories[0]!;
+        } else {
+            category = await this.createFolder(userId, 'My Documents', undefined, undefined, '📁', 'category');
         }
-        return this.createFolder(userId, 'My Documents', undefined, undefined, '📁');
+
+        return this.createFolder(userId, 'Documents', category.id, undefined, '📄', 'section');
     }
 
     /**
@@ -174,6 +207,22 @@ export class FolderService {
             if (newParentId === id) {
                 throw new ConflictError('Folder cannot be its own parent');
             }
+
+            // Enforce two-level model: categories stay root, sections stay under categories
+            if (folder.type === 'category' && newParentId !== null) {
+                throw new ConflictError('Categories must remain at root level');
+            }
+            if (folder.type === 'section') {
+                if (newParentId === null) {
+                    throw new ConflictError('Sections must have a parent category');
+                }
+                const newParent = await this.getFolder(newParentId, userId);
+                if (!newParent) throw new NotFoundError('Folder', newParentId);
+                if (newParent.type !== 'category') {
+                    throw new ConflictError('Sections can only be moved to categories');
+                }
+            }
+
             if (newParentId) {
                 const newParent = await this.getFolder(newParentId, userId);
                 if (!newParent) throw new NotFoundError('Folder', newParentId);
@@ -181,9 +230,7 @@ export class FolderService {
                     throw new ConflictError('Cannot move folder inside its own descendant');
                 }
             }
-            const newPath = newParentId
-                ? `${(await this.getFolder(newParentId, userId))!.path}/${folder.name}`
-                : `/${folder.name}`;
+            const newPath = newParentId ? `${(await this.getFolder(newParentId, userId))!.path}/${folder.name}` : `/${folder.name}`;
             const existing = await db
                 .selectFrom('folders')
                 .select('id')

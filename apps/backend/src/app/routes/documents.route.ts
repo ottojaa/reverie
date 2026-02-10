@@ -141,6 +141,9 @@ export default async function (fastify: FastifyInstance) {
             if (!folder) {
                 return reply.notFound('Folder not found');
             }
+            if (folder.type !== 'section') {
+                return reply.badRequest('Documents can only be moved to sections, not categories');
+            }
 
             if (document_ids.length === 0) {
                 return reply.status(204).send();
@@ -248,16 +251,8 @@ export default async function (fastify: FastifyInstance) {
             }
 
             await db.transaction().execute(async (trx) => {
-                await trx
-                    .deleteFrom('processing_jobs')
-                    .where('target_type', '=', 'document')
-                    .where('target_id', '=', request.params.id)
-                    .execute();
-                await trx
-                    .deleteFrom('documents')
-                    .where('id', '=', request.params.id)
-                    .where('user_id', '=', userId)
-                    .execute();
+                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', request.params.id).execute();
+                await trx.deleteFrom('documents').where('id', '=', request.params.id).where('user_id', '=', userId).execute();
             });
 
             try {
@@ -304,16 +299,8 @@ export default async function (fastify: FastifyInstance) {
             const foundIds = new Set(found.map((d) => d.id));
 
             await db.transaction().execute(async (trx) => {
-                await trx
-                    .deleteFrom('processing_jobs')
-                    .where('target_type', '=', 'document')
-                    .where('target_id', 'in', Array.from(foundIds))
-                    .execute();
-                await trx
-                    .deleteFrom('documents')
-                    .where('id', 'in', Array.from(foundIds))
-                    .where('user_id', '=', userId)
-                    .execute();
+                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', 'in', Array.from(foundIds)).execute();
+                await trx.deleteFrom('documents').where('id', 'in', Array.from(foundIds)).where('user_id', '=', userId).execute();
             });
 
             for (const document of found) {

@@ -68,7 +68,7 @@ export function UploadModal() {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sectionsTree = [] } = useSections();
-    const flatSections = useMemo(() => flattenSectionTree(sectionsTree), [sectionsTree]);
+    const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'section'), [sectionsTree]);
     const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);

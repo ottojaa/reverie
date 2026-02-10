@@ -1,2 +1,2 @@
-export { CreateSectionModal } from './CreateSectionModal';
+export { CreateSectionModal, type CreateFolderMode } from './CreateSectionModal';
 export { EditSectionModal } from './EditSectionModal';
