@@ -1,1 +1,1 @@
-export { useDocument, useDocuments } from './documents';
+export { useDocument, useDocuments, useInfiniteDocuments } from './documents';

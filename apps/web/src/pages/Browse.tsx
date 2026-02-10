@@ -2,12 +2,12 @@ import { DocumentGrid, DocumentSkeleton, SelectionBanner } from '@/components/do
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { UploadFAB } from '@/components/upload';
-import { useDocuments } from '@/lib/api';
+import { useInfiniteDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { FolderOpen, Pencil } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const SKELETON_DELAY_MS = 200;
 
@@ -18,13 +18,32 @@ export interface BrowsePageProps {
 export function BrowsePage({ sectionId }: BrowsePageProps) {
     const section = useCurrentSection(sectionId);
     const { openEdit } = useSectionEdit();
-    const { data, isLoading, error } = useDocuments({
-        limit: 50,
+    const sentinelRef = useRef<HTMLDivElement>(null);
+
+    const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteDocuments({
         ...(sectionId && { folderId: sectionId }),
     });
 
-    const documents = data?.items ?? [];
+    const documents = data?.pages.flatMap((p) => p.items) ?? [];
+    const total = data?.pages[0]?.total ?? 0;
     const isEmpty = !isLoading && documents.length === 0;
+
+    useEffect(() => {
+        const el = sentinelRef.current;
+
+        if (!el || !hasNextPage || isFetchingNextPage) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) fetchNextPage();
+            },
+            { rootMargin: '200px' },
+        );
+
+        observer.observe(el);
+
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     // Only show skeleton if loading lasts longer than SKELETON_DELAY_MS (avoids flash on fast loads)
     const [showSkeleton, setShowSkeleton] = useState(false);
@@ -59,11 +78,11 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
 
     const title = section ? section.name : 'My Files';
     const subtitle = section
-        ? data?.total
-            ? `${data.total} ${data.total === 1 ? 'file' : 'files'} in this section`
+        ? total
+            ? `${total} ${total === 1 ? 'file' : 'files'} in this section`
             : null
-        : data?.total
-          ? `${data.total} ${data.total === 1 ? 'file' : 'files'} in your collection`
+        : total
+          ? `${total} ${total === 1 ? 'file' : 'files'} in your collection`
           : null;
 
     return (
@@ -125,6 +144,12 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 <>
                     <SelectionBanner />
                     <DocumentGrid documents={documents} isLoading={false} />
+                    <div ref={sentinelRef} className="h-2" aria-hidden />
+                    {isFetchingNextPage && (
+                        <div className="mt-4 flex justify-center">
+                            <div className="aspect-4/3 h-8 w-24 animate-pulse rounded-xl bg-muted" />
+                        </div>
+                    )}
                 </>
             )}
             <UploadFAB />
