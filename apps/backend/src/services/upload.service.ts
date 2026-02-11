@@ -4,7 +4,10 @@ import { db } from '../db/kysely';
 import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
+import { getDeduplicatedFilename } from '../utils/filename';
 import { canGenerateThumbnail, getStorageService, type UserStorageContext } from './storage.service';
+
+export type ConflictStrategy = 'replace' | 'keep_both';
 
 /**
  * Extension-to-MIME fallback for files where the browser reports a generic type
@@ -70,17 +73,52 @@ export class UploadService {
     /**
      * Upload multiple files (with user context for storage quotas)
      * @param clientSessionId - Optional client-provided session ID for WebSocket correlation (avoids race with job events)
+     * @param conflictStrategy - When 'replace', delete existing docs in folder with same filename first. When 'keep_both', auto-rename with (n) suffix.
      */
-    async uploadFiles(files: UploadedFile[], userId: string, folderId?: string, clientSessionId?: string): Promise<UploadResult> {
+    async uploadFiles(
+        files: UploadedFile[],
+        userId: string,
+        folderId?: string,
+        clientSessionId?: string,
+        conflictStrategy?: ConflictStrategy,
+    ): Promise<UploadResult> {
         const sessionId = clientSessionId ?? randomUUID();
+        const resolvedFolderId = folderId ?? null;
+
+        if (conflictStrategy === 'replace' && resolvedFolderId) {
+            await this.deleteDocumentsInFolderByFilenames(userId, resolvedFolderId, files.map((f) => f.filename));
+        }
+
+        let effectiveFilenames: string[] | undefined;
+
+        if (conflictStrategy === 'keep_both' && resolvedFolderId) {
+            const existing = await this.getFilenamesInFolder(userId, resolvedFolderId);
+            effectiveFilenames = [];
+            const taken = new Set(existing);
+
+            for (const file of files) {
+                const name = getDeduplicatedFilename([...taken], file.filename);
+                effectiveFilenames.push(name);
+                taken.add(name);
+            }
+        }
+
         const documents: Document[] = [];
         const jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
-
-        // Get user storage context once for all files
         const userContext = await this.storageService.getUserStorageContext(userId);
+        const skipHashDuplicate = conflictStrategy != null;
 
-        const promises = files.map(async (file) => {
-            const result = await this.uploadSingleFile(file, userId, userContext, folderId, sessionId);
+        const promises = files.map(async (file, index) => {
+            const effectiveFilename = effectiveFilenames?.[index] ?? file.filename;
+            const result = await this.uploadSingleFile(
+                file,
+                userId,
+                userContext,
+                resolvedFolderId ?? undefined,
+                sessionId,
+                effectiveFilename,
+                skipHashDuplicate,
+            );
             documents.push(result.document);
             jobs.push(...result.jobs);
             userContext.storageUsedBytes += file.buffer.length;
@@ -96,7 +134,61 @@ export class UploadService {
     }
 
     /**
+     * Get original_filename of all documents in a folder (for duplicate naming).
+     */
+    async getFilenamesInFolder(userId: string, folderId: string): Promise<string[]> {
+        const rows = await db
+            .selectFrom('documents')
+            .select('original_filename')
+            .where('user_id', '=', userId)
+            .where('folder_id', '=', folderId)
+            .execute();
+
+        return rows.map((r) => r.original_filename);
+    }
+
+    /**
+     * Delete documents in folder that have one of the given filenames (used for replace strategy).
+     */
+    async deleteDocumentsInFolderByFilenames(userId: string, folderId: string, filenames: string[]): Promise<void> {
+        if (filenames.length === 0) return;
+
+        const docs = await db
+            .selectFrom('documents')
+            .selectAll()
+            .where('user_id', '=', userId)
+            .where('folder_id', '=', folderId)
+            .where('original_filename', 'in', filenames)
+            .execute();
+
+        for (const doc of docs) {
+            await db.transaction().execute(async (trx) => {
+                await trx
+                    .deleteFrom('processing_jobs')
+                    .where('target_type', '=', 'document')
+                    .where('target_id', '=', doc.id)
+                    .execute();
+                await trx.deleteFrom('documents').where('id', '=', doc.id).where('user_id', '=', userId).execute();
+            });
+
+            try {
+                await this.storageService.deleteFile(doc.file_path, userId);
+
+                if (doc.thumbnail_paths) {
+                    for (const path of Object.values(doc.thumbnail_paths)) {
+                        await this.storageService.deleteFile(path, userId);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to delete file from storage:', err);
+            }
+        }
+    }
+
+    /**
      * Upload a single file
+     * @param effectiveFilename - Used for original_filename when doing keep_both (renamed with (n) suffix)
+     * @param skipHashDuplicate - When true, do not short-circuit on hash match (used when user chose replace/keep_both)
      */
     private async uploadSingleFile(
         file: UploadedFile,
@@ -104,22 +196,34 @@ export class UploadService {
         userContext: UserStorageContext,
         folderId: string | undefined,
         sessionId: string,
+        effectiveFilename?: string,
+        skipHashDuplicate?: boolean,
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
+        const displayName = effectiveFilename ?? file.filename;
+
         // Correct generic MIME types (e.g. application/octet-stream for .mov files)
         const mimeType = correctMimeType(file.filename, file.mimetype);
 
         // Process and store the file (with user context for quotas)
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
 
-        // Check for duplicate by hash (scoped to user)
-        const existing = await db.selectFrom('documents').selectAll().where('file_hash', '=', processed.hash).where('user_id', '=', userId).executeTakeFirst();
+        if (!skipHashDuplicate) {
+            // Check for duplicate by hash in the *target folder* only.
+            // Same hash in a different folder = upload fresh copy to this folder.
+            const hashQuery = db
+                .selectFrom('documents')
+                .selectAll()
+                .where('file_hash', '=', processed.hash)
+                .where('user_id', '=', userId);
 
-        if (existing) {
-            // Return existing document without creating new jobs
-            return {
-                document: existing,
-                jobs: [],
-            };
+            const existing = await (folderId != null ? hashQuery.where('folder_id', '=', folderId) : hashQuery.where('folder_id', 'is', null)).executeTakeFirst();
+
+            if (existing) {
+                return {
+                    document: existing,
+                    jobs: [],
+                };
+            }
         }
 
         // Determine if we can generate thumbnails for this file type
@@ -131,7 +235,7 @@ export class UploadService {
             folder_id: folderId ?? null,
             file_path: processed.storagePath,
             file_hash: processed.hash,
-            original_filename: file.filename,
+            original_filename: displayName,
             mime_type: mimeType,
             size_bytes: file.buffer.length,
             width: processed.width,

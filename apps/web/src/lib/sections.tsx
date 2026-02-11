@@ -1,4 +1,5 @@
 import type { Folder, FolderWithChildren } from '@reverie/shared';
+import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
 import { toast } from 'sonner';
@@ -216,12 +217,27 @@ async function reorderSectionsWithAuth(authFetch: AuthFetch, updates: Array<{ id
     if (!response.ok) throw new Error('Failed to reorder sections');
 }
 
-async function moveDocumentsWithAuth(authFetch: AuthFetch, data: { document_ids: string[]; folder_id: string }): Promise<void> {
+export interface MoveDocumentsParams {
+    document_ids: string[];
+    folder_id: string;
+    conflict_strategy?: 'replace' | 'keep_both';
+}
+
+async function moveDocumentsWithAuth(authFetch: AuthFetch, data: MoveDocumentsParams): Promise<void> {
+    const body: MoveDocumentsParams = {
+        document_ids: data.document_ids,
+        folder_id: data.folder_id,
+    };
+
+    if (data.conflict_strategy) {
+        body.conflict_strategy = data.conflict_strategy;
+    }
+
     const response = await authFetch(`${API_BASE}/documents/move`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
     });
 
     if (!response.ok) throw new Error('Failed to move documents');
@@ -237,10 +253,10 @@ export function useReorderSections() {
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
-            if (previous) {
-                const optimistic = applyReorderToTree(previous, updates);
-                queryClient.setQueryData(['sections', 'tree'], optimistic);
-            }
+            if (!previous) return { previous };
+
+            const optimistic = applyReorderToTree(previous, updates);
+            queryClient.setQueryData(['sections', 'tree'], optimistic);
 
             return { previous };
         },
@@ -329,36 +345,22 @@ export function useUpdateFolder() {
         mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
             updateFolderWithAuth(authFetch, id, data),
         onMutate: async ({ id, data }) => {
-            const hasOrderChange = data.parent_id !== undefined;
-            const hasMetadataChange = data.name !== undefined || data.description !== undefined || data.emoji !== undefined;
+            const { parent_id, ...patch } = data;
 
-            if (!hasOrderChange && !hasMetadataChange) return;
+            const transforms: Array<(tree: FolderWithChildren[]) => FolderWithChildren[]> = [];
+
+            if (parent_id !== undefined) transforms.push((t) => moveSectionInTree(t, id, parent_id ?? null));
+
+            if (Object.values(patch).some((v) => v !== undefined)) transforms.push((t) => patchFolderInTree(t, id, patch));
+
+            if (transforms.length === 0) return;
 
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
             if (!previous) return { previous };
 
-            function applyOptimisticUpdate(tree: FolderWithChildren[]): FolderWithChildren[] {
-                let result = tree;
-
-                if (hasOrderChange) {
-                    result = moveSectionInTree(result, id, data.parent_id ?? null);
-                }
-
-                if (hasMetadataChange) {
-                    result = patchFolderInTree(result, id, {
-                        ...(data.name !== undefined && { name: data.name }),
-                        ...(data.description !== undefined && { description: data.description }),
-                        ...(data.emoji !== undefined && { emoji: data.emoji }),
-                    });
-                }
-
-                return result;
-            }
-
-            const optimistic = applyOptimisticUpdate(previous);
-            queryClient.setQueryData(['sections', 'tree'], optimistic);
+            queryClient.setQueryData(['sections', 'tree'], transforms.reduce((tree, fn) => fn(tree), previous));
 
             return { previous };
         },
@@ -393,17 +395,30 @@ export function useMoveDocuments() {
     const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (data: { document_ids: string[]; folder_id: string }) => moveDocumentsWithAuth(authFetch, data),
+        mutationFn: (data: MoveDocumentsParams) => moveDocumentsWithAuth(authFetch, data),
         onMutate: async ({ document_ids, folder_id }) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
-            const previous = queryClient.getQueriesData<DocumentsResponse>({ queryKey: ['documents'] });
-            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | undefined) => {
+            const previous = queryClient.getQueriesData<DocumentsResponse | InfiniteData<DocumentsResponse>>({ queryKey: ['documents'] });
+            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | InfiniteData<DocumentsResponse> | undefined) => {
                 if (!old) return old;
 
-                return {
-                    ...old,
-                    items: old.items.map((doc) => (document_ids.includes(doc.id) ? { ...doc, folder_id } : doc)),
-                };
+                const infinite = old as { pages?: DocumentsResponse[] };
+
+                if (infinite.pages) {
+                    return produce(old as InfiniteData<DocumentsResponse>, (draft) => {
+                        for (const page of draft.pages) {
+                            for (const doc of page.items) {
+                                if (document_ids.includes(doc.id)) doc.folder_id = folder_id;
+                            }
+                        }
+                    });
+                }
+
+                return produce(old as DocumentsResponse, (draft) => {
+                    for (const doc of draft.items) {
+                        if (document_ids.includes(doc.id)) doc.folder_id = folder_id;
+                    }
+                });
             });
 
             return { previous };

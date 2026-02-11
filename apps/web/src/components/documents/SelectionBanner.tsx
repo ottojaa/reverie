@@ -2,10 +2,13 @@ import { Button } from '@/components/ui/button';
 import { useDeleteDocuments } from '@/lib/api/documents';
 import { useConfirm } from '@/lib/confirm';
 import { useSelection } from '@/lib/selection';
+import { useLocation } from '@tanstack/react-router';
 import { Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useEffect } from 'react';
 
 export function SelectionBanner() {
+    const { pathname } = useLocation();
     const { selectedIds, clear } = useSelection();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
@@ -27,6 +30,10 @@ export function SelectionBanner() {
             onSuccess: () => clear(),
         });
     };
+
+    useEffect(() => {
+        clear();
+    }, [pathname]);
 
     return (
         <AnimatePresence>

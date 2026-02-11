@@ -8,16 +8,17 @@ import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useRef } from 'react';
 import { Loader2, Play, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useEffect, useRef } from 'react';
 
 const DOUBLE_TAP_MS = 400;
 
 interface DocumentCardProps {
     document: Document;
-    /** Ordered list of document ids (e.g. from grid); required for shift+click range selection */
     orderedIds?: string[];
+    shouldPulse?: boolean;
+    onPulseComplete?: () => void;
     className?: string;
 }
 
@@ -51,7 +52,6 @@ function formatDate(dateString: string): string {
  * Get thumbnail URL for a document (uses pre-signed URLs from API)
  */
 function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
-    // Use pre-signed URLs from the API response
     if (document.thumbnail_urls) {
         const url = document.thumbnail_urls[size];
 
@@ -66,7 +66,9 @@ function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): s
     return null;
 }
 
-export function DocumentCard({ document, orderedIds = [], className }: DocumentCardProps) {
+const PULSE_DURATION_MS = 2000;
+
+export function DocumentCard({ document, orderedIds = [], shouldPulse, onPulseComplete, className }: DocumentCardProps) {
     const selection = useSelectionOptional();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
@@ -87,6 +89,17 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
             documentIds,
         },
     });
+
+    const hasPulsedRef = useRef(false);
+
+    useEffect(() => {
+        if (!shouldPulse || !onPulseComplete || hasPulsedRef.current) return;
+
+        hasPulsedRef.current = true;
+        const timer = setTimeout(onPulseComplete, PULSE_DURATION_MS);
+
+        return () => clearTimeout(timer);
+    }, [shouldPulse, onPulseComplete]);
 
     const isProcessing = document.ocr_status === 'processing' || document.thumbnail_status === 'processing';
     const isPending = document.ocr_status === 'pending' || document.thumbnail_status === 'pending';
@@ -159,100 +172,120 @@ export function DocumentCard({ document, orderedIds = [], className }: DocumentC
             <ContextMenuTrigger asChild>
                 <div ref={setNodeRef} style={{ touchAction: 'none' }} {...attributes} {...listeners}>
                     <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} onDoubleClick={handleDoubleClick} draggable={false}>
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: isDragging ? 0.5 : 1, scale: isDragging ? 0.98 : 1 }}
-                            whileHover={isDragging ? {} : { scale: 1.02, y: -2 }}
-                            transition={{ duration: 0.2 }}
-                            className={cn(
-                                'group relative overflow-hidden rounded-md bg-card transition-shadow',
-                                'border border-border/50 shadow-md hover:shadow-lg',
-                                'dark:border-border dark:shadow-none dark:hover:shadow-none',
-                                isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background dark:ring-offset-background',
-                                isDragging && 'cursor-grabbing',
-                                className,
-                            )}
-                        >
-                            {isSelected && (
-                                <div className="z-10 pointer-events-none absolute inset-0 rounded-md bg-primary/12 dark:bg-primary/15" aria-hidden />
-                            )}
-                            {/* Thumbnail / Icon area */}
-                            <div className="relative aspect-4/3 overflow-hidden bg-muted">
-                                {hasThumbnail && thumbnailUrl ? (
-                                    <>
-                                        {/* Blurhash placeholder */}
-                                        {document.thumbnail_blurhash && (
-                                            <div
-                                                className="absolute inset-0 bg-cover bg-center"
-                                                style={{
-                                                    // Blurhash would be decoded here with a library
-                                                    // For now, use a gradient as placeholder
-                                                    background: `linear-gradient(135deg, ${fileConfig.bgColor}, ${fileConfig.bgColor})`,
-                                                }}
+                        <div className="relative">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: isDragging ? 0.5 : 1, scale: isDragging ? 0.98 : 1 }}
+                                whileHover={isDragging ? {} : { scale: 1.02, y: -2 }}
+                                transition={{ duration: 0.2 }}
+                                className={cn(
+                                    'group relative overflow-hidden rounded-md bg-card transition-shadow',
+                                    'border border-border/50 shadow-md hover:shadow-lg',
+                                    'dark:border-border dark:shadow-none dark:hover:shadow-none',
+                                    isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background dark:ring-offset-background',
+                                    isDragging && 'cursor-grabbing',
+                                    className,
+                                )}
+                            >
+                                {isSelected && (
+                                    <div className="z-10 pointer-events-none absolute inset-0 rounded-md bg-primary/12 dark:bg-primary/15" aria-hidden />
+                                )}
+                                {/* Thumbnail / Icon area */}
+                                <div className="relative aspect-4/3 overflow-hidden bg-muted">
+                                    {hasThumbnail && thumbnailUrl ? (
+                                        <>
+                                            {/* Blurhash placeholder */}
+                                            {document.thumbnail_blurhash && (
+                                                <div
+                                                    className="absolute inset-0 bg-cover bg-center"
+                                                    style={{
+                                                        // Blurhash would be decoded here with a library
+                                                        // For now, use a gradient as placeholder
+                                                        background: `linear-gradient(135deg, ${fileConfig.bgColor}, ${fileConfig.bgColor})`,
+                                                    }}
+                                                />
+                                            )}
+                                            {/* Actual thumbnail */}
+                                            <img
+                                                src={thumbnailUrl}
+                                                alt={document.original_filename}
+                                                className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
+                                                loading="lazy"
                                             />
-                                        )}
-                                        {/* Actual thumbnail */}
-                                        <img
-                                            src={thumbnailUrl}
-                                            alt={document.original_filename}
-                                            className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
-                                            loading="lazy"
-                                        />
-                                        {/* Play icon overlay for videos */}
-                                        {document.mime_type.startsWith('video/') && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                                                <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
-                                                    <Play className="size-8 text-foreground fill-foreground" />
+                                            {/* Play icon overlay for videos */}
+                                            {document.mime_type.startsWith('video/') && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                    <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
+                                                        <Play className="size-8 text-foreground fill-foreground" />
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    /* File type icon for non-thumbnail files */
-                                    <div className={cn('flex h-full w-full items-center justify-center', fileConfig.bgColor)}>
-                                        <FileTypeIcon mimeType={document.mime_type} size="xl" className="opacity-80" />
-                                    </div>
-                                )}
+                                            )}
+                                        </>
+                                    ) : (
+                                        /* File type icon for non-thumbnail files */
+                                        <div className={cn('flex h-full w-full items-center justify-center', fileConfig.bgColor)}>
+                                            <FileTypeIcon mimeType={document.mime_type} size="xl" className="opacity-80" />
+                                        </div>
+                                    )}
 
-                                {/* File extension badge */}
-                                {extension && (
-                                    <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white backdrop-blur-sm">
-                                        .{extension.toLowerCase()}
-                                    </div>
-                                )}
+                                    {/* File extension badge */}
+                                    {extension && (
+                                        <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white backdrop-blur-sm">
+                                            .{extension.toLowerCase()}
+                                        </div>
+                                    )}
 
-                                {/* Processing overlay */}
-                                {(isProcessing || isPending) && (
-                                    <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
-                                    >
+                                    {/* Processing overlay */}
+                                    {(isProcessing || isPending) && (
                                         <motion.div
-                                            animate={isProcessing ? { rotate: 360 } : {}}
-                                            transition={isProcessing ? { duration: 2, repeat: Infinity, ease: 'linear' } : {}}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
                                         >
-                                            <Loader2 className={cn('size-8 text-white', isProcessing && 'animate-spin')} />
+                                            <motion.div
+                                                animate={isProcessing ? { rotate: 360 } : {}}
+                                                transition={isProcessing ? { duration: 2, repeat: Infinity, ease: 'linear' } : {}}
+                                            >
+                                                <Loader2 className={cn('size-8 text-white', isProcessing && 'animate-spin')} />
+                                            </motion.div>
+                                            <span className="absolute bottom-2 left-2 text-xs font-medium text-white">
+                                                {isProcessing ? 'Processing...' : 'Pending...'}
+                                            </span>
                                         </motion.div>
-                                        <span className="absolute bottom-2 left-2 text-xs font-medium text-white">
-                                            {isProcessing ? 'Processing...' : 'Pending...'}
-                                        </span>
-                                    </motion.div>
-                                )}
-                            </div>
-
-                            {/* File info */}
-                            <div className="p-3">
-                                <p className="truncate text-sm font-medium" title={document.original_filename}>
-                                    {document.original_filename}
-                                </p>
-                                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span>{formatFileSize(document.size_bytes)}</span>
-                                    <span>•</span>
-                                    <span>{formatDate(document.created_at)}</span>
+                                    )}
                                 </div>
-                            </div>
-                        </motion.div>
+
+                                {/* File info */}
+                                <div className="p-3">
+                                    <p className="truncate text-sm font-medium" title={document.original_filename}>
+                                        {document.original_filename}
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{formatFileSize(document.size_bytes)}</span>
+                                        <span>•</span>
+                                        <span>{formatDate(document.created_at)}</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                            {/* Skeleton-style shimmer wave for newly uploaded documents */}
+                            {shouldPulse && (
+                                <motion.div className="pointer-events-none absolute inset-0 z-11 overflow-hidden rounded-md" aria-hidden>
+                                    <motion.div
+                                        className="absolute inset-y-0 w-[60%]"
+                                        style={{
+                                            background:
+                                                'linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--primary) 45%, transparent) 50%, transparent 100%)',
+                                        }}
+                                        initial={{ x: '-70%' }}
+                                        animate={{ x: '170%' }}
+                                        transition={{
+                                            duration: PULSE_DURATION_MS / 1000,
+                                            ease: [0.32, 0.72, 0, 1],
+                                        }}
+                                    />
+                                </motion.div>
+                            )}
+                        </div>
                     </Link>
                 </div>
             </ContextMenuTrigger>

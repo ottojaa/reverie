@@ -1,7 +1,7 @@
 import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { getFolderService } from '../../services/folder.service';
-import { getUploadService, type UploadedFile } from '../../services/upload.service';
+import { getUploadService, type ConflictStrategy, type UploadedFile } from '../../services/upload.service';
 
 const uploadService = getUploadService();
 const folderService = getFolderService();
@@ -30,6 +30,7 @@ export default async function (fastify: FastifyInstance) {
             const files: UploadedFile[] = [];
             let folderId: string | undefined;
             let sessionId: string | undefined;
+            let conflictStrategy: ConflictStrategy | undefined;
 
             for await (const part of parts) {
                 if (part.type === 'file') {
@@ -43,6 +44,9 @@ export default async function (fastify: FastifyInstance) {
                     folderId = String(part.value);
                 } else if (part.fieldname === 'session_id' && part.value) {
                     sessionId = String(part.value);
+                } else if (part.fieldname === 'conflict_strategy' && part.value) {
+                    const v = String(part.value);
+                    if (v === 'replace' || v === 'keep_both') conflictStrategy = v;
                 }
             }
 
@@ -74,7 +78,7 @@ export default async function (fastify: FastifyInstance) {
                 }
             }
 
-            const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId);
+            const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy);
 
             return {
                 session_id: result.sessionId,

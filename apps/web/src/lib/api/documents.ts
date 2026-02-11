@@ -22,6 +22,29 @@ interface UseDocumentsOptions {
 
 type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
+export interface CheckDuplicatesResult {
+    duplicates: string[];
+}
+
+export async function checkDuplicates(
+    authFetch: AuthFetch,
+    folderId: string,
+    filenames: string[],
+): Promise<CheckDuplicatesResult> {
+    if (filenames.length === 0) return { duplicates: [] };
+
+    const response = await authFetch(`${API_BASE}/documents/check-duplicates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ folder_id: folderId, filenames }),
+    });
+
+    if (!response.ok) throw new Error('Failed to check duplicates');
+
+    return response.json();
+}
+
 async function fetchDocumentsWithAuth(authFetch: AuthFetch, options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
     const params = new URLSearchParams();
 

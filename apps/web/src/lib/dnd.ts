@@ -6,7 +6,7 @@ export const dndMeasuring = {
     },
 };
 
-const activationConstraint = { delay: 200, tolerance: 10 };
+const activationConstraint = { delay: 200, tolerance: 2 };
 
 /** No-op keyboard coordinate getter so sensors array length stays 3 (matches tree's Pointer + Touch + Keyboard). */
 function noopKeyboardCoordinateGetter() {

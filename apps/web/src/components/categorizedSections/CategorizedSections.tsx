@@ -1,5 +1,7 @@
 import type { SortableTreeHandlers } from '@/components/layout/Layout';
 import { SectionIcon } from '@/components/ui/SectionIcon';
+import { checkDuplicates } from '@/lib/api/documents';
+import { useAuthenticatedFetch } from '@/lib/auth';
 import { FOLDER_DROP_PREFIX, useMoveDocuments } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
 import type { DragEndEvent, DragOverEvent, DragStartEvent, DropAnimation } from '@dnd-kit/core';
@@ -7,7 +9,8 @@ import { defaultDropAnimation, DragOverlay } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { FolderWithChildren } from '@reverie/shared';
+import type { Document, FolderWithChildren } from '@reverie/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { produce } from 'immer';
 import { Plus } from 'lucide-react';
@@ -15,6 +18,7 @@ import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { DuplicateOptionsDialog } from '../upload/DuplicateOptionsDialog';
 import { categoryIdToSortableId, CategoryItem, sortableIdToCategoryId } from './CategoryItem';
 import { SectionItem } from './SectionItem';
 
@@ -94,9 +98,16 @@ export function CategorizedSections({
     }, [sections, activeDragData]);
 
     const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
+    const [moveDuplicateState, setMoveDuplicateState] = useState<{
+        duplicateFilenames: string[];
+        documentIds: string[];
+        folderId: string;
+    } | null>(null);
 
     const moveDocuments = useMoveDocuments();
     const selection = useSelectionOptional();
+    const queryClient = useQueryClient();
+    const authFetch = useAuthenticatedFetch();
 
     // Sortable IDs for categories (prefixed) and sections
     const categoryIds = useMemo(() => categories.map((c) => categoryIdToSortableId(c.id)), [categories]);
@@ -182,19 +193,57 @@ export function CategorizedSections({
         setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
     }
 
-    function handleDocumentDropEnd(activeData: { type: 'documents'; documentIds: string[] }, over: { id: string | number; data?: { current?: unknown } }) {
+    async function handleDocumentDropEnd(
+        activeData: { type: 'documents'; documentIds: string[] },
+        over: { id: string | number; data?: { current?: unknown } },
+    ) {
         const targetSectionId = (over.data?.current as { type?: string })?.type === 'section' ? String(over.id) : null;
 
         if (!targetSectionId || activeData.documentIds.length === 0) return;
 
+        const filenames = getDocumentFilenamesFromCache(queryClient, activeData.documentIds);
+
+        if (filenames.length === 0) {
+            moveDocuments.mutate(
+                { document_ids: activeData.documentIds, folder_id: targetSectionId },
+                {
+                    onSuccess: () => {
+                        selection?.clear();
+                        toast.success(
+                            activeData.documentIds.length === 1 ? '1 file moved successfully' : `${activeData.documentIds.length} files moved successfully`,
+                        );
+                    },
+                },
+            );
+
+            return;
+        }
+
+        try {
+            const { duplicates } = await checkDuplicates(authFetch, targetSectionId, filenames);
+
+            if (duplicates.length > 0) {
+                setMoveDuplicateState({
+                    duplicateFilenames: duplicates,
+                    documentIds: activeData.documentIds,
+                    folderId: targetSectionId,
+                });
+            } else {
+                doMove(activeData.documentIds, targetSectionId);
+            }
+        } catch {
+            toast.error('Failed to check for duplicates');
+            doMove(activeData.documentIds, targetSectionId);
+        }
+    }
+
+    function doMove(documentIds: string[], folderId: string, conflictStrategy?: 'replace' | 'keep_both') {
         moveDocuments.mutate(
-            { document_ids: activeData.documentIds, folder_id: targetSectionId },
+            { document_ids: documentIds, folder_id: folderId, ...(conflictStrategy && { conflict_strategy: conflictStrategy }) },
             {
                 onSuccess: () => {
                     selection?.clear();
-                    toast.success(
-                        activeData.documentIds.length === 1 ? '1 file moved successfully' : `${activeData.documentIds.length} files moved successfully`,
-                    );
+                    toast.success(documentIds.length === 1 ? '1 file moved successfully' : `${documentIds.length} files moved successfully`);
                 },
             },
         );
@@ -382,11 +431,44 @@ export function CategorizedSections({
                 </DragOverlay>,
                 document.body,
             )}
+
+            <DuplicateOptionsDialog
+                title="File exists in destination"
+                open={moveDuplicateState !== null}
+                duplicateFilenames={moveDuplicateState?.duplicateFilenames ?? []}
+                action="move"
+                onConfirm={(strategy) => {
+                    if (moveDuplicateState) {
+                        doMove(moveDuplicateState.documentIds, moveDuplicateState.folderId, strategy);
+                        setMoveDuplicateState(null);
+                    }
+                }}
+                onCancel={() => setMoveDuplicateState(null)}
+            />
         </>
     );
 }
 
 // ---- Helpers ----
+
+function getDocumentFilenamesFromCache(queryClient: ReturnType<typeof useQueryClient>, documentIds: string[]): string[] {
+    const idToFilename = new Map<string, string>();
+    const queries = queryClient.getQueriesData<{ items?: Document[]; pages?: { items: Document[] }[] }>({ queryKey: ['documents'] });
+
+    for (const [, data] of queries) {
+        if (!data) continue;
+
+        const items: Document[] = 'pages' in data && Array.isArray(data.pages) ? data.pages.flatMap((p) => p.items ?? []) : (data.items ?? []);
+
+        for (const doc of items) {
+            if (!idToFilename.has(doc.id)) {
+                idToFilename.set(doc.id, doc.original_filename);
+            }
+        }
+    }
+
+    return documentIds.map((id) => idToFilename.get(id) ?? '').filter(Boolean);
+}
 
 function getDocumentDropHighlightId(overId: string, overData: unknown): string | null {
     const isOverSection = overData && typeof overData === 'object' && 'type' in overData && overData.type === 'section';

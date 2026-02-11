@@ -35,6 +35,35 @@ export function connectSocket(): Socket {
 }
 
 /**
+ * Ensure socket is connected before proceeding. Resolves when connected.
+ * Use before subscribe + upload to avoid race where job events are emitted
+ * before the client has joined the session room.
+ */
+export function ensureSocketConnected(): Promise<void> {
+    const s = getSocket();
+
+    if (s.connected) {
+        return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+        const onConnect = () => {
+            s.off('connect_error', onError);
+            resolve();
+        };
+
+        const onError = (err: Error) => {
+            s.off('connect', onConnect);
+            reject(err);
+        };
+
+        s.once('connect', onConnect);
+        s.once('connect_error', onError);
+        s.connect();
+    });
+}
+
+/**
  * Disconnect from the WebSocket server
  */
 export function disconnectSocket(): void {

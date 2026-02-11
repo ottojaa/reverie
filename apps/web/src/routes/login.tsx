@@ -6,8 +6,8 @@ import { Input } from '../components/ui/input';
 import { useAuth } from '../lib/auth';
 
 export const Route = createFileRoute('/login')({
-    validateSearch: (search: Record<string, unknown>) => ({
-        error: search.error as string | undefined,
+    validateSearch: (search?: { error?: string } | undefined) => ({
+        error: search?.error as string | undefined,
     }),
     component: LoginPage,
 });

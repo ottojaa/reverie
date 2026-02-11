@@ -79,7 +79,7 @@ export default async function (fastify: FastifyInstance) {
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/auth',
-                maxAge: 7 * 24 * 60 * 60, // 7 days
+                maxAge: 90 * 24 * 60 * 60, // 90 days
             });
 
             return {

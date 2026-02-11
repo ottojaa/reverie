@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 /**
  * Upload files to the server
  * @param sessionId - Client-generated session ID; subscribe to WebSocket with this before calling so job events are received
+ * @param conflictStrategy - When duplicates exist: 'replace' or 'keep_both' (from duplicate options dialog)
  */
 export async function uploadFiles(
     files: File[],
@@ -12,10 +13,11 @@ export async function uploadFiles(
     options: {
         folderId?: string;
         sessionId: string;
+        conflictStrategy?: 'replace' | 'keep_both';
         onProgress?: (loaded: number, total: number) => void;
     },
 ): Promise<UploadApiResult> {
-    const { folderId, sessionId, onProgress } = options;
+    const { folderId, sessionId, conflictStrategy, onProgress } = options;
     const formData = new FormData();
 
     for (const file of files) {
@@ -27,6 +29,10 @@ export async function uploadFiles(
     }
 
     formData.append('session_id', sessionId);
+
+    if (conflictStrategy) {
+        formData.append('conflict_strategy', conflictStrategy);
+    }
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();

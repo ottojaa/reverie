@@ -1,7 +1,7 @@
 import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../auth';
-import { connectSocket, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
+import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFiles } from './uploadApi';
 
@@ -319,8 +319,8 @@ interface UploadContextType {
     retryFailed: () => void;
     /** Retry a specific file */
     retryFile: (fileId: string) => void;
-    /** Start uploading queued files */
-    startUpload: (folderId?: string) => Promise<void>;
+    /** Start uploading queued files (optionally with conflict strategy when duplicates were detected) */
+    startUpload: (folderId?: string, conflictStrategy?: 'replace' | 'keep_both') => Promise<void>;
     /** Reset all state */
     reset: () => void;
     /** Computed stats */
@@ -335,6 +335,12 @@ interface UploadContextType {
     /** Byte-level upload progress (for phase indicator and smooth progress bar) */
     uploadBytesLoaded: number;
     uploadBytesTotal: number;
+    /** Document IDs that just completed upload – shown with pulse in grid until dismissed */
+    recentlyCompletedDocumentIds: string[];
+    /** Record document IDs when upload completes (called from modal) */
+    recordCompletedDocumentIds: (ids: string[]) => void;
+    /** Mark pulse as seen for a document (removes from set) */
+    markPulseComplete: (id: string) => void;
 }
 
 const UploadContext = createContext<UploadContextType | null>(null);
@@ -349,8 +355,18 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     const sessionIdRef = useRef<string | null>(null);
     const subscribedDocumentIdsRef = useRef<Set<string>>(new Set());
 
+    const [recentlyCompletedDocumentIds, setRecentlyCompletedDocumentIds] = useState<string[]>([]);
+
     const openModal = useCallback(() => setIsModalOpen(true), []);
     const closeModal = useCallback(() => setIsModalOpen(false), []);
+
+    const recordCompletedDocumentIds = useCallback((ids: string[]) => {
+        setRecentlyCompletedDocumentIds(ids);
+    }, []);
+
+    const markPulseComplete = useCallback((id: string) => {
+        setRecentlyCompletedDocumentIds((prev) => prev.filter((x) => x !== id));
+    }, []);
 
     const addFiles = useCallback((files: File[]) => {
         if (files.length === 0) return;
@@ -396,7 +412,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const startUpload = useCallback(
-        async (folderId?: string) => {
+        async (folderId?: string, conflictStrategy?: 'replace' | 'keep_both') => {
             if (!accessToken) {
                 throw new Error('Not authenticated');
             }
@@ -407,7 +423,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            // Generate session ID and subscribe to WebSocket BEFORE upload so we don't miss job events
+            // Generate session ID and subscribe to WebSocket BEFORE upload so we don't miss job events.
+            // Must await connection: fast jobs can complete before client joins session room otherwise.
             const sessionId = crypto.randomUUID();
             jobEventsCleanupRef.current();
 
@@ -416,7 +433,13 @@ export function UploadProvider({ children }: { children: ReactNode }) {
             }
 
             sessionIdRef.current = sessionId;
-            connectSocket();
+
+            try {
+                await ensureSocketConnected();
+            } catch (err) {
+                throw new Error(err instanceof Error ? err.message : 'WebSocket connection failed');
+            }
+
             subscribeToSession(sessionId);
             jobEventsCleanupRef.current = onJobEvents((event) => {
                 dispatch({ type: 'JOB_EVENT', event });
@@ -431,6 +454,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                     {
                         ...(folderId && { folderId }),
                         sessionId,
+                        ...(conflictStrategy && { conflictStrategy }),
                         onProgress: (loaded, total) => {
                             const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
                             dispatch({ type: 'UPLOAD_PROGRESS', progress, loaded, total });
@@ -528,6 +552,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         stats,
         uploadBytesLoaded: state.uploadBytesLoaded,
         uploadBytesTotal: state.uploadBytesTotal,
+        recentlyCompletedDocumentIds,
+        recordCompletedDocumentIds,
+        markPulseComplete,
     };
 
     return <UploadContext.Provider value={value}>{children}</UploadContext.Provider>;

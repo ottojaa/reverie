@@ -1,5 +1,7 @@
 import {
     BatchDeleteDocumentsSchema,
+    CheckDuplicatesRequestSchema,
+    CheckDuplicatesResponseSchema,
     DocumentListQuerySchema,
     DocumentSchema,
     MoveDocumentsRequestSchema,
@@ -13,6 +15,7 @@ import { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
+import { getDeduplicatedFilename } from '../../utils/filename';
 import { type Document as DbDocument } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
@@ -124,6 +127,44 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
+    // Check for duplicate filenames in a folder (requires authentication)
+    fastify.post<{
+        Body: { folder_id: string; filenames: string[] };
+        Reply: { duplicates: string[] };
+    }>(
+        '/documents/check-duplicates',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Check which filenames already exist in the given folder',
+                body: CheckDuplicatesRequestSchema,
+                response: {
+                    200: CheckDuplicatesResponseSchema,
+                },
+            },
+        },
+        async function (request) {
+            const userId = request.user.id;
+            const { folder_id, filenames } = request.body;
+
+            if (filenames.length === 0) {
+                return { duplicates: [] };
+            }
+
+            const existing = await db
+                .selectFrom('documents')
+                .select('original_filename')
+                .where('folder_id', '=', folder_id)
+                .where('user_id', '=', userId)
+                .where('original_filename', 'in', filenames)
+                .execute();
+
+            const duplicates = [...new Set(existing.map((r) => r.original_filename))];
+
+            return { duplicates };
+        },
+    );
+
     // Move documents to a section (requires authentication)
     fastify.patch<{
         Body: MoveDocumentsRequest;
@@ -141,7 +182,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const { document_ids, folder_id } = request.body;
+            const { document_ids, folder_id, conflict_strategy } = request.body;
 
             const folder = await folderService.getFolder(folder_id, userId);
 
@@ -157,12 +198,45 @@ export default async function (fastify: FastifyInstance) {
                 return reply.status(204).send();
             }
 
-            await db
-                .updateTable('documents')
-                .set({ folder_id, updated_at: new Date() })
+            const docsToMove = await db
+                .selectFrom('documents')
+                .select(['id', 'original_filename'])
                 .where('id', 'in', document_ids)
                 .where('user_id', '=', userId)
+                .orderBy('id')
                 .execute();
+
+            if (docsToMove.length === 0) {
+                return reply.status(204).send();
+            }
+
+            if (conflict_strategy === 'replace') {
+                const filenames = docsToMove.map((d) => d.original_filename);
+                await uploadService.deleteDocumentsInFolderByFilenames(userId, folder_id, filenames);
+            }
+
+            if (conflict_strategy === 'keep_both') {
+                const existingFilenames = await uploadService.getFilenamesInFolder(userId, folder_id);
+                const taken = new Set(existingFilenames);
+
+                for (const doc of docsToMove) {
+                    const newName = getDeduplicatedFilename([...taken], doc.original_filename);
+                    taken.add(newName);
+                    await db
+                        .updateTable('documents')
+                        .set({ folder_id, original_filename: newName, updated_at: new Date() })
+                        .where('id', '=', doc.id)
+                        .where('user_id', '=', userId)
+                        .execute();
+                }
+            } else {
+                await db
+                    .updateTable('documents')
+                    .set({ folder_id, updated_at: new Date() })
+                    .where('id', 'in', document_ids)
+                    .where('user_id', '=', userId)
+                    .execute();
+            }
 
             reply.status(204).send();
         },

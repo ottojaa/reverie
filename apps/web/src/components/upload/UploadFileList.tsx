@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useUpload } from '@/lib/upload';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { AlertCircle, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { UploadFileItem } from './UploadFileItem';
 
@@ -18,7 +18,6 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
     const hasQueued = stats.queued > 0;
     const hasCompleted = stats.complete > 0;
     const hasFailed = stats.error > 0;
-    const allComplete = files.length > 0 && stats.complete === files.length;
 
     return (
         <div className="mt-6 space-y-4">
@@ -43,17 +42,6 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1 text-sm text-destructive">
                             <AlertCircle className="size-4" />
                             {stats.error} failed
-                        </motion.div>
-                    )}
-
-                    {allComplete && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="flex items-center gap-1 text-sm text-green-600"
-                        >
-                            <CheckCircle2 className="size-4" />
-                            All complete!
                         </motion.div>
                     )}
                 </div>

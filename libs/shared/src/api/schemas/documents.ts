@@ -110,9 +110,23 @@ export const BatchDeleteDocumentsSchema = z.object({
 
 export type BatchDeleteDocuments = z.infer<typeof BatchDeleteDocumentsSchema>;
 
+export const ConflictStrategyEnum = z.enum(['replace', 'keep_both']);
+export type ConflictStrategy = z.infer<typeof ConflictStrategyEnum>;
+
+export const CheckDuplicatesRequestSchema = z.object({
+    folder_id: UuidSchema,
+    filenames: z.array(z.string().min(1)).min(1),
+});
+export type CheckDuplicatesRequest = z.infer<typeof CheckDuplicatesRequestSchema>;
+
+export const CheckDuplicatesResponseSchema = z.object({
+    duplicates: z.array(z.string()),
+});
+export type CheckDuplicatesResponse = z.infer<typeof CheckDuplicatesResponseSchema>;
+
 export const MoveDocumentsRequestSchema = z.object({
     document_ids: z.array(UuidSchema).min(1).max(100),
     folder_id: UuidSchema,
+    conflict_strategy: ConflictStrategyEnum.optional(),
 });
-
 export type MoveDocumentsRequest = z.infer<typeof MoveDocumentsRequestSchema>;
