@@ -154,7 +154,6 @@ export function UploadModal() {
     const { percent, completedCount, total, phase, phaseLabel } = useOverallProgress();
 
     const hasQueued = stats.queued > 0;
-    const hasCompleted = stats.complete > 0;
     const hasFailed = stats.error > 0;
     const allComplete = total > 0 && stats.complete === total;
 

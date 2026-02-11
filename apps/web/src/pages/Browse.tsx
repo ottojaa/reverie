@@ -5,6 +5,7 @@ import { UploadFAB } from '@/components/upload';
 import { useInfiniteDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
+import { useSelectionOptional } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { FolderOpen, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +20,23 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     const section = useCurrentSection(sectionId);
     const { openEdit } = useSectionEdit();
     const sentinelRef = useRef<HTMLDivElement>(null);
+    const selection = useSelectionOptional();
+
+    useEffect(() => {
+        if (!selection) return;
+
+        const handler = (e: MouseEvent) => {
+            const target = e.target instanceof Node ? e.target : null;
+
+            if (target && (target as Element).closest?.('[data-document-card]')) return;
+
+            selection.clear();
+        };
+
+        document.addEventListener('click', handler);
+
+        return () => document.removeEventListener('click', handler);
+    }, [selection]);
 
     const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteDocuments({
         ...(sectionId && { folderId: sectionId }),

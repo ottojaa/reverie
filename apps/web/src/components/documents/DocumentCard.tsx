@@ -2,6 +2,8 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { useDeleteDocuments } from '@/lib/api/documents';
 import { useConfirm } from '@/lib/confirm';
+import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { useLongPress } from '@/lib/hooks/useLongPress';
 import { useSelectionOptional } from '@/lib/selection';
 import { cn } from '@/lib/utils';
 import { useDraggable } from '@dnd-kit/core';
@@ -10,9 +12,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Loader2, Play, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 const DOUBLE_TAP_MS = 400;
+const LONG_PRESS_MS = 450;
 
 interface DocumentCardProps {
     document: Document;
@@ -74,9 +77,22 @@ export function DocumentCard({ document, orderedIds = [], shouldPulse, onPulseCo
     const deleteDocuments = useDeleteDocuments();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const isMobile = useIsMobile();
     const lastTapRef = useRef<{ id: string; time: number } | null>(null);
+    const longPressFiredRef = useRef(false);
     const isSelected = selection?.isSelected(document.id) ?? false;
     const selectedIds = selection?.selectedIds ?? new Set<string>();
+    const inSelectionMode = selectedIds.size > 0;
+
+    const handleLongPress = useCallback(() => {
+        longPressFiredRef.current = true;
+        selection?.selectOnly(document.id);
+    }, [document.id, selection]);
+
+    const longPressHandlers = useLongPress(handleLongPress, {
+        threshold: LONG_PRESS_MS,
+        enabled: isMobile,
+    });
 
     // When dragging a selected card, drag all selected documents
     // When dragging an unselected card, drag just that one
@@ -88,6 +104,7 @@ export function DocumentCard({ document, orderedIds = [], shouldPulse, onPulseCo
             type: 'documents' as const,
             documentIds,
         },
+        disabled: isMobile,
     });
 
     const hasPulsedRef = useRef(false);
@@ -110,6 +127,46 @@ export function DocumentCard({ document, orderedIds = [], shouldPulse, onPulseCo
     const thumbnailUrl = getThumbnailUrl(document);
 
     const handleClick = (e: React.MouseEvent) => {
+        if (isMobile) {
+            if (longPressFiredRef.current) {
+                longPressFiredRef.current = false;
+                e.preventDefault();
+                e.stopPropagation();
+
+                return;
+            }
+
+            if (!selection) return;
+
+            if (inSelectionMode) {
+                e.preventDefault();
+                e.stopPropagation();
+                selection.toggle(document.id);
+
+                return;
+            }
+
+            const now = Date.now();
+            const prev = lastTapRef.current;
+
+            if (prev?.id === document.id && now - prev.time < DOUBLE_TAP_MS) {
+                lastTapRef.current = null;
+                e.preventDefault();
+                e.stopPropagation();
+                queryClient.setQueryData(['document', document.id], document);
+                navigate({ to: '/document/$id', params: { id: document.id } });
+
+                return;
+            }
+
+            lastTapRef.current = { id: document.id, time: now };
+            e.preventDefault();
+            e.stopPropagation();
+
+            return;
+        }
+
+        // Desktop
         const isSimpleClick = !e.shiftKey && !e.metaKey && !e.ctrlKey;
 
         if (isSimpleClick) {
@@ -170,7 +227,15 @@ export function DocumentCard({ document, orderedIds = [], shouldPulse, onPulseCo
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div ref={setNodeRef} style={{ touchAction: 'none' }} {...attributes} {...listeners}>
+                <div
+                    ref={setNodeRef}
+                    data-document-card
+                    style={{ touchAction: 'none' }}
+                    {...attributes}
+                    {...listeners}
+                    {...longPressHandlers}
+                    onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
+                >
                     <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} onDoubleClick={handleDoubleClick} draggable={false}>
                         <div className="relative">
                             <motion.div
