@@ -1,12 +1,12 @@
-import { Worker, Job } from 'bullmq';
-import { getRedisConnectionOptions } from '../queues/redis';
-import { QUEUE_NAMES, QUEUE_CONCURRENCY } from '../queues/queue.config';
-import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
-import { addLlmJob } from '../queues/llm.queue';
-import { processJobWithTracking, createWorkerLogger, publishJobProgress } from './worker.utils';
+import { Job, Worker } from 'bullmq';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
-import { processDocument, shouldQueueLlmJob, isProcessableImage } from '../ocr';
+import { isProcessableImage, processDocument, shouldQueueLlmJob } from '../ocr';
+import { addLlmJob } from '../queues/llm.queue';
+import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
+import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
+import { getRedisConnectionOptions } from '../queues/redis';
+import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('OCR');
 
@@ -78,17 +78,37 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {
-            const llmJobId = `llm-${documentId}`;
+            await db
+                .updateTable('documents')
+                .set({ llm_status: 'pending' })
+                .where('id', '=', documentId)
+                .execute();
+
+            const createdJob = await db
+                .insertInto('processing_jobs')
+                .values({
+                    job_type: 'llm_summary',
+                    target_type: 'document',
+                    target_id: documentId,
+                    status: 'pending',
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
             await addLlmJob(
                 {
                     documentId,
                     sessionId: job.data.sessionId,
-                    // Type will be determined by eligibility check in LLM worker
                 },
-                llmJobId,
+                createdJob.id,
             );
-            logger.info('Queued LLM job', { documentId, llmJobId });
+            logger.info('Queued LLM job', { documentId, llmJobId: createdJob.id });
         } else {
+            await db
+                .updateTable('documents')
+                .set({ llm_status: 'skipped' })
+                .where('id', '=', documentId)
+                .execute();
             logger.info('Skipping LLM job', {
                 documentId,
                 reason: result.hasMeaningfulText ? 'low_confidence' : 'no_text',

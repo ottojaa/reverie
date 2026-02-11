@@ -416,7 +416,7 @@ export function CategorizedSections({
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{activeDragData.category.name}</span>
                         </div>
                     ) : activeDragData?.type === 'section' ? (
-                        <div className="flex items-center gap-2 rounded-md bg-sidebar-accent px-2 py-1.5 shadow-lg">
+                        <div className="flex opacity-30 items-center gap-2 rounded-md bg-sidebar-accent px-2 py-1.5 shadow-lg">
                             <SectionIcon value={activeDragData.section.emoji} />
                             <Link
                                 to="/browse/$sectionId"

@@ -365,6 +365,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const markPulseComplete = useCallback((id: string) => {
+        console.log('markPulseComplete', id);
         setRecentlyCompletedDocumentIds((prev) => prev.filter((x) => x !== id));
     }, []);
 

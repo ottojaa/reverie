@@ -23,22 +23,17 @@ export function useDocumentStatus(documentId: string | undefined) {
                 // Determine which status to update based on job type
                 // We don't have job_type in the event, so we update based on status
                 if (event.status === 'complete' || event.status === 'failed') {
-                    // Check if this is OCR or thumbnail based on current statuses
-                    if (old.ocr_status === 'processing') {
-                        updates.ocr_status = event.status;
-                    }
+                    if (old.ocr_status === 'processing') updates.ocr_status = event.status;
 
-                    if (old.thumbnail_status === 'processing') {
-                        updates.thumbnail_status = event.status;
-                    }
+                    if (old.thumbnail_status === 'processing') updates.thumbnail_status = event.status;
+
+                    if (old.llm_status === 'processing') updates.llm_status = event.status;
                 } else if (event.status === 'processing') {
-                    if (old.ocr_status === 'pending') {
-                        updates.ocr_status = 'processing';
-                    }
+                    if (old.ocr_status === 'pending') updates.ocr_status = 'processing';
 
-                    if (old.thumbnail_status === 'pending') {
-                        updates.thumbnail_status = 'processing';
-                    }
+                    if (old.thumbnail_status === 'pending') updates.thumbnail_status = 'processing';
+
+                    if (old.llm_status === 'pending') updates.llm_status = 'processing';
                 }
 
                 return { ...old, ...updates };

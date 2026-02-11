@@ -49,8 +49,6 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
 
     /** Wheel + trackpad pinch (ctrlKey) zoom */
     const handleWheel = useCallback((e: React.WheelEvent) => {
-        e.preventDefault();
-
         // Trackpad pinch fires wheel with ctrlKey=true
         if (e.ctrlKey) {
             const pinchDelta = -e.deltaY * 0.01;

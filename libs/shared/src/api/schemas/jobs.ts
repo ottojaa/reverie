@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const JobStatusEnum = z.enum(['pending', 'processing', 'complete', 'failed']);
+export const JobStatusEnum = z.enum(['pending', 'processing', 'complete', 'failed', 'skipped']);
 export type JobStatus = z.infer<typeof JobStatusEnum>;
 
 export const JobTypeEnum = z.enum(['ocr', 'thumbnail', 'llm_summary']);

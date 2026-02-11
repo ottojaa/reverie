@@ -135,6 +135,43 @@ async function fetchDocumentWithAuth(authFetch: AuthFetch, documentId: string): 
     return response.json();
 }
 
+export interface ReprocessLlmResponse {
+    job_id: string;
+    status: 'pending';
+}
+
+async function reprocessLlmWithAuth(authFetch: AuthFetch, documentId: string): Promise<ReprocessLlmResponse> {
+    const response = await authFetch(`${API_BASE}/documents/${documentId}/reprocess-llm`, {
+        method: 'POST',
+        credentials: 'include',
+    });
+
+    if (!response.ok) throw new Error('Failed to reprocess LLM');
+
+    return response.json();
+}
+
+/**
+ * Hook to reprocess LLM for a document (regenerate summary)
+ */
+export function useReprocessLlm() {
+    const queryClient = useQueryClient();
+    const authFetch = useAuthenticatedFetch();
+
+    return useMutation({
+        mutationFn: (documentId: string) => reprocessLlmWithAuth(authFetch, documentId),
+        onSuccess: (_, documentId) => {
+            queryClient.setQueryData<Document>(['document', documentId], (old) =>
+                old ? { ...old, llm_status: 'pending' } : old,
+            );
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+        onError: () => {
+            toast.error('Failed to reprocess');
+        },
+    });
+}
+
 /**
  * Hook to fetch a single document (uses auth fetch for 401 refresh + retry)
  */
@@ -146,6 +183,80 @@ export function useDocument(documentId: string) {
         queryKey: ['document', documentId],
         queryFn: () => fetchDocumentWithAuth(authFetch, documentId),
         enabled: isAuthenticated && !!documentId,
+    });
+}
+
+export interface OcrResult {
+    document_id: string;
+    raw_text: string;
+    confidence_score: number | null;
+    text_density: number | null;
+    has_meaningful_text: boolean;
+    metadata: {
+        companies?: string[];
+        dates?: string[];
+        values?: Array<{ amount: number; currency: string }>;
+    } | null;
+    processed_at: string;
+}
+
+async function fetchOcrResultWithAuth(authFetch: AuthFetch, documentId: string): Promise<OcrResult> {
+    const response = await authFetch(`${API_BASE}/documents/${documentId}/ocr`, { credentials: 'include' });
+
+    if (!response.ok) throw new Error('Failed to fetch OCR result');
+
+    return response.json();
+}
+
+/**
+ * Hook to fetch OCR result for a document (only when ocr_status is complete)
+ */
+export function useOcrResult(documentId: string, enabled: boolean) {
+    const { isAuthenticated } = useAuth();
+    const authFetch = useAuthenticatedFetch();
+
+    return useQuery({
+        queryKey: ['document', documentId, 'ocr'],
+        queryFn: () => fetchOcrResultWithAuth(authFetch, documentId),
+        enabled: isAuthenticated && !!documentId && enabled,
+    });
+}
+
+export interface RetryOcrResponse {
+    job_id: string;
+    status: 'pending';
+}
+
+async function retryOcrWithAuth(authFetch: AuthFetch, documentId: string): Promise<RetryOcrResponse> {
+    const response = await authFetch(`${API_BASE}/documents/${documentId}/ocr/retry`, {
+        method: 'POST',
+        credentials: 'include',
+    });
+
+    if (!response.ok) throw new Error('Failed to run OCR');
+
+    return response.json();
+}
+
+/**
+ * Hook to run or retry OCR for a document (force reprocess)
+ */
+export function useRetryOcr() {
+    const queryClient = useQueryClient();
+    const authFetch = useAuthenticatedFetch();
+
+    return useMutation({
+        mutationFn: (documentId: string) => retryOcrWithAuth(authFetch, documentId),
+        onSuccess: (_, documentId) => {
+            queryClient.setQueryData<Document>(['document', documentId], (old) =>
+                old ? { ...old, ocr_status: 'pending' } : old,
+            );
+            queryClient.removeQueries({ queryKey: ['document', documentId, 'ocr'] });
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+        onError: () => {
+            toast.error('Failed to run OCR');
+        },
     });
 }
 

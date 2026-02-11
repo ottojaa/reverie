@@ -4,6 +4,8 @@ import {
     CheckDuplicatesResponseSchema,
     DocumentListQuerySchema,
     DocumentSchema,
+    JobSchema,
+    JobStatusEnum,
     MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
     UuidSchema,
@@ -12,10 +14,8 @@ import {
     type MoveDocumentsRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { getDeduplicatedFilename } from '../../utils/filename';
 import { type Document as DbDocument } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
@@ -23,6 +23,7 @@ import { addOcrJob } from '../../queues/ocr.queue';
 import { getFolderService } from '../../services/folder.service';
 import { getStorageService } from '../../services/storage.service';
 import { getUploadService } from '../../services/upload.service';
+import { getDeduplicatedFilename } from '../../utils/filename';
 
 const uploadService = getUploadService();
 const storageService = getStorageService();
@@ -423,12 +424,13 @@ export default async function (fastify: FastifyInstance) {
                 response: {
                     200: z.object({
                         document_id: z.string().uuid(),
-                        ocr_status: z.enum(['pending', 'processing', 'complete', 'failed']),
-                        thumbnail_status: z.enum(['pending', 'processing', 'complete', 'failed']),
+                        ocr_status: JobStatusEnum,
+                        thumbnail_status: JobStatusEnum,
+                        llm_status: JobStatusEnum,
                         jobs: z.array(
                             z.object({
                                 type: z.string(),
-                                status: z.enum(['pending', 'processing', 'complete', 'failed']),
+                                status: JobStatusEnum,
                                 completed_at: z.string().nullable(),
                             }),
                         ),
@@ -456,6 +458,7 @@ export default async function (fastify: FastifyInstance) {
                 document_id: document.id,
                 ocr_status: document.ocr_status,
                 thumbnail_status: document.thumbnail_status,
+                llm_status: document.llm_status,
                 jobs: jobs.map((job) => ({
                     type: job.job_type,
                     status: job.status,
@@ -476,22 +479,7 @@ export default async function (fastify: FastifyInstance) {
                 description: 'Get all processing jobs for a document',
                 params: z.object({ id: UuidSchema }),
                 response: {
-                    200: z.array(
-                        z.object({
-                            id: z.string().uuid(),
-                            job_type: z.string(),
-                            target_type: z.string(),
-                            target_id: z.string().uuid(),
-                            status: z.enum(['pending', 'processing', 'complete', 'failed']),
-                            priority: z.number(),
-                            attempts: z.number(),
-                            error_message: z.string().nullable(),
-                            result: z.unknown().nullable(),
-                            created_at: z.string(),
-                            started_at: z.string().nullable(),
-                            completed_at: z.string().nullable(),
-                        }),
-                    ),
+                    200: z.array(JobSchema),
                 },
             },
         },
@@ -578,18 +566,8 @@ export default async function (fastify: FastifyInstance) {
                 };
             }
 
-            // Queue new OCR job
-            const jobId = `ocr-${request.params.id}-${nanoid(6)}`;
-            await addOcrJob(
-                {
-                    documentId: request.params.id,
-                    filePath: document.file_path,
-                },
-                jobId,
-            );
-
-            // Track in processing_jobs table
-            await db
+            // Create processing_job first (UUID required for worker tracking)
+            const createdJob = await db
                 .insertInto('processing_jobs')
                 .values({
                     job_type: 'ocr',
@@ -597,12 +575,21 @@ export default async function (fastify: FastifyInstance) {
                     target_id: request.params.id,
                     status: 'pending',
                 })
-                .execute();
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await addOcrJob(
+                {
+                    documentId: request.params.id,
+                    filePath: document.file_path,
+                },
+                createdJob.id,
+            );
 
             // Update document status
             await db.updateTable('documents').set({ ocr_status: 'pending' }).where('id', '=', request.params.id).execute();
 
-            return { job_id: jobId, status: 'pending' as const };
+            return { job_id: createdJob.id, status: 'pending' as const };
         },
     );
 
@@ -675,19 +662,8 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            // Queue new OCR job with force reprocess flag
-            const jobId = `ocr-retry-${request.params.id}-${nanoid(6)}`;
-            await addOcrJob(
-                {
-                    documentId: request.params.id,
-                    filePath: document.file_path,
-                    forceReprocess: true,
-                },
-                jobId,
-            );
-
-            // Track in processing_jobs table
-            await db
+            // Create processing_job first (UUID required for worker tracking)
+            const createdJob = await db
                 .insertInto('processing_jobs')
                 .values({
                     job_type: 'ocr',
@@ -695,12 +671,21 @@ export default async function (fastify: FastifyInstance) {
                     target_id: request.params.id,
                     status: 'pending',
                 })
-                .execute();
+                .returning('id')
+                .executeTakeFirstOrThrow();
 
-            // Update document status
+            await addOcrJob(
+                {
+                    documentId: request.params.id,
+                    filePath: document.file_path,
+                    forceReprocess: true,
+                },
+                createdJob.id,
+            );
+
             await db.updateTable('documents').set({ ocr_status: 'pending' }).where('id', '=', request.params.id).execute();
 
-            return { job_id: jobId, status: 'pending' as const };
+            return { job_id: createdJob.id, status: 'pending' as const };
         },
     );
 
@@ -767,6 +752,7 @@ export default async function (fastify: FastifyInstance) {
 
             const eligibility = checkLlmEligibility(document, ocrResult);
 
+
             if (!eligibility.eligible) {
                 return {
                     job_id: '',
@@ -775,18 +761,13 @@ export default async function (fastify: FastifyInstance) {
                 };
             }
 
-            // Queue LLM job
-            const jobId = `llm-${request.params.id}-${nanoid(6)}`;
-            await addLlmJob(
-                {
-                    documentId: request.params.id,
-                    type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
-                },
-                jobId,
-            );
-
-            // Track in processing_jobs table
             await db
+                .updateTable('documents')
+                .set({ llm_status: 'pending' })
+                .where('id', '=', request.params.id)
+                .execute();
+
+            const createdJob = await db
                 .insertInto('processing_jobs')
                 .values({
                     job_type: 'llm_summary',
@@ -794,9 +775,18 @@ export default async function (fastify: FastifyInstance) {
                     target_id: request.params.id,
                     status: 'pending',
                 })
-                .execute();
+                .returning('id')
+                .executeTakeFirstOrThrow();
 
-            return { job_id: jobId, status: 'pending' as const };
+            await addLlmJob(
+                {
+                    documentId: request.params.id,
+                    type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
+                },
+                createdJob.id,
+            );
+
+            return { job_id: createdJob.id, status: 'pending' as const };
         },
     );
 
@@ -865,10 +855,11 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            // Clear existing LLM data
+            // Clear existing LLM data and set status to pending
             await db
                 .updateTable('documents')
                 .set({
+                    llm_status: 'pending',
                     llm_summary: null,
                     llm_metadata: null,
                     llm_processed_at: null,
@@ -877,17 +868,8 @@ export default async function (fastify: FastifyInstance) {
                 .where('id', '=', request.params.id)
                 .execute();
 
-            // Queue LLM job
-            const jobId = `llm-reprocess-${request.params.id}-${nanoid(6)}`;
-            await addLlmJob(
-                {
-                    documentId: request.params.id,
-                },
-                jobId,
-            );
-
-            // Track in processing_jobs table
-            await db
+            // Create processing_job first (UUID required for worker tracking)
+            const createdJob = await db
                 .insertInto('processing_jobs')
                 .values({
                     job_type: 'llm_summary',
@@ -895,9 +877,17 @@ export default async function (fastify: FastifyInstance) {
                     target_id: request.params.id,
                     status: 'pending',
                 })
-                .execute();
+                .returning('id')
+                .executeTakeFirstOrThrow();
 
-            return { job_id: jobId, status: 'pending' as const };
+            await addLlmJob(
+                {
+                    documentId: request.params.id,
+                },
+                createdJob.id,
+            );
+
+            return { job_id: createdJob.id, status: 'pending' as const };
         },
     );
 
@@ -958,18 +948,13 @@ export default async function (fastify: FastifyInstance) {
                     continue;
                 }
 
-                // Queue LLM job
-                const jobId = `llm-batch-${documentId}-${nanoid(6)}`;
-                await addLlmJob(
-                    {
-                        documentId,
-                        type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
-                    },
-                    jobId,
-                );
-
-                // Track in processing_jobs table
                 await db
+                    .updateTable('documents')
+                    .set({ llm_status: 'pending' })
+                    .where('id', '=', documentId)
+                    .execute();
+
+                const createdJob = await db
                     .insertInto('processing_jobs')
                     .values({
                         job_type: 'llm_summary',
@@ -977,9 +962,18 @@ export default async function (fastify: FastifyInstance) {
                         target_id: documentId,
                         status: 'pending',
                     })
-                    .execute();
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
 
-                jobIds.push(jobId);
+                await addLlmJob(
+                    {
+                        documentId,
+                        type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
+                    },
+                    createdJob.id,
+                );
+
+                jobIds.push(createdJob.id);
             }
 
             return { job_ids: jobIds, skipped };
@@ -1018,6 +1012,7 @@ async function serializeDocument(doc: DbDocument): Promise<Document> {
         extracted_date: doc.extracted_date?.toISOString().split('T')[0] ?? null,
         ocr_status: doc.ocr_status as Document['ocr_status'],
         thumbnail_status: doc.thumbnail_status as Document['thumbnail_status'],
+        llm_status: doc.llm_status,
         llm_summary: doc.llm_summary,
         llm_metadata: doc.llm_metadata as Document['llm_metadata'],
         llm_processed_at: doc.llm_processed_at?.toISOString() ?? null,

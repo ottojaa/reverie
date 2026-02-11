@@ -99,11 +99,32 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     return result;
 }
 
+async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResult> {
+    const { documentId } = job.data;
+
+    await db
+        .updateTable('documents')
+        .set({ llm_status: 'processing' })
+        .where('id', '=', documentId)
+        .execute();
+
+    try {
+        return await processJobWithTracking(job, processLlmJob);
+    } catch (error) {
+        await db
+            .updateTable('documents')
+            .set({ llm_status: 'failed' })
+            .where('id', '=', documentId)
+            .execute();
+        throw error;
+    }
+}
+
 /**
  * Create and start the LLM worker
  */
 export function createLlmWorker(): Worker<LlmJobData, LlmJobResult> {
-    const worker = new Worker<LlmJobData, LlmJobResult>(QUEUE_NAMES.LLM, async (job) => processJobWithTracking(job, processLlmJob), {
+    const worker = new Worker<LlmJobData, LlmJobResult>(QUEUE_NAMES.LLM, processLlmJobWithStatus, {
         connection: getRedisConnectionOptions(),
         concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.LLM],
     });

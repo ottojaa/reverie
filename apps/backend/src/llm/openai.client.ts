@@ -54,17 +54,28 @@ export async function callChatCompletion(prompt: LlmPrompt, _model?: string): Pr
     const client = getOpenAIClient();
 
     const response = await client.chat.completions.create({
-        model: 'gpt-5-nano',
+        model: 'gpt-4o-mini',
         messages: [
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },
         ],
-        max_tokens: prompt.maxTokens,
-        temperature: 0.3,
+        max_completion_tokens: prompt.maxTokens,
         response_format: { type: 'json_object' },
     });
 
     const content = response.choices[0]?.message?.content;
+
+    console.log('--------------------------------');
+    console.log('response', JSON.stringify(response, null, 2));
+    console.log('--------------------------------');
+    console.log('prompt', prompt);
+    console.log('--------------------------------');
+    console.log('maxTokens', prompt.maxTokens);
+    console.log('--------------------------------');
+    console.log('system', prompt.system);
+    console.log('--------------------------------');
+    console.log('user', prompt.user);
+    console.log('--------------------------------');
 
     if (!content) {
         throw new Error('OpenAI returned empty response');
@@ -156,7 +167,7 @@ Respond in JSON format:
                 ],
             },
         ],
-        max_tokens: 300,
+        max_completion_tokens: 1000,
         response_format: { type: 'json_object' },
     });
 

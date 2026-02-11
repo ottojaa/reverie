@@ -66,6 +66,7 @@ export const DocumentSchema = z.object({
     extracted_date: DateOnlySchema.nullable(),
     ocr_status: JobStatusEnum,
     thumbnail_status: JobStatusEnum,
+    llm_status: JobStatusEnum,
     llm_summary: z.string().nullable(),
     llm_metadata: z.record(z.unknown()).nullable(),
     llm_processed_at: z.string().datetime().nullable(),
@@ -92,6 +93,7 @@ export const DocumentStatusResponseSchema = z.object({
     document_id: UuidSchema,
     ocr_status: JobStatusEnum,
     thumbnail_status: JobStatusEnum,
+    llm_status: JobStatusEnum,
     jobs: z.array(
         z.object({
             type: z.string(),

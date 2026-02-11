@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
-import { useAuth, useAuthenticatedFetch } from '../lib/auth';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { useAuth, useAuthenticatedFetch } from '../lib/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -86,10 +86,9 @@ function SettingsPage() {
     const storagePercentage = (user.storage_used_bytes / user.storage_quota_bytes) * 100;
 
     return (
-        <div className="container max-w-2xl py-8">
-            <h1 className="text-2xl font-bold mb-8">Settings</h1>
-
-            <div className="space-y-6">
+        <div className="container p-6">
+            <div className="space-y-6 w-full">
+                <h1 className="text-2xl font-bold mb-8">Settings</h1>
                 {/* Account Info */}
                 <Card>
                     <CardHeader>

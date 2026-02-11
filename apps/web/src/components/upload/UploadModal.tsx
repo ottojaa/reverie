@@ -123,12 +123,19 @@ export function UploadModal() {
     const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
+    console.log({ defaultSectionId, flatSections, currentSectionId, selectedFolderId });
 
     const selectedSection = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
 
     useEffect(() => {
         setSelectedFolderId(currentSectionId);
     }, [currentSectionId]);
+
+    useEffect(() => {
+        if (!selectedFolderId) return;
+
+        setSelectedFolderId(defaultSectionId);
+    }, [defaultSectionId]);
 
     const {
         files,
@@ -160,8 +167,6 @@ export function UploadModal() {
     const uploadStarted = stats.uploading > 0 || stats.processing > 0 || stats.complete > 0;
 
     const { isCounting, seconds, startCountdown } = useCountdown();
-
-    console.log({ isCounting, seconds, allComplete, allCompleteRef: prevAllComplete.current });
 
     useEffect(() => {
         if (allComplete && !prevAllComplete.current) {

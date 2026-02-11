@@ -1,5 +1,7 @@
 import { CategorizedSections } from '@/components/categorizedSections';
 import { CreateSectionModal, type CreateFolderMode } from '@/components/sections';
+import { useAuth } from '@/lib/auth';
+import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
@@ -8,7 +10,7 @@ import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useParams } from '@tanstack/react-router';
 import { Settings } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useRef, useState } from 'react';
 import { Skeleton } from '../ui/skeleton';
 import type { SortableTreeHandlers } from './Layout';
@@ -16,14 +18,17 @@ import type { SortableTreeHandlers } from './Layout';
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
-    sortableTreeHandlersRef?: MutableRefObject<SortableTreeHandlers | null>;
+    sortableTreeHandlersRef?: RefObject<SortableTreeHandlers | null>;
 }
 
 export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: SidebarProps) {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
+    const { user } = useAuth();
     const { data: sections = [], isLoading } = useSections();
     const confirm = useConfirm();
+
+    const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
     const deleteFolder = useDeleteFolder();
     const reorderSections = useReorderSections();
     const updateFolder = useUpdateFolder();
@@ -156,8 +161,23 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 </button>
             </nav>
 
-            {/* Settings */}
-            <div className="border-t border-sidebar-border p-3">
+            {/* Storage & Settings */}
+            <div className="border-t border-sidebar-border p-2">
+                {user ? (
+                    <Link to="/settings" className="block px-3 py-2.5 transition-colors hover:bg-sidebar-accent" onClick={onClose}>
+                        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-success rounded-full transition-all duration-500 ease-out"
+                                style={{ width: `${Math.min(storagePct, 100)}%` }}
+                            />
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1.5">
+                            <span>
+                                {formatFileSize(user.storage_used_bytes)} of {formatFileSize(user.storage_quota_bytes)} used
+                            </span>
+                        </div>
+                    </Link>
+                ) : null}
                 <Link
                     to="/settings"
                     className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"

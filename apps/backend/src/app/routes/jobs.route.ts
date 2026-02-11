@@ -1,33 +1,8 @@
+import { JobBatchResponseSchema, JobSchema } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getJobService } from '../../jobs/job.service';
-
-// Schemas
-const JobStatusEnum = z.enum(['pending', 'processing', 'complete', 'failed']);
-
-const JobResponseSchema = z.object({
-    id: z.string().uuid(),
-    job_type: z.string(),
-    target_type: z.string(),
-    target_id: z.string().uuid(),
-    status: JobStatusEnum,
-    priority: z.number(),
-    attempts: z.number(),
-    error_message: z.string().nullable(),
-    result: z.unknown().nullable(),
-    created_at: z.string(),
-    started_at: z.string().nullable(),
-    completed_at: z.string().nullable(),
-});
-
-const JobBatchResponseSchema = z.array(
-    z.object({
-        id: z.string().uuid(),
-        status: JobStatusEnum,
-        progress: z.number().min(0).max(100).optional(),
-    }),
-);
 
 export default async function jobsRoute(fastify: FastifyInstance) {
     const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -45,7 +20,7 @@ export default async function jobsRoute(fastify: FastifyInstance) {
                     id: z.string().uuid(),
                 }),
                 response: {
-                    200: JobResponseSchema,
+                    200: JobSchema,
                     404: z.object({
                         statusCode: z.number(),
                         error: z.string(),

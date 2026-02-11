@@ -17,8 +17,7 @@ interface SectionItemProps {
     onDeleteSection?: ((section: FolderWithChildren) => void) | undefined;
 }
 
-const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) =>
-    !(isSorting || wasDragging);
+const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => !(isSorting || wasDragging);
 
 export function SectionItem({ section, currentSectionId, isHighlighted, onEditSection, onDeleteSection }: SectionItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);

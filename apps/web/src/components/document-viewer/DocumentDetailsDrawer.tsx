@@ -1,35 +1,17 @@
+import { Button } from '@/components/ui/button';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { FileTypeIcon, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { useOcrResult, useReprocessLlm, useRetryOcr } from '@/lib/api/documents';
+import { formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
-import { Calendar, Clock, FileType, Hash, ImageIcon, Layers, Sparkles, X } from 'lucide-react';
+import { Calendar, Clock, FileType, Hash, ImageIcon, Layers, Loader2, ScanText, Sparkles, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface DocumentDetailsDrawerProps {
     document: Document;
     isOpen: boolean;
     onClose: () => void;
-}
-
-function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    });
 }
 
 function formatCategory(category: string): string {
@@ -63,21 +45,43 @@ function DetailRow({ icon, label, value, delay = 0 }: DetailRowProps) {
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, onClick, disabled }: { status: string; onClick?: () => void; disabled?: boolean }) {
     const styles: Record<string, string> = {
         complete: 'bg-success/15 text-success',
         processing: 'bg-info/15 text-info',
         pending: 'bg-warning/15 text-warning',
         failed: 'bg-destructive/15 text-destructive',
+        skipped: 'bg-muted text-muted-foreground',
     };
 
-    return (
-        <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', styles[status] ?? 'bg-muted text-muted-foreground')}>{status}</span>
-    );
+    const baseClasses = cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', styles[status] ?? 'bg-muted text-muted-foreground');
+
+    if (onClick && !disabled) {
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                className={cn(baseClasses, 'cursor-pointer transition-opacity hover:opacity-80')}
+                title="Click to reprocess"
+            >
+                {status}
+            </button>
+        );
+    }
+
+    return <span className={baseClasses}>{status}</span>;
 }
 
 function DrawerBody({ document }: { document: Document }) {
     const fileConfig = getFileTypeConfig(document.mime_type);
+    const reprocessLlm = useReprocessLlm();
+    const retryOcr = useRetryOcr();
+    const ocrStatus = document.ocr_status ?? 'skipped';
+    const canRunOcr = ocrStatus === 'failed' || ocrStatus === 'complete' || ocrStatus === 'skipped';
+    const ocrResultQuery = useOcrResult(document.id, ocrStatus === 'complete');
+
+    const llmStatus = document.llm_status ?? 'skipped';
+    const canReprocessLlm = llmStatus === 'failed' || llmStatus === 'complete' || llmStatus === 'skipped';
     const baseDelay = 0.05;
     let rowIndex = 0;
     const nextDelay = () => baseDelay + 0.03 * rowIndex++;
@@ -129,9 +133,9 @@ function DrawerBody({ document }: { document: Document }) {
                     />
                 )}
 
-                <DetailRow icon={<Calendar className="size-3.5" />} label="Uploaded" value={formatDate(document.created_at)} delay={nextDelay()} />
+                <DetailRow icon={<Calendar className="size-3.5" />} label="Uploaded" value={formatDateTime(document.created_at)} delay={nextDelay()} />
 
-                <DetailRow icon={<Clock className="size-3.5" />} label="Last modified" value={formatDate(document.updated_at)} delay={nextDelay()} />
+                <DetailRow icon={<Clock className="size-3.5" />} label="Last modified" value={formatDateTime(document.updated_at)} delay={nextDelay()} />
 
                 {document.extracted_date && (
                     <DetailRow icon={<Calendar className="size-3.5" />} label="Document date" value={document.extracted_date} delay={nextDelay()} />
@@ -144,13 +148,136 @@ function DrawerBody({ document }: { document: Document }) {
                 <div className="flex flex-wrap gap-2">
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">OCR</span>
-                        <StatusBadge status={document.ocr_status} />
+                        <StatusBadge status={ocrStatus} {...(canRunOcr && { onClick: () => retryOcr.mutate(document.id) })} disabled={retryOcr.isPending} />
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">Thumbnail</span>
                         <StatusBadge status={document.thumbnail_status} />
                     </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">LLM</span>
+                        <StatusBadge
+                            status={llmStatus}
+                            {...(canReprocessLlm && { onClick: () => reprocessLlm.mutate(document.id) })}
+                            disabled={reprocessLlm.isPending}
+                        />
+                    </div>
                 </div>
+            </motion.div>
+
+            {/* OCR Result */}
+            <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: nextDelay(), duration: 0.3 }}
+                className="mt-5 rounded-lg bg-muted/50 p-4"
+            >
+                <div className="mb-2 flex items-center gap-1.5">
+                    <ScanText className="size-3.5 text-primary" />
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">OCR Result</p>
+                </div>
+                {(ocrStatus === 'pending' || ocrStatus === 'processing') && (
+                    <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" />
+                        <span>Generating OCR…</span>
+                    </div>
+                )}
+                {ocrStatus === 'failed' && (
+                    <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">OCR failed.</p>
+                        <Button variant="outline" size="sm" onClick={() => retryOcr.mutate(document.id)} disabled={retryOcr.isPending}>
+                            {retryOcr.isPending ? (
+                                <>
+                                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                                    Running…
+                                </>
+                            ) : (
+                                'Retry OCR'
+                            )}
+                        </Button>
+                    </div>
+                )}
+                {ocrStatus === 'skipped' && (
+                    <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">OCR not run for this document.</p>
+                        <Button variant="outline" size="sm" onClick={() => retryOcr.mutate(document.id)} disabled={retryOcr.isPending}>
+                            {retryOcr.isPending ? (
+                                <>
+                                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                                    Running…
+                                </>
+                            ) : (
+                                'Run OCR'
+                            )}
+                        </Button>
+                    </div>
+                )}
+                {ocrStatus === 'complete' && (
+                    <>
+                        {ocrResultQuery.isLoading && (
+                            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                                <Loader2 className="size-4 animate-spin" />
+                                <span>Loading result…</span>
+                            </div>
+                        )}
+                        {ocrResultQuery.isError && <p className="text-sm text-destructive">Failed to load OCR result.</p>}
+                        {ocrResultQuery.data && (
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2 text-[10px]">
+                                    {ocrResultQuery.data.confidence_score != null && (
+                                        <span className="rounded bg-muted px-1.5 py-0.5">Confidence: {ocrResultQuery.data.confidence_score}%</span>
+                                    )}
+                                    {ocrResultQuery.data.text_density != null && (
+                                        <span className="rounded bg-muted px-1.5 py-0.5">Density: {ocrResultQuery.data.text_density.toFixed(1)}</span>
+                                    )}
+                                    <span
+                                        className={cn(
+                                            'rounded px-1.5 py-0.5',
+                                            ocrResultQuery.data.has_meaningful_text ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
+                                        )}
+                                    >
+                                        {ocrResultQuery.data.has_meaningful_text ? 'Meaningful text' : 'No meaningful text'}
+                                    </span>
+                                </div>
+                                {ocrResultQuery.data.raw_text ? (
+                                    <pre className="max-h-48 overflow-auto rounded border border-border/50 bg-background/80 p-2.5 text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap wrap-break-word">
+                                        {ocrResultQuery.data.raw_text}
+                                    </pre>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic">No text extracted.</p>
+                                )}
+                                {ocrResultQuery.data.metadata &&
+                                    (Boolean(ocrResultQuery.data.metadata.companies?.length) ||
+                                        Boolean(ocrResultQuery.data.metadata.dates?.length) ||
+                                        Boolean(ocrResultQuery.data.metadata.values?.length)) && (
+                                        <div className="space-y-1.5 text-xs">
+                                            {ocrResultQuery.data.metadata.companies?.length ? (
+                                                <p>
+                                                    <span className="text-muted-foreground">Companies: </span>
+                                                    {ocrResultQuery.data.metadata.companies.join(', ')}
+                                                </p>
+                                            ) : null}
+                                            {ocrResultQuery.data.metadata.dates?.length ? (
+                                                <p>
+                                                    <span className="text-muted-foreground">Dates: </span>
+                                                    {ocrResultQuery.data.metadata.dates.join(', ')}
+                                                </p>
+                                            ) : null}
+                                            {ocrResultQuery.data.metadata.values?.length ? (
+                                                <p>
+                                                    <span className="text-muted-foreground">Values: </span>
+                                                    {ocrResultQuery.data.metadata.values.map((v) => `${v.currency} ${v.amount}`).join(', ')}
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                    )}
+                                {ocrResultQuery.data.processed_at && (
+                                    <p className="text-[10px] text-muted-foreground/50">Processed {formatDateTime(ocrResultQuery.data.processed_at)}</p>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
             </motion.div>
 
             {/* LLM Summary */}
@@ -167,7 +294,7 @@ function DrawerBody({ document }: { document: Document }) {
                     </div>
                     <p className="text-sm leading-relaxed text-foreground/90">{document.llm_summary}</p>
                     {document.llm_processed_at && (
-                        <p className="mt-2 text-[10px] text-muted-foreground/50">Generated {formatDate(document.llm_processed_at)}</p>
+                        <p className="mt-2 text-[10px] text-muted-foreground/50">Generated {formatDateTime(document.llm_processed_at)}</p>
                     )}
                 </motion.div>
             )}

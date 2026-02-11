@@ -242,6 +242,7 @@ export class UploadService {
             height: processed.height,
             thumbnail_blurhash: processed.blurhash,
             ocr_status: 'pending',
+            llm_status: 'skipped',
             // For files that can't have thumbnails, mark as complete immediately
             thumbnail_status: canThumbnail ? 'pending' : 'complete',
         };

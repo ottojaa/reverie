@@ -43,6 +43,7 @@ export async function processDocument(documentId: string, forceType?: LlmProcess
         await db
             .updateTable('documents')
             .set({
+                llm_status: 'complete',
                 llm_metadata: buildSkipMetadata(eligibility.reason!, ocrResult?.raw_text?.length, eligibility.warnings),
                 llm_processed_at: new Date(),
             })
@@ -76,6 +77,7 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
         await db
             .updateTable('documents')
             .set({
+                llm_status: 'complete',
                 llm_summary: fallbackSummary,
                 llm_metadata: {
                     type: 'text_summary',
@@ -129,6 +131,7 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
     await db
         .updateTable('documents')
         .set({
+            llm_status: 'complete',
             llm_summary: result.summary,
             llm_metadata: enhancedMetadata,
             llm_processed_at: new Date(),
@@ -185,6 +188,7 @@ async function processVisionDocument(document: Document): Promise<VisionResult> 
     await db
         .updateTable('documents')
         .set({
+            llm_status: 'complete',
             llm_summary: result.description,
             llm_metadata: enhancedMetadata,
             llm_processed_at: new Date(),

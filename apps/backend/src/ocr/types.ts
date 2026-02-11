@@ -39,7 +39,7 @@ export interface TextDetectionResult {
     textDensity: number; // chars per 1000 pixels²
     confidenceScore: number;
     rawTextLength: number;
-    reason?: 'low_density' | 'low_confidence' | 'short_text' | 'valid';
+    reason?: 'low_density' | 'low_confidence' | 'short_text' | 'valid' | 'high_confidence_bypass';
 }
 
 /**
@@ -77,8 +77,11 @@ export interface PreprocessingOptions {
  * Thresholds for text detection
  */
 export const TEXT_DETECTION_THRESHOLDS = {
-    /** Minimum characters per 1000px² to consider meaningful */
-    minTextDensity: 5,
+    /** Minimum characters per 1000px². Calibrated for screenshots (≈0.3–0.5) vs photos with stray text like logos (≈0.01) */
+    minTextDensity: 0.1,
+    /** When confidence >= this AND text length >= highConfidenceMinLength, bypass density check (screenshots with sparse UI layout) */
+    highConfidenceBypass: 80,
+    highConfidenceMinLength: 100,
     /** Minimum Tesseract confidence to consider reliable */
     minConfidence: 40,
     /** Minimum raw text length to consider meaningful */

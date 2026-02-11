@@ -1,7 +1,7 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
 
 // Enums
-export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed';
+export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
 export type JobType = 'ocr' | 'thumbnail' | 'llm_summary';
 export type TargetType = 'document' | 'folder';
 export type TagSource = 'user' | 'auto';
@@ -65,6 +65,7 @@ export interface DocumentsTable {
     extracted_date: Date | null;
     ocr_status: JobStatus;
     thumbnail_status: JobStatus;
+    llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     llm_summary: string | null;
     llm_metadata: Record<string, unknown> | null;

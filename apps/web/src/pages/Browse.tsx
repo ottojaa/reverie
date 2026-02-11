@@ -86,7 +86,9 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                         doc.ocr_status === 'processing' ||
                         doc.ocr_status === 'pending' ||
                         doc.thumbnail_status === 'processing' ||
-                        doc.thumbnail_status === 'pending',
+                        doc.thumbnail_status === 'pending' ||
+                        (doc.llm_status ?? 'skipped') === 'processing' ||
+                        (doc.llm_status ?? 'skipped') === 'pending',
                 )
                 .map((doc) => doc.id),
         [documents],

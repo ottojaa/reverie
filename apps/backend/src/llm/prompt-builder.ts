@@ -84,7 +84,7 @@ Respond in JSON format:
     return {
         system: SYSTEM_MESSAGE,
         user: userMessage,
-        maxTokens: 500,
+        maxTokens: 800,
     };
 }
 

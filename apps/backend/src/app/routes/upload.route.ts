@@ -46,6 +46,7 @@ export default async function (fastify: FastifyInstance) {
                     sessionId = String(part.value);
                 } else if (part.fieldname === 'conflict_strategy' && part.value) {
                     const v = String(part.value);
+
                     if (v === 'replace' || v === 'keep_both') conflictStrategy = v;
                 }
             }
@@ -69,14 +70,6 @@ export default async function (fastify: FastifyInstance) {
                 resolvedFolderId = (await folderService.getOrCreateDefaultSection(userId)).id;
             }
 
-            // Optional: Add file size limit (100MB per file)
-            const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-
-            for (const file of files) {
-                if (file.buffer.length > MAX_FILE_SIZE) {
-                    return reply.badRequest(`File "${file.filename}" exceeds maximum size of 100MB`);
-                }
-            }
 
             const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy);
 
