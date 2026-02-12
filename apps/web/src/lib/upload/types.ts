@@ -6,8 +6,8 @@ import type { Job, JobEvent, UploadedDocument } from '@reverie/shared';
 export type UploadFileStatus =
     | 'queued' // Waiting to be uploaded
     | 'uploading' // Currently uploading to server
-    | 'processing' // Uploaded, waiting for OCR/thumbnail jobs
-    | 'complete' // All processing done
+    | 'processing' // Uploaded, waiting for thumbnail generation
+    | 'complete' // Thumbnail ready (OCR/LLM continue in background)
     | 'error'; // Upload or processing failed
 
 /**

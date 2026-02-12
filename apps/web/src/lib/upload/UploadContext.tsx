@@ -63,16 +63,22 @@ function applyJobEventToFile(file: UploadFile, event: JobEvent): UploadFile {
         return { ...job, status: event.status };
     });
 
-    const completedJobs = updatedJobs.filter((j) => j.status === 'complete').length;
-    const totalJobs = updatedJobs.length || 1;
-    const processingProgress = Math.round((completedJobs / totalJobs) * 100);
-    const allComplete = updatedJobs.every((j) => j.status === 'complete' || j.status === 'failed');
+    // Only thumbnail jobs gate upload modal completion — OCR/LLM run in background
+    const thumbnailJobs = updatedJobs.filter((j) => j.job_type === 'thumbnail');
+    const allThumbnailsDone = thumbnailJobs.length === 0 || thumbnailJobs.every((j) => j.status === 'complete' || j.status === 'failed');
+
+    const completedThumbnails = thumbnailJobs.filter((j) => j.status === 'complete' || j.status === 'failed').length;
+    const thumbnailProgress = thumbnailJobs.length > 0 ? Math.round((completedThumbnails / thumbnailJobs.length) * 100) : 100;
+
+    // Use event.progress only for thumbnail job events
+    const matchedJobType = matchedJob ? updatedJobs.find((j) => j.id === event.job_id)?.job_type : undefined;
+    const processingProgress = matchedJobType === 'thumbnail' && event.progress != null ? event.progress : thumbnailProgress;
 
     return {
         ...file,
         jobs: updatedJobs,
-        processingProgress: matchedJob ? (event.progress ?? processingProgress) : processingProgress,
-        status: allComplete ? 'complete' : 'processing',
+        processingProgress,
+        status: allThumbnailsDone ? 'complete' : 'processing',
     };
 }
 
@@ -206,12 +212,13 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                     if (mapping) {
                         const { error: _, ...fileRest } = file;
                         const jobs = mapping.jobs as Job[];
-                        const hasJobs = jobs.length > 0;
+                        // Only thumbnail jobs block the upload modal — OCR/LLM run in background
+                        const hasThumbnailJobs = jobs.some((j) => j.job_type === 'thumbnail');
                         let nextFile: UploadFile = {
                             ...fileRest,
-                            status: hasJobs ? 'processing' : 'complete',
+                            status: hasThumbnailJobs ? 'processing' : 'complete',
                             uploadProgress: 100,
-                            processingProgress: hasJobs ? 0 : 100,
+                            processingProgress: hasThumbnailJobs ? 0 : 100,
                             documentId: mapping.documentId,
                             jobs,
                         };

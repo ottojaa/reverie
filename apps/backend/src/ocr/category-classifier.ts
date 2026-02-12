@@ -73,6 +73,11 @@ export function getCategoryDescription(category: DocumentCategory): string {
         stock_statement: 'Stock or investment statement',
         dividend_notice: 'Dividend notice',
         tax_document: 'Tax document or form',
+        bank_statement: 'Bank statement',
+        insurance_policy: 'Insurance policy',
+        medical_record: 'Medical record',
+        bill_of_materials: 'Bill of materials',
+        securities_statement: 'Securities statement',
         other: 'Other document',
     };
 

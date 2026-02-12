@@ -1,6 +1,7 @@
 import { useUpload } from '@/lib/upload';
 import type { Document } from '@reverie/shared';
 import { AnimatePresence } from 'motion/react';
+import { useCallback, useEffect, useState } from 'react';
 import { DocumentCard } from './DocumentCard';
 
 interface DocumentGridProps {
@@ -10,6 +11,36 @@ interface DocumentGridProps {
 
 export function DocumentGrid({ documents, isLoading }: DocumentGridProps) {
     const { recentlyCompletedDocumentIds, markPulseComplete } = useUpload();
+    const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
+
+    // Consume IDs from context into local state, then clear context immediately.
+    // This way navigating away + back won't re-trigger the pulse animation.
+    useEffect(() => {
+        if (recentlyCompletedDocumentIds.length === 0) return;
+
+        setPulsingIds((prev) => {
+            const next = new Set(prev);
+
+            for (const id of recentlyCompletedDocumentIds) {
+                next.add(id);
+            }
+
+            return next;
+        });
+
+        for (const id of recentlyCompletedDocumentIds) {
+            markPulseComplete(id);
+        }
+    }, [recentlyCompletedDocumentIds, markPulseComplete]);
+
+    const handlePulseComplete = useCallback((id: string) => {
+        setPulsingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+
+            return next;
+        });
+    }, []);
 
     if (isLoading) {
         return (
@@ -29,8 +60,8 @@ export function DocumentGrid({ documents, isLoading }: DocumentGridProps) {
                         key={doc.id}
                         document={doc}
                         orderedIds={documents.map((d) => d.id)}
-                        shouldPulse={recentlyCompletedDocumentIds.includes(doc.id)}
-                        onPulseComplete={() => markPulseComplete(doc.id)}
+                        shouldPulse={pulsingIds.has(doc.id)}
+                        onPulseComplete={() => handlePulseComplete(doc.id)}
                     />
                 ))}
             </AnimatePresence>

@@ -15,6 +15,7 @@ import { OCR_LIMITS } from './types';
 
 const DEFAULT_OPTIONS: PreprocessingOptions = {
     targetMinWidth: OCR_LIMITS.targetMinWidth,
+    targetMaxDimension: OCR_LIMITS.targetMaxDimension,
     grayscale: true,
     normalizeContrast: true,
     sharpen: true,
@@ -32,15 +33,25 @@ export async function preprocessImage(buffer: Buffer, options: PreprocessingOpti
     // Get current dimensions to decide on scaling
     const metadata = await sharp(buffer).metadata();
     const currentWidth = metadata.width ?? 0;
+    const currentHeight = metadata.height ?? 0;
+    const longestSide = Math.max(currentWidth, currentHeight);
 
-    // Upscale small images for better OCR accuracy
-    // Only upscale if below target, never downscale
-    if (opts.targetMinWidth && currentWidth > 0 && currentWidth < opts.targetMinWidth) {
+    // Downscale oversized images first — keeps OCR fast without losing meaningful detail
+    if (opts.targetMaxDimension && longestSide > opts.targetMaxDimension) {
+        pipeline = pipeline.resize({
+            width: currentWidth >= currentHeight ? opts.targetMaxDimension : undefined,
+            height: currentHeight > currentWidth ? opts.targetMaxDimension : undefined,
+            fit: 'inside',
+            withoutEnlargement: true,
+            kernel: 'lanczos3',
+        });
+    } else if (opts.targetMinWidth && currentWidth > 0 && currentWidth < opts.targetMinWidth) {
+        // Upscale small images for better OCR accuracy
         pipeline = pipeline.resize({
             width: opts.targetMinWidth,
             fit: 'inside',
             withoutEnlargement: false, // Allow upscaling
-            kernel: 'lanczos3', // High-quality upscaling
+            kernel: 'lanczos3',
         });
     }
 

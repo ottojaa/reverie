@@ -1,20 +1,14 @@
 import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
-import { Spinner } from '@/components/ui/spinner';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { Play } from 'lucide-react';
-import { motion } from 'motion/react';
 
 export function DocumentThumbnail({ document }: { document: Document }) {
     const fileConfig = getFileTypeConfig(document.mime_type);
     const extension = getFileExtension(document.original_filename);
     const thumbnailUrl = getThumbnailUrl(document);
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
-
-    const llmStatus = document.llm_status ?? 'skipped';
-    const isProcessing = document.ocr_status === 'processing' || document.thumbnail_status === 'processing' || llmStatus === 'processing';
-    const isPending = document.ocr_status === 'pending' || document.thumbnail_status === 'pending' || llmStatus === 'pending';
 
     return (
         <div className="relative aspect-4/3 overflow-hidden bg-muted">
@@ -53,21 +47,6 @@ export function DocumentThumbnail({ document }: { document: Document }) {
                     .{extension.toLowerCase()}
                 </div>
             )}
-
-            {(isProcessing || isPending) && <ProcessingOverlay isProcessing={isProcessing} />}
         </div>
-    );
-}
-
-function ProcessingOverlay({ isProcessing }: { isProcessing: boolean }) {
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
-        >
-            <Spinner className="size-8 text-white" />
-            <span className="absolute bottom-2 left-2 text-xs font-medium text-white">{isProcessing ? 'Processing...' : 'Pending...'}</span>
-        </motion.div>
     );
 }

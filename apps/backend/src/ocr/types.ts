@@ -61,6 +61,8 @@ export interface OcrProcessingResult {
 export interface PreprocessingOptions {
     /** Minimum width to upscale small images to (for better OCR accuracy) */
     targetMinWidth?: number | undefined;
+    /** Maximum longest side — downscale images exceeding this to speed up OCR */
+    targetMaxDimension?: number | undefined;
     grayscale?: boolean | undefined;
     normalizeContrast?: boolean | undefined;
     sharpen?: boolean | undefined;
@@ -94,6 +96,8 @@ export const OCR_LIMITS = {
     maxFileSize: 10 * 1024 * 1024,
     /** Target minimum width for OCR (upscale small images) */
     targetMinWidth: 2000,
+    /** Maximum longest side in pixels — images exceeding this are downscaled before OCR */
+    targetMaxDimension: 2048,
     /** Maximum processing time per image in ms */
     maxProcessingTime: 60000,
 } as const;

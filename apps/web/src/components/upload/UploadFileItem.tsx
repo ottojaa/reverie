@@ -101,7 +101,7 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
                         {formatFileSize(file.file.size)}
                         {isQueued && ' • Queued'}
                         {file.status === 'uploading' && ` • Uploading ${progress}%`}
-                        {file.status === 'processing' && ` • Processing ${progress}%`}
+                        {file.status === 'processing' && ' • Generating preview\u2026'}
                         {file.status === 'error' && file.error && <span className="text-destructive"> • {file.error}</span>}
                     </p>
                 </div>

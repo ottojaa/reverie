@@ -110,7 +110,7 @@ function useOverallProgress() {
             completedCount,
             total,
             phase: 'processing' as const,
-            phaseLabel: completedCount === total ? '' : `Processing ${completedCount} of ${total} files`,
+            phaseLabel: completedCount === total ? '' : `Generating previews \u2014 ${completedCount} of ${total}`,
         };
     }, [files, isUploading, uploadBytesLoaded, uploadBytesTotal]);
 }
@@ -123,8 +123,6 @@ export function UploadModal() {
     const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
-    console.log({ defaultSectionId, flatSections, currentSectionId, selectedFolderId });
-
     const selectedSection = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
 
     useEffect(() => {
@@ -185,7 +183,9 @@ export function UploadModal() {
                 clearFailed();
                 queryClient.invalidateQueries({ queryKey: ['documents'] });
                 queryClient.invalidateQueries({ queryKey: ['sections'] });
-                toast.success(n === 1 ? '1 document uploaded successfully' : `${n} documents uploaded successfully`);
+                toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`, {
+                    description: 'Text recognition will continue in the background',
+                });
             }, ALL_COMPLETE_CLOSE_DELAY_MS);
 
             return () => {
@@ -261,7 +261,7 @@ export function UploadModal() {
                                                     phase === 'processing' && 'bg-accent/15 text-accent',
                                                 )}
                                             >
-                                                {phase === 'uploading' ? 'Uploading' : 'Processing'}
+                                                    {phase === 'uploading' ? 'Uploading' : 'Generating previews'}
                                             </span>
                                         )
                                     )}

@@ -28,6 +28,11 @@ export const DocumentCategoryEnum = z.enum([
     'stock_statement', // Stock/investment statements
     'dividend_notice', // Dividend notifications
     'tax_document', // Tax forms, returns
+    'bank_statement', // Bank statements
+    'insurance_policy', // Insurance policies
+    'medical_record', // Medical records
+    'bill_of_materials', // Bill of materials
+    'securities_statement', // Securities statements
 
     'other', // Uncategorized documents with text
 ]);

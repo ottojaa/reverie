@@ -1,38 +1,50 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useCountdown() {
-    const [seconds, setSeconds] = useState<number>(0);
-    const [isCounting, setIsCounting] = useState<boolean>(false);
+    const [seconds, setSeconds] = useState(0);
+    const endTimeRef = useRef<number | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const stop = useCallback(() => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
 
-    useEffect(() => {
-        if (!isCounting || seconds <= 0) return;
+        endTimeRef.current = null;
+        setSeconds(0);
+    }, []);
 
-        intervalRef.current = setInterval(() => {
-            setSeconds((prev) => prev - 1);
-        }, 1000);
+    const startCountdown = useCallback(
+        (duration: number) => {
+            stop();
+            endTimeRef.current = Date.now() + duration * 1000;
+            setSeconds(duration);
 
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
+            intervalRef.current = setInterval(() => {
+                const remaining = Math.max(0, Math.ceil((endTimeRef.current! - Date.now()) / 1000));
+                setSeconds(remaining);
 
-            setSeconds(0);
-            setIsCounting(false);
-        };
-    }, [isCounting]);
+                if (remaining <= 0) {
+                    if (intervalRef.current) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                    }
+
+                    endTimeRef.current = null;
+                }
+            }, 500);
+        },
+        [stop],
+    );
+
+    // Cleanup on unmount
+    useEffect(() => stop, [stop]);
 
     return {
         seconds,
-        isCounting,
-        startCountdown: (seconds: number) => {
-            setIsCounting(true);
-            setSeconds(seconds);
-        },
-        stopCountdown: () => {
-            setIsCounting(false);
-        },
+        isCounting: seconds > 0,
+        startCountdown,
+        stopCountdown: stop,
     };
 }
