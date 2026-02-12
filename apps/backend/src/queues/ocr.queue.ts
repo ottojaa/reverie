@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
-import type { DocumentCategory, ExtractedMetadata } from '../ocr/types';
+import type { DocumentCategory } from '../ocr/types';
 
 export interface OcrJobData {
     documentId: string;
@@ -18,7 +18,7 @@ export interface OcrJobResult {
     hasMeaningfulText: boolean;
     category: DocumentCategory;
     needsReview: boolean;
-    metadata: ExtractedMetadata | null;
+    ocrEngine: string;
 }
 
 let ocrQueueInstance: Queue | null = null;

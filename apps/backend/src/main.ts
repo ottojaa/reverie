@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { app } from './app/app';
 import { env } from './config/env';
 import { checkDbConnection, closeDb } from './db/kysely';
+import { shutdownPaddleOcr, startPaddleOcr } from './ocr/paddleocr.client';
 import { closeAllQueues } from './queues';
 import { closeRedisConnections } from './queues/redis';
 import { closeSocketServer, initializeSocketServer, startRedisSubscriber, stopRedisSubscriber } from './websocket';
@@ -57,6 +58,9 @@ async function main() {
             // Close Fastify
             await server.close();
 
+            // Shut down persistent PaddleOCR process
+            await shutdownPaddleOcr();
+
             // Close queues and Redis
             await closeAllQueues();
             await closeRedisConnections();
@@ -98,6 +102,14 @@ async function main() {
         // In production, you might want to run workers separately
         startAllWorkers();
         server.log.info('Background workers started');
+
+        // Eagerly start PaddleOCR if configured — loads models in background
+        // so the first OCR job doesn't pay the ~10-20s cold-start cost
+        if (env.OCR_ENGINE === 'paddleocr') {
+            startPaddleOcr().catch((err) => {
+                server.log.warn(`PaddleOCR failed to start: ${err}`);
+            });
+        }
     } catch (err) {
         server.log.error(err);
         process.exit(1);

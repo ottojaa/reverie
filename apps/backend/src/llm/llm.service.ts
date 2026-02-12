@@ -16,7 +16,7 @@ import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isOpenAIAvailable, summarizeDocument } from './openai.client';
 import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
 import { prepareTextForLlm } from './text-preparer';
-import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
+import type { DocumentLlmResult, EnhancedMetadata, KeyEntities, LlmProcessingType, VisionResult } from './types';
 
 /**
  * Process a document with LLM
@@ -72,7 +72,6 @@ export async function processDocument(documentId: string, forceType?: LlmProcess
 async function processTextSummary(document: Document, ocrResult: OcrResult): Promise<DocumentLlmResult> {
     // Check if OpenAI is available
     if (!isOpenAIAvailable()) {
-        // Generate fallback summary
         const fallbackSummary = buildFallbackSummary(document, ocrResult);
         await db
             .updateTable('documents')
@@ -114,12 +113,14 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
     const enhancedMetadata: EnhancedMetadata = {
         type: 'text_summary',
         title: result.title,
+        language: result.language,
         keyEntities: result.key_entities,
         topics: result.topics,
         sentiment: result.sentiment,
         documentType: result.document_type,
-        extractedDates: result.additional_dates,
+        extractedDates: result.extracted_dates,
         keyValues: result.key_values,
+        tableData: result.table_data,
         // Sampling info
         truncated: prepared.truncated,
         samplingStrategy: prepared.samplingStrategy,
@@ -127,7 +128,9 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
         sampledSections: prepared.sampledSections,
     };
 
-    // Update document
+    // Update document with LLM-determined category if available
+    const documentCategory = result.document_type ?? document.document_category;
+
     await db
         .updateTable('documents')
         .set({
@@ -136,6 +139,7 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
             llm_metadata: enhancedMetadata,
             llm_processed_at: new Date(),
             llm_token_count: tokenCount,
+            document_category: documentCategory,
         })
         .where('id', '=', document.id)
         .execute();
@@ -177,7 +181,7 @@ async function processVisionDocument(document: Document): Promise<VisionResult> 
     // Build enhanced metadata
     const enhancedMetadata: EnhancedMetadata = {
         type: 'vision_describe',
-        keyEntities: [],
+        keyEntities: { people: [], organizations: [], locations: [] },
         topics: [],
         detectedObjects: result.detected_objects,
         sceneType: result.scene_type,
@@ -197,9 +201,10 @@ async function processVisionDocument(document: Document): Promise<VisionResult> 
         .where('id', '=', document.id)
         .execute();
 
-    // Optionally index the description for search
+    // Index the description for search
     if (result.description) {
-        await updateSearchIndex(document.id, result.description, [], result.detected_objects ?? []);
+        const emptyEntities: KeyEntities = { people: [], organizations: [], locations: [] };
+        await updateSearchIndex(document.id, result.description, emptyEntities, result.detected_objects ?? []);
     }
 
     return {
@@ -211,52 +216,48 @@ async function processVisionDocument(document: Document): Promise<VisionResult> 
 }
 
 /**
+ * Flatten key entities into a single array for search indexing
+ */
+function flattenEntities(entities: KeyEntities): string[] {
+    return [...entities.people, ...entities.organizations, ...entities.locations];
+}
+
+/**
  * Update the search index with LLM-generated content
  *
- * Appends summary, entities, and topics to the OCR text vector for search
+ * Stores entities and topics as document tags for faceted search
  */
-async function updateSearchIndex(documentId: string, summary: string, entities: string[], topics: string[]): Promise<void> {
-    // Build additional search text from LLM output
-    const searchText = [summary, ...entities, ...topics].filter(Boolean).join(' ');
+async function updateSearchIndex(documentId: string, summary: string, entities: KeyEntities, topics: string[]): Promise<void> {
+    const flatEntities = flattenEntities(entities);
+    const searchText = [summary, ...flatEntities, ...topics].filter(Boolean).join(' ');
 
     if (!searchText) {
         return;
     }
 
-    // Check if OCR result exists
-    const existing = await db.selectFrom('ocr_results').select('id').where('document_id', '=', documentId).executeTakeFirst();
+    // Store LLM search terms in document tags for faceted search
+    const tagsToAdd = [...flatEntities, ...topics].filter(Boolean);
 
-    if (existing) {
-        // Update existing OCR result with enhanced search vector
-        // The text_vector column uses PostgreSQL tsvector, we append to raw_text
-        // which triggers the text_vector update via PostgreSQL trigger
-        // Note: In a production system, you might want a separate
-        // llm_text_vector column to keep OCR and LLM text separate
-        // For now, we rely on LLM content stored in document tags for search
-        // The OCR metadata is already set during OCR processing
+    if (tagsToAdd.length === 0) {
+        return;
     }
 
-    // Store LLM search terms in document tags for faceted search
-    const tagsToAdd = [...entities, ...topics].filter(Boolean);
+    const existingTags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
 
-    if (tagsToAdd.length > 0) {
-        const existingTags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
+    const existingTagSet = new Set(existingTags.map((t) => t.tag.toLowerCase()));
+    const newTags = tagsToAdd.filter((t) => !existingTagSet.has(t.toLowerCase()));
 
-        const existingTagSet = new Set(existingTags.map((t) => t.tag.toLowerCase()));
-        const newTags = tagsToAdd.filter((t) => !existingTagSet.has(t.toLowerCase()));
-
-        if (newTags.length > 0) {
-            await db
-                .insertInto('document_tags')
-                .values(
-                    newTags.map((tag) => ({
-                        document_id: documentId,
-                        tag,
-                        source: 'auto' as const,
-                    })),
-                )
-                .execute();
-        }
+    if (newTags.length > 0) {
+        await db
+            .insertInto('document_tags')
+            .values(
+                newTags.map((tag) => ({
+                    document_id: documentId,
+                    tag,
+                    source: 'auto' as const,
+                })),
+            )
+            .execute();
     }
 }
 
@@ -293,7 +294,7 @@ export async function batchProcessDocuments(documentIds: string[]): Promise<Map<
         } catch (_error) {
             results.set(documentId, {
                 success: false,
-                reason: 'llm_disabled', // Using existing type, but represents error
+                reason: 'llm_disabled',
             });
         }
     }

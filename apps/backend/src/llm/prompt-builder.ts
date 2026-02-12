@@ -2,26 +2,63 @@
  * Prompt Builder
  *
  * Constructs prompts for LLM document processing.
- * Prompts are generic to handle diverse document types.
+ * Designed for OCR-extracted text with potential recognition errors.
+ * Supports multilingual documents (Finnish/English).
  */
 
-import type { Document, OcrMetadata, OcrResult } from '../db/schema';
+import type { Document, OcrResult } from '../db/schema';
 import { buildPromptWithSamplingContext } from './text-preparer';
 import type { LlmPrompt, PreparedText } from './types';
 
 /**
- * System message for document analysis (generic for all document types)
+ * System message for document analysis
+ *
+ * Key design decisions:
+ * - Explicitly warns about OCR artifacts
+ * - Instructs preservation of proper nouns
+ * - Requests comprehensive structured extraction
+ * - Handles multilingual content (Finnish/English)
  */
-const SYSTEM_MESSAGE = `You are a document analysis assistant. Your task is to analyze text extracted from a document via OCR and provide a structured summary.
+const SYSTEM_MESSAGE = `You are a document analysis assistant that processes text extracted from scanned documents via OCR.
 
-Your goals:
-- Generate a concise, human-readable summary (2-3 sentences)
-- Extract key entities (people, organizations, places)
-- Identify main topics or themes
-- Suggest a document type/category
-- Extract important information that would be useful for searching
+IMPORTANT CONTEXT:
+- The input text comes from OCR (optical character recognition) and may contain recognition errors such as garbled characters, misread letters, merged or split words, and misplaced whitespace.
+- Use surrounding context to infer correct readings when OCR errors are apparent.
+- Documents may be in Finnish, English, or a mix of both languages.
+- CRITICAL: Preserve proper nouns (names of people, companies, places) as accurately as possible. Only correct a proper noun if you are highly confident it is an OCR error AND the correct form appears elsewhere in the document or is unambiguously inferable from context. Never guess or hallucinate corrections to names.
 
-Be factual and concise. Avoid speculation.`;
+YOUR TASK:
+Analyze the OCR-extracted document text and produce a comprehensive structured extraction.
+
+OUTPUT FORMAT (strict JSON):
+{
+  "summary": "2-3 sentence description of the document's purpose and key content. Be specific about what the document contains.",
+  "title": "Concise document title, 5-10 words",
+  "document_type": "One of: receipt, invoice, statement, letter, contract, form, certificate, report, securities_statement, tax_document, bank_statement, insurance, medical, memo, newsletter, other",
+  "language": "Primary language code (e.g. 'fi', 'en', 'fi/en' for mixed)",
+  "key_entities": {
+    "people": ["Full names of people mentioned in the document"],
+    "organizations": ["Companies, banks, institutions, authorities mentioned"],
+    "locations": ["Cities, addresses, countries mentioned"]
+  },
+  "topics": ["Main themes/topics as keywords"],
+  "extracted_dates": ["All dates found, normalized to YYYY-MM-DD format"],
+  "key_values": [
+    {"label": "Descriptive label for the value", "value": "The extracted value with original units/currency"}
+  ],
+  "sentiment": "neutral",
+  "table_data": [
+    {"item": "Row identifier/name", "columns": {"column_name": "value", "another_column": "value"}}
+  ]
+}
+
+EXTRACTION GUIDELINES:
+- summary: Be specific about the document's purpose. For financial documents, mention the account holder and the nature of the statement. For letters, mention the sender, recipient, and topic.
+- key_values: Extract ALL significant named values including account numbers, reference numbers, totals, subtotals, conversion rates, service numbers, and any other labeled values. Preserve the original currency symbols and number formats.
+- table_data: If the document contains tabular data (e.g. stock holdings, transaction lists, line items), extract EVERY row as a structured object. Use the header labels as column keys. This is critical for financial documents.
+- extracted_dates: Normalize all dates to YYYY-MM-DD format. For European date formats (DD.MM.YYYY), parse correctly.
+- key_entities.organizations: Include company names, stock names, bank names, and other institutions even if abbreviated or in a table.
+- Do not include empty arrays or null values in the output -- omit the field instead.`;
 
 /**
  * Vision system message for image description
@@ -48,79 +85,26 @@ export function buildDocumentPrompt(context: BuildPromptContext): LlmPrompt {
     // Build OCR text with sampling context if needed
     const textForPrompt = buildPromptWithSamplingContext(preparedText);
 
-    // Build metadata context
-    const metadataContext = buildMetadataContext(ocrResult);
+    // Build confidence context
+    const confidenceNote = ocrResult?.confidence_score
+        ? `\nOCR confidence: ${ocrResult.confidence_score}% (${ocrResult.confidence_score < 60 ? 'low -- expect more errors' : ocrResult.confidence_score < 80 ? 'moderate -- some errors likely' : 'high'})`
+        : '';
 
     // Construct user message
-    const userMessage = `Document: "${document.original_filename}"
-OCR Text:
+    const userMessage = `Document filename: "${document.original_filename}"${confidenceNote}
+
+OCR-extracted text:
 ---
 ${textForPrompt}
 ---
-${metadataContext}
 
-Based on this document, generate:
-1. A 2-3 sentence summary of what this document is about
-2. A suggested title for the document (5-10 words)
-3. Key entities mentioned (people, organizations, places)
-4. Main topics or themes
-5. A document type/category
-6. Any additional important information for indexing
-
-Respond in JSON format:
-{
-  "summary": "Brief description of the document contents...",
-  "title": "Suggested Document Title",
-  "key_entities": ["Entity 1", "Entity 2"],
-  "topics": ["topic1", "topic2"],
-  "document_type": "category_name",
-  "key_values": [
-    { "label": "context for value", "value": "extracted value" }
-  ],
-  "sentiment": "neutral",
-  "additional_dates": ["2023-06-01"]
-}`;
+Analyze this document and extract all structured information as specified. Pay special attention to tabular data, financial figures, and proper nouns.`;
 
     return {
         system: SYSTEM_MESSAGE,
         user: userMessage,
-        maxTokens: 800,
+        maxTokens: 2000,
     };
-}
-
-/**
- * Build metadata context from OCR result
- */
-function buildMetadataContext(ocrResult?: OcrResult | null): string {
-    if (!ocrResult?.metadata) {
-        return '';
-    }
-
-    const metadata = ocrResult.metadata as OcrMetadata;
-    const parts: string[] = ['OCR Metadata (already extracted):'];
-
-    if (metadata.dates && metadata.dates.length > 0) {
-        parts.push(`- Detected dates: ${metadata.dates.join(', ')}`);
-    }
-
-    if (metadata.companies && metadata.companies.length > 0) {
-        parts.push(`- Companies: ${metadata.companies.join(', ')}`);
-    }
-
-    if (metadata.values && metadata.values.length > 0) {
-        const valueStrs = metadata.values.map((v) => `${v.currency}${v.amount}`);
-        parts.push(`- Extracted values: ${valueStrs.join(', ')}`);
-    }
-
-    if (ocrResult.confidence_score) {
-        parts.push(`- OCR confidence: ${ocrResult.confidence_score}%`);
-    }
-
-    if (parts.length === 1) {
-        return ''; // No metadata to show
-    }
-
-    return '\n' + parts.join('\n');
 }
 
 /**
@@ -136,27 +120,15 @@ export function getVisionPrompt(): string {
 export function buildFallbackSummary(document: Document, ocrResult?: OcrResult | null): string {
     const parts: string[] = [];
 
-    // Document type
     if (document.document_category) {
         parts.push(`Document type: ${document.document_category}`);
     }
 
-    // Date info
     if (document.extracted_date) {
         const date = new Date(document.extracted_date);
         parts.push(`Date: ${date.toLocaleDateString()}`);
     }
 
-    // OCR metadata
-    if (ocrResult?.metadata) {
-        const metadata = ocrResult.metadata as OcrMetadata;
-
-        if (metadata.companies && metadata.companies.length > 0) {
-            parts.push(`Companies: ${metadata.companies.join(', ')}`);
-        }
-    }
-
-    // Text preview
     if (ocrResult?.raw_text) {
         const preview = ocrResult.raw_text.slice(0, 200).replace(/\s+/g, ' ').trim();
 

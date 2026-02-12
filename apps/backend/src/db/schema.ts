@@ -96,6 +96,8 @@ export interface OcrResultsTable {
     metadata: OcrMetadata | null;
     text_vector: unknown | null; // tsvector type
     processed_at: ColumnType<Date, Date | undefined, never>;
+    /** OCR engine identifier, e.g. "paddleocr/PP-OCRv4" or "tesseract/5.x-fin+eng" */
+    ocr_engine: ColumnType<string, string | undefined, string>;
 }
 
 export interface OcrMetadata {

@@ -1,4 +1,4 @@
-import type { ImageSize, TesseractOutput, TextDetectionResult } from './types';
+import type { ImageSize, OcrOutput, TextDetectionResult } from './types';
 import { TEXT_DETECTION_THRESHOLDS } from './types';
 
 /**
@@ -13,11 +13,11 @@ import { TEXT_DETECTION_THRESHOLDS } from './types';
  *
  * Uses multiple heuristics:
  * 1. Text density (characters per 1000 pixels²)
- * 2. Tesseract confidence score
+ * 2. OCR confidence score
  * 3. Raw text length
  * 4. Text quality analysis
  */
-export function detectTextPresence(ocrOutput: TesseractOutput, imageSize: ImageSize): TextDetectionResult {
+export function detectTextPresence(ocrOutput: OcrOutput, imageSize: ImageSize): TextDetectionResult {
     const { text, confidence } = ocrOutput;
     const { width, height } = imageSize;
 

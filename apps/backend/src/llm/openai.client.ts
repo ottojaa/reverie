@@ -50,11 +50,11 @@ export interface ChatCompletionResult {
 /**
  * Call OpenAI Chat Completion API for text summarization
  */
-export async function callChatCompletion(prompt: LlmPrompt, _model?: string): Promise<ChatCompletionResult> {
+export async function callChatCompletion(prompt: LlmPrompt): Promise<ChatCompletionResult> {
     const client = getOpenAIClient();
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: env.OPENAI_MODEL,
         messages: [
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },
@@ -64,18 +64,6 @@ export async function callChatCompletion(prompt: LlmPrompt, _model?: string): Pr
     });
 
     const content = response.choices[0]?.message?.content;
-
-    console.log('--------------------------------');
-    console.log('response', JSON.stringify(response, null, 2));
-    console.log('--------------------------------');
-    console.log('prompt', prompt);
-    console.log('--------------------------------');
-    console.log('maxTokens', prompt.maxTokens);
-    console.log('--------------------------------');
-    console.log('system', prompt.system);
-    console.log('--------------------------------');
-    console.log('user', prompt.user);
-    console.log('--------------------------------');
 
     if (!content) {
         throw new Error('OpenAI returned empty response');
@@ -123,12 +111,14 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
         result: {
             summary: result.summary,
             title: result.title,
-            key_entities: result.key_entities ?? [],
-            topics: result.topics ?? [],
             document_type: result.document_type,
+            language: result.language,
+            key_entities: result.key_entities ?? { people: [], organizations: [], locations: [] },
+            topics: result.topics ?? [],
+            extracted_dates: result.extracted_dates,
             key_values: result.key_values,
             sentiment: result.sentiment,
-            additional_dates: result.additional_dates,
+            table_data: result.table_data,
         },
         tokenCount: response.tokenCount,
     };
@@ -179,7 +169,6 @@ Respond in JSON format:
 
     const result = parseJsonResponse<VisionResponse>(content);
 
-    // Validate required fields
     if (!result.description || typeof result.description !== 'string') {
         throw new Error('Invalid vision response: missing description field');
     }

@@ -1,10 +1,11 @@
 import { createWorker, OEM, PSM, Worker } from 'tesseract.js';
-import type { TesseractOutput } from './types';
+import type { OcrOutput } from './types';
 
 /**
- * Tesseract OCR Client
+ * Tesseract OCR Client (Fallback)
  *
  * Wrapper around tesseract.js for text extraction.
+ * Uses Finnish + English language models.
  * Manages worker lifecycle and provides simplified interface.
  */
 
@@ -17,28 +18,24 @@ let workerInitPromise: Promise<Worker> | null = null;
  * Uses singleton pattern to avoid loading model multiple times
  */
 async function initializeWorker(): Promise<Worker> {
-    // If already initialized, return existing instance
     if (workerInstance) {
         return workerInstance;
     }
 
-    // If initialization is in progress, wait for it
     if (workerInitPromise) {
         return workerInitPromise;
     }
 
-    // Start initialization
     workerInitPromise = (async () => {
-        const worker = await createWorker('eng', OEM.DEFAULT, {
+        // Load Finnish + English language models
+        const worker = await createWorker('fin+eng', OEM.DEFAULT, {
             // Logger can be enabled for debugging
             // logger: (m) => console.log(m),
         });
 
         // Configure for document processing
         await worker.setParameters({
-            // Page segmentation mode: Assume single uniform block of text
             tessedit_pageseg_mode: PSM.AUTO,
-            // Preserve interword spaces
             preserve_interword_spaces: '1',
         });
 
@@ -51,16 +48,16 @@ async function initializeWorker(): Promise<Worker> {
 }
 
 /**
- * Recognize text in an image buffer
+ * Recognize text in an image buffer using Tesseract
  */
-export async function recognizeText(imageBuffer: Buffer): Promise<TesseractOutput> {
+export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
     const worker = await initializeWorker();
-
     const result = await worker.recognize(imageBuffer);
 
     return {
         text: result.data.text,
         confidence: result.data.confidence,
+        engine: 'tesseract/5.x-fin+eng',
     };
 }
 

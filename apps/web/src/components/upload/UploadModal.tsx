@@ -300,14 +300,6 @@ export function UploadModal() {
 
                     {/* Status / actions */}
                     <div className="flex flex-wrap items-center gap-2">
-                        {(stats.uploading > 0 || stats.processing > 0) && (
-                            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                <Loader2 className="size-4 animate-spin" />
-                                {stats.uploading > 0 && 'Uploading'}
-                                {stats.uploading > 0 && stats.processing > 0 && '·'}
-                                {stats.processing > 0 && 'Processing'}
-                            </span>
-                        )}
                         {hasFailed && !isUploading && (
                             <span className="flex items-center gap-1.5 text-sm text-destructive">
                                 <AlertCircle className="size-4" />

@@ -1,93 +1,23 @@
-import { CATEGORY_KEYWORDS } from './patterns';
-import type { DocumentCategory, ExtractedMetadata, ImageSize } from './types';
+import type { DocumentCategory, ImageSize } from './types';
 
 /**
  * Category Classifier
  *
- * Classifies documents based on:
- * 1. Whether text was detected
- * 2. Keyword matching for documents with text
- * 3. Image characteristics for non-text content
+ * Lightweight classifier for non-text images only (screenshot vs photo detection).
+ * For documents with text, the LLM handles classification.
  */
-
-interface CategoryScore {
-    category: DocumentCategory;
-    score: number;
-}
 
 /**
  * Common screenshot aspect ratios
  */
 const SCREENSHOT_ASPECT_RATIOS = [
-    { ratio: 16 / 9, name: '16:9' }, // Modern widescreen
-    { ratio: 16 / 10, name: '16:10' }, // MacBook, etc.
-    { ratio: 4 / 3, name: '4:3' }, // Traditional
-    { ratio: 21 / 9, name: '21:9' }, // Ultrawide
-    { ratio: 9 / 16, name: '9:16' }, // Mobile portrait
-    { ratio: 3 / 4, name: '3:4' }, // Tablet portrait
+    { ratio: 16 / 9 }, // Modern widescreen
+    { ratio: 16 / 10 }, // MacBook, etc.
+    { ratio: 4 / 3 }, // Traditional
+    { ratio: 21 / 9 }, // Ultrawide
+    { ratio: 9 / 16 }, // Mobile portrait
+    { ratio: 3 / 4 }, // Tablet portrait
 ];
-
-/**
- * Classify a document based on its text content
- */
-export function classifyDocument(text: string, metadata: ExtractedMetadata, hasMeaningfulText: boolean): DocumentCategory {
-    // If no meaningful text, defer to non-text classification
-    if (!hasMeaningfulText) {
-        return 'other'; // Will be overridden by classifyNonTextImage
-    }
-
-    const normalizedText = text.toLowerCase();
-    const scores: CategoryScore[] = [];
-
-    // Score each category based on keyword matches
-    for (const [category, { keywords, weight }] of Object.entries(CATEGORY_KEYWORDS)) {
-        let score = 0;
-
-        for (const keyword of keywords) {
-            // Count occurrences of each keyword
-            const regex = new RegExp(keyword.toLowerCase(), 'gi');
-            const matches = normalizedText.match(regex);
-
-            if (matches) {
-                score += matches.length * weight;
-            }
-        }
-
-        if (score > 0) {
-            scores.push({
-                category: category as DocumentCategory,
-                score,
-            });
-        }
-    }
-
-    // Boost scores based on extracted metadata
-    if (metadata.currencyValues.length > 0) {
-        // Documents with currency are likely financial
-        boostScore(scores, 'receipt', 1);
-        boostScore(scores, 'invoice', 1);
-        boostScore(scores, 'statement', 1);
-        boostScore(scores, 'stock_statement', 1);
-    }
-
-    if (metadata.percentages.length > 0) {
-        // Percentages often indicate financial/report documents
-        boostScore(scores, 'report', 1);
-        boostScore(scores, 'stock_statement', 1);
-    }
-
-    // Sort by score (highest first)
-    scores.sort((a, b) => b.score - a.score);
-
-    // Return highest scoring category, or 'other' if no strong matches
-    const topScore = scores[0];
-
-    if (topScore && topScore.score >= 2) {
-        return topScore.category;
-    }
-
-    return 'other';
-}
 
 /**
  * Classify an image without meaningful text
@@ -111,28 +41,14 @@ export function classifyNonTextImage(imageSize: ImageSize, filename: string): Do
     const isScreenshotRatio = SCREENSHOT_ASPECT_RATIOS.some((ar) => Math.abs(aspectRatio - ar.ratio) < 0.1);
 
     // Screenshots tend to have specific dimensions (screen resolutions)
-    const commonScreenWidths = [1920, 1280, 2560, 3840, 1440, 1366, 750, 1125, 1242]; // Desktop + mobile
+    const commonScreenWidths = [1920, 1280, 2560, 3840, 1440, 1366, 750, 1125, 1242];
     const isCommonScreenWidth = commonScreenWidths.some((w) => Math.abs(width - w) < 50);
 
     if ((isScreenshotRatio && width >= 1024) || (isCommonScreenWidth && width >= 640)) {
         return 'screenshot';
     }
 
-    // Default to photo for images without text
     return 'photo';
-}
-
-/**
- * Helper to boost a category's score
- */
-function boostScore(scores: CategoryScore[], category: DocumentCategory, boost: number): void {
-    const existing = scores.find((s) => s.category === category);
-
-    if (existing) {
-        existing.score += boost;
-    } else {
-        scores.push({ category, score: boost });
-    }
 }
 
 /**

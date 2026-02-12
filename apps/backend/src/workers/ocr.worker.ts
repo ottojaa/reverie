@@ -65,7 +65,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
                 hasMeaningfulText: false,
                 category: 'other',
                 needsReview: false,
-                metadata: null,
+                ocrEngine: 'none',
             };
         }
 
@@ -122,6 +122,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             confidence: result.confidenceScore,
             hasMeaningfulText: result.hasMeaningfulText,
             category: result.category,
+            ocrEngine: result.ocrEngine,
         });
 
         return {
@@ -131,7 +132,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             hasMeaningfulText: result.hasMeaningfulText,
             category: result.category,
             needsReview: result.needsReview,
-            metadata: result.metadata,
+            ocrEngine: result.ocrEngine,
         };
     } catch (error) {
         // Update document status to failed
@@ -148,6 +149,10 @@ export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
     const worker = new Worker<OcrJobData, OcrJobResult>(QUEUE_NAMES.OCR, async (job) => processJobWithTracking(job, processOcrJob), {
         connection: getRedisConnectionOptions(),
         concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.OCR],
+        // PaddleOCR model loading on first request can take 20s+;
+        // default stalledInterval (30s) is too tight and causes false stalls.
+        stalledInterval: 120_000,
+        lockDuration: 120_000,
     });
 
     worker.on('completed', (job) => {

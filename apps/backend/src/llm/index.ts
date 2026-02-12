@@ -24,6 +24,7 @@ export type {
     DocumentLlmResult,
     EnhancedMetadata,
     FileCategory,
+    KeyEntities,
     LlmEligibility,
     LlmMetadata,
     LlmProcessingType,
@@ -33,6 +34,7 @@ export type {
     PreparedText,
     SamplingStrategy,
     SkippedMetadata,
+    TableRow,
     VisionResponse,
     VisionResult,
 } from './types';

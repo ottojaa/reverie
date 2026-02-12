@@ -8,19 +8,18 @@ import type { DocumentCategory } from '@reverie/shared';
 export type { DocumentCategory };
 
 /**
- * Extracted metadata from document text
+ * Supported OCR engines
  */
-export interface ExtractedMetadata {
-    dates: Date[];
-    primaryDate?: Date | undefined; // Best guess for "document date"
-    companies: string[];
-    currencyValues: CurrencyValue[];
-    percentages: number[];
-}
+export type OcrEngine = 'paddleocr' | 'tesseract';
 
-export interface CurrencyValue {
-    amount: number;
-    currency: string;
+/**
+ * Unified OCR output from any engine
+ */
+export interface OcrOutput {
+    text: string;
+    confidence: number;
+    /** Engine identifier with version, e.g. "paddleocr/PP-OCRv4" or "tesseract/5.x-fin+eng" */
+    engine: string;
 }
 
 /**
@@ -43,14 +42,6 @@ export interface TextDetectionResult {
 }
 
 /**
- * Tesseract OCR output
- */
-export interface TesseractOutput {
-    text: string;
-    confidence: number;
-}
-
-/**
  * Full OCR processing result
  */
 export interface OcrProcessingResult {
@@ -58,18 +49,21 @@ export interface OcrProcessingResult {
     confidenceScore: number;
     textDensity: number;
     hasMeaningfulText: boolean;
-    metadata: ExtractedMetadata | null;
     category: DocumentCategory;
     needsReview: boolean;
+    /** Which OCR engine produced this result, e.g. "paddleocr/PP-OCRv4" */
+    ocrEngine: string;
 }
 
 /**
  * Pre-processing options for images
  */
 export interface PreprocessingOptions {
-    maxWidth?: number | undefined;
+    /** Minimum width to upscale small images to (for better OCR accuracy) */
+    targetMinWidth?: number | undefined;
     grayscale?: boolean | undefined;
     normalizeContrast?: boolean | undefined;
+    sharpen?: boolean | undefined;
     removeNoise?: boolean | undefined;
 }
 
@@ -82,7 +76,7 @@ export const TEXT_DETECTION_THRESHOLDS = {
     /** When confidence >= this AND text length >= highConfidenceMinLength, bypass density check (screenshots with sparse UI layout) */
     highConfidenceBypass: 80,
     highConfidenceMinLength: 100,
-    /** Minimum Tesseract confidence to consider reliable */
+    /** Minimum OCR confidence to consider reliable */
     minConfidence: 40,
     /** Minimum raw text length to consider meaningful */
     minTextLength: 20,
@@ -98,8 +92,8 @@ export const TEXT_DETECTION_THRESHOLDS = {
 export const OCR_LIMITS = {
     /** Maximum image size in bytes (10MB) */
     maxFileSize: 10 * 1024 * 1024,
-    /** Maximum image width before resizing */
-    maxImageWidth: 2000,
+    /** Target minimum width for OCR (upscale small images) */
+    targetMinWidth: 2000,
     /** Maximum processing time per image in ms */
-    maxProcessingTime: 30000,
+    maxProcessingTime: 60000,
 } as const;

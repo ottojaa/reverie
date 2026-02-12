@@ -28,11 +28,14 @@ const envSchema = z.object({
     STORAGE_S3_ACCESS_KEY: z.string().optional(),
     STORAGE_S3_SECRET_KEY: z.string().optional(),
 
+    // OCR Engine
+    OCR_ENGINE: z.enum(['paddleocr', 'tesseract']).default('paddleocr'),
+    PYTHON_PATH: z.string().default('python3'),
+
     // OpenAI / LLM
     OPENAI_API_KEY: z.string().optional(),
     OPENAI_MODEL: z.string().default('gpt-4o-mini'),
-    OPENAI_TEMPERATURE: z.coerce.number().default(0.3),
-    OPENAI_MAX_TOKENS: z.coerce.number().default(1000),
+    OPENAI_MAX_TOKENS: z.coerce.number().default(2000),
 
     // LLM Processing
     LLM_ENABLED: z.coerce.boolean().default(true),

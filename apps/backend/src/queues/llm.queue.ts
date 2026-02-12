@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import { getRedisConnectionOptions } from './redis';
 import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
-import type { LlmProcessingType, LlmSkipReason } from '../llm/types';
+import type { KeyEntities, LlmProcessingType, LlmSkipReason } from '../llm/types';
 
 export interface LlmJobData {
     documentId: string;
@@ -14,7 +14,7 @@ export interface LlmJobResult {
     summary: string | null;
     enhancedMetadata: {
         title?: string | undefined;
-        keyEntities?: string[] | undefined;
+        keyEntities?: KeyEntities | undefined;
         topics?: string[] | undefined;
         skipped?: boolean | undefined;
         skipReason?: LlmSkipReason | undefined;

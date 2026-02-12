@@ -94,8 +94,6 @@ export class LocalStorageProvider implements IStorageProvider {
     }
 
     getAbsolutePath(storagePath: string): string {
-        console.log('getAbsolutePath', this._rootPath, storagePath);
-
         return path.join(this._rootPath, storagePath);
     }
 }

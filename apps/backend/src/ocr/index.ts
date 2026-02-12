@@ -6,7 +6,7 @@
 
 // Main service
 export { processDocument, shouldQueueLlmJob, shutdownOcrService } from './ocr.service';
-export type { DocumentCategory, ExtractedMetadata, OcrProcessingResult, ProcessDocumentOptions } from './ocr.service';
+export type { DocumentCategory, OcrProcessingResult, ProcessDocumentOptions } from './ocr.service';
 
 // Image preprocessing
 export { getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
@@ -14,15 +14,13 @@ export { getImageSize, isProcessableImage, preprocessImage, validateImageForOcr 
 // Text detection
 export { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from './text-detector';
 
-// Metadata extraction
-export { extractCompanies, extractCurrencyValues, extractDates, extractMetadata, extractPercentages } from './metadata-extractor';
+// Category classification (non-text images only)
+export { classifyNonTextImage, getCategoryDescription } from './category-classifier';
 
-// Category classification
-export { classifyDocument, classifyNonTextImage, getCategoryDescription } from './category-classifier';
-
-// Tesseract client
-export { isWorkerInitialized, recognizeText, terminateWorker } from './tesseract.client';
+// OCR clients
+export { recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
+export { isWorkerInitialized, recognizeText as recognizeWithTesseract, terminateWorker } from './tesseract.client';
 
 // Types
 export { OCR_LIMITS, TEXT_DETECTION_THRESHOLDS } from './types';
-export type { CurrencyValue, ImageSize, PreprocessingOptions, TesseractOutput, TextDetectionResult } from './types';
+export type { ImageSize, OcrEngine, OcrOutput, PreprocessingOptions, TextDetectionResult } from './types';

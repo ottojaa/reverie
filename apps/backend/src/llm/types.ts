@@ -47,15 +47,37 @@ export interface LlmPrompt {
 
 // ===== LLM Response Types =====
 
+/**
+ * Structured key entities from LLM extraction
+ */
+export interface KeyEntities {
+    people: string[];
+    organizations: string[];
+    locations: string[];
+}
+
+/**
+ * Row of tabular data extracted from the document
+ */
+export interface TableRow {
+    item: string;
+    columns: Record<string, string>;
+}
+
+/**
+ * LLM summary/extraction response from the model
+ */
 export interface LlmSummaryResponse {
     summary: string;
     title?: string | undefined;
-    key_entities: string[];
-    topics: string[];
     document_type?: string | undefined;
+    language?: string | undefined;
+    key_entities: KeyEntities;
+    topics: string[];
+    extracted_dates?: string[] | undefined;
     key_values?: Array<{ label: string; value: string }> | undefined;
     sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
-    additional_dates?: string[] | undefined;
+    table_data?: TableRow[] | undefined;
 }
 
 export interface VisionResponse {
@@ -70,12 +92,14 @@ export interface VisionResponse {
 export interface EnhancedMetadata {
     type: 'text_summary' | 'vision_describe';
     title?: string | undefined;
-    keyEntities: string[];
+    language?: string | undefined;
+    keyEntities: KeyEntities;
     topics: string[];
     sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
     documentType?: string | undefined;
     extractedDates?: string[] | undefined;
     keyValues?: Array<{ label: string; value: string }> | undefined;
+    tableData?: TableRow[] | undefined;
     // Sampling info (for large files)
     truncated?: boolean | undefined;
     samplingStrategy?: SamplingStrategy | undefined;

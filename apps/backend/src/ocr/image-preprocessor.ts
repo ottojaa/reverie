@@ -6,16 +6,18 @@ import { OCR_LIMITS } from './types';
  * Image Preprocessor for OCR
  *
  * Optimizes images before OCR processing:
+ * - Upscale small images (OCR engines perform better on higher-res images)
  * - Convert to grayscale (improves accuracy)
  * - Normalize contrast
- * - Resize if too large
- * - Remove noise
+ * - Sharpen edges for clearer text
+ * - Optional noise removal
  */
 
 const DEFAULT_OPTIONS: PreprocessingOptions = {
-    maxWidth: OCR_LIMITS.maxImageWidth,
+    targetMinWidth: OCR_LIMITS.targetMinWidth,
     grayscale: true,
     normalizeContrast: true,
+    sharpen: true,
     removeNoise: false, // Disabled by default as it can sometimes hurt quality
 };
 
@@ -27,13 +29,18 @@ export async function preprocessImage(buffer: Buffer, options: PreprocessingOpti
 
     let pipeline = sharp(buffer);
 
-    // Resize if too large (maintain aspect ratio)
-    if (opts.maxWidth) {
+    // Get current dimensions to decide on scaling
+    const metadata = await sharp(buffer).metadata();
+    const currentWidth = metadata.width ?? 0;
+
+    // Upscale small images for better OCR accuracy
+    // Only upscale if below target, never downscale
+    if (opts.targetMinWidth && currentWidth > 0 && currentWidth < opts.targetMinWidth) {
         pipeline = pipeline.resize({
-            width: opts.maxWidth,
-            height: opts.maxWidth,
+            width: opts.targetMinWidth,
             fit: 'inside',
-            withoutEnlargement: true,
+            withoutEnlargement: false, // Allow upscaling
+            kernel: 'lanczos3', // High-quality upscaling
         });
     }
 
@@ -45,6 +52,11 @@ export async function preprocessImage(buffer: Buffer, options: PreprocessingOpti
     // Normalize/enhance contrast
     if (opts.normalizeContrast) {
         pipeline = pipeline.normalize();
+    }
+
+    // Sharpen edges for clearer text recognition
+    if (opts.sharpen) {
+        pipeline = pipeline.sharpen({ sigma: 1.5 });
     }
 
     // Apply median filter to reduce noise (optional)
@@ -83,7 +95,6 @@ export function isProcessableImage(mimeType: string): boolean {
  * Validate image for OCR processing
  */
 export async function validateImageForOcr(buffer: Buffer): Promise<{ valid: boolean; error?: string }> {
-    // Check file size
     if (buffer.length > OCR_LIMITS.maxFileSize) {
         return {
             valid: false,
@@ -91,7 +102,6 @@ export async function validateImageForOcr(buffer: Buffer): Promise<{ valid: bool
         };
     }
 
-    // Check if it's a valid image
     try {
         const metadata = await sharp(buffer).metadata();
 
@@ -99,7 +109,6 @@ export async function validateImageForOcr(buffer: Buffer): Promise<{ valid: bool
             return { valid: false, error: 'Invalid image: could not determine dimensions' };
         }
 
-        // Check for zero-size images
         if (metadata.width === 0 || metadata.height === 0) {
             return { valid: false, error: 'Invalid image: zero dimensions' };
         }
