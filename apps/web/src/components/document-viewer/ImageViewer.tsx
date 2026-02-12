@@ -114,7 +114,7 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
         <div
             ref={containerRef}
             className={cn(
-                'relative flex h-full w-full items-center justify-center overflow-hidden',
+                'relative flex h-full w-full items-center justify-center overflow-hidden p-4 md:p-6',
                 isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
             onClick={handleClick}
@@ -129,7 +129,7 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
                     src={thumbnailUrl}
                     alt=""
                     aria-hidden
-                    className="absolute inset-0 m-auto max-h-full max-w-full object-contain blur-xl scale-105 opacity-60"
+                    className="absolute inset-4 m-auto max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] object-contain blur-xl scale-105 opacity-60 md:inset-6 md:max-h-[calc(100%-3rem)] md:max-w-[calc(100%-3rem)]"
                 />
             )}
 
@@ -149,7 +149,7 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
                         transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
                         transition: hasDragged.current ? 'none' : 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
                     }}
-                    className="max-h-[calc(100vh-4rem)] max-w-full select-none object-contain"
+                    className="max-h-[calc(100vh-8rem)] max-w-full select-none rounded-lg object-contain"
                     draggable={false}
                 />
             </motion.div>

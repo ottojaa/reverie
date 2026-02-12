@@ -39,8 +39,10 @@ export function useDocumentStatus(documentId: string | undefined) {
                 return { ...old, ...updates };
             });
 
-            // Also invalidate the documents list to refresh it
+            // Refetch the full document to get fresh LLM summary/metadata, OCR result, etc.
             if (event.status === 'complete') {
+                queryClient.invalidateQueries({ queryKey: ['document', documentId] });
+                queryClient.invalidateQueries({ queryKey: ['document', documentId, 'ocr'] });
                 queryClient.invalidateQueries({ queryKey: ['documents'] });
             }
         },

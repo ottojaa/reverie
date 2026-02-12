@@ -183,9 +183,7 @@ export function UploadModal() {
                 clearFailed();
                 queryClient.invalidateQueries({ queryKey: ['documents'] });
                 queryClient.invalidateQueries({ queryKey: ['sections'] });
-                toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`, {
-                    description: 'Text recognition will continue in the background',
-                });
+                toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`);
             }, ALL_COMPLETE_CLOSE_DELAY_MS);
 
             return () => {
@@ -261,7 +259,7 @@ export function UploadModal() {
                                                     phase === 'processing' && 'bg-accent/15 text-accent',
                                                 )}
                                             >
-                                                    {phase === 'uploading' ? 'Uploading' : 'Generating previews'}
+                                                {phase === 'uploading' ? 'Uploading' : 'Generating previews'}
                                             </span>
                                         )
                                     )}

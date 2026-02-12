@@ -1,8 +1,10 @@
+import { AiSummaryBanner } from '@/components/document-viewer/AiSummaryBanner';
 import { DocumentDetailsDrawer } from '@/components/document-viewer/DocumentDetailsDrawer';
 import type { ViewerProps } from '@/components/document-viewer/viewer-registry';
 import { getViewerLoader } from '@/components/document-viewer/viewer-registry';
 import { ViewerToolbar } from '@/components/document-viewer/ViewerToolbar';
 import { useDocument } from '@/lib/api';
+import { useDocumentStatus } from '@/lib/useDocumentStatus';
 import { useParams } from '@tanstack/react-router';
 import { FileWarning } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -53,6 +55,9 @@ export function DocumentPage() {
     const { data: document, isLoading, error } = useDocument(id);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
+    // Subscribe to real-time job status updates via websocket
+    useDocumentStatus(document?.id);
+
     const toggleDetails = useCallback(() => setIsDetailsOpen((v) => !v), []);
 
     // Resolve the viewer component via dynamic import (no Suspense needed)
@@ -94,12 +99,17 @@ export function DocumentPage() {
             {/* Toolbar overlay */}
             <ViewerToolbar document={document} fileUrl={fileUrl} isDetailsOpen={isDetailsOpen} onToggleDetails={toggleDetails} />
 
+            {/* AI Summary banner — between toolbar and viewer */}
+            <div className="pt-14">
+                <AiSummaryBanner document={document} />
+            </div>
+
             {/* Viewer area */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-1 overflow-hidden pt-14"
+                className="flex flex-1 overflow-hidden"
             >
                 {ViewerComponent && fileUrl ? (
                     <ViewerComponent document={document} fileUrl={fileUrl} />

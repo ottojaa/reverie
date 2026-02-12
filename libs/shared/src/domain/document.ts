@@ -20,17 +20,45 @@ export interface CurrencyValue {
     currency: string;
 }
 
-export interface LlmMetadata {
-    title?: string;
-    key_entities: string[];
-    topics: string[];
-    sentiment?: 'positive' | 'neutral' | 'negative';
-    document_type?: string;
-    extracted_dates?: string[];
-    key_values?: KeyValue[];
+/**
+ * Structured key entities extracted by the LLM.
+ * Matches the backend EnhancedMetadata.keyEntities shape.
+ */
+export interface KeyEntities {
+    people: string[];
+    organizations: string[];
+    locations: string[];
+}
+
+/**
+ * Row of tabular data extracted from the document.
+ */
+export interface TableRow {
+    item: string;
+    columns: Record<string, string>;
 }
 
 export interface KeyValue {
     label: string;
     value: string;
+}
+
+/**
+ * LLM-generated metadata stored in the `llm_metadata` column.
+ * Matches the backend `EnhancedMetadata` shape (camelCase).
+ *
+ * NOTE: The API schema types this as `Record<string, unknown> | null`,
+ * so consumers must parse/validate at runtime.
+ */
+export interface LlmMetadata {
+    type: 'text_summary' | 'vision_describe';
+    title?: string;
+    language?: string;
+    keyEntities: KeyEntities;
+    topics: string[];
+    sentiment?: 'positive' | 'neutral' | 'negative';
+    documentType?: string;
+    extractedDates?: string[];
+    keyValues?: KeyValue[];
+    tableData?: TableRow[];
 }

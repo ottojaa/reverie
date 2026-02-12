@@ -158,14 +158,21 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
     // --- Delete ---
 
     const handleDelete = async () => {
+        const count = selectedIds.size;
         const confirmed = await confirm({
-            title: 'Delete document?',
+            title: count === 1 ? 'Delete document?' : `Delete ${count} documents?`,
             description: 'This action cannot be undone.',
             confirmText: 'Delete',
+            cancelText: 'Cancel',
             variant: 'destructive',
         });
 
-        if (confirmed) deleteDocuments.mutate([document.id]);
+        if (!confirmed) return;
+
+        const ids = Array.from(selectedIds);
+        deleteDocuments.mutate(ids, {
+            onSuccess: () => selection?.clear(),
+        });
     };
 
     return {
