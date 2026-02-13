@@ -7,7 +7,7 @@
 
 import { env } from '../config/env';
 import type { Document, OcrResult } from '../db/schema';
-import type { FileCategory, LlmEligibility, LlmSkipReason } from './types';
+import type { FileCategory, LlmEligibility, LlmSkipReason, SkippedMetadata } from './types';
 
 /**
  * Check if a document is eligible for LLM processing
@@ -142,12 +142,12 @@ export function getFileCategory(mimeType: string): FileCategory {
 /**
  * Build skip metadata for documents that won't be processed
  */
-export function buildSkipMetadata(reason: LlmSkipReason, textLength?: number, warnings?: string[]): Record<string, unknown> {
+export function buildSkipMetadata(reason: LlmSkipReason, textLength?: number, warnings?: string[]): SkippedMetadata {
     return {
         skipped: true,
-        skip_reason: reason,
-        skipped_at: new Date().toISOString(),
-        original_text_length: textLength,
+        skipReason: reason,
+        skippedAt: new Date().toISOString(),
+        originalTextLength: textLength,
         warnings,
     };
 }

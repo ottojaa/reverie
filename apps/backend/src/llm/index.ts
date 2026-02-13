@@ -23,6 +23,7 @@ export { isOpenAIAvailable, isVisionAvailable } from './openai.client';
 export type {
     DocumentLlmResult,
     EnhancedMetadata,
+    ExtractedDate,
     FileCategory,
     KeyEntities,
     LlmEligibility,

@@ -131,15 +131,16 @@ def main():
     # ── Load models once ─────────────────────────────────────────
     try:
         from paddleocr import PaddleOCR
+
     except ImportError as e:
         _print_json({"error": f"PaddleOCR not installed: {e}"})
         sys.exit(1)
 
     try:
         ocr = PaddleOCR(
-            lang="en",
-            ocr_version="PP-OCRv3",
+            ocr_version="PP-OCRv4",
             use_textline_orientation=True,
+            enable_mkldnn=True,                 # CPU optimization
         )
     except Exception as e:
         _print_json({"error": f"Failed to initialize PaddleOCR: {e}"})

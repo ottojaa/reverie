@@ -80,6 +80,8 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
                 llm_summary: fallbackSummary,
                 llm_metadata: {
                     type: 'text_summary',
+                    keyEntities: { people: [], organizations: [], locations: [] },
+                    topics: [],
                     fallback: true,
                     reason: 'openai_unavailable',
                 },
@@ -118,6 +120,7 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
         topics: result.topics,
         sentiment: result.sentiment,
         documentType: result.document_type,
+        extractedDate: result.extracted_date,
         extractedDates: result.extracted_dates,
         keyValues: result.key_values,
         tableData: result.table_data,
@@ -127,6 +130,9 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
         originalTextLength: prepared.originalLength,
         sampledSections: prepared.sampledSections,
     };
+
+    // Parse primary extracted date into a Date for the DB column
+    const extractedDate = result.extracted_date ? new Date(`${result.extracted_date}T00:00:00`) : null;
 
     // Update document with LLM-determined category if available
     const documentCategory = result.document_type ?? document.document_category;
@@ -140,6 +146,7 @@ async function processTextSummary(document: Document, ocrResult: OcrResult): Pro
             llm_processed_at: new Date(),
             llm_token_count: tokenCount,
             document_category: documentCategory,
+            extracted_date: extractedDate,
         })
         .where('id', '=', document.id)
         .execute();

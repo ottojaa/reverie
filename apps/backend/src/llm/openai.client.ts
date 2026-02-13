@@ -115,6 +115,7 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
             language: result.language,
             key_entities: result.key_entities ?? { people: [], organizations: [], locations: [] },
             topics: result.topics ?? [],
+            extracted_date: result.extracted_date,
             extracted_dates: result.extracted_dates,
             key_values: result.key_values,
             sentiment: result.sentiment,

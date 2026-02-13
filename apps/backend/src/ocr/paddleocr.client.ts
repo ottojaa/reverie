@@ -265,3 +265,8 @@ export async function shutdownPaddleOcr(): Promise<void> {
 
     cleanup();
 }
+
+process.on('SIGINT', shutdownPaddleOcr);
+process.on('SIGTERM', shutdownPaddleOcr);
+process.on('SIGQUIT', shutdownPaddleOcr);
+process.on('exit', shutdownPaddleOcr);

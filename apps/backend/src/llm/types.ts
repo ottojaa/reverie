@@ -57,6 +57,14 @@ export interface KeyEntities {
 }
 
 /**
+ * A date extracted from the document, with context about what it represents
+ */
+export interface ExtractedDate {
+    date: string;
+    context: string;
+}
+
+/**
  * Row of tabular data extracted from the document
  */
 export interface TableRow {
@@ -74,7 +82,8 @@ export interface LlmSummaryResponse {
     language?: string | undefined;
     key_entities: KeyEntities;
     topics: string[];
-    extracted_dates?: string[] | undefined;
+    extracted_date?: string | undefined;
+    extracted_dates?: ExtractedDate[] | undefined;
     key_values?: Array<{ label: string; value: string }> | undefined;
     sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
     table_data?: TableRow[] | undefined;
@@ -97,7 +106,8 @@ export interface EnhancedMetadata {
     topics: string[];
     sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
     documentType?: string | undefined;
-    extractedDates?: string[] | undefined;
+    extractedDate?: string | undefined;
+    extractedDates?: ExtractedDate[] | undefined;
     keyValues?: Array<{ label: string; value: string }> | undefined;
     tableData?: TableRow[] | undefined;
     // Sampling info (for large files)

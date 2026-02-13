@@ -48,7 +48,8 @@ OUTPUT FORMAT (strict JSON):
     "locations": ["Cities, addresses, countries mentioned"]
   },
   "topics": ["Main themes/topics as keywords"],
-  "extracted_dates": ["All dates found, normalized to YYYY-MM-DD format"],
+  "extracted_date": "YYYY-MM-DD — the single most representative date for this document (e.g. invoice date, statement date, letter date). Omit if no clear primary date.",
+  "extracted_dates": [{"date": "YYYY-MM-DD", "context": "what this date represents (e.g. 'invoice date', 'due date', 'validity start')"}],
   "key_values": [
     {"label": "Descriptive label for the value", "value": "The extracted value with original units/currency"}
   ],
@@ -67,7 +68,8 @@ EXTRACTION GUIDELINES:
 - currency: Documents may contain multiple currencies (e.g. Finnish markka "mk" and euro "e"/"EUR"). Never mix currencies in the same figure or sentence. If converting, state both values explicitly (e.g. "22,869.71 mk (approx. 3,847 EUR)"). When a document uses one primary currency, keep all amounts in that currency.
 - key_values: Extract ALL significant named values including account numbers, reference numbers, totals, subtotals, conversion rates, service numbers, and any other labeled values. Preserve the original currency symbols and number formats.
 - table_data: If the document contains tabular data (e.g. stock holdings, transaction lists, line items), extract EVERY row as a structured object. Use the header labels as column keys. This is critical for indexing purposes.
-- extracted_dates: Normalize all dates to YYYY-MM-DD format. For European date formats (DD.MM.YYYY), parse correctly.
+- extracted_date: The single primary date of the document. For invoices/receipts, use the issue date. For statements, use the statement date. For letters, use the letter date. Prefer the document's own date over due dates, validity periods, or referenced dates. Omit if no clear primary date exists.
+- extracted_dates: Normalize all dates to YYYY-MM-DD format. For European date formats (DD.MM.YYYY), parse correctly. Include a short "context" string describing what each date represents (e.g. "invoice date", "due date", "period start", "transaction date").
 - key_entities.organizations: Include company names, stock names, bank names, and other institutions even if abbreviated or in a table.
 - Do not include empty arrays or null values in the output -- omit the field instead.`;
 
@@ -115,7 +117,7 @@ REMINDER: Extract key_entities first. Then write the summary using the EXACT nam
     return {
         system: SYSTEM_MESSAGE,
         user: userMessage,
-        maxTokens: 2000,
+        maxTokens: 25000,
     };
 }
 

@@ -44,6 +44,14 @@ export interface KeyValue {
 }
 
 /**
+ * A date extracted from the document, with context about what it represents.
+ */
+export interface ExtractedDate {
+    date: string;
+    context: string;
+}
+
+/**
  * LLM-generated metadata stored in the `llm_metadata` column.
  * Matches the backend `EnhancedMetadata` shape (camelCase).
  *
@@ -58,7 +66,8 @@ export interface LlmMetadata {
     topics: string[];
     sentiment?: 'positive' | 'neutral' | 'negative';
     documentType?: string;
-    extractedDates?: string[];
+    extractedDate?: string;
+    extractedDates?: ExtractedDate[];
     keyValues?: KeyValue[];
     tableData?: TableRow[];
 }

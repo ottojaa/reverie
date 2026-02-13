@@ -1,4 +1,5 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
+import type { LlmMetadata } from '../llm/types';
 
 // Enums
 export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
@@ -68,7 +69,7 @@ export interface DocumentsTable {
     llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     llm_summary: string | null;
-    llm_metadata: Record<string, unknown> | null;
+    llm_metadata: LlmMetadata | null;
     llm_processed_at: Date | null;
     llm_token_count: number | null;
     created_at: ColumnType<Date, Date | undefined, never>;

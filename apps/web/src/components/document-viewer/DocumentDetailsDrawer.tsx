@@ -4,18 +4,7 @@ import { useReprocessLlm, useRetryOcr } from '@/lib/api/documents';
 import { formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document, LlmMetadata } from '@reverie/shared';
-import {
-    Brain,
-    Calendar,
-    Clock,
-    ExternalLink,
-    FileType,
-    Hash,
-    ImageIcon,
-    Layers,
-    Sparkles,
-    X,
-} from 'lucide-react';
+import { Brain, Calendar, Clock, ExternalLink, FileType, Hash, ImageIcon, Layers, Sparkles, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { OcrResultDialog } from './OcrResultDialog';
@@ -108,8 +97,7 @@ function parseLlmMetadata(raw: Record<string, unknown> | null | undefined): LlmM
     // Skip if this is a "skipped" metadata record
     if (raw.skipped === true) return null;
 
-    const parseStringArray = (val: unknown): string[] =>
-        Array.isArray(val) ? val.filter((s): s is string => typeof s === 'string') : [];
+    const parseStringArray = (val: unknown): string[] => (Array.isArray(val) ? val.filter((s): s is string => typeof s === 'string') : []);
 
     // keyEntities is { people: string[], organizations: string[], locations: string[] }
     const rawEntities = typeof raw.keyEntities === 'object' && raw.keyEntities != null ? (raw.keyEntities as Record<string, unknown>) : {};
@@ -134,14 +122,24 @@ function parseLlmMetadata(raw: Record<string, unknown> | null | undefined): LlmM
         result.sentiment = raw.sentiment;
     }
 
+    if (typeof raw.extractedDate === 'string') result.extractedDate = raw.extractedDate;
+
     if (Array.isArray(raw.extractedDates)) {
-        result.extractedDates = parseStringArray(raw.extractedDates);
+        result.extractedDates = raw.extractedDates
+            .filter(
+                (d): d is { date: string; context: string } | string =>
+                    (typeof d === 'object' && d != null && typeof (d as Record<string, unknown>).date === 'string') || typeof d === 'string',
+            )
+            .map((d) => (typeof d === 'string' ? { date: d, context: '' } : d));
     }
 
     if (Array.isArray(raw.keyValues)) {
         result.keyValues = raw.keyValues.filter(
             (kv): kv is { label: string; value: string } =>
-                typeof kv === 'object' && kv != null && typeof (kv as Record<string, unknown>).label === 'string' && typeof (kv as Record<string, unknown>).value === 'string',
+                typeof kv === 'object' &&
+                kv != null &&
+                typeof (kv as Record<string, unknown>).label === 'string' &&
+                typeof (kv as Record<string, unknown>).value === 'string',
         );
     }
 
@@ -183,9 +181,7 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
             </div>
 
             {/* Title */}
-            {metadata.title && (
-                <p className="text-sm font-medium text-foreground">{metadata.title}</p>
-            )}
+            {metadata.title && <p className="text-sm font-medium text-foreground">{metadata.title}</p>}
 
             {/* Document type + key entities */}
             {(metadata.documentType || hasEntities) && (
@@ -199,7 +195,9 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
                     {hasEntities && (
                         <div className="flex flex-wrap gap-1">
                             {entities.map((entity) => (
-                                <Chip key={entity} variant="primary">{entity}</Chip>
+                                <Chip key={entity} variant="primary">
+                                    {entity}
+                                </Chip>
                             ))}
                         </div>
                     )}
@@ -212,7 +210,9 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Topics</p>
                     <div className="flex flex-wrap gap-1">
                         {metadata.topics.map((topic) => (
-                            <Chip key={topic} variant="secondary">{topic}</Chip>
+                            <Chip key={topic} variant="secondary">
+                                {topic}
+                            </Chip>
                         ))}
                     </div>
                 </div>
@@ -238,8 +238,11 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
                 <div className="space-y-1.5">
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Dates</p>
                     <div className="flex flex-wrap gap-1.5 text-xs text-foreground">
-                        {metadata.extractedDates!.map((date) => (
-                            <span key={date} className="rounded bg-muted px-1.5 py-0.5 text-[11px]">{date}</span>
+                        {metadata.extractedDates!.map((d) => (
+                            <span key={d.date + d.context} className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
+                                {d.date}
+                                {d.context ? ` (${d.context})` : ''}
+                            </span>
                         ))}
                     </div>
                 </div>
@@ -360,12 +363,7 @@ function DrawerBody({ document }: { document: Document }) {
                 </button>
             </motion.div>
 
-            <OcrResultDialog
-                documentId={document.id}
-                ocrStatus={ocrStatus}
-                open={ocrDialogOpen}
-                onOpenChange={setOcrDialogOpen}
-            />
+            <OcrResultDialog documentId={document.id} ocrStatus={ocrStatus} open={ocrDialogOpen} onOpenChange={setOcrDialogOpen} />
         </div>
     );
 }

@@ -67,7 +67,7 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-const ALL_COMPLETE_CLOSE_DELAY_MS = 3000;
+const ALL_COMPLETE_CLOSE_DELAY_MS = 2000;
 
 function useOverallProgress() {
     const { files, isUploading, uploadBytesLoaded, uploadBytesTotal } = useUpload();
@@ -187,6 +187,7 @@ export function UploadModal() {
             }, ALL_COMPLETE_CLOSE_DELAY_MS);
 
             return () => {
+                console.log('clearing timer');
                 clearTimeout(timer);
                 setSuccessPhase(false);
             };
@@ -259,7 +260,7 @@ export function UploadModal() {
                                                     phase === 'processing' && 'bg-accent/15 text-accent',
                                                 )}
                                             >
-                                                {phase === 'uploading' ? 'Uploading' : 'Generating previews'}
+                                                {phase === 'uploading' ? 'Uploading' : 'Processing'}
                                             </span>
                                         )
                                     )}
