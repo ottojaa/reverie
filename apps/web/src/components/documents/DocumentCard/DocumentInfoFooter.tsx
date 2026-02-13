@@ -1,7 +1,8 @@
 import { formatDate, formatFileSize } from '@/lib/commonhelpers';
 import type { Document } from '@reverie/shared';
+import { memo } from 'react';
 
-export function DocumentInfoFooter({ document }: { document: Document }) {
+export const DocumentInfoFooter = memo(function DocumentInfoFooter({ document }: { document: Document }) {
     return (
         <div className="p-3">
             <p className="truncate text-sm font-medium" title={document.original_filename}>
@@ -14,4 +15,4 @@ export function DocumentInfoFooter({ document }: { document: Document }) {
             </div>
         </div>
     );
-}
+});

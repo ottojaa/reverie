@@ -1,10 +1,13 @@
 import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { ImageLoader } from '@/components/ui/image-loader';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { Play } from 'lucide-react';
+import { memo, useRef } from 'react';
 
-export function DocumentThumbnail({ document }: { document: Document }) {
+export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: { document: Document }) {
+    const thumbnailRef = useRef<HTMLDivElement>(null);
     const fileConfig = getFileTypeConfig(document.mime_type);
     const extension = getFileExtension(document.original_filename);
     const thumbnailUrl = getThumbnailUrl(document);
@@ -22,12 +25,15 @@ export function DocumentThumbnail({ document }: { document: Document }) {
                             }}
                         />
                     )}
-                    <img
-                        src={thumbnailUrl}
-                        alt={document.original_filename}
-                        className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
-                        loading="lazy"
-                    />
+                    <div className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105">
+                        <ImageLoader
+                            ref={thumbnailRef}
+                            hash={document.thumbnail_blurhash ?? ''}
+                            url={thumbnailUrl}
+                            style={{ objectFit: 'cover', height: '100%', width: '100%' }}
+                        />
+                    </div>
+
                     {document.mime_type.startsWith('video/') && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
@@ -49,4 +55,4 @@ export function DocumentThumbnail({ document }: { document: Document }) {
             )}
         </div>
     );
-}
+});

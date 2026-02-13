@@ -8,7 +8,7 @@ import { useCurrentSection } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { FolderOpen, Pencil } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const SKELETON_DELAY_MS = 200;
 
@@ -19,7 +19,6 @@ export interface BrowsePageProps {
 export function BrowsePage({ sectionId }: BrowsePageProps) {
     const section = useCurrentSection(sectionId);
     const { openEdit } = useSectionEdit();
-    const sentinelRef = useRef<HTMLDivElement>(null);
     const selection = useSelectionOptional();
 
     useEffect(() => {
@@ -45,23 +44,6 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     const documents = data?.pages.flatMap((p) => p.items) ?? [];
     const total = data?.pages[0]?.total ?? 0;
     const isEmpty = !isLoading && documents.length === 0;
-
-    useEffect(() => {
-        const el = sentinelRef.current;
-
-        if (!el || !hasNextPage || isFetchingNextPage) return;
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0]?.isIntersecting) fetchNextPage();
-            },
-            { rootMargin: '200px' },
-        );
-
-        observer.observe(el);
-
-        return () => observer.disconnect();
-    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     // Only show skeleton if loading lasts longer than SKELETON_DELAY_MS (avoids flash on fast loads)
     const [showSkeleton, setShowSkeleton] = useState(false);
@@ -139,8 +121,8 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
             )}
 
             {isLoading ? (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                    {Array.from({ length: 12 }).map((_, i) =>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5">
+                    {Array.from({ length: 10 }).map((_, i) =>
                         showSkeleton ? (
                             <DocumentSkeleton key={i} />
                         ) : (
@@ -163,8 +145,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
             ) : (
                 <>
                     <SelectionBanner />
-                    <DocumentGrid documents={documents} isLoading={false} />
-                    <div ref={sentinelRef} className="h-2" aria-hidden />
+                    <DocumentGrid documents={documents} isLoading={false} fetchNextPage={fetchNextPage} hasNextPage={hasNextPage && !isFetchingNextPage} />
                     {isFetchingNextPage && (
                         <div className="mt-4 flex justify-center">
                             <div className="aspect-4/3 h-8 w-24 animate-pulse rounded-xl bg-muted" />

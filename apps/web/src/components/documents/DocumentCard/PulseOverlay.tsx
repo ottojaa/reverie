@@ -3,19 +3,17 @@ import { useEffect, useRef } from 'react';
 
 const PULSE_DURATION_MS = 2000;
 
-export function PulseOverlay({ active, onComplete }: { active?: boolean | undefined; onComplete?: (() => void) | undefined }) {
+export function PulseOverlay({ onComplete }: { onComplete?: (() => void) | undefined }) {
     const hasPulsedRef = useRef(false);
 
     useEffect(() => {
-        if (!active || !onComplete || hasPulsedRef.current) return;
+        if (!onComplete || hasPulsedRef.current) return;
 
         hasPulsedRef.current = true;
         const timer = setTimeout(onComplete, PULSE_DURATION_MS);
 
         return () => clearTimeout(timer);
-    }, [active, onComplete]);
-
-    if (!active) return null;
+    }, [onComplete]);
 
     return (
         <motion.div className="pointer-events-none absolute inset-0 z-11 overflow-hidden rounded-md" aria-hidden>

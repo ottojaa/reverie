@@ -1,4 +1,6 @@
 import { GlobalDropzone, UploadModal } from '@/components/upload';
+import { usePathnameTracker } from '@/lib/hooks/useNavigationDirection';
+import { ScrollContainerProvider } from '@/lib/ScrollContainerContext';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
 import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
 import { SelectionProvider } from '@/lib/selection';
@@ -26,7 +28,11 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
+    const mainRef = useRef<HTMLElement | null>(null);
     const defaultSensors = useDefaultSensors();
+
+    // Global pathname tracker for useIsReturningFromDocument
+    usePathnameTracker();
 
     const defaultAnnouncements: Announcements = {
         onDragStart: () => 'Picked up.',
@@ -59,7 +65,11 @@ export function Layout({ children }: LayoutProps) {
                         <div className="flex flex-1 flex-col overflow-hidden">
                             <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
                             <GlobalDropzone>
-                                <main className="flex-1 overflow-auto">{children}</main>
+                                <ScrollContainerProvider value={mainRef}>
+                                    <main ref={mainRef} id="main-scroll-area" data-scroll-restoration-id="main-scroll-area" className="flex-1 overflow-auto">
+                                        {children}
+                                    </main>
+                                </ScrollContainerProvider>
                             </GlobalDropzone>
                         </div>
                         <UploadModal />

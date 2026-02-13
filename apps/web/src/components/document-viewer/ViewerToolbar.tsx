@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
-import { Link } from '@tanstack/react-router';
+import { useRouter } from '@tanstack/react-router';
 import { ArrowLeft, Download, Edit3, Info, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -67,6 +67,7 @@ const processingSlideKeyframes = `
 `;
 
 export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false }: ViewerToolbarProps) {
+    const router = useRouter();
     const fileConfig = getFileTypeConfig(document.mime_type);
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
 
@@ -84,10 +85,8 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
 
                 {/* Left: back + filename */}
                 <div className="relative z-10 flex min-w-0 items-center gap-2">
-                    <Button variant="ghost" size="icon-sm" asChild className="shrink-0">
-                        <Link to="/browse">
-                            <ArrowLeft className="size-4" />
-                        </Link>
+                    <Button variant="ghost" size="icon-sm" className="shrink-0" onClick={() => router.history.back()}>
+                        <ArrowLeft className="size-4" />
                     </Button>
 
                     <div className="min-w-0">
