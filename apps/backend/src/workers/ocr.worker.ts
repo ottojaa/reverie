@@ -10,9 +10,6 @@ import { createWorkerLogger, processJobWithTracking, publishJobProgress } from '
 
 const logger = createWorkerLogger('OCR');
 
-/**
- * Process an OCR job (Plan 05 implementation)
- */
 async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     const { documentId, forceReprocess } = job.data;
 

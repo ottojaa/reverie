@@ -57,6 +57,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     }, [recentlyCompletedDocumentIds, markPulseComplete]);
 
     const handlePulseComplete = useCallback((id: string) => {
+        console.log('handlePulseComplete', id);
         setPulsingIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
