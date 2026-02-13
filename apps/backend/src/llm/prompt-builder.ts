@@ -25,6 +25,13 @@ IMPORTANT CONTEXT:
 - The input text comes from OCR (optical character recognition) and may contain recognition errors such as garbled characters, misread letters, merged or split words, and misplaced whitespace.
 - Use surrounding context to infer correct readings when OCR errors are apparent.
 - Documents may be in Finnish, English, or a mix of both languages. Finnish names, addresses, and words may look unusual to you — this is normal, not an OCR error.
+- If you encounter sequences of random characters or clearly nonsensical text that doesn't form words in any language (e.g. "MuUONKA", "OTETAANCOMPPEL", "y0O0MMc"), these are OCR artifacts from handwritten annotations or noise. Ignore them entirely — do not mention them or try to interpret them.
+- The text may include section markers such as [Header], [Body], [Table], and [Footer] — these indicate the document's layout inferred from OCR block positions. Use them to understand structure: header typically contains document title and metadata, body is prose or mixed content, [Table] marks rows of tabular data (extract each row into table_data), and footer often has totals or legal text.
+
+OUTPUT LANGUAGE RULE (MANDATORY):
+- Always write the "summary", "title", and all other free-text fields in English, regardless of the source document's language.
+- Translate relevant terms and descriptions into English. For example, if the document says "Noteeratut osakkeet yhteensä", write "Total listed shares" in the summary.
+- The ONLY exception is proper nouns (people, companies, places) — keep those in their original form.
 
 PROPER NOUN RULES (MANDATORY — ZERO TOLERANCE):
 - Extract all proper nouns (people, companies, places) into key_entities FIRST by copying them verbatim from the OCR text.
@@ -38,10 +45,10 @@ Analyze the OCR-extracted document text and produce a comprehensive structured e
 
 OUTPUT FORMAT (strict JSON):
 {
-  "summary": "2-3 sentence description with CONCRETE details (see guidelines below)",
+  "summary": "2-3 sentence human-readable description (see guidelines below)",
   "title": "Concise document title, 5-10 words",
   "document_type": "One of: receipt, invoice, statement, letter, contract, form, certificate, report, securities_statement, tax_document, bank_statement, insurance, medical, memo, newsletter, other",
-  "language": "Primary language code (e.g. 'fi', 'en', 'fi/en' for mixed)",
+  "language": "Primary language code of the SOURCE document (e.g. 'fi', 'en', 'fi/en' for mixed)",
   "key_entities": {
     "people": ["Full names of people mentioned in the document"],
     "organizations": ["Companies, banks, institutions, authorities mentioned"],
@@ -59,19 +66,24 @@ OUTPUT FORMAT (strict JSON):
   ]
 }
 
-EXTRACTION GUIDELINES:
-- summary: Include the SPECIFIC numbers, amounts, names, and actions from the document. Do not write generic descriptions.
+SUMMARY GUIDELINES:
+- Write as if you are explaining the document to a colleague who hasn't seen it. Use clear, natural English prose.
+- Lead with WHAT the document is, then summarize the key details (who, what, how much, when).
+- Include specific numbers and amounts, but don't try to cram every value — the key_values and table_data fields capture the full detail. The summary is for quick human comprehension.
+- Use complete sentences. Do not write comma-separated lists of raw values.
   BAD:  "This document is a purchase statement detailing a transaction involving a financial instrument, including fees."
-  GOOD: "Purchase order from Merita for 100 shares of Instrumentarium B at 225.94 mk per share, totaling 22,869.71 mk including a 50.00 mk commission. Valid 17.05.1999–16.06.1999."
-  The summary should answer: WHO is involved, WHAT was the transaction/action, HOW MUCH (quantities, prices, totals), and WHEN.
-  All names in the summary MUST be copy-pasted from your key_entities extraction — never retyped.
+  BAD:  "Merita account statement for owner JAAKONMAKI OTTO ELMERI lists securities holdings: BIOHIT B 250 shares at 12,35 e (market value 18.357,44), FISKARS A 100..."
+  GOOD: "A Merita securities statement for Jaakonmaki Otto Elmeri showing a portfolio of four stocks (Biohit B, Fiskars A, Instrumentarium, and TJ Group) with a combined market value of 240,644.50 mk as of January 2000. The exchange rate at the time was 1 EUR = 5.94573 mk."
+- All names in the summary MUST be copy-pasted from your key_entities extraction — never retyped.
+
+OTHER EXTRACTION GUIDELINES:
 - currency: Documents may contain multiple currencies (e.g. Finnish markka "mk" and euro "e"/"EUR"). Never mix currencies in the same figure or sentence. If converting, state both values explicitly (e.g. "22,869.71 mk (approx. 3,847 EUR)"). When a document uses one primary currency, keep all amounts in that currency.
 - key_values: Extract ALL significant named values including account numbers, reference numbers, totals, subtotals, conversion rates, service numbers, and any other labeled values. Preserve the original currency symbols and number formats.
 - table_data: If the document contains tabular data (e.g. stock holdings, transaction lists, line items), extract EVERY row as a structured object. Use the header labels as column keys. This is critical for indexing purposes.
 - extracted_date: The single primary date of the document. For invoices/receipts, use the issue date. For statements, use the statement date. For letters, use the letter date. Prefer the document's own date over due dates, validity periods, or referenced dates. Omit if no clear primary date exists.
 - extracted_dates: Normalize all dates to YYYY-MM-DD format. For European date formats (DD.MM.YYYY), parse correctly. Include a short "context" string describing what each date represents (e.g. "invoice date", "due date", "period start", "transaction date").
 - key_entities.organizations: Include company names, stock names, bank names, and other institutions even if abbreviated or in a table.
-- Do not include empty arrays or null values in the output -- omit the field instead.`;
+- Do not include empty arrays or null values in the output — omit the field instead.`;
 
 /**
  * Vision system message for image description
