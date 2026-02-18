@@ -65,7 +65,11 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     };
 
     // Build base query with all joins
-    const baseQuery = db.selectFrom('documents as d').leftJoin('folders as f', 'f.id', 'd.folder_id').leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
+    const baseQuery = db
+        .selectFrom('documents as d')
+        .leftJoin('folders as f', 'f.id', 'd.folder_id')
+        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
@@ -83,7 +87,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         'd.has_meaningful_text',
         'd.thumbnail_paths',
         'd.thumbnail_blurhash',
-        'd.llm_summary',
+        'llm.summary as llm_summary',
         'f.path as folder_path',
         'ocr.raw_text',
     ]);
@@ -100,7 +104,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     const countBaseQuery = db
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
-        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
+        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
 
     // Apply the same filters to count query
     const filteredCountQuery = buildSearchQuery(countBaseQuery as any, parsed, options.userId, {

@@ -47,33 +47,75 @@ export interface ChatCompletionResult {
     model: string;
 }
 
+const EMPTY_JSON_RETRY_SUFFIX = `
+
+IMPORTANT:
+- Return a valid JSON object only (no markdown, no prose).
+- Keep output compact.
+- Required keys: "summary", "key_entities", "topics".
+- If uncertain, return best-effort values and keep arrays short.`;
+
 /**
  * Call OpenAI Chat Completion API for text summarization
  */
 export async function callChatCompletion(prompt: LlmPrompt): Promise<ChatCompletionResult> {
     const client = getOpenAIClient();
+    const maxCompletionTokens = Math.max(256, Math.min(prompt.maxTokens, env.OPENAI_MAX_TOKENS));
+    const retries = Math.max(0, env.OPENAI_EMPTY_RESPONSE_RETRIES);
+    let lastError: Error | null = null;
 
-    const response = await client.chat.completions.create({
-        model: env.OPENAI_MODEL,
-        messages: [
-            { role: 'system', content: prompt.system },
-            { role: 'user', content: prompt.user },
-        ],
-        max_completion_tokens: prompt.maxTokens,
-        response_format: { type: 'json_object' },
-    });
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const requestStart = Date.now();
+        const isRetry = attempt > 0;
+        const attemptMaxTokens = isRetry ? Math.max(256, Math.floor(maxCompletionTokens * 0.6)) : maxCompletionTokens;
+        const userPrompt = isRetry ? `${prompt.user}${EMPTY_JSON_RETRY_SUFFIX}` : prompt.user;
 
-    const content = response.choices[0]?.message?.content;
+        try {
+            const reasoning_effort = env.OPENAI_MODEL === 'gpt-5-mini' ? env.OPENAI_REASONING_EFFORT : null
+            const response = await client.chat.completions.create({
+                model: env.OPENAI_MODEL,
+                messages: [
+                    { role: 'system', content: prompt.system },
+                    { role: 'user', content: userPrompt },
+                ],
+                max_completion_tokens: attemptMaxTokens,
+                response_format: { type: 'json_object' },
+                ...(reasoning_effort && { reasoning_effort })
+            });
 
-    if (!content) {
-        throw new Error('OpenAI returned empty response');
+            const content = response.choices[0]?.message?.content?.trim();
+
+            if (process.env.NODE_ENV !== 'production') {
+                console.info(
+                    '[OpenAI] text_summary timings',
+                    JSON.stringify({
+                        model: env.OPENAI_MODEL,
+                        attempt: attempt + 1,
+                        retries,
+                        requestMs: Date.now() - requestStart,
+                        promptChars: prompt.system.length + userPrompt.length,
+                        maxCompletionTokens: attemptMaxTokens,
+                        finishReason: response.choices[0]?.finish_reason ?? null,
+                        usage: response.usage ?? null,
+                    }),
+                );
+            }
+
+            if (content) {
+                return {
+                    content,
+                    tokenCount: response.usage?.total_tokens ?? 0,
+                    model: response.model,
+                };
+            }
+
+            lastError = new Error('OpenAI returned empty response');
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error('OpenAI request failed');
+        }
     }
 
-    return {
-        content,
-        tokenCount: response.usage?.total_tokens ?? 0,
-        model: response.model,
-    };
+    throw lastError ?? new Error('OpenAI request failed');
 }
 
 /**
@@ -113,13 +155,9 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
             title: result.title,
             document_type: result.document_type,
             language: result.language,
-            key_entities: result.key_entities ?? { people: [], organizations: [], locations: [] },
+            entities: result.entities ?? [],
             topics: result.topics ?? [],
             extracted_date: result.extracted_date,
-            extracted_dates: result.extracted_dates,
-            key_values: result.key_values,
-            sentiment: result.sentiment,
-            table_data: result.table_data,
         },
         tokenCount: response.tokenCount,
     };
@@ -130,6 +168,7 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
  */
 export async function describeImage(imageBase64: string, mimeType: string, prompt: string): Promise<{ result: VisionResponse; tokenCount: number }> {
     const client = getOpenAIClient();
+    const requestStart = Date.now();
 
     const response = await client.chat.completions.create({
         model: env.LLM_VISION_MODEL,
@@ -161,6 +200,18 @@ Respond in JSON format:
         max_completion_tokens: 1000,
         response_format: { type: 'json_object' },
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+        console.info(
+            '[OpenAI] vision_describe timings',
+            JSON.stringify({
+                model: env.LLM_VISION_MODEL,
+                requestMs: Date.now() - requestStart,
+                imageBytesApprox: Math.floor((imageBase64.length * 3) / 4),
+                usage: response.usage ?? null,
+            }),
+        );
+    }
 
     const content = response.choices[0]?.message?.content;
 

@@ -69,7 +69,10 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
 
         // Run OCR processing
-        const result = await processDocument(documentId, forceReprocess ? { forceReprocess: true } : {});
+        const result = await processDocument(documentId, {
+            ...(forceReprocess ? { forceReprocess: true } : {}),
+            document,
+        });
 
         await publishJobProgress(job.id!, 80, documentId, job.data.sessionId);
 
@@ -143,14 +146,23 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
  * Create and start the OCR worker
  */
 export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
-    const worker = new Worker<OcrJobData, OcrJobResult>(QUEUE_NAMES.OCR, async (job) => processJobWithTracking(job, processOcrJob), {
-        connection: getRedisConnectionOptions(),
-        concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.OCR],
-        // PaddleOCR model loading on first request can take 20s+;
-        // default stalledInterval (30s) is too tight and causes false stalls.
-        stalledInterval: 120_000,
-        lockDuration: 120_000,
-    });
+    const worker = new Worker<OcrJobData, OcrJobResult>(
+        QUEUE_NAMES.OCR,
+        async (job) =>
+            processJobWithTracking(job, processOcrJob, {
+                storeDuration: async (documentId, durationMs) => {
+                    await db.updateTable('ocr_results').set({ duration_ms: durationMs }).where('document_id', '=', documentId).execute();
+                },
+            }),
+        {
+            connection: getRedisConnectionOptions(),
+            concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.OCR],
+            // PaddleOCR model loading on first request can take 20s+;
+            // default stalledInterval (30s) is too tight and causes false stalls.
+            stalledInterval: 120_000,
+            lockDuration: 120_000,
+        },
+    );
 
     worker.on('completed', (job) => {
         logger.info('Job completed', { jobId: job.id });

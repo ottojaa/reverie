@@ -33,7 +33,7 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 # Blocks with per-line confidence below this threshold are discarded.
 # Handwritten text / noise typically scores well below 0.50 while
 # printed text lands in the 0.80–0.99 range.
-MIN_BLOCK_CONFIDENCE = 0.8
+MIN_BLOCK_CONFIDENCE = 0.7
 
 
 def _print_json(obj):

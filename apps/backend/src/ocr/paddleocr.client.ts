@@ -32,6 +32,7 @@ let childProcess: ChildProcess | null = null;
 let readline: ReadlineInterface | null = null;
 let ready = false;
 let startingUp: Promise<void> | null = null;
+let sharedTempDirPromise: Promise<string> | null = null;
 
 /** Queue of pending response handlers (FIFO — one response per request) */
 const pendingResponses: Array<{
@@ -121,6 +122,14 @@ function cleanup(): void {
     startingUp = null;
 }
 
+async function getSharedTempDir(): Promise<string> {
+    if (!sharedTempDirPromise) {
+        sharedTempDirPromise = mkdtemp(join(tmpdir(), 'reverie-ocr-'));
+    }
+
+    return sharedTempDirPromise;
+}
+
 /**
  * Ensure the persistent process is running and models are loaded.
  * Safe to call multiple times — concurrent callers share the same startup promise.
@@ -196,12 +205,13 @@ export async function startPaddleOcr(): Promise<void> {
  * Recognize text in an image buffer using PaddleOCR
  */
 export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
-    let tempDir: string | null = null;
+    let tempImagePath: string | null = null;
 
     try {
-        // Write buffer to a temp file (PaddleOCR needs a file path)
-        tempDir = await mkdtemp(join(tmpdir(), 'reverie-ocr-'));
-        const tempImagePath = join(tempDir, 'input.png');
+        // Write buffer to a temp file (PaddleOCR needs a file path).
+        // Reuse a shared temp directory to avoid mkdir/rm overhead per request.
+        const tempDir = await getSharedTempDir();
+        tempImagePath = join(tempDir, `input-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
         await writeFile(tempImagePath, imageBuffer);
 
         const response = await sendRequest({ image_path: tempImagePath });
@@ -218,8 +228,8 @@ export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
             engine: result.engine ?? 'paddleocr/PP-OCRv3',
         };
     } finally {
-        if (tempDir) {
-            await rm(tempDir, { recursive: true, force: true }).catch(() => {
+        if (tempImagePath) {
+            await rm(tempImagePath, { force: true }).catch(() => {
                 /* ignore cleanup errors */
             });
         }
@@ -264,6 +274,17 @@ export async function shutdownPaddleOcr(): Promise<void> {
     });
 
     cleanup();
+
+    if (sharedTempDirPromise) {
+        const tempDir = await sharedTempDirPromise.catch(() => null);
+        sharedTempDirPromise = null;
+
+        if (tempDir) {
+            await rm(tempDir, { recursive: true, force: true }).catch(() => {
+                /* ignore cleanup errors */
+            });
+        }
+    }
 }
 
 process.on('SIGINT', shutdownPaddleOcr);

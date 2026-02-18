@@ -15,6 +15,7 @@ export const db = new Kysely<Database>({
     log: env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
 });
 
+
 export async function checkDbConnection(): Promise<boolean> {
     try {
         await sql`SELECT 1`.execute(db);

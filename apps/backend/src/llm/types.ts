@@ -2,6 +2,8 @@
  * LLM Module Types
  */
 
+import { Entity } from "@reverie/shared";
+
 // ===== Processing Types =====
 
 export type LlmProcessingType = 'text_summary' | 'vision_describe' | 'skip';
@@ -48,15 +50,6 @@ export interface LlmPrompt {
 // ===== LLM Response Types =====
 
 /**
- * Structured key entities from LLM extraction
- */
-export interface KeyEntities {
-    people: string[];
-    organizations: string[];
-    locations: string[];
-}
-
-/**
  * A date extracted from the document, with context about what it represents
  */
 export interface ExtractedDate {
@@ -80,13 +73,9 @@ export interface LlmSummaryResponse {
     title?: string | undefined;
     document_type?: string | undefined;
     language?: string | undefined;
-    key_entities: KeyEntities;
+    entities: Entity[];
     topics: string[];
     extracted_date?: string | undefined;
-    extracted_dates?: ExtractedDate[] | undefined;
-    key_values?: Array<{ label: string; value: string }> | undefined;
-    sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
-    table_data?: TableRow[] | undefined;
 }
 
 export interface VisionResponse {
@@ -102,9 +91,8 @@ export interface EnhancedMetadata {
     type: 'text_summary' | 'vision_describe';
     title?: string | undefined;
     language?: string | undefined;
-    keyEntities: KeyEntities;
+    entities: Entity[];
     topics: string[];
-    sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
     documentType?: string | undefined;
     extractedDate?: string | undefined;
     extractedDates?: ExtractedDate[] | undefined;

@@ -47,6 +47,7 @@ export class JobService {
                 ...(update.result !== undefined && { result: update.result }),
                 ...(update.started_at !== undefined && { started_at: update.started_at }),
                 ...(update.completed_at !== undefined && { completed_at: update.completed_at }),
+                ...(update.duration_ms !== undefined && { duration_ms: update.duration_ms }),
             })
             .where('id', '=', jobId)
             .returningAll()
@@ -66,11 +67,12 @@ export class JobService {
     /**
      * Mark job as complete
      */
-    async markJobComplete(jobId: string, result: Record<string, unknown>): Promise<ProcessingJob | undefined> {
+    async markJobComplete(jobId: string, result: Record<string, unknown>, durationMs?: number): Promise<ProcessingJob | undefined> {
         return this.updateJobStatus(jobId, {
             status: 'complete',
             result,
             completed_at: new Date(),
+            ...(durationMs !== undefined && { duration_ms: durationMs }),
         });
     }
 

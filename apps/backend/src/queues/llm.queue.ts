@@ -1,7 +1,8 @@
+import { Entity } from '@reverie/shared';
 import { Queue } from 'bullmq';
+import type { LlmProcessingType, LlmSkipReason } from '../llm/types';
+import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
-import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
-import type { KeyEntities, LlmProcessingType, LlmSkipReason } from '../llm/types';
 
 export interface LlmJobData {
     documentId: string;
@@ -14,7 +15,7 @@ export interface LlmJobResult {
     summary: string | null;
     enhancedMetadata: {
         title?: string | undefined;
-        keyEntities?: KeyEntities | undefined;
+        entities?: Entity[] | undefined;
         topics?: string[] | undefined;
         skipped?: boolean | undefined;
         skipReason?: LlmSkipReason | undefined;

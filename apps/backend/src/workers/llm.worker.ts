@@ -68,7 +68,11 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     await publishJobProgress(job.id!, 40, documentId, job.data.sessionId);
 
     // Process document with LLM
-    const llmResult = await processDocument(documentId, processingType);
+    const llmResult = await processDocument(documentId, {
+        forceType: processingType,
+        document,
+        ocrResult,
+    });
 
     await publishJobProgress(job.id!, 90, documentId, job.data.sessionId);
 
@@ -76,7 +80,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const metadata = llmResult.enhancedMetadata
         ? {
               title: llmResult.enhancedMetadata.title,
-              keyEntities: llmResult.enhancedMetadata.keyEntities,
+              entities: llmResult.enhancedMetadata.entities,
               topics: llmResult.enhancedMetadata.topics,
           }
         : {};
@@ -109,7 +113,11 @@ async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResu
         .execute();
 
     try {
-        return await processJobWithTracking(job, processLlmJob);
+        return await processJobWithTracking(job, processLlmJob, {
+            storeDuration: async (documentId, durationMs) => {
+                await db.updateTable('llm_results').set({ duration_ms: durationMs }).where('document_id', '=', documentId).execute();
+            },
+        });
     } catch (error) {
         await db
             .updateTable('documents')

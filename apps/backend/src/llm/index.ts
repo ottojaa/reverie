@@ -25,7 +25,6 @@ export type {
     EnhancedMetadata,
     ExtractedDate,
     FileCategory,
-    KeyEntities,
     LlmEligibility,
     LlmMetadata,
     LlmProcessingType,
@@ -37,5 +36,6 @@ export type {
     SkippedMetadata,
     TableRow,
     VisionResponse,
-    VisionResult,
+    VisionResult
 } from './types';
+

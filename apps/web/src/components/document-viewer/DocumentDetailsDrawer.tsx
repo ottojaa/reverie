@@ -3,10 +3,11 @@ import { FileTypeIcon, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { useReprocessLlm, useRetryOcr } from '@/lib/api/documents';
 import { formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
-import type { Document, LlmMetadata } from '@reverie/shared';
+import type { Document, Entity, LlmMetadata } from '@reverie/shared';
 import { Brain, Calendar, Clock, ExternalLink, FileType, Hash, ImageIcon, Layers, Sparkles, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
+import { AiSummaryBanner } from './AiSummaryBanner';
 import { OcrResultDialog } from './OcrResultDialog';
 
 interface DocumentDetailsDrawerProps {
@@ -99,16 +100,17 @@ function parseLlmMetadata(raw: Record<string, unknown> | null | undefined): LlmM
 
     const parseStringArray = (val: unknown): string[] => (Array.isArray(val) ? val.filter((s): s is string => typeof s === 'string') : []);
 
-    // keyEntities is { people: string[], organizations: string[], locations: string[] }
-    const rawEntities = typeof raw.keyEntities === 'object' && raw.keyEntities != null ? (raw.keyEntities as Record<string, unknown>) : {};
+    // keyEntities is Entity[]
+    const rawEntities = typeof raw.entities === 'object' && raw.entities != null ? (raw.entities as Entity[]) : [];
 
     const result: LlmMetadata = {
         type: raw.type === 'vision_describe' ? 'vision_describe' : 'text_summary',
-        keyEntities: {
-            people: parseStringArray(rawEntities.people),
-            organizations: parseStringArray(rawEntities.organizations),
-            locations: parseStringArray(rawEntities.locations),
-        },
+        entities: rawEntities.map((entity) => ({
+            type: entity.type,
+            canonical_name: entity.canonical_name,
+            raw_text: entity.raw_text,
+            confidence: entity.confidence,
+        })),
         topics: parseStringArray(raw.topics),
     };
 
@@ -117,10 +119,6 @@ function parseLlmMetadata(raw: Record<string, unknown> | null | undefined): LlmM
     if (typeof raw.language === 'string') result.language = raw.language;
 
     if (typeof raw.documentType === 'string') result.documentType = raw.documentType;
-
-    if (raw.sentiment === 'positive' || raw.sentiment === 'neutral' || raw.sentiment === 'negative') {
-        result.sentiment = raw.sentiment;
-    }
 
     if (typeof raw.extractedDate === 'string') result.extractedDate = raw.extractedDate;
 
@@ -154,12 +152,12 @@ function parseLlmMetadata(raw: Record<string, unknown> | null | undefined): LlmM
 }
 
 /** Flatten keyEntities into a single string array for display */
-function flattenEntities(entities: LlmMetadata['keyEntities']): string[] {
-    return [...entities.organizations, ...entities.people, ...entities.locations];
+function flattenEntities(entities: LlmMetadata['entities']): string[] {
+    return entities.map((entity) => entity.canonical_name);
 }
 
-function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay: number }) {
-    const entities = flattenEntities(metadata.keyEntities);
+function LlmMetadataSection({ document, metadata, delay }: { document: Document; metadata: LlmMetadata; delay: number }) {
+    const entities = flattenEntities(metadata.entities);
     const hasEntities = entities.length > 0;
     const hasTopics = metadata.topics.length > 0;
     const hasKeyValues = metadata.keyValues && metadata.keyValues.length > 0;
@@ -182,6 +180,8 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
 
             {/* Title */}
             {metadata.title && <p className="text-sm font-medium text-foreground">{metadata.title}</p>}
+
+            <AiSummaryBanner document={document} />
 
             {/* Document type + key entities */}
             {(metadata.documentType || hasEntities) && (
@@ -213,36 +213,6 @@ function LlmMetadataSection({ metadata, delay }: { metadata: LlmMetadata; delay:
                             <Chip key={topic} variant="secondary">
                                 {topic}
                             </Chip>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Key values */}
-            {hasKeyValues && (
-                <div className="space-y-1.5">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Key Values</p>
-                    <div className="space-y-1">
-                        {metadata.keyValues!.map((kv) => (
-                            <div key={kv.label} className="flex items-baseline justify-between gap-2">
-                                <span className="text-[11px] text-muted-foreground">{kv.label}</span>
-                                <span className="text-right text-xs font-medium text-foreground">{kv.value}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Extracted dates */}
-            {hasDates && (
-                <div className="space-y-1.5">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Dates</p>
-                    <div className="flex flex-wrap gap-1.5 text-xs text-foreground">
-                        {metadata.extractedDates!.map((d) => (
-                            <span key={d.date + d.context} className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
-                                {d.date}
-                                {d.context ? ` (${d.context})` : ''}
-                            </span>
                         ))}
                     </div>
                 </div>
@@ -328,7 +298,7 @@ function DrawerBody({ document }: { document: Document }) {
             </div>
 
             {/* LLM Metadata */}
-            {llmMetadata && <LlmMetadataSection metadata={llmMetadata} delay={nextDelay()} />}
+            {llmMetadata && <LlmMetadataSection document={document} metadata={llmMetadata} delay={nextDelay()} />}
 
             {/* Processing status */}
             <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: nextDelay(), duration: 0.25 }} className="mt-5">

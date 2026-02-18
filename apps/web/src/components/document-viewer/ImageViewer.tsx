@@ -123,16 +123,6 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
         >
-            {/* Blur-up placeholder from thumbnail */}
-            {thumbnailUrl && !isLoaded && (
-                <img
-                    src={thumbnailUrl}
-                    alt=""
-                    aria-hidden
-                    className="absolute inset-4 m-auto max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] object-contain blur-xl scale-105 opacity-60 md:inset-6 md:max-h-[calc(100%-3rem)] md:max-w-[calc(100%-3rem)]"
-                />
-            )}
-
             {/* Entrance animation wrapper — only controls opacity, no transform */}
             <motion.div
                 initial={{ opacity: 0 }}

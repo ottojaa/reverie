@@ -45,9 +45,10 @@ type SearchDatabase = Database & {
     d: Database['documents'];
     f: Database['folders'];
     ocr: Database['ocr_results'];
+    llm: Database['llm_results'];
 };
 
-type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr', object>;
+type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>;
 
 /**
  * Apply date range filter to query
@@ -101,7 +102,7 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
 
     // Negated has:summary
     if (negations.hasSummary === true) {
-        query = query.where('d.llm_summary', 'is', null) as T;
+        query = query.where('llm.summary' as any, 'is', null) as T;
     }
 
     // Negated has:thumbnail
@@ -162,14 +163,14 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
         } else if (parsed.searchScope === 'content') {
             query = query.where(sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`);
         } else if (parsed.searchScope === 'summary') {
-            query = query.where(sql<SqlBool>`d.llm_summary ILIKE ${'%' + parsed.fullText + '%'}`);
+            query = query.where(sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`);
         } else {
             // Search all: filename, OCR text, LLM summary
             query = query.where((eb) =>
                 eb.or([
                     sql<SqlBool>`d.original_filename ILIKE ${'%' + parsed.fullText + '%'}`,
                     sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`,
-                    sql<SqlBool>`d.llm_summary ILIKE ${'%' + parsed.fullText + '%'}`,
+                    sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`,
                 ]),
             );
         }
@@ -241,9 +242,9 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
     // Has summary filter
     if (parsed.hasSummary !== undefined) {
         if (parsed.hasSummary) {
-            query = query.where('d.llm_summary', 'is not', null);
+            query = query.where('llm.summary' as any, 'is not', null);
         } else {
-            query = query.where('d.llm_summary', 'is', null);
+            query = query.where('llm.summary' as any, 'is', null);
         }
     }
 
@@ -285,7 +286,7 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
                     // Full-text search in OCR text
                     sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`,
                     // Check LLM metadata key entities
-                    sql<SqlBool>`d.llm_metadata->'keyEntities' ? ${entity}`,
+                    sql<SqlBool>`llm.metadata->'keyEntities' ? ${entity}`,
                 ]);
             });
 
@@ -324,10 +325,10 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
  * Build the count query (same filters, no pagination)
  */
 export function buildCountQuery(
-    baseQuery: SelectQueryBuilder<Database & { d: Database['documents']; f: Database['folders']; ocr: Database['ocr_results'] }, 'd' | 'f' | 'ocr', object>,
+    baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>,
     parsed: ParsedQuery,
     userId: string,
-): SelectQueryBuilder<Database & { d: Database['documents']; f: Database['folders']; ocr: Database['ocr_results'] }, 'd' | 'f' | 'ocr', { count: number }> {
+): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', { count: number }> {
     // Reuse the search query builder but without sorting and pagination
     const query = buildSearchQuery(baseQuery, parsed, userId, {
         limit: 1000000, // Will be ignored
@@ -343,8 +344,8 @@ export function buildCountQuery(
         .clearLimit()
         .clearOffset()
         .select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<
-        Database & { d: Database['documents']; f: Database['folders']; ocr: Database['ocr_results'] },
-        'd' | 'f' | 'ocr',
+        SearchDatabase,
+        'd' | 'f' | 'ocr' | 'llm',
         { count: number }
     >;
 }

@@ -4,6 +4,7 @@ import {
     CheckDuplicatesResponseSchema,
     DocumentListQuerySchema,
     DocumentSchema,
+    EntitySchema,
     JobSchema,
     JobStatusEnum,
     MoveDocumentsRequestSchema,
@@ -16,7 +17,7 @@ import {
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { type Document as DbDocument } from '../../db/schema';
+import { type Document as DbDocument, type LlmResult } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
@@ -117,7 +118,7 @@ export default async function (fastify: FastifyInstance) {
             ]);
 
             // Serialize documents with signed URLs (parallel for performance)
-            const serializedDocuments = await Promise.all(documents.map(serializeDocument));
+            const serializedDocuments = await Promise.all(documents.map((doc) => serializeDocument(doc)));
 
             return {
                 items: serializedDocuments,
@@ -312,7 +313,13 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            return await serializeDocument(document);
+            const llmResult = await db
+                .selectFrom('llm_results')
+                .selectAll()
+                .where('document_id', '=', request.params.id)
+                .executeTakeFirst();
+
+            return await serializeDocument(document, llmResult);
         },
     );
 
@@ -699,10 +706,9 @@ export default async function (fastify: FastifyInstance) {
             .object({
                 type: z.enum(['text_summary', 'vision_describe']).optional(),
                 title: z.string().optional(),
-                keyEntities: z.array(z.string()).optional(),
+                entities: z.array(EntitySchema).optional(),
                 topics: z.array(z.string()).optional(),
                 documentType: z.string().optional(),
-                sentiment: z.enum(['positive', 'neutral', 'negative']).optional(),
                 truncated: z.boolean().optional(),
                 samplingStrategy: z.enum(['full', 'start_end', 'distributed']).optional(),
                 originalTextLength: z.number().optional(),
@@ -743,7 +749,13 @@ export default async function (fastify: FastifyInstance) {
             }
 
             // Check if already processed
-            if (document.llm_processed_at) {
+            const existingLlmResult = await db
+                .selectFrom('llm_results')
+                .select('id')
+                .where('document_id', '=', request.params.id)
+                .executeTakeFirst();
+
+            if (existingLlmResult) {
                 return { job_id: '', status: 'already_complete' as const };
             }
 
@@ -751,7 +763,6 @@ export default async function (fastify: FastifyInstance) {
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             const eligibility = checkLlmEligibility(document, ocrResult);
-
 
             if (!eligibility.eligible) {
                 return {
@@ -814,16 +825,22 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            if (!document.llm_processed_at && !document.llm_metadata) {
+            const llmResult = await db
+                .selectFrom('llm_results')
+                .selectAll()
+                .where('document_id', '=', request.params.id)
+                .executeTakeFirst();
+
+            if (!llmResult) {
                 return reply.notFound('LLM result not found. Document may not have been processed yet.');
             }
 
             return {
                 document_id: document.id,
-                summary: document.llm_summary,
-                metadata: document.llm_metadata,
-                processed_at: document.llm_processed_at?.toISOString() ?? null,
-                token_count: document.llm_token_count,
+                summary: llmResult.summary,
+                metadata: llmResult.metadata,
+                processed_at: llmResult.processed_at.toISOString(),
+                token_count: llmResult.token_count,
             };
         },
     );
@@ -855,16 +872,12 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            // Clear existing LLM data and set status to pending
+            // Clear existing LLM result and set status to pending
+            await db.deleteFrom('llm_results').where('document_id', '=', request.params.id).execute();
+
             await db
                 .updateTable('documents')
-                .set({
-                    llm_status: 'pending',
-                    llm_summary: null,
-                    llm_metadata: null,
-                    llm_processed_at: null,
-                    llm_token_count: null,
-                })
+                .set({ llm_status: 'pending' })
                 .where('id', '=', request.params.id)
                 .execute();
 
@@ -933,7 +946,13 @@ export default async function (fastify: FastifyInstance) {
                 }
 
                 // Skip if already processed
-                if (document.llm_processed_at) {
+                const existingResult = await db
+                    .selectFrom('llm_results')
+                    .select('id')
+                    .where('document_id', '=', documentId)
+                    .executeTakeFirst();
+
+                if (existingResult) {
                     skipped.push({ document_id: documentId, reason: 'already_processed' });
                     continue;
                 }
@@ -981,7 +1000,7 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-async function serializeDocument(doc: DbDocument): Promise<Document> {
+async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null): Promise<Document> {
     // Generate signed URLs for file access
     const fileUrl = await storageService.getFileUrl(doc.file_path);
 
@@ -1013,10 +1032,10 @@ async function serializeDocument(doc: DbDocument): Promise<Document> {
         ocr_status: doc.ocr_status as Document['ocr_status'],
         thumbnail_status: doc.thumbnail_status as Document['thumbnail_status'],
         llm_status: doc.llm_status,
-        llm_summary: doc.llm_summary,
-        llm_metadata: doc.llm_metadata as Document['llm_metadata'],
-        llm_processed_at: doc.llm_processed_at?.toISOString() ?? null,
-        llm_token_count: doc.llm_token_count,
+        llm_summary: llmResult?.summary ?? null,
+        llm_metadata: (llmResult?.metadata as Document['llm_metadata']) ?? null,
+        llm_processed_at: llmResult?.processed_at?.toISOString() ?? null,
+        llm_token_count: llmResult?.token_count ?? null,
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,

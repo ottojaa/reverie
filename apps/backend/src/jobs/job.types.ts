@@ -20,6 +20,7 @@ export interface JobRecord {
     created_at: Date;
     started_at: Date | null;
     completed_at: Date | null;
+    duration_ms: number | null;
 }
 
 export interface JobStatusUpdate {
@@ -29,6 +30,7 @@ export interface JobStatusUpdate {
     result?: Record<string, unknown> | null;
     started_at?: Date | null;
     completed_at?: Date | null;
+    duration_ms?: number | null;
 }
 
 // Error types for job processing
