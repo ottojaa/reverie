@@ -6,7 +6,7 @@
  * Communicates via newline-delimited JSON over stdin/stdout.
  */
 
-import { type ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, execFileSync, spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -61,7 +61,24 @@ interface PaddleOcrResult {
 
 // ── Process lifecycle ───────────────────────────────────────────
 
+/**
+ * Kill any orphaned ocr_runner.py processes from previous runs.
+ * When the Node process is killed abruptly (e.g. dev restart), the Python child
+ * can be orphaned and keep consuming RAM. Clean them up before spawning a new one.
+ */
+function killOrphanedOcrProcesses(): void {
+    try {
+        // Escape for pkill -f regex; use array form to avoid shell escaping
+        const pattern = OCR_RUNNER_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        execFileSync('pkill', ['-9', '-f', pattern], { stdio: 'ignore', encoding: 'utf8' });
+    } catch {
+        // pkill exits 1 when no process matches — ignore
+    }
+}
+
 function spawnProcess(): void {
+    killOrphanedOcrProcesses();
+
     childProcess = spawn(PYTHON_BIN, [OCR_RUNNER_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
@@ -290,4 +307,9 @@ export async function shutdownPaddleOcr(): Promise<void> {
 process.on('SIGINT', shutdownPaddleOcr);
 process.on('SIGTERM', shutdownPaddleOcr);
 process.on('SIGQUIT', shutdownPaddleOcr);
-process.on('exit', shutdownPaddleOcr);
+// exit is synchronous — async shutdown won't complete; force kill immediately
+process.on('exit', () => {
+    if (childProcess && !childProcess.killed) {
+        childProcess.kill('SIGKILL');
+    }
+});

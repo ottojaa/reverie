@@ -1,6 +1,7 @@
 import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQuery } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
+import { formatDateOnly } from '../utils/date';
 import { getStorageService } from '../services/storage.service';
 import { generateFacets } from './facets';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
@@ -186,7 +187,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
                 folder_path: row.folder_path,
                 folder_id: row.folder_id,
                 uploaded_at: row.created_at.toISOString(),
-                extracted_date: row.extracted_date?.toISOString().split('T')[0] ?? null,
+                extracted_date: formatDateOnly(row.extracted_date),
                 category: row.document_category as SearchResult['category'],
                 mime_type: row.mime_type,
                 format,

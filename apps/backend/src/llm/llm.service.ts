@@ -186,12 +186,13 @@ async function processTextSummary(
     };
 
     // Parse primary extracted date into a Date for the DB column
-    const extractedDate = result.extracted_date ? new Date(`${result.extracted_date}T00:00:00`) : null;
+    const extractedDate = result.extracted_date ? new Date(`${result.extracted_date}T00:00:00Z`) : null;
 
     // Update document with LLM-determined category if available
     const documentCategory = result.document_type ?? document.document_category;
 
     const dbWriteStart = Date.now();
+    
     await upsertLlmResult(document.id, {
         summary: result.summary,
         metadata: enhancedMetadata,

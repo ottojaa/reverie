@@ -24,6 +24,7 @@ import { addOcrJob } from '../../queues/ocr.queue';
 import { getFolderService } from '../../services/folder.service';
 import { getStorageService } from '../../services/storage.service';
 import { getUploadService } from '../../services/upload.service';
+import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
 
 const uploadService = getUploadService();
@@ -1028,7 +1029,7 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null):
         thumbnail_blurhash: doc.thumbnail_blurhash,
         thumbnail_paths: doc.thumbnail_paths,
         document_category: doc.document_category as Document['document_category'],
-        extracted_date: doc.extracted_date?.toISOString().split('T')[0] ?? null,
+        extracted_date: formatDateOnly(doc.extracted_date),
         ocr_status: doc.ocr_status as Document['ocr_status'],
         thumbnail_status: doc.thumbnail_status as Document['thumbnail_status'],
         llm_status: doc.llm_status,
