@@ -4,12 +4,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSearchSuggestions } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import type { FacetItem, SearchFacets, SuggestionType } from '@reverie/shared';
-import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, Image, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, Image, MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
-type FilterType = 'type' | 'format' | 'category' | 'folder' | 'tag' | 'entity' | 'uploaded' | 'date';
+type FilterType = 'type' | 'format' | 'category' | 'folder' | 'tag' | 'entity' | 'uploaded' | 'date' | 'location';
 
 interface FilterDefinition {
     key: FilterType;
@@ -26,6 +26,7 @@ const FILTER_DEFS: FilterDefinition[] = [
     { key: 'category', label: 'Category', icon: Hash, prefix: 'category', mode: 'list' },
     { key: 'folder', label: 'Folder', icon: Folder, prefix: 'folder', mode: 'searchable', suggestionType: 'folder' },
     { key: 'tag', label: 'Tag', icon: Tag, prefix: 'tag', mode: 'searchable', suggestionType: 'tag' },
+    { key: 'location', label: 'Location', icon: MapPin, prefix: 'location', mode: 'searchable', suggestionType: 'location' },
     { key: 'uploaded', label: 'Upload date', icon: CalendarIcon, prefix: 'uploaded', mode: 'date' },
     { key: 'date', label: 'Document date', icon: CalendarIcon, prefix: 'date', mode: 'date' },
 ];
@@ -262,6 +263,8 @@ function getFacetItems(facets: SearchFacets | undefined, key: FilterType): Facet
             return facets.tags;
         case 'entity':
             return facets.entities ?? [];
+        case 'location':
+            return facets.locations ?? [];
         default:
             return [];
     }

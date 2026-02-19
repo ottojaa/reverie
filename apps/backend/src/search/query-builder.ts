@@ -46,9 +46,10 @@ type SearchDatabase = Database & {
     f: Database['folders'];
     ocr: Database['ocr_results'];
     llm: Database['llm_results'];
+    pm: Database['photo_metadata'];
 };
 
-type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>;
+type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', object>;
 
 /**
  * Apply date range filter to query
@@ -294,6 +295,20 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
         });
     }
 
+    // Location filter (matches city or country in photo_metadata)
+    if (parsed.locations?.length) {
+        query = query.where((eb) => {
+            const conditions = parsed.locations!.map((loc) =>
+                eb.or([
+                    sql<SqlBool>`pm.city ILIKE ${'%' + loc + '%'}`,
+                    sql<SqlBool>`pm.country ILIKE ${'%' + loc + '%'}`,
+                ]),
+            );
+
+            return eb.and(conditions);
+        });
+    }
+
     // Apply negations
     query = applyNegations(query, parsed.negations);
 
@@ -325,10 +340,10 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
  * Build the count query (same filters, no pagination)
  */
 export function buildCountQuery(
-    baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>,
+    baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', object>,
     parsed: ParsedQuery,
     userId: string,
-): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', { count: number }> {
+): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', { count: number }> {
     // Reuse the search query builder but without sorting and pagination
     const query = buildSearchQuery(baseQuery, parsed, userId, {
         limit: 1000000, // Will be ignored
@@ -345,7 +360,7 @@ export function buildCountQuery(
         .clearOffset()
         .select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<
         SearchDatabase,
-        'd' | 'f' | 'ocr' | 'llm',
+        'd' | 'f' | 'ocr' | 'llm' | 'pm',
         { count: number }
     >;
 }

@@ -159,6 +159,22 @@ export type DocumentTag = Selectable<DocumentTagsTable>;
 export type NewDocumentTag = Insertable<DocumentTagsTable>;
 export type DocumentTagUpdate = Updateable<DocumentTagsTable>;
 
+// Photo Metadata table
+export interface PhotoMetadataTable {
+    id: Generated<string>;
+    document_id: string;
+    latitude: number | null;
+    longitude: number | null;
+    country: string | null;
+    city: string | null;
+    taken_at: Date | null;
+    processed_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type PhotoMetadata = Selectable<PhotoMetadataTable>;
+export type NewPhotoMetadata = Insertable<PhotoMetadataTable>;
+export type PhotoMetadataUpdate = Updateable<PhotoMetadataTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -168,4 +184,5 @@ export interface Database {
     llm_results: LlmResultsTable;
     processing_jobs: ProcessingJobsTable;
     document_tags: DocumentTagsTable;
+    photo_metadata: PhotoMetadataTable;
 }

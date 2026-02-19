@@ -76,6 +76,48 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         await publishJobProgress(job.id!, 80, documentId, job.data.sessionId);
 
+        // Store EXIF metadata if extracted
+        const exif = result.exifMetadata;
+
+        if (exif) {
+            await db
+                .insertInto('photo_metadata')
+                .values({
+                    document_id: documentId,
+                    latitude: exif.latitude ?? undefined,
+                    longitude: exif.longitude ?? undefined,
+                    city: exif.city ?? undefined,
+                    country: exif.country ?? undefined,
+                    taken_at: exif.takenAt ?? undefined,
+                })
+                .onConflict((oc) => oc.column('document_id').doUpdateSet({
+                    latitude: exif.latitude ?? undefined,
+                    longitude: exif.longitude ?? undefined,
+                    city: exif.city ?? undefined,
+                    country: exif.country ?? undefined,
+                    taken_at: exif.takenAt ?? undefined,
+                }))
+                .execute();
+
+            // Use photo taken_at as extracted_date if not already set
+            if (exif.takenAt) {
+                await db
+                    .updateTable('documents')
+                    .set({ extracted_date: exif.takenAt })
+                    .where('id', '=', documentId)
+                    .where('extracted_date', 'is', null)
+                    .execute();
+            }
+
+            logger.info('Stored EXIF metadata', {
+                documentId,
+                hasGps: exif.latitude !== null,
+                city: exif.city,
+                country: exif.country,
+                takenAt: exif.takenAt,
+            });
+        }
+
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {
             await db

@@ -402,6 +402,14 @@ export function parseQuery(query: string): ParsedQuery {
                 break;
             }
 
+            case 'location': {
+                // Location filter: location:Barcelona, location:Italy, location:"New York"
+                if (!target.locations) target.locations = [];
+
+                target.locations.push(token.value);
+                break;
+            }
+
             default:
                 // Unknown filter, treat as text
                 textParts.push(`${token.key}:${token.value}`);
@@ -492,6 +500,10 @@ export function stringifyQuery(parsed: ParsedQuery): string {
 
     if (parsed.entities?.length) {
         parts.push(...parsed.entities.map((e) => `entity:${e.includes(' ') ? `"${e}"` : e}`));
+    }
+
+    if (parsed.locations?.length) {
+        parts.push(...parsed.locations.map((l) => `location:${l.includes(' ') ? `"${l}"` : l}`));
     }
 
     if (parsed.hasText !== undefined) {

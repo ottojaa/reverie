@@ -45,6 +45,9 @@ const ParsedQueryBaseSchema = z.object({
     categories: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
     entities: z.array(z.string()).optional(),
+
+    // Location filters (matches city or country)
+    locations: z.array(z.string()).optional(),
 });
 
 // Full schema with negations
@@ -137,6 +140,9 @@ export const SearchFacetsSchema = z.object({
     // Entity facets (if entities extracted)
     categories: z.array(FacetItemSchema),
     entities: z.array(FacetItemSchema).optional(), // Companies, people, etc.
+
+    // Location facets (countries/cities with photo metadata)
+    locations: z.array(FacetItemSchema).optional(),
 });
 
 export type SearchFacets = z.infer<typeof SearchFacetsSchema>;
@@ -159,7 +165,7 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 // Suggestions / Autocomplete
 // ============================================================================
 
-export const SuggestionTypeEnum = z.enum(['filename', 'folder', 'tag', 'entity', 'category']);
+export const SuggestionTypeEnum = z.enum(['filename', 'folder', 'tag', 'entity', 'category', 'location']);
 export type SuggestionType = z.infer<typeof SuggestionTypeEnum>;
 
 export const SuggestQuerySchema = z.object({

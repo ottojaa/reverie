@@ -70,7 +70,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
         .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
+        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
@@ -106,7 +107,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
         .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
+        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Apply the same filters to count query
     const filteredCountQuery = buildSearchQuery(countBaseQuery as any, parsed, options.userId, {
@@ -239,6 +241,8 @@ export async function suggest(query: SuggestQuery, userId: string): Promise<stri
             return suggestEntities(q, userId, limit);
         case 'category':
             return suggestCategories(q, userId, limit);
+        case 'location':
+            return suggestLocations(q, userId, limit);
         default:
             return [];
     }
@@ -329,6 +333,50 @@ async function suggestCategories(prefix: string, userId: string, limit: number):
         .execute();
 
     return results.filter((r) => r.document_category).map((r) => r.document_category!);
+}
+
+/**
+ * Suggest locations (cities and countries from photo metadata)
+ */
+async function suggestLocations(prefix: string, userId: string, limit: number): Promise<string[]> {
+    const pattern = `%${prefix}%`;
+
+    const [cities, countries] = await Promise.all([
+        db
+            .selectFrom('photo_metadata as pm')
+            .innerJoin('documents as d', 'd.id', 'pm.document_id')
+            .select('pm.city')
+            .distinct()
+            .where('d.user_id', '=', userId)
+            .where('pm.city', 'is not', null)
+            .where('pm.city', 'ilike', pattern)
+            .orderBy('pm.city', 'asc')
+            .limit(limit)
+            .execute(),
+        db
+            .selectFrom('photo_metadata as pm')
+            .innerJoin('documents as d', 'd.id', 'pm.document_id')
+            .select('pm.country')
+            .distinct()
+            .where('d.user_id', '=', userId)
+            .where('pm.country', 'is not', null)
+            .where('pm.country', 'ilike', pattern)
+            .orderBy('pm.country', 'asc')
+            .limit(limit)
+            .execute(),
+    ]);
+
+    const results = new Set<string>();
+
+    for (const row of cities) {
+        if (row.city) results.add(row.city);
+    }
+
+    for (const row of countries) {
+        if (row.country) results.add(row.country);
+    }
+
+    return Array.from(results).slice(0, limit);
 }
 
 /**

@@ -3,6 +3,7 @@ import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
 import { getStorageService } from '../services/storage.service';
 import { classifyNonTextImage } from './category-classifier';
+import { extractExifMetadata } from './exif-extractor';
 import { getImageMetadata, getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
 import { recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
 import { recognizeText as recognizeWithTesseract, terminateWorker } from './tesseract.client';
@@ -104,9 +105,12 @@ export async function processDocument(documentId: string, options: ProcessDocume
     // 5. Get image dimensions
     const imageSize = await getImageSize(imageBuffer, imageMetadata);
 
-    // 6. Preprocess image for OCR
+    // 6. Preprocess image for OCR + extract EXIF metadata in parallel
     const preprocessStart = Date.now();
-    const processedImage = options.skipPreprocessing ? imageBuffer : await preprocessImage(imageBuffer, {}, imageMetadata);
+    const [processedImage, exifMetadata] = await Promise.all([
+        options.skipPreprocessing ? Promise.resolve(imageBuffer) : preprocessImage(imageBuffer, {}, imageMetadata),
+        extractExifMetadata(imageBuffer),
+    ]);
     timings.preprocessMs = Date.now() - preprocessStart;
 
     // 7. Run OCR
@@ -139,6 +143,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
         category,
         needsReview,
         ocrEngine: ocrOutput.engine,
+        exifMetadata,
     };
 
     // 12. Save to database
