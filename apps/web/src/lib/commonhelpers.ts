@@ -1,4 +1,3 @@
-import type { Document } from '@reverie/shared';
 
 /**
  * Format byte count for human display.
@@ -43,7 +42,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 /**
  * Get pre-signed thumbnail URL for a document.
  */
-export function getThumbnailUrl(document: Document, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
+export function getThumbnailUrl<T extends { thumbnail_urls?: { sm: string; md: string; lg: string } | null }>(document: T, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
     const url = document.thumbnail_urls?.[size];
 
     if (!url) return null;

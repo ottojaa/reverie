@@ -107,8 +107,6 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
     }, []);
 
     // Build thumbnail URL for blur-up
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    const thumbnailUrl = document.thumbnail_urls?.lg ? `${API_BASE}${document.thumbnail_urls.lg}` : null;
 
     return (
         <div

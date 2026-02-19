@@ -83,7 +83,7 @@ export const TEXT_DETECTION_THRESHOLDS = {
     /** Minimum raw text length to consider meaningful */
     minTextLength: 20,
     /** Confidence below which to skip LLM processing */
-    llmSkipThreshold: 30,
+    llmSkipThreshold: 60,
     /** Confidence below which to flag for review */
     reviewThreshold: 60,
 } as const;

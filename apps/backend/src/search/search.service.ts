@@ -1,8 +1,8 @@
 import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQuery } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
-import { formatDateOnly } from '../utils/date';
 import { getStorageService } from '../services/storage.service';
+import { formatDateOnly } from '../utils/date';
 import { generateFacets } from './facets';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
 import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
@@ -254,7 +254,7 @@ async function suggestFilenames(prefix: string, userId: string, limit: number): 
         .distinct()
         .where('user_id', '=', userId)
         .where('original_filename', 'ilike', `${prefix}%`)
-        .orderBy('created_at', 'desc')
+        .orderBy('original_filename', 'asc')
         .limit(limit)
         .execute();
 
