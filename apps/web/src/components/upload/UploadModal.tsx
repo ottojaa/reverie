@@ -167,36 +167,35 @@ export function UploadModal() {
     const { isCounting, seconds, startCountdown } = useCountdown();
 
     useEffect(() => {
-        if (allComplete && !prevAllComplete.current) {
-            prevAllComplete.current = true;
-            const completedIds = files.filter((f) => f.status === 'complete' && f.documentId).map((f) => f.documentId!);
-            recordCompletedDocumentIds(completedIds);
-            setSuccessPhase(true);
+        if (!allComplete) {
+            prevAllComplete.current = false;
 
-            const n = stats.complete;
-
-            startCountdown(ALL_COMPLETE_CLOSE_DELAY_MS / 1000);
-
-            const timer = setTimeout(() => {
-                closeModal();
-                clearCompleted();
-                clearFailed();
-                queryClient.invalidateQueries({ queryKey: ['documents'] });
-                queryClient.invalidateQueries({ queryKey: ['sections'] });
-                toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`);
-            }, ALL_COMPLETE_CLOSE_DELAY_MS);
-
-            return () => {
-                console.log('clearing timer');
-                clearTimeout(timer);
-                setSuccessPhase(false);
-            };
+            return;
         }
 
-        prevAllComplete.current = allComplete;
+        prevAllComplete.current = true;
+        const completedIds = files.filter((f) => f.status === 'complete' && f.documentId).map((f) => f.documentId!);
+        recordCompletedDocumentIds(completedIds);
+        setSuccessPhase(true);
 
-        return undefined;
-    }, [allComplete, stats.complete, closeModal, queryClient, clearCompleted, clearFailed, files, recordCompletedDocumentIds]);
+        const n = stats.complete;
+
+        startCountdown(ALL_COMPLETE_CLOSE_DELAY_MS / 1000);
+
+        const timer = setTimeout(() => {
+            closeModal();
+            clearCompleted();
+            clearFailed();
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['sections'] });
+            toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`);
+        }, ALL_COMPLETE_CLOSE_DELAY_MS);
+
+        return () => {
+            clearTimeout(timer);
+            setSuccessPhase(false);
+        };
+    }, [allComplete, stats.complete, closeModal, queryClient, clearCompleted, clearFailed, files, recordCompletedDocumentIds, startCountdown]);
 
     if (files.length === 0) {
         return null;

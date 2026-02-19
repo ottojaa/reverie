@@ -10,9 +10,17 @@ export function PulseOverlay({ onComplete }: { onComplete?: (() => void) | undef
         if (!onComplete || hasPulsedRef.current) return;
 
         hasPulsedRef.current = true;
-        const timer = setTimeout(onComplete, PULSE_DURATION_MS);
+        let completed = false;
+        const timer = setTimeout(() => {
+            completed = true;
+            onComplete();
+        }, PULSE_DURATION_MS);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+
+            if (!completed) onComplete();
+        };
     }, [onComplete]);
 
     return (

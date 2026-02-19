@@ -2,6 +2,7 @@ import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQu
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { getStorageService } from '../services/storage.service';
+import { formatDateOnly } from '../utils/date';
 import { generateFacets } from './facets';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
 import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
@@ -65,7 +66,11 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     };
 
     // Build base query with all joins
-    const baseQuery = db.selectFrom('documents as d').leftJoin('folders as f', 'f.id', 'd.folder_id').leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
+    const baseQuery = db
+        .selectFrom('documents as d')
+        .leftJoin('folders as f', 'f.id', 'd.folder_id')
+        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
@@ -83,7 +88,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         'd.has_meaningful_text',
         'd.thumbnail_paths',
         'd.thumbnail_blurhash',
-        'd.llm_summary',
+        'llm.summary as llm_summary',
         'f.path as folder_path',
         'ocr.raw_text',
     ]);
@@ -100,7 +105,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     const countBaseQuery = db
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
-        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id');
+        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
 
     // Apply the same filters to count query
     const filteredCountQuery = buildSearchQuery(countBaseQuery as any, parsed, options.userId, {
@@ -181,7 +187,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
                 folder_path: row.folder_path,
                 folder_id: row.folder_id,
                 uploaded_at: row.created_at.toISOString(),
-                extracted_date: row.extracted_date?.toISOString().split('T')[0] ?? null,
+                extracted_date: formatDateOnly(row.extracted_date),
                 category: row.document_category as SearchResult['category'],
                 mime_type: row.mime_type,
                 format,
@@ -248,7 +254,7 @@ async function suggestFilenames(prefix: string, userId: string, limit: number): 
         .distinct()
         .where('user_id', '=', userId)
         .where('original_filename', 'ilike', `${prefix}%`)
-        .orderBy('created_at', 'desc')
+        .orderBy('original_filename', 'asc')
         .limit(limit)
         .execute();
 

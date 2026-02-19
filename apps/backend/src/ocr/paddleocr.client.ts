@@ -6,7 +6,7 @@
  * Communicates via newline-delimited JSON over stdin/stdout.
  */
 
-import { type ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, execFileSync, spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -32,6 +32,7 @@ let childProcess: ChildProcess | null = null;
 let readline: ReadlineInterface | null = null;
 let ready = false;
 let startingUp: Promise<void> | null = null;
+let sharedTempDirPromise: Promise<string> | null = null;
 
 /** Queue of pending response handlers (FIFO — one response per request) */
 const pendingResponses: Array<{
@@ -60,7 +61,24 @@ interface PaddleOcrResult {
 
 // ── Process lifecycle ───────────────────────────────────────────
 
+/**
+ * Kill any orphaned ocr_runner.py processes from previous runs.
+ * When the Node process is killed abruptly (e.g. dev restart), the Python child
+ * can be orphaned and keep consuming RAM. Clean them up before spawning a new one.
+ */
+function killOrphanedOcrProcesses(): void {
+    try {
+        // Escape for pkill -f regex; use array form to avoid shell escaping
+        const pattern = OCR_RUNNER_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        execFileSync('pkill', ['-9', '-f', pattern], { stdio: 'ignore', encoding: 'utf8' });
+    } catch {
+        // pkill exits 1 when no process matches — ignore
+    }
+}
+
 function spawnProcess(): void {
+    killOrphanedOcrProcesses();
+
     childProcess = spawn(PYTHON_BIN, [OCR_RUNNER_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
@@ -119,6 +137,14 @@ function cleanup(): void {
     childProcess = null;
     ready = false;
     startingUp = null;
+}
+
+async function getSharedTempDir(): Promise<string> {
+    if (!sharedTempDirPromise) {
+        sharedTempDirPromise = mkdtemp(join(tmpdir(), 'reverie-ocr-'));
+    }
+
+    return sharedTempDirPromise;
 }
 
 /**
@@ -196,12 +222,13 @@ export async function startPaddleOcr(): Promise<void> {
  * Recognize text in an image buffer using PaddleOCR
  */
 export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
-    let tempDir: string | null = null;
+    let tempImagePath: string | null = null;
 
     try {
-        // Write buffer to a temp file (PaddleOCR needs a file path)
-        tempDir = await mkdtemp(join(tmpdir(), 'reverie-ocr-'));
-        const tempImagePath = join(tempDir, 'input.png');
+        // Write buffer to a temp file (PaddleOCR needs a file path).
+        // Reuse a shared temp directory to avoid mkdir/rm overhead per request.
+        const tempDir = await getSharedTempDir();
+        tempImagePath = join(tempDir, `input-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
         await writeFile(tempImagePath, imageBuffer);
 
         const response = await sendRequest({ image_path: tempImagePath });
@@ -218,8 +245,8 @@ export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
             engine: result.engine ?? 'paddleocr/PP-OCRv3',
         };
     } finally {
-        if (tempDir) {
-            await rm(tempDir, { recursive: true, force: true }).catch(() => {
+        if (tempImagePath) {
+            await rm(tempImagePath, { force: true }).catch(() => {
                 /* ignore cleanup errors */
             });
         }
@@ -264,9 +291,25 @@ export async function shutdownPaddleOcr(): Promise<void> {
     });
 
     cleanup();
+
+    if (sharedTempDirPromise) {
+        const tempDir = await sharedTempDirPromise.catch(() => null);
+        sharedTempDirPromise = null;
+
+        if (tempDir) {
+            await rm(tempDir, { recursive: true, force: true }).catch(() => {
+                /* ignore cleanup errors */
+            });
+        }
+    }
 }
 
 process.on('SIGINT', shutdownPaddleOcr);
 process.on('SIGTERM', shutdownPaddleOcr);
 process.on('SIGQUIT', shutdownPaddleOcr);
-process.on('exit', shutdownPaddleOcr);
+// exit is synchronous — async shutdown won't complete; force kill immediately
+process.on('exit', () => {
+    if (childProcess && !childProcess.killed) {
+        childProcess.kill('SIGKILL');
+    }
+});

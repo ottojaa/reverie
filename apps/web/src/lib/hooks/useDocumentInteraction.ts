@@ -40,6 +40,7 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
 
     const navigateToDocument = useCallback(() => {
         queryClient.setQueryData(['document', document.id], document);
+        queryClient.invalidateQueries({ queryKey: ['document', document.id] });
         navigate({ to: '/document/$id', params: { id: document.id } });
     }, [queryClient, document, navigate]);
 

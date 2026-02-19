@@ -1,8 +1,9 @@
 import { env } from '../config/env';
 import { db } from '../db/kysely';
+import type { Document } from '../db/schema';
 import { getStorageService } from '../services/storage.service';
 import { classifyNonTextImage } from './category-classifier';
-import { getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
+import { getImageMetadata, getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
 import { recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
 import { recognizeText as recognizeWithTesseract, terminateWorker } from './tesseract.client';
 import { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from './text-detector';
@@ -25,6 +26,12 @@ export interface ProcessDocumentOptions {
     skipPreprocessing?: boolean | undefined;
     /** Force reprocessing even if already complete */
     forceReprocess?: boolean | undefined;
+    /** Optional preloaded document from worker */
+    document?: Document | undefined;
+}
+
+function shouldLogTimings(): boolean {
+    return process.env.NODE_ENV !== 'production';
 }
 
 /**
@@ -42,10 +49,14 @@ async function runOcr(imageBuffer: Buffer): Promise<OcrOutput> {
  * Process a document for OCR
  */
 export async function processDocument(documentId: string, options: ProcessDocumentOptions = {}): Promise<OcrProcessingResult> {
+    const totalStart = Date.now();
+    const timings: Record<string, number> = {};
     const storageService = getStorageService();
 
+    const fetchStart = Date.now();
     // 1. Fetch document from DB
-    const document = await db.selectFrom('documents').selectAll().where('id', '=', documentId).executeTakeFirst();
+    const document = options.document ?? (await db.selectFrom('documents').selectAll().where('id', '=', documentId).executeTakeFirst());
+    timings.fetchDocumentMs = Date.now() - fetchStart;
 
     if (!document) {
         throw new Error(`Document ${documentId} not found`);
@@ -74,23 +85,34 @@ export async function processDocument(documentId: string, options: ProcessDocume
     }
 
     // 3. Load image from storage
+    const readFileStart = Date.now();
     const imageBuffer = await storageService.getFile(document.file_path);
+    timings.readFileMs = Date.now() - readFileStart;
+
+    // Decode image metadata once and reuse across validation/sizing/preprocessing
+    const metadataStart = Date.now();
+    const imageMetadata = await getImageMetadata(imageBuffer);
+    timings.imageMetadataMs = Date.now() - metadataStart;
 
     // 4. Validate image
-    const validation = await validateImageForOcr(imageBuffer);
+    const validation = await validateImageForOcr(imageBuffer, imageMetadata);
 
     if (!validation.valid) {
         throw new Error(validation.error);
     }
 
     // 5. Get image dimensions
-    const imageSize = await getImageSize(imageBuffer);
+    const imageSize = await getImageSize(imageBuffer, imageMetadata);
 
     // 6. Preprocess image for OCR
-    const processedImage = options.skipPreprocessing ? imageBuffer : await preprocessImage(imageBuffer);
+    const preprocessStart = Date.now();
+    const processedImage = options.skipPreprocessing ? imageBuffer : await preprocessImage(imageBuffer, {}, imageMetadata);
+    timings.preprocessMs = Date.now() - preprocessStart;
 
     // 7. Run OCR
+    const ocrStart = Date.now();
     const ocrOutput = await runOcr(processedImage);
+    timings.ocrEngineMs = Date.now() - ocrStart;
 
     // 8. Detect if meaningful text exists
     const textDetection = detectTextPresence(ocrOutput, imageSize);
@@ -120,7 +142,14 @@ export async function processDocument(documentId: string, options: ProcessDocume
     };
 
     // 12. Save to database
+    const dbWriteStart = Date.now();
     await saveOcrResult(documentId, result);
+    timings.dbWriteMs = Date.now() - dbWriteStart;
+    timings.totalMs = Date.now() - totalStart;
+
+    if (shouldLogTimings()) {
+        console.info('[OCRService] process timings', JSON.stringify({ documentId, ...timings }));
+    }
 
     return result;
 }

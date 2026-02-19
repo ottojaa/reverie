@@ -68,10 +68,6 @@ export interface DocumentsTable {
     thumbnail_status: JobStatus;
     llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
-    llm_summary: string | null;
-    llm_metadata: LlmMetadata | null;
-    llm_processed_at: Date | null;
-    llm_token_count: number | null;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }
@@ -99,6 +95,7 @@ export interface OcrResultsTable {
     processed_at: ColumnType<Date, Date | undefined, never>;
     /** OCR engine identifier, e.g. "paddleocr/PP-OCRv4" or "tesseract/5.x-fin+eng" */
     ocr_engine: ColumnType<string, string | undefined, string>;
+    duration_ms: number | null;
 }
 
 export interface OcrMetadata {
@@ -111,6 +108,22 @@ export interface OcrMetadata {
 export type OcrResult = Selectable<OcrResultsTable>;
 export type NewOcrResult = Insertable<OcrResultsTable>;
 export type OcrResultUpdate = Updateable<OcrResultsTable>;
+
+// LLM Results table
+export interface LlmResultsTable {
+    id: Generated<string>;
+    document_id: string;
+    summary: string | null;
+    metadata: LlmMetadata | null;
+    token_count: number | null;
+    processing_type: string | null;
+    duration_ms: number | null;
+    processed_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type LlmResult = Selectable<LlmResultsTable>;
+export type NewLlmResult = Insertable<LlmResultsTable>;
+export type LlmResultUpdate = Updateable<LlmResultsTable>;
 
 // Processing Jobs table
 export interface ProcessingJobsTable {
@@ -126,6 +139,7 @@ export interface ProcessingJobsTable {
     created_at: ColumnType<Date, Date | undefined, never>;
     started_at: Date | null;
     completed_at: Date | null;
+    duration_ms: number | null;
 }
 
 export type ProcessingJob = Selectable<ProcessingJobsTable>;
@@ -151,6 +165,7 @@ export interface Database {
     folders: FoldersTable;
     documents: DocumentsTable;
     ocr_results: OcrResultsTable;
+    llm_results: LlmResultsTable;
     processing_jobs: ProcessingJobsTable;
     document_tags: DocumentTagsTable;
 }

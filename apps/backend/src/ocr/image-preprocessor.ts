@@ -22,18 +22,24 @@ const DEFAULT_OPTIONS: PreprocessingOptions = {
     removeNoise: false, // Disabled by default as it can sometimes hurt quality
 };
 
+type SharpImageMetadata = { width?: number; height?: number };
+
+export async function getImageMetadata(buffer: Buffer): Promise<SharpImageMetadata> {
+    return sharp(buffer).metadata();
+}
+
 /**
  * Preprocess an image buffer for optimal OCR results
  */
-export async function preprocessImage(buffer: Buffer, options: PreprocessingOptions = {}): Promise<Buffer> {
+export async function preprocessImage(buffer: Buffer, options: PreprocessingOptions = {}, metadata?: SharpImageMetadata): Promise<Buffer> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     let pipeline = sharp(buffer);
 
     // Get current dimensions to decide on scaling
-    const metadata = await sharp(buffer).metadata();
-    const currentWidth = metadata.width ?? 0;
-    const currentHeight = metadata.height ?? 0;
+    const resolvedMetadata = metadata ?? (await getImageMetadata(buffer));
+    const currentWidth = resolvedMetadata.width ?? 0;
+    const currentHeight = resolvedMetadata.height ?? 0;
     const longestSide = Math.max(currentWidth, currentHeight);
 
     // Downscale oversized images first — keeps OCR fast without losing meaningful detail
@@ -84,12 +90,12 @@ export async function preprocessImage(buffer: Buffer, options: PreprocessingOpti
 /**
  * Get image dimensions from buffer
  */
-export async function getImageSize(buffer: Buffer): Promise<ImageSize> {
-    const metadata = await sharp(buffer).metadata();
+export async function getImageSize(buffer: Buffer, metadata?: SharpImageMetadata): Promise<ImageSize> {
+    const resolvedMetadata = metadata ?? (await getImageMetadata(buffer));
 
     return {
-        width: metadata.width ?? 0,
-        height: metadata.height ?? 0,
+        width: resolvedMetadata.width ?? 0,
+        height: resolvedMetadata.height ?? 0,
     };
 }
 
@@ -105,7 +111,7 @@ export function isProcessableImage(mimeType: string): boolean {
 /**
  * Validate image for OCR processing
  */
-export async function validateImageForOcr(buffer: Buffer): Promise<{ valid: boolean; error?: string }> {
+export async function validateImageForOcr(buffer: Buffer, metadata?: SharpImageMetadata): Promise<{ valid: boolean; error?: string }> {
     if (buffer.length > OCR_LIMITS.maxFileSize) {
         return {
             valid: false,
@@ -114,13 +120,13 @@ export async function validateImageForOcr(buffer: Buffer): Promise<{ valid: bool
     }
 
     try {
-        const metadata = await sharp(buffer).metadata();
+        const resolvedMetadata = metadata ?? (await getImageMetadata(buffer));
 
-        if (!metadata.width || !metadata.height) {
+        if (!resolvedMetadata.width || !resolvedMetadata.height) {
             return { valid: false, error: 'Invalid image: could not determine dimensions' };
         }
 
-        if (metadata.width === 0 || metadata.height === 0) {
+        if (resolvedMetadata.width === 0 || resolvedMetadata.height === 0) {
             return { valid: false, error: 'Invalid image: zero dimensions' };
         }
 

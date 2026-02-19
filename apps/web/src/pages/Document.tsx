@@ -1,4 +1,3 @@
-import { AiSummaryBanner } from '@/components/document-viewer/AiSummaryBanner';
 import { DocumentDetailsDrawer } from '@/components/document-viewer/DocumentDetailsDrawer';
 import type { ViewerProps } from '@/components/document-viewer/viewer-registry';
 import { getViewerLoader } from '@/components/document-viewer/viewer-registry';
@@ -98,11 +97,6 @@ export function DocumentPage() {
         <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
             {/* Toolbar overlay */}
             <ViewerToolbar document={document} fileUrl={fileUrl} isDetailsOpen={isDetailsOpen} onToggleDetails={toggleDetails} />
-
-            {/* AI Summary banner — between toolbar and viewer */}
-            <div className="pt-14">
-                <AiSummaryBanner document={document} />
-            </div>
 
             {/* Viewer area */}
             <motion.div

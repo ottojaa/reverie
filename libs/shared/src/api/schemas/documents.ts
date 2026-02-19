@@ -55,6 +55,15 @@ export const ThumbnailUrlsSchema = z.object({
 
 export type ThumbnailUrls = z.infer<typeof ThumbnailUrlsSchema>;
 
+export const EntitySchema = z.object({
+    type: z.enum(['person', 'organization', 'location', 'product', 'account', 'identifier', 'other']),
+    canonical_name: z.string(),
+    raw_text: z.string(),
+    confidence: z.enum(['high', 'medium', 'low']),
+});
+
+export type Entity = z.infer<typeof EntitySchema>;
+
 export const DocumentSchema = z.object({
     id: UuidSchema,
     folder_id: UuidSchema.nullable(),

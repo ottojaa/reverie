@@ -36,11 +36,13 @@ const envSchema = z.object({
     OPENAI_API_KEY: z.string().optional(),
     OPENAI_MODEL: z.string().default('gpt-4o-mini'),
     OPENAI_MAX_TOKENS: z.coerce.number().default(2000),
+    OPENAI_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
+    OPENAI_EMPTY_RESPONSE_RETRIES: z.coerce.number().default(1),
 
     // LLM Processing
     LLM_ENABLED: z.coerce.boolean().default(true),
-    LLM_MAX_INPUT_CHARS: z.coerce.number().default(50000),
-    LLM_SNIPPET_SIZE: z.coerce.number().default(5000),
+    LLM_MAX_INPUT_CHARS: z.coerce.number().default(25000),
+    LLM_SNIPPET_SIZE: z.coerce.number().default(3000),
     LLM_PROCESS_CODE_FILES: z.coerce.boolean().default(false),
     LLM_MIN_OCR_CONFIDENCE: z.coerce.number().default(30),
 

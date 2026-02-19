@@ -104,15 +104,22 @@ export async function publishJobFailed(jobId: string, errorMessage: string, docu
     await publishJobEvent(event);
 }
 
+export interface TrackingOptions {
+    /** Callback to store duration in the appropriate result table */
+    storeDuration?: (documentId: string, durationMs: number) => Promise<void>;
+}
+
 /**
  * Base job processor wrapper that handles common logic:
  * - Updates job status in DB
  * - Publishes events to Redis
  * - Handles errors and retries
+ * - Measures and stores processing duration
  */
 export async function processJobWithTracking<TData extends { documentId: string; sessionId?: string | undefined }, TResult>(
     job: Job<TData>,
     processor: (job: Job<TData>) => Promise<TResult>,
+    options?: TrackingOptions,
 ): Promise<TResult> {
     const jobService = getJobService();
     const { documentId, sessionId } = job.data;
@@ -123,11 +130,19 @@ export async function processJobWithTracking<TData extends { documentId: string;
         await jobService.markJobStarted(jobId);
         await publishJobStarted(jobId, documentId, sessionId);
 
-        // Process the job
+        // Process the job with timing
+        const startTime = Date.now();
         const result = await processor(job);
+        const durationMs = Date.now() - startTime;
 
-        // Mark job as complete
-        await jobService.markJobComplete(jobId, result as Record<string, unknown>);
+        // Mark job as complete (with duration)
+        await jobService.markJobComplete(jobId, result as Record<string, unknown>, durationMs);
+
+        // Store duration in the result table if callback provided
+        if (options?.storeDuration) {
+            await options.storeDuration(documentId, durationMs);
+        }
+
         await publishJobComplete(jobId, result, documentId, sessionId);
 
         return result;

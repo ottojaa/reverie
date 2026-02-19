@@ -1059,16 +1059,3 @@ For true content-based image search:
 - Invalid filter syntax returns helpful error
 
 ---
-
-## Future Enhancements
-
-- **Multi-language support**: Detect document language, use appropriate stemmer
-- **Boolean operators**: Explicit AND, OR, NOT in text search
-- **Proximity search**: "Apple" within 5 words of "stock"
-- **Image similarity search**: Find visually similar photos (requires embeddings)
-- **Semantic search**: "Find documents about money" matches "invoice", "payment", "budget"
-- **Saved searches**: Save complex queries with names for quick access
-- **Search alerts**: Notify when new documents match a saved search
-- **Export search results**: CSV, JSON export of search results
-- **Search analytics**: Track popular searches, failed searches
-- **Natural language queries**: "Show me photos from last summer" → `type:photo uploaded:2023-06..2023-08`

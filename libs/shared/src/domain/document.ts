@@ -1,5 +1,7 @@
 // Domain types for documents (not tied to API schemas)
 
+import type { Entity } from "../api/schemas/documents.js";
+
 export interface OcrResult {
     raw_text: string;
     confidence_score: number;
@@ -62,9 +64,8 @@ export interface LlmMetadata {
     type: 'text_summary' | 'vision_describe';
     title?: string;
     language?: string;
-    keyEntities: KeyEntities;
+    entities: Entity[];
     topics: string[];
-    sentiment?: 'positive' | 'neutral' | 'negative';
     documentType?: string;
     extractedDate?: string;
     extractedDates?: ExtractedDate[];
