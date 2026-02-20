@@ -10,7 +10,7 @@ export interface SearchState {
     setQuery: (q: string) => void;
     clearQuery: () => void;
     recentSearches: RecentSearch[];
-    addRecentSearch: (query: string, resultCount: number) => void;
+    addRecentSearch: (query: string) => void;
     removeRecentSearch: (query: string) => void;
     clearRecentSearches: () => void;
 }
@@ -56,15 +56,12 @@ export function useSearchState(debounceMs = 300): SearchState {
         return () => clearTimeout(timerRef.current);
     }, []);
 
-    const addRecentSearch = useCallback((q: string, resultCount: number) => {
+    const addRecentSearch = useCallback((q: string) => {
         if (!q.trim()) return;
 
         setRecentSearches((prev) => {
             const filtered = prev.filter((s) => s.query !== q);
-            const next: RecentSearch[] = [
-                { query: q, timestamp: new Date().toISOString(), resultCount },
-                ...filtered,
-            ].slice(0, MAX_RECENT_SEARCHES);
+            const next: RecentSearch[] = [{ query: q, timestamp: new Date().toISOString() }, ...filtered].slice(0, MAX_RECENT_SEARCHES);
             saveRecentSearches(next);
 
             return next;

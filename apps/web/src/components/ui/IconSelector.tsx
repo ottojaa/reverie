@@ -18,7 +18,7 @@ const ICONS_AVAILABLE: readonly IconData[] = iconsData.filter((icon) => icon.nam
 
 interface IconSelectorProps extends Omit<React.ComponentPropsWithoutRef<typeof PopoverTrigger>, 'onSelect' | 'value'> {
     value?: SectionIconName | null;
-    onValueChange?: (name: SectionIconName) => void;
+    onValueChange?: (name: SectionIconName | null) => void;
     open?: boolean;
     defaultOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -139,6 +139,14 @@ export function IconSelector({
         [value, onValueChange, onOpenChange, open],
     );
 
+    const handleClear = useCallback(() => {
+        setSelectedIcon(null);
+        onValueChange?.(null);
+        onOpenChange?.(false);
+
+        if (open === undefined) setIsOpen(false);
+    }, [onValueChange, onOpenChange, open]);
+
     const handleOpenChange = useCallback(
         (next: boolean) => {
             if (open === undefined) setIsOpen(next);
@@ -171,11 +179,11 @@ export function IconSelector({
                     </Button>
                 )}
             </PopoverTrigger>
-            <PopoverContent className="w-72 p-2" align="start">
+            <PopoverContent className="w-72 p-2 relative" align="start">
                 <Input placeholder={searchPlaceholder} value={inputValue} onChange={handleSearchChange} className="mb-2 h-8" />
                 <div
                     ref={(el) => {
-                        (parentRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+                        (parentRef as React.RefObject<HTMLDivElement | null>).current = el;
 
                         if (el && isOpenState) requestAnimationFrame(() => setScrollReady(true));
                     }}
@@ -234,6 +242,9 @@ export function IconSelector({
                         </div>
                     )}
                 </div>
+                <Button type="button" variant="secondary" className="absolute bottom-2 right-2 h-8" onClick={handleClear}>
+                    Clear icon
+                </Button>
             </PopoverContent>
         </Popover>
     );

@@ -53,6 +53,19 @@ export interface OcrProcessingResult {
     needsReview: boolean;
     /** Which OCR engine produced this result, e.g. "paddleocr/PP-OCRv4" */
     ocrEngine: string;
+    /** EXIF metadata extracted from the image, if available */
+    exifMetadata?: ExifMetadata | undefined;
+}
+
+/**
+ * EXIF metadata extracted from a photo
+ */
+export interface ExifMetadata {
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+    country: string | null;
+    takenAt: Date | null;
 }
 
 /**

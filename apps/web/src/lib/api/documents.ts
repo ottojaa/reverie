@@ -26,11 +26,7 @@ export interface CheckDuplicatesResult {
     duplicates: string[];
 }
 
-export async function checkDuplicates(
-    authFetch: AuthFetch,
-    folderId: string,
-    filenames: string[],
-): Promise<CheckDuplicatesResult> {
+export async function checkDuplicates(authFetch: AuthFetch, folderId: string, filenames: string[]): Promise<CheckDuplicatesResult> {
     if (filenames.length === 0) return { duplicates: [] };
 
     const response = await authFetch(`${API_BASE}/documents/check-duplicates`, {
@@ -161,9 +157,7 @@ export function useReprocessLlm() {
     return useMutation({
         mutationFn: (documentId: string) => reprocessLlmWithAuth(authFetch, documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) =>
-                old ? { ...old, llm_status: 'pending' } : old,
-            );
+            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, llm_status: 'pending' } : old));
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
         onError: () => {
@@ -248,9 +242,7 @@ export function useRetryOcr() {
     return useMutation({
         mutationFn: (documentId: string) => retryOcrWithAuth(authFetch, documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) =>
-                old ? { ...old, ocr_status: 'pending' } : old,
-            );
+            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, ocr_status: 'pending' } : old));
             queryClient.removeQueries({ queryKey: ['document', documentId, 'ocr'] });
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
@@ -335,7 +327,7 @@ export function useDeleteDocuments() {
                         ? []
                         : 'pages' in res && Array.isArray(res.pages)
                           ? (res as InfiniteData<DocumentsResponse>).pages.flatMap((p) => p.items)
-                          : (res as DocumentsResponse).items ?? [];
+                          : ((res as DocumentsResponse).items ?? []);
 
                     for (const id of ids) {
                         const doc = items.find((d) => d.id === id);

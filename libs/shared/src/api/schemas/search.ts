@@ -45,6 +45,9 @@ const ParsedQueryBaseSchema = z.object({
     categories: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
     entities: z.array(z.string()).optional(),
+
+    // Location filters (matches city or country)
+    locations: z.array(z.string()).optional(),
 });
 
 // Full schema with negations
@@ -80,6 +83,7 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 
 export const SearchResultSchema = z.object({
     document_id: UuidSchema,
+    display_name: z.string(),
     filename: z.string(),
     folder_path: z.string().nullable(),
     folder_id: UuidSchema.nullable(),
@@ -137,6 +141,9 @@ export const SearchFacetsSchema = z.object({
     // Entity facets (if entities extracted)
     categories: z.array(FacetItemSchema),
     entities: z.array(FacetItemSchema).optional(), // Companies, people, etc.
+
+    // Location facets (countries/cities with photo metadata)
+    locations: z.array(FacetItemSchema).optional(),
 });
 
 export type SearchFacets = z.infer<typeof SearchFacetsSchema>;
@@ -159,7 +166,7 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 // Suggestions / Autocomplete
 // ============================================================================
 
-export const SuggestionTypeEnum = z.enum(['filename', 'folder', 'tag', 'entity', 'category']);
+export const SuggestionTypeEnum = z.enum(['filename', 'folder', 'tag', 'entity', 'category', 'location']);
 export type SuggestionType = z.infer<typeof SuggestionTypeEnum>;
 
 export const SuggestQuerySchema = z.object({
@@ -180,7 +187,6 @@ export type SuggestResponse = z.infer<typeof SuggestResponseSchema>;
 export const RecentSearchSchema = z.object({
     query: z.string(),
     timestamp: z.string().datetime(),
-    resultCount: z.number(),
 });
 
 export type RecentSearch = z.infer<typeof RecentSearchSchema>;

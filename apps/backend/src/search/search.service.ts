@@ -5,7 +5,7 @@ import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
 import { generateFacets } from './facets';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
-import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
+import { buildPrefixTsQuery, buildSearchQuery, type SearchQueryOptions } from './query-builder';
 import { parseQuery, validateQuery } from './query-parser';
 
 /**
@@ -70,7 +70,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
         .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
+        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
@@ -89,16 +90,21 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         'd.thumbnail_paths',
         'd.thumbnail_blurhash',
         'llm.summary as llm_summary',
+        sql<string | null>`llm.metadata->>'title'`.as('llm_title'),
+        sql<string | null>`llm.metadata->>'type'`.as('llm_processing_type'),
         'f.path as folder_path',
         'ocr.raw_text',
+        'pm.city as photo_city',
+        'pm.country as photo_country',
+        'pm.taken_at as photo_taken_at',
     ]);
 
     // Add relevance score if text search
     let finalQuery = resultsQuery;
 
     if (parsed.fullText) {
-        const tsQuery = sql`plainto_tsquery('english', ${parsed.fullText})`;
-        finalQuery = resultsQuery.select(sql<number>`COALESCE(ts_rank(ocr.text_vector, ${tsQuery}), 0)`.as('relevance'));
+        const tsQuery = buildPrefixTsQuery(parsed.fullText);
+        finalQuery = resultsQuery.select(sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance'));
     }
 
     // For counting, we'll run a simpler query
@@ -106,7 +112,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
         .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id');
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
+        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Apply the same filters to count query
     const filteredCountQuery = buildSearchQuery(countBaseQuery as any, parsed, options.userId, {
@@ -170,7 +177,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
                 // Fall back to filename snippet
                 if (!snippet) {
-                    snippet = generateFilenameSnippet(row.folder_path, row.original_filename, parsed.fullText);
+                    snippet = generateFilenameSnippet(row.original_filename, parsed.fullText);
                 }
             }
 
@@ -181,8 +188,11 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
             const thumbnailPaths = row.thumbnail_paths as { sm: string; md: string; lg: string } | null;
             const thumbnailUrl = thumbnailPaths ? await storageService.getFileUrl(thumbnailPaths.md) : null;
 
+            const displayName = computeDisplayName(row);
+
             return {
                 document_id: row.id,
+                display_name: displayName,
                 filename: row.original_filename,
                 folder_path: row.folder_path,
                 folder_id: row.folder_id,
@@ -239,6 +249,8 @@ export async function suggest(query: SuggestQuery, userId: string): Promise<stri
             return suggestEntities(q, userId, limit);
         case 'category':
             return suggestCategories(q, userId, limit);
+        case 'location':
+            return suggestLocations(q, userId, limit);
         default:
             return [];
     }
@@ -329,6 +341,136 @@ async function suggestCategories(prefix: string, userId: string, limit: number):
         .execute();
 
     return results.filter((r) => r.document_category).map((r) => r.document_category!);
+}
+
+/**
+ * Suggest locations (cities and countries from photo metadata)
+ */
+async function suggestLocations(prefix: string, userId: string, limit: number): Promise<string[]> {
+    const pattern = `%${prefix}%`;
+
+    const [cities, countries] = await Promise.all([
+        db
+            .selectFrom('photo_metadata as pm')
+            .innerJoin('documents as d', 'd.id', 'pm.document_id')
+            .select('pm.city')
+            .distinct()
+            .where('d.user_id', '=', userId)
+            .where('pm.city', 'is not', null)
+            .where('pm.city', 'ilike', pattern)
+            .orderBy('pm.city', 'asc')
+            .limit(limit)
+            .execute(),
+        db
+            .selectFrom('photo_metadata as pm')
+            .innerJoin('documents as d', 'd.id', 'pm.document_id')
+            .select('pm.country')
+            .distinct()
+            .where('d.user_id', '=', userId)
+            .where('pm.country', 'is not', null)
+            .where('pm.country', 'ilike', pattern)
+            .orderBy('pm.country', 'asc')
+            .limit(limit)
+            .execute(),
+    ]);
+
+    const results = new Set<string>();
+
+    for (const row of cities) {
+        if (row.city) results.add(row.city);
+    }
+
+    for (const row of countries) {
+        if (row.country) results.add(row.country);
+    }
+
+    return Array.from(results).slice(0, limit);
+}
+
+/**
+ * Compute a human-readable display name for a search result.
+ *
+ * Priority cascade:
+ * 1. LLM-generated title (text_summary processing)
+ * 2. EXIF location + date (photo_metadata)
+ * 3. Vision description truncated to first sentence
+ * 4. Category-based fallback with date
+ * 5. Original filename
+ */
+function computeDisplayName(row: {
+    original_filename: string;
+    document_category: string | null;
+    extracted_date: Date | null;
+    llm_title: string | null;
+    llm_summary: string | null;
+    llm_processing_type: string | null;
+    photo_city: string | null;
+    photo_country: string | null;
+    photo_taken_at: Date | null;
+}): string {
+    // 1. LLM title for text-processed documents
+    if (row.llm_title && row.llm_processing_type === 'text_summary') {
+        return row.llm_title;
+    }
+
+    // 2. EXIF location + date for photos
+    const isPhoto = row.document_category === 'photo' || row.document_category === 'screenshot' || row.document_category === 'graphic';
+
+    if (isPhoto && (row.photo_city || row.photo_country)) {
+        const location = row.photo_city ?? row.photo_country;
+        const date = row.photo_taken_at ?? row.extracted_date;
+
+        if (date) {
+            return `Photo in ${location}, ${formatShortDate(date)}`;
+        }
+
+        return `Photo in ${location}`;
+    }
+
+    if (isPhoto && (row.photo_taken_at || row.extracted_date)) {
+        const date = row.photo_taken_at ?? row.extracted_date!;
+
+        return `Photo, ${formatShortDate(date)}`;
+    }
+
+    // 3. Vision description (first sentence)
+    if (row.llm_summary && row.llm_processing_type === 'vision_describe') {
+        const firstSentence = row.llm_summary.split(/[.!?]\s/)[0];
+
+        if (firstSentence && firstSentence.length <= 60) {
+            return firstSentence;
+        }
+
+        if (firstSentence) {
+            return firstSentence.slice(0, 57) + '...';
+        }
+    }
+
+    // 4. Category-based fallback
+    const categoryLabels: Record<string, string> = {
+        screenshot: 'Screenshot',
+        receipt: 'Receipt',
+        invoice: 'Invoice',
+    };
+
+    const categoryLabel = row.document_category ? categoryLabels[row.document_category] : undefined;
+
+    if (categoryLabel) {
+        const date = row.extracted_date ?? row.photo_taken_at;
+
+        if (date) {
+            return `${categoryLabel}, ${formatShortDate(date)}`;
+        }
+
+        return categoryLabel;
+    }
+
+    // 5. Original filename
+    return row.original_filename;
+}
+
+function formatShortDate(date: Date): string {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /**

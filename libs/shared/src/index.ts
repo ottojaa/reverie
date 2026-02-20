@@ -12,4 +12,5 @@ export * from './domain/folder.js';
 export * from './errors.js';
 
 // Helpers
+export * from './helpers/formatting.js';
 export * from './helpers/utils.js';

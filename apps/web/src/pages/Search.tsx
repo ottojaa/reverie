@@ -1,13 +1,13 @@
-import { SearchCommandPalette } from '@/components/search/SearchCommandPalette';
 import { SearchFilterPopover } from '@/components/search/SearchFilterPopover';
 import { ActiveFilters } from '@/components/search/SearchFilters';
 import { SearchResultItem } from '@/components/search/SearchResultItem';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteSearch } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowDownAZ, ArrowUpAZ, Calendar, ChevronDown, Clock, FileText, Loader2, Search, Star } from 'lucide-react';
+import { ArrowDownAZ, ArrowUpAZ, Calendar, Check, ChevronDown, Clock, FileText, FolderSearch2, Image, Loader2, Search, Star, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -24,13 +24,58 @@ const sortOptions: Array<{ value: SortBy; label: string; icon: typeof Star }> = 
 export function SearchPage() {
     const { q, sort_by, sort_order } = useSearch({ from: '/search' });
     const navigate = useNavigate();
-    const [showSortMenu, setShowSortMenu] = useState(false);
-    const [paletteOpen, setPaletteOpen] = useState(false);
-    const sortMenuRef = useRef<HTMLDivElement>(null);
+    const [localQuery, setLocalQuery] = useState(q);
+    const inputRef = useRef<HTMLInputElement>(null);
     const observerRef = useRef<HTMLDivElement>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const sortBy = (sort_by as SortBy) || 'relevance';
     const sortOrder = (sort_order as 'asc' | 'desc') || 'desc';
+
+    // Sync local query when URL changes (e.g., navigating back)
+    useEffect(() => {
+        setLocalQuery(q);
+    }, [q]);
+
+    // Keyboard shortcut: "/" to focus search input
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                const target = e.target as HTMLElement;
+
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+                e.preventDefault();
+                inputRef.current?.focus();
+            }
+        };
+
+        document.addEventListener('keydown', handler);
+
+        return () => document.removeEventListener('keydown', handler);
+    }, []);
+
+    const handleQueryChange = useCallback(
+        (value: string) => {
+            setLocalQuery(value);
+            clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => {
+                navigate({
+                    to: '/search',
+                    search: { q: value, sort_by: sort_by ?? 'relevance', sort_order: sort_order ?? 'desc' },
+                    replace: true,
+                });
+            }, 300);
+        },
+        [navigate, sort_by, sort_order],
+    );
+
+    const handleClearQuery = useCallback(() => {
+        setLocalQuery('');
+        clearTimeout(debounceRef.current);
+        navigate({ to: '/search', search: { q: '', sort_by: sort_by ?? 'relevance', sort_order: sort_order ?? 'desc' }, replace: true });
+        inputRef.current?.focus();
+    }, [navigate, sort_by, sort_order]);
 
     const updateSearch = useCallback(
         (updates: { q?: string; sort_by?: string; sort_order?: string }) => {
@@ -96,8 +141,6 @@ export function SearchPage() {
             } else {
                 updateSearch({ sort_by: newSortBy, sort_order: 'desc' });
             }
-
-            setShowSortMenu(false);
         },
         [sortBy, sortOrder, updateSearch],
     );
@@ -130,20 +173,6 @@ export function SearchPage() {
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    useEffect(() => {
-        if (!showSortMenu) return;
-
-        const handler = (e: MouseEvent) => {
-            if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
-                setShowSortMenu(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handler);
-
-        return () => document.removeEventListener('mousedown', handler);
-    }, [showSortMenu]);
-
     const isEmpty = !isLoading && results.length === 0 && q.length > 0;
     const activeSortOption = sortOptions.find((o) => o.value === sortBy);
 
@@ -152,20 +181,33 @@ export function SearchPage() {
             {/* Search Header */}
             <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
                 <div className="mx-auto max-w-4xl px-4 py-3 md:px-6">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                            {/* Query display -- click to open palette */}
+                    {/* Row 1: Search input (full width) */}
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={localQuery}
+                            onChange={(e) => handleQueryChange(e.target.value)}
+                            placeholder="Search documents..."
+                            className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-9 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:ring-1 focus:ring-ring/30 focus:outline-none"
+                        />
+                        {localQuery && (
                             <button
                                 type="button"
-                                onClick={() => setPaletteOpen(true)}
-                                className="flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors hover:bg-secondary"
+                                onClick={handleClearQuery}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
                             >
-                                <Search className="size-3.5 shrink-0 text-muted-foreground" />
-                                <span className="truncate font-medium">{q || 'Search documents...'}</span>
+                                <X className="size-3.5" />
                             </button>
+                        )}
+                    </div>
 
+                    {/* Row 2: Result count + sort/filter controls */}
+                    <div className="mt-2 flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
                             {!isLoading && q && (
-                                <span className="shrink-0 text-sm text-muted-foreground">
+                                <span>
                                     {total.toLocaleString()} result{total !== 1 ? 's' : ''}
                                 </span>
                             )}
@@ -173,31 +215,28 @@ export function SearchPage() {
 
                         <div className="flex shrink-0 items-center gap-2">
                             {/* Sort Dropdown */}
-                            <div className="relative" ref={sortMenuRef}>
-                                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setShowSortMenu(!showSortMenu)}>
-                                    {activeSortOption && <activeSortOption.icon className="size-3.5" />}
-                                    {activeSortOption?.label ?? 'Sort'}
-                                    {sortOrder === 'asc' ? <ArrowUpAZ className="size-3" /> : <ChevronDown className="size-3" />}
-                                </Button>
-                                {showSortMenu && (
-                                    <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-popover p-1 shadow-lg">
-                                        {sortOptions.map((option) => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleSort(option.value)}
-                                                className={cn(
-                                                    'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors',
-                                                    sortBy === option.value ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-secondary',
-                                                )}
-                                            >
-                                                <option.icon className="size-3.5" />
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                                        {activeSortOption && <activeSortOption.icon className="size-3.5" />}
+                                        {activeSortOption?.label ?? 'Sort'}
+                                        {sortOrder === 'asc' ? <ArrowUpAZ className="size-3" /> : <ChevronDown className="size-3" />}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                    {sortOptions.map((option) => (
+                                        <DropdownMenuItem
+                                            key={option.value}
+                                            onClick={() => handleSort(option.value)}
+                                            className={cn(sortBy === option.value && 'font-medium')}
+                                        >
+                                            <option.icon className="size-3.5" />
+                                            {option.label}
+                                            {sortBy === option.value && <Check className="ml-auto size-3.5 text-primary" />}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
 
                             {/* Filter Popover */}
                             <SearchFilterPopover
@@ -210,7 +249,7 @@ export function SearchPage() {
                         </div>
                     </div>
 
-                    {/* Active filter chips */}
+                    {/* Row 3: Active filter chips */}
                     <ActiveFilters query={q} onRemoveFilter={handleRemoveFilter} onClearAll={handleClearFilters} />
                 </div>
             </div>
@@ -256,11 +295,8 @@ export function SearchPage() {
 
                 {isEmpty && <EmptySearchState query={q} />}
 
-                {!q && !isLoading && <NoQueryState />}
+                {!q && !isLoading && <NoQueryState onFilter={(filter) => handleQueryChange(filter)} />}
             </div>
-
-            {/* Command palette for editing the query */}
-            <SearchCommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} initialQuery={q} />
         </div>
     );
 }
@@ -294,23 +330,30 @@ function EmptySearchState({ query }: { query: string }) {
     );
 }
 
-function NoQueryState() {
+const QUICK_FILTERS = [
+    { query: 'type:photo', label: 'All photos', icon: Image },
+    { query: 'format:pdf', label: 'PDF files', icon: FileText },
+    { query: 'uploaded:last-week', label: 'Recent uploads', icon: Clock },
+    { query: 'has:summary', label: 'With AI summary', icon: Star },
+];
+
+function NoQueryState({ onFilter }: { onFilter: (query: string) => void }) {
     return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Search className="mb-4 size-12 text-muted-foreground/30" />
-            <h3 className="text-lg font-medium">Search your documents</h3>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">Search by content, filename, tags, or use advanced filters</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {[
-                    { label: 'type:photo', desc: 'All photos' },
-                    { label: 'format:pdf', desc: 'PDF files' },
-                    { label: 'uploaded:last-week', desc: 'Recent uploads' },
-                    { label: 'has:summary', desc: 'With AI summary' },
-                ].map((example) => (
-                    <div key={example.label} className="rounded-lg border border-border bg-card px-3 py-2 text-left">
-                        <code className="text-xs font-medium text-primary">{example.label}</code>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{example.desc}</p>
-                    </div>
+        <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <FolderSearch2 className="size-20 text-muted-foreground/30" />
+            <h3 className="text-lg font-medium">Find your documents</h3>
+            <p className="mb-3 text-xs font-medium text-muted-foreground">Try one of these quick filters:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+                {QUICK_FILTERS.map((filter) => (
+                    <button
+                        key={filter.query}
+                        type="button"
+                        onClick={() => onFilter(filter.query)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary hover:border-border"
+                    >
+                        <filter.icon className="size-4 text-muted-foreground" />
+                        {filter.label}
+                    </button>
                 ))}
             </div>
         </div>

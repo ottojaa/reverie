@@ -4,11 +4,10 @@ import { cn } from '@/lib/utils';
 import type { SearchResult, SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { ArrowRight, Clock, FileText, Folder, HardDrive, Hash, Image, Loader2, Search, Sparkles, Tag, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, Clock, FileText, Folder, HardDrive, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, TrendingUp, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SearchResultItem } from './SearchResultItem';
 
 interface SearchCommandPaletteProps {
     open: boolean;
@@ -31,6 +30,7 @@ const suggestionTypeIcons: Record<SuggestionType, typeof FileText> = {
     tag: Tag,
     entity: Sparkles,
     category: Hash,
+    location: MapPin,
 };
 
 const suggestionTypeLabels: Record<SuggestionType, string> = {
@@ -39,6 +39,7 @@ const suggestionTypeLabels: Record<SuggestionType, string> = {
     tag: 'Tags',
     entity: 'Entities',
     category: 'Categories',
+    location: 'Locations',
 };
 
 const SUGGESTION_TYPES: SuggestionType[] = ['filename', 'folder', 'tag', 'category'];
@@ -54,7 +55,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
     const { data: quickFilters } = useQuickFilters();
 
-    const { data: suggestions, isLoading: suggestionsLoading } = useSearchSuggestions(activeSuggestionType, debouncedQuery, 6);
+    const { data: suggestions, isLoading: suggestionsLoading } = useSearchSuggestions(activeSuggestionType, debouncedQuery, 5);
 
     const { data: previewResults, isLoading: searchLoading } = useSearch({ q: debouncedQuery, limit: 5, include_facets: false }, hasDebounced);
 
@@ -87,12 +88,9 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const handleSubmit = useCallback(() => {
         if (!query.trim()) return;
 
-        if (previewResults) {
-            addRecentSearch(query.trim(), previewResults.total);
-        }
-
+        addRecentSearch(query.trim());
         navigateToSearch(query.trim());
-    }, [query, previewResults, addRecentSearch, navigateToSearch]);
+    }, [query, addRecentSearch, navigateToSearch]);
 
     const handleQuickFilter = useCallback(
         (filterQuery: string) => {
@@ -117,6 +115,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                 tag: `tag:${suggestion}`,
                 entity: `entity:${suggestion}`,
                 category: `category:${suggestion}`,
+                location: `location:${suggestion}`,
             };
             const newQuery = type === 'filename' ? suggestion : `${query.trim()} ${filterMap[type]}`.trim();
             setQuery(newQuery);
@@ -127,14 +126,14 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
     const handleResultClick = useCallback(
         (documentId: string) => {
-            if (query.trim() && previewResults) {
-                addRecentSearch(query.trim(), previewResults.total);
+            if (query.trim()) {
+                addRecentSearch(query.trim());
             }
 
             onOpenChange(false);
             navigate({ to: '/document/$id', params: { id: documentId } });
         },
-        [query, previewResults, addRecentSearch, onOpenChange, navigate],
+        [query, addRecentSearch, onOpenChange, navigate],
     );
 
     const handleClose = useCallback(() => {
@@ -166,12 +165,6 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                 onValueChange={setQuery}
                                 placeholder="Search documents, folders, tags..."
                                 className="h-12 flex-1 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground outline-none"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                                        e.preventDefault();
-                                        handleSubmit();
-                                    }
-                                }}
                             />
                             {isLoading && <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />}
                             {hasQuery && !isLoading && (
@@ -229,7 +222,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                 </span>
                                 <span className="flex items-center gap-1">
                                     <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">↵</kbd>
-                                    {hasQuery ? 'search' : 'select'}
+                                    select
                                 </span>
                                 <span className="flex items-center gap-1">
                                     <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">esc</kbd>
@@ -249,7 +242,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
  * ============================================================================ */
 
 interface EmptyStateProps {
-    recentSearches: Array<{ query: string; resultCount: number }>;
+    recentSearches: Array<{ query: string }>;
     quickFilters: Array<{ label: string; query: string; icon?: string }>;
     onRecentSearch: (query: string) => void;
     onRemoveRecent: (query: string) => void;
@@ -270,7 +263,6 @@ function EmptyState({ recentSearches, quickFilters, onRecentSearch, onRemoveRece
                         >
                             <Clock className="size-3.5 shrink-0 text-muted-foreground" />
                             <span className="min-w-0 flex-1 truncate">{recent.query}</span>
-                            <span className="shrink-0 text-xs text-muted-foreground">{recent.resultCount} results</span>
                             <button
                                 type="button"
                                 onClick={(e) => {
@@ -342,6 +334,7 @@ interface SearchResultsProps {
 }
 
 function SearchResults({
+    query,
     suggestions,
     suggestionTypes,
     activeSuggestionType,
@@ -355,12 +348,28 @@ function SearchResults({
 }: SearchResultsProps) {
     return (
         <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}>
+            {/* Search action -- always first so bare Enter goes to search page */}
+            {query.trim() && (
+                <Command.Item
+                    value="search-all"
+                    onSelect={onViewAll}
+                    className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors aria-selected:bg-secondary data-[selected=true]:bg-secondary"
+                >
+                    <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">
+                        Search for &ldquo;<span className="font-medium text-foreground">{query.trim()}</span>&rdquo;
+                    </span>
+                    <ArrowRight className="size-3 shrink-0 text-muted-foreground opacity-0 [[aria-selected=true]>&]:opacity-100 [[data-selected=true]>&]:opacity-100" />
+                </Command.Item>
+            )}
+
             {/* Suggestions */}
             {suggestionTypes.length > 0 && suggestions.length > 0 && (
                 <Command.Group>
-                    <div className="mb-1 flex items-center gap-1 px-1">
+                    <div className="mb-1.5 flex items-center gap-0.5 border-b border-border px-1">
                         {suggestionTypes.map((type) => {
                             const Icon = suggestionTypeIcons[type];
+                            const isActive = activeSuggestionType === type;
 
                             return (
                                 <button
@@ -368,14 +377,13 @@ function SearchResults({
                                     type="button"
                                     onClick={() => onSuggestionTypeChange(type)}
                                     className={cn(
-                                        'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                                        activeSuggestionType === type
-                                            ? 'bg-primary/10 text-primary'
-                                            : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                                        'relative inline-flex items-center gap-1 px-2.5 pb-2 pt-1 text-xs font-medium transition-colors',
+                                        isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     <Icon className="size-3" />
                                     {suggestionTypeLabels[type]}
+                                    {isActive && <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-primary" />}
                                 </button>
                             );
                         })}
@@ -405,36 +413,15 @@ function SearchResults({
                     heading={
                         <span className="flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
                             <span>Results</span>
-                            <span>{total.toLocaleString()} found</span>
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] tabular-nums text-primary">{total.toLocaleString()} found</span>
                         </span>
                     }
+                    className="mt-1"
                 >
                     {results.map((result) => (
-                        <Command.Item
-                            key={result.document_id}
-                            value={`result-${result.document_id}`}
-                            onSelect={() => onResultClick(result.document_id)}
-                            className="rounded-md p-0 transition-colors aria-selected:bg-transparent data-[selected=true]:bg-transparent"
-                            asChild
-                        >
-                            <div>
-                                <SearchResultItem result={result} compact />
-                            </div>
-                        </Command.Item>
+                        <PreviewResultItem key={result.document_id} result={result} onSelect={() => onResultClick(result.document_id)} />
                     ))}
                 </Command.Group>
-            )}
-
-            {/* View All */}
-            {total > results.length && (
-                <Command.Item
-                    value="view-all"
-                    onSelect={onViewAll}
-                    className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-primary transition-colors aria-selected:bg-primary/5 data-[selected=true]:bg-primary/5"
-                >
-                    View all {total.toLocaleString()} results
-                    <ArrowRight className="size-3.5" />
-                </Command.Item>
             )}
 
             {/* Loading */}
@@ -453,5 +440,48 @@ function SearchResults({
                 </div>
             )}
         </motion.div>
+    );
+}
+
+/* ============================================================================
+ * Lightweight result row for the overlay (name + thumbnail only)
+ * ============================================================================ */
+
+const resultCategoryIcons: Record<string, typeof FileText> = {
+    photo: Image,
+    screenshot: Image,
+    graphic: Image,
+};
+
+function PreviewResultItem({ result, onSelect }: { result: SearchResult; onSelect: () => void }) {
+    const categoryIcon = result.category ? resultCategoryIcons[result.category] : undefined;
+    const Icon = categoryIcon ?? (result.mime_type.startsWith('image/') ? Image : FileText);
+    const thumbnailUrl = result.thumbnail_url ? `${import.meta.env.VITE_API_URL}${result.thumbnail_url}` : null;
+    const displayName = result.display_name ?? result.filename;
+
+    return (
+        <Command.Item
+            value={`result-${result.document_id}`}
+            onSelect={onSelect}
+            className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors aria-selected:bg-secondary data-[selected=true]:bg-secondary"
+        >
+            {thumbnailUrl ? (
+                <img src={thumbnailUrl} alt="" className="size-7 shrink-0 rounded object-cover bg-muted" />
+            ) : (
+                <div className="flex size-7 shrink-0 items-center justify-center rounded bg-muted">
+                    <Icon className="size-3.5 text-muted-foreground" />
+                </div>
+            )}
+            <div className="min-w-0 flex-1">
+                <span className="block truncate">{displayName}</span>
+                {result.snippet && (
+                    <p
+                        className="truncate text-xs text-muted-foreground [&_mark]:bg-primary/20 [&_mark]:text-primary [&_mark]:rounded-sm [&_mark]:px-0.5"
+                        dangerouslySetInnerHTML={{ __html: result.snippet }}
+                    />
+                )}
+            </div>
+            <ArrowRight className="size-3 shrink-0 text-muted-foreground opacity-0 [[aria-selected=true]>&]:opacity-100 [[data-selected=true]>&]:opacity-100" />
+        </Command.Item>
     );
 }

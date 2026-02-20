@@ -42,7 +42,7 @@ Entity rules:
 Return JSON with these fields when present:
 {
   "summary": "2-3 sentence English summary",
-  "title": "5-10 word English title",
+  "title": "3-8 word scannable title, noun-phrase style, most identifying info first (e.g. 'Nordea Statement Jan 2026')",
   "document_type": "receipt|invoice|statement|letter|contract|form|certificate|report|securities_statement|tax_document|bank_statement|insurance|medical|memo|newsletter|other",
   "entities": [
     {
@@ -63,7 +63,6 @@ Extraction rules:
 - Prefer under-extraction to over-extraction.
 - Do not output empty fields.
 `;
-
 
 /**
  * Vision system message for image description

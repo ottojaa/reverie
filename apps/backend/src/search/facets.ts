@@ -13,7 +13,7 @@ import { db } from '../db/kysely';
  */
 export async function generateFacets(parsed: ParsedQuery, userId: string): Promise<SearchFacets> {
     // Run all facet queries in parallel
-    const [types, formats, folders, uploadPeriod, tags, hasText, categories, entities] = await Promise.all([
+    const [types, formats, folders, uploadPeriod, tags, hasText, categories, entities, locations] = await Promise.all([
         getTypeFacets(parsed, userId),
         getFormatFacets(parsed, userId),
         getFolderFacets(parsed, userId),
@@ -22,6 +22,7 @@ export async function generateFacets(parsed: ParsedQuery, userId: string): Promi
         getHasTextFacets(parsed, userId),
         getCategoryFacets(parsed, userId),
         getEntityFacets(parsed, userId),
+        getLocationFacets(parsed, userId),
     ]);
 
     return {
@@ -33,6 +34,7 @@ export async function generateFacets(parsed: ParsedQuery, userId: string): Promi
         hasText,
         categories,
         entities: entities.length > 0 ? entities : undefined,
+        locations: locations.length > 0 ? locations : undefined,
     };
 }
 
@@ -303,6 +305,30 @@ async function getEntityFacets(parsed: ParsedQuery, userId: string): Promise<Fac
         count: row.count,
         selected: parsed.entities?.includes(row.entity),
     }));
+}
+
+/**
+ * Location facets (countries with photo metadata, ordered by count)
+ */
+async function getLocationFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
+    const results = await db
+        .selectFrom('photo_metadata as pm')
+        .innerJoin('documents as d', 'd.id', 'pm.document_id')
+        .select(['pm.country', sql<number>`count(*)::int`.as('count')])
+        .where('d.user_id', '=', userId)
+        .where('pm.country', 'is not', null)
+        .groupBy('pm.country')
+        .orderBy(sql`count(*)`, 'desc')
+        .limit(20)
+        .execute();
+
+    return results
+        .filter((row) => row.country)
+        .map((row) => ({
+            name: row.country!,
+            count: row.count,
+            selected: parsed.locations?.includes(row.country!),
+        }));
 }
 
 /**

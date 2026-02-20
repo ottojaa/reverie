@@ -68,6 +68,7 @@ export interface DocumentsTable {
     thumbnail_status: JobStatus;
     llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
+    search_vector: unknown | null; // tsvector type — unified search index
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }
@@ -159,6 +160,22 @@ export type DocumentTag = Selectable<DocumentTagsTable>;
 export type NewDocumentTag = Insertable<DocumentTagsTable>;
 export type DocumentTagUpdate = Updateable<DocumentTagsTable>;
 
+// Photo Metadata table
+export interface PhotoMetadataTable {
+    id: Generated<string>;
+    document_id: string;
+    latitude: number | null;
+    longitude: number | null;
+    country: string | null;
+    city: string | null;
+    taken_at: Date | null;
+    processed_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type PhotoMetadata = Selectable<PhotoMetadataTable>;
+export type NewPhotoMetadata = Insertable<PhotoMetadataTable>;
+export type PhotoMetadataUpdate = Updateable<PhotoMetadataTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -168,4 +185,5 @@ export interface Database {
     llm_results: LlmResultsTable;
     processing_jobs: ProcessingJobsTable;
     document_tags: DocumentTagsTable;
+    photo_metadata: PhotoMetadataTable;
 }

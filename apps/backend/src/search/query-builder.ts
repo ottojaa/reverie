@@ -1,5 +1,5 @@
-import { sql, type SelectQueryBuilder, type SqlBool } from 'kysely';
-import type { ParsedQuery, DateRange, SortBy } from '@reverie/shared';
+import type { DateRange, ParsedQuery, SortBy } from '@reverie/shared';
+import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
 import type { Database } from '../db/schema';
 import { resolveRelativeDate } from './query-parser';
 
@@ -8,6 +8,24 @@ import { resolveRelativeDate } from './query-parser';
  *
  * Converts ParsedQuery into efficient Kysely SQL queries using PostgreSQL full-text search.
  */
+
+/**
+ * Build a prefix-aware tsquery so partial words match.
+ * "instru" → to_tsquery('english', 'instru:*')
+ * "spain 2024" → to_tsquery('english', 'spain:* & 2024:*')
+ */
+export function buildPrefixTsQuery(text: string): RawBuilder<unknown> {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const sanitized = words.map((w) => w.replace(/[&|!():*<>'"\\]/g, '').trim()).filter((w) => w.length > 0);
+
+    if (sanitized.length === 0) {
+        return sql`plainto_tsquery('english', ${text})`;
+    }
+
+    const prefixExpr = sanitized.map((w) => `${w}:*`).join(' & ');
+
+    return sql`to_tsquery('english', ${prefixExpr})`;
+}
 
 // Mime type mappings for format filter
 const FORMAT_TO_MIME: Record<string, string[]> = {
@@ -46,9 +64,10 @@ type SearchDatabase = Database & {
     f: Database['folders'];
     ocr: Database['ocr_results'];
     llm: Database['llm_results'];
+    pm: Database['photo_metadata'];
 };
 
-type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>;
+type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', object>;
 
 /**
  * Apply date range filter to query
@@ -155,24 +174,18 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
 
     // Full-text search
     if (parsed.fullText) {
-        const tsQuery = sql`plainto_tsquery('english', ${parsed.fullText})`;
+        const tsQuery = buildPrefixTsQuery(parsed.fullText);
 
         // Determine search scope
         if (parsed.searchScope === 'filename') {
             query = query.where(sql<SqlBool>`d.original_filename ILIKE ${'%' + parsed.fullText + '%'}`);
         } else if (parsed.searchScope === 'content') {
-            query = query.where(sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`);
+            query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
         } else if (parsed.searchScope === 'summary') {
             query = query.where(sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`);
         } else {
-            // Search all: filename, OCR text, LLM summary
-            query = query.where((eb) =>
-                eb.or([
-                    sql<SqlBool>`d.original_filename ILIKE ${'%' + parsed.fullText + '%'}`,
-                    sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`,
-                    sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`,
-                ]),
-            );
+            // Unified search vector includes filename, OCR text, LLM data, photo metadata, tags
+            query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
         }
     }
 
@@ -281,14 +294,22 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
                 const tsQuery = sql`to_tsquery('english', ${entity.replace(/\s+/g, ' & ')})`;
 
                 return eb.or([
-                    // Check JSONB companies array
                     sql<SqlBool>`ocr.metadata->'companies' ? ${entity}`,
-                    // Full-text search in OCR text
-                    sql<SqlBool>`ocr.text_vector @@ ${tsQuery}`,
-                    // Check LLM metadata key entities
+                    sql<SqlBool>`d.search_vector @@ ${tsQuery}`,
                     sql<SqlBool>`llm.metadata->'keyEntities' ? ${entity}`,
                 ]);
             });
+
+            return eb.and(conditions);
+        });
+    }
+
+    // Location filter (matches city or country in photo_metadata)
+    if (parsed.locations?.length) {
+        query = query.where((eb) => {
+            const conditions = parsed.locations!.map((loc) =>
+                eb.or([sql<SqlBool>`pm.city ILIKE ${'%' + loc + '%'}`, sql<SqlBool>`pm.country ILIKE ${'%' + loc + '%'}`]),
+            );
 
             return eb.and(conditions);
         });
@@ -299,9 +320,8 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
 
     // Sorting
     if (options.sortBy === 'relevance' && parsed.fullText) {
-        const tsQuery = sql`plainto_tsquery('english', ${parsed.fullText})`;
-        // Sort by text search relevance, then by date
-        query = query.orderBy(sql`ts_rank(ocr.text_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc').orderBy('d.created_at', 'desc');
+        const tsQuery = buildPrefixTsQuery(parsed.fullText);
+        query = query.orderBy(sql`ts_rank(d.search_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc').orderBy('d.created_at', 'desc');
     } else if (options.sortBy === 'uploaded') {
         query = query.orderBy('d.created_at', options.sortOrder);
     } else if (options.sortBy === 'date') {
@@ -325,10 +345,10 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
  * Build the count query (same filters, no pagination)
  */
 export function buildCountQuery(
-    baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', object>,
+    baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', object>,
     parsed: ParsedQuery,
     userId: string,
-): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm', { count: number }> {
+): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', { count: number }> {
     // Reuse the search query builder but without sorting and pagination
     const query = buildSearchQuery(baseQuery, parsed, userId, {
         limit: 1000000, // Will be ignored
@@ -343,9 +363,5 @@ export function buildCountQuery(
         .clearOrderBy()
         .clearLimit()
         .clearOffset()
-        .select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<
-        SearchDatabase,
-        'd' | 'f' | 'ocr' | 'llm',
-        { count: number }
-    >;
+        .select(sql<number>`count(*)::int`.as('count')) as SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', { count: number }>;
 }

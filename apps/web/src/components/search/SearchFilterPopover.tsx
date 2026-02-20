@@ -4,12 +4,26 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSearchSuggestions } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import type { FacetItem, SearchFacets, SuggestionType } from '@reverie/shared';
-import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, Image, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
+import {
+    ArrowLeft,
+    Calendar as CalendarIcon,
+    Check,
+    ChevronRight,
+    FileText,
+    Folder,
+    Hash,
+    Image,
+    MapPin,
+    Search,
+    SlidersHorizontal,
+    Tag,
+    X,
+} from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
-type FilterType = 'type' | 'format' | 'category' | 'folder' | 'tag' | 'entity' | 'uploaded' | 'date';
+type FilterType = 'type' | 'format' | 'category' | 'folder' | 'tag' | 'entity' | 'uploaded' | 'date' | 'location';
 
 interface FilterDefinition {
     key: FilterType;
@@ -26,6 +40,7 @@ const FILTER_DEFS: FilterDefinition[] = [
     { key: 'category', label: 'Category', icon: Hash, prefix: 'category', mode: 'list' },
     { key: 'folder', label: 'Folder', icon: Folder, prefix: 'folder', mode: 'searchable', suggestionType: 'folder' },
     { key: 'tag', label: 'Tag', icon: Tag, prefix: 'tag', mode: 'searchable', suggestionType: 'tag' },
+    { key: 'location', label: 'Location', icon: MapPin, prefix: 'location', mode: 'searchable', suggestionType: 'location' },
     { key: 'uploaded', label: 'Upload date', icon: CalendarIcon, prefix: 'uploaded', mode: 'date' },
     { key: 'date', label: 'Document date', icon: CalendarIcon, prefix: 'date', mode: 'date' },
 ];
@@ -172,7 +187,9 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
                                             <def.icon className="size-4 shrink-0 text-muted-foreground" />
                                             <span className="flex-1 text-left">{def.label}</span>
                                             {count > 0 && (
-                                                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{count}</span>
+                                                <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                                                    {count}
+                                                </span>
                                             )}
                                             <ChevronRight className="size-3.5 text-muted-foreground" />
                                         </button>
@@ -262,6 +279,8 @@ function getFacetItems(facets: SearchFacets | undefined, key: FilterType): Facet
             return facets.tags;
         case 'entity':
             return facets.entities ?? [];
+        case 'location':
+            return facets.locations ?? [];
         default:
             return [];
     }
@@ -525,7 +544,7 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                         >
                             <CalendarIcon className="size-4 text-muted-foreground" />
                             <span className="flex-1 text-left">Custom range</span>
-                            {activeValue?.includes('..') && <span className="text-xs text-primary">{activeValue}</span>}
+                            {activeValue?.includes('..') && <span className="text-xs text-primary">{formatDateRangeDisplay(activeValue)}</span>}
                         </button>
                     </PopoverTrigger>
                     <PopoverContent side="right" align="center" className="w-auto p-0">
@@ -571,4 +590,19 @@ function formatDateISO(date: Date): string {
 
 function formatDateDisplay(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateRangeDisplay(raw: string): string {
+    if (!raw.includes('..')) return raw;
+
+    const [from, to] = raw.split('..');
+
+    if (!from || !to) return raw;
+
+    const fromDisplay = formatDateDisplay(new Date(from + 'T00:00:00'));
+    const toDisplay = formatDateDisplay(new Date(to + 'T00:00:00'));
+
+    if (from === to) return fromDisplay;
+
+    return `${fromDisplay} – ${toDisplay}`;
 }
