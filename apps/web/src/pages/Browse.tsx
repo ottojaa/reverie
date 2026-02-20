@@ -110,7 +110,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 )}
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        {section?.description && <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>}
+                        <p className="mt-2 text-sm text-muted-foreground">{section?.description}</p>
                         <p className="text-primary mt-2 text-sm">{subtitle}</p>
                     </div>
                 </div>

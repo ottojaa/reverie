@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { SectionIconName } from '@/components/ui/icons-data';
 import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
-import type { SectionIconName } from '@/components/ui/icons-data';
 import { useUpdateFolder } from '@/lib/sections';
 import type { FolderWithChildren } from '@reverie/shared';
 import { dynamicIconImports } from 'lucide-react/dynamic';
@@ -67,21 +67,8 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
                     <DialogTitle>Edit section</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div>
-                        <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
-                        <div className="flex items-center gap-2">
-                            <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="No icon" searchPlaceholder="Search icons…" />
-                            {icon != null && (
-                                <button type="button" className="text-xs text-muted-foreground underline hover:text-foreground" onClick={() => setIcon(null)}>
-                                    Clear icon
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="edit-section-name" className="mb-1.5 block text-sm font-medium">
-                            Name
-                        </label>
+                    <div className="flex flex-row gap-2">
+                        <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="Select icon" searchPlaceholder="Search icons…" />
                         <Input
                             id="edit-section-name"
                             value={name}

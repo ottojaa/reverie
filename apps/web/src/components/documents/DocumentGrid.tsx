@@ -31,7 +31,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     const gridRef = useRef<HTMLDivElement>(null);
     const { recentlyCompletedDocumentIds, markPulseComplete } = useUpload();
     const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-    const [columnCount, setColumnCount] = useState(2);
+    const [columnCount, setColumnCount] = useState(() => (typeof window !== 'undefined' ? getColumnCount(window.innerWidth) : 2));
 
     // Memoize orderedIds once for all cards
     const orderedIds = useMemo(() => documents.map((d) => d.id), [documents]);
@@ -57,7 +57,6 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     }, [recentlyCompletedDocumentIds, markPulseComplete]);
 
     const handlePulseComplete = useCallback((id: string) => {
-        console.log('handlePulseComplete', id);
         setPulsingIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
@@ -135,8 +134,6 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
             fetchNextPage();
         }
     }, [lastVirtualItemIndex, hasNextPage, fetchNextPage, rowCount]);
-
-    // --- Render ---
 
     if (isLoading) {
         return (

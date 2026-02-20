@@ -1,5 +1,5 @@
-import exifr from 'exifr';
 import { createRevGeocoder } from '@webkitty/geo-rev';
+import exifr from 'exifr';
 
 export interface ExifMetadata {
     latitude: number | null;
@@ -15,6 +15,7 @@ function getGeocoder() {
     if (!geocoderPromise) {
         geocoderPromise = createRevGeocoder();
     }
+
     return geocoderPromise;
 }
 
@@ -59,6 +60,7 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
         }
 
         const dateValue = exif.DateTimeOriginal ?? exif.CreateDate;
+
         if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
             result.takenAt = dateValue;
         }

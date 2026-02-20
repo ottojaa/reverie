@@ -83,6 +83,7 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 
 export const SearchResultSchema = z.object({
     document_id: UuidSchema,
+    display_name: z.string(),
     filename: z.string(),
     folder_path: z.string().nullable(),
     folder_id: UuidSchema.nullable(),
@@ -186,7 +187,6 @@ export type SuggestResponse = z.infer<typeof SuggestResponseSchema>;
 export const RecentSearchSchema = z.object({
     query: z.string(),
     timestamp: z.string().datetime(),
-    resultCount: z.number(),
 });
 
 export type RecentSearch = z.infer<typeof RecentSearchSchema>;

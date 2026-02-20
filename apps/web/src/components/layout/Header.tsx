@@ -1,6 +1,7 @@
 import { SearchCommandPalette } from '@/components/search/SearchCommandPalette';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/lib/theme';
+import { useLocation } from '@tanstack/react-router';
 import { Bell, Menu, Moon, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -11,6 +12,8 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
     const { isDark, setIsDark } = useTheme();
     const [searchOpen, setSearchOpen] = useState(false);
+    const { pathname } = useLocation();
+    const isSearchPage = pathname === '/search';
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -36,17 +39,19 @@ export function Header({ onMenuClick }: HeaderProps) {
                             <Menu className="size-5" />
                         </Button>
                     )}
-                    <button
-                        type="button"
-                        onClick={openSearch}
-                        className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-input bg-card px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-secondary/50 hover:border-border md:max-w-96"
-                    >
-                        <Search className="size-4 shrink-0" />
-                        <span className="truncate">Search documents...</span>
-                        <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground md:inline-block">
-                            ⌘K
-                        </kbd>
-                    </button>
+                    {!isSearchPage && (
+                        <button
+                            type="button"
+                            onClick={openSearch}
+                            className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-input bg-card px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-secondary/50 hover:border-border md:max-w-96"
+                        >
+                            <Search className="size-4 shrink-0" />
+                            <span className="truncate">Search documents...</span>
+                            <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground md:inline-block">
+                                ⌘K
+                            </kbd>
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 md:gap-2">

@@ -68,6 +68,7 @@ export interface DocumentsTable {
     thumbnail_status: JobStatus;
     llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
+    search_vector: unknown | null; // tsvector type — unified search index
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }

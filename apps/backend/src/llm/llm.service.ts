@@ -12,6 +12,7 @@ import { Entity } from '@reverie/shared';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
+import { rebuildSearchVector } from '../search/search-indexer';
 import { getStorageService } from '../services/storage.service';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isOpenAIAvailable, summarizeDocument } from './openai.client';
@@ -70,11 +71,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
             processing_type: 'text_summary',
         });
 
-        await db
-            .updateTable('documents')
-            .set({ llm_status: 'complete' })
-            .where('id', '=', documentId)
-            .execute();
+        await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', documentId).execute();
         const saveMs = Date.now() - saveStart;
         logTimings('skip_path', documentId, {
             fetchMs,
@@ -133,11 +130,7 @@ async function processTextSummary(
             processing_type: 'text_summary',
         });
 
-        await db
-            .updateTable('documents')
-            .set({ llm_status: 'complete' })
-            .where('id', '=', document.id)
-            .execute();
+        await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
         const saveMs = Date.now() - saveStart;
         logTimings('text_summary_fallback', document.id, {
             ...baseTimings,
@@ -192,7 +185,7 @@ async function processTextSummary(
     const documentCategory = result.document_type ?? document.document_category;
 
     const dbWriteStart = Date.now();
-    
+
     await upsertLlmResult(document.id, {
         summary: result.summary,
         metadata: enhancedMetadata,
@@ -212,6 +205,9 @@ async function processTextSummary(
 
     // Update search index with enhanced data
     await updateSearchIndex(document.id, result.summary, result.entities, result.topics);
+
+    await rebuildSearchVector(db, document.id);
+
     const dbWriteMs = Date.now() - dbWriteStart;
     logTimings('text_summary', document.id, {
         ...baseTimings,
@@ -236,10 +232,7 @@ async function processTextSummary(
 /**
  * Process an image document with vision API
  */
-async function processVisionDocument(
-    document: Document,
-    baseTimings: { fetchMs: number; eligibilityMs: number; totalStart: number },
-): Promise<VisionResult> {
+async function processVisionDocument(document: Document, baseTimings: { fetchMs: number; eligibilityMs: number; totalStart: number }): Promise<VisionResult> {
     if (!env.LLM_VISION_ENABLED) {
         return {
             success: true,
@@ -281,17 +274,15 @@ async function processVisionDocument(
         processing_type: 'vision_describe',
     });
 
-    await db
-        .updateTable('documents')
-        .set({ llm_status: 'complete' })
-        .where('id', '=', document.id)
-        .execute();
+    await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
 
     // Index the description for search
     if (result.description) {
         const emptyEntities: Entity[] = [];
         await updateSearchIndex(document.id, result.description, emptyEntities, result.detected_objects ?? []);
     }
+
+    await rebuildSearchVector(db, document.id);
 
     const dbWriteMs = Date.now() - dbWriteStart;
     logTimings('vision_describe', document.id, {
@@ -338,7 +329,6 @@ async function upsertLlmResult(
         )
         .execute();
 }
-
 
 /**
  * Update the search index with LLM-generated content

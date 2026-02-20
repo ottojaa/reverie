@@ -65,6 +65,7 @@ export async function generateSnippets(documentIds: string[], searchTerms: strin
     const snippetMap = new Map<string, string>();
 
     for (const row of results) {
+        console.log(row.snippet);
         snippetMap.set(row.document_id, row.snippet);
     }
 
@@ -74,16 +75,14 @@ export async function generateSnippets(documentIds: string[], searchTerms: strin
 /**
  * Generate a filename-based snippet when content doesn't match
  */
-export function generateFilenameSnippet(folderPath: string | null, filename: string, searchTerms?: string): string {
-    const fullPath = folderPath ? `${folderPath}/${filename}` : filename;
-
+export function generateFilenameSnippet(filename: string, searchTerms?: string): string | null {
     if (!searchTerms) {
-        return fullPath;
+        return null;
     }
 
     // Simple highlighting for filename matches
     const terms = searchTerms.toLowerCase().split(/\s+/).filter(Boolean);
-    let highlighted = fullPath;
+    let highlighted = filename;
 
     for (const term of terms) {
         const regex = new RegExp(`(${escapeRegex(term)})`, 'gi');

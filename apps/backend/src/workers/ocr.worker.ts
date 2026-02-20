@@ -6,6 +6,7 @@ import { addLlmJob } from '../queues/llm.queue';
 import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
+import { rebuildSearchVector } from '../search/search-indexer';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('OCR');
@@ -90,13 +91,15 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
                     country: exif.country ?? undefined,
                     taken_at: exif.takenAt ?? undefined,
                 })
-                .onConflict((oc) => oc.column('document_id').doUpdateSet({
-                    latitude: exif.latitude ?? undefined,
-                    longitude: exif.longitude ?? undefined,
-                    city: exif.city ?? undefined,
-                    country: exif.country ?? undefined,
-                    taken_at: exif.takenAt ?? undefined,
-                }))
+                .onConflict((oc) =>
+                    oc.column('document_id').doUpdateSet({
+                        latitude: exif.latitude ?? undefined,
+                        longitude: exif.longitude ?? undefined,
+                        city: exif.city ?? undefined,
+                        country: exif.country ?? undefined,
+                        taken_at: exif.takenAt ?? undefined,
+                    }),
+                )
                 .execute();
 
             // Use photo taken_at as extracted_date if not already set
@@ -120,11 +123,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {
-            await db
-                .updateTable('documents')
-                .set({ llm_status: 'pending' })
-                .where('id', '=', documentId)
-                .execute();
+            await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', documentId).execute();
 
             const createdJob = await db
                 .insertInto('processing_jobs')
@@ -146,16 +145,16 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             );
             logger.info('Queued LLM job', { documentId, llmJobId: createdJob.id });
         } else {
-            await db
-                .updateTable('documents')
-                .set({ llm_status: 'skipped' })
-                .where('id', '=', documentId)
-                .execute();
+            await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
             logger.info('Skipping LLM job', {
                 documentId,
                 reason: result.hasMeaningfulText ? 'low_confidence' : 'no_text',
             });
         }
+
+        // Rebuild unified search vector with OCR text + EXIF metadata.
+        // Will be rebuilt again after LLM processing if queued.
+        await rebuildSearchVector(db, documentId);
 
         await publishJobProgress(job.id!, 100, documentId, job.data.sessionId);
 
