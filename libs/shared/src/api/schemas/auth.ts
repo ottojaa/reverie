@@ -9,11 +9,10 @@ export const LoginRequestSchema = z.object({
 
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 
-// Login response (tokens + user)
+// Login response (tokens + user). refresh_token is set as httpOnly cookie, not in body.
 export const LoginResponseSchema = z.object({
     user: UserSchema,
     access_token: z.string(),
-    refresh_token: z.string(),
     expires_in: z.number(), // seconds until access_token expires
 });
 

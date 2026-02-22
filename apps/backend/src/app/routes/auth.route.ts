@@ -8,10 +8,22 @@ import {
     RefreshTokenResponseSchema,
 } from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
 import type { User } from '../../db/schema.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
+
+const TTL_MS = 60_000;
+const oauthCodeStore = new Map<string, { access_token: string; expires_in: number; expiresAt: number }>();
+
+function cleanupExpiredCodes() {
+    const now = Date.now();
+
+    for (const [code, data] of oauthCodeStore.entries()) {
+        if (data.expiresAt < now) oauthCodeStore.delete(code);
+    }
+}
 
 // Simple success response schema
 const SuccessResponseSchema = z.object({ success: z.boolean() });
@@ -51,6 +63,9 @@ export default async function (fastify: FastifyInstance) {
     fastify.post<{ Body: { email: string; password: string } }>(
         '/auth/login',
         {
+            config: {
+                rateLimit: { max: 30, timeWindow: '15 minutes' },
+            },
             schema: {
                 description: 'Login with email and password',
                 tags: ['Auth'],
@@ -76,7 +91,7 @@ export default async function (fastify: FastifyInstance) {
             // Set refresh token as httpOnly cookie
             reply.setCookie('refresh_token', result.tokens.refresh_token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 path: '/auth',
                 maxAge: 90 * 24 * 60 * 60, // 90 days
@@ -85,7 +100,6 @@ export default async function (fastify: FastifyInstance) {
             return {
                 user: serializeUser(result.user),
                 access_token: result.tokens.access_token,
-                refresh_token: result.tokens.refresh_token,
                 expires_in: result.tokens.expires_in,
             };
         },
@@ -95,6 +109,9 @@ export default async function (fastify: FastifyInstance) {
     fastify.post<{ Body: { refresh_token?: string } }>(
         '/auth/refresh',
         {
+            config: {
+                rateLimit: { max: 120, timeWindow: '15 minutes' },
+            },
             schema: {
                 description: 'Refresh access token using refresh token',
                 tags: ['Auth'],
@@ -116,8 +133,8 @@ export default async function (fastify: FastifyInstance) {
                 });
             }
 
-            // Verify the refresh token
-            const payload = await authService.verifyRefreshToken(refreshToken);
+            // Consume refresh token (one-time use, rotation)
+            const payload = await authService.consumeRefreshToken(refreshToken);
 
             if (!payload) {
                 return reply.status(401).send({
@@ -136,8 +153,17 @@ export default async function (fastify: FastifyInstance) {
                 });
             }
 
-            // Generate new access token
+            // Generate new tokens and store new refresh token
             const tokens = authService.generateTokens(user);
+            await authService.storeRefreshToken(tokens.refresh_token, user.id);
+
+            reply.setCookie('refresh_token', tokens.refresh_token, {
+                httpOnly: true,
+                secure: env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/auth',
+                maxAge: 90 * 24 * 60 * 60, // 90 days
+            });
 
             return {
                 access_token: tokens.access_token,
@@ -196,6 +222,9 @@ export default async function (fastify: FastifyInstance) {
     fastify.post<{ Body: { current_password: string; new_password: string } }>(
         '/auth/change-password',
         {
+            config: {
+                rateLimit: { max: 30, timeWindow: '15 minutes' },
+            },
             preHandler: [fastify.authenticate],
             schema: {
                 description: 'Change password for authenticated user',
@@ -220,6 +249,45 @@ export default async function (fastify: FastifyInstance) {
             }
 
             return { success: true };
+        },
+    );
+
+    // POST /auth/exchange-oauth-code - Exchange short-lived code for access token (OAuth callback flow)
+    fastify.post<{ Body: { code: string } }>(
+        '/auth/exchange-oauth-code',
+        {
+            config: {
+                rateLimit: { max: 30, timeWindow: '15 minutes' },
+            },
+            schema: {
+                description: 'Exchange OAuth callback code for access token',
+                tags: ['Auth'],
+                body: z.object({ code: z.string().min(1) }),
+                response: {
+                    200: RefreshTokenResponseSchema,
+                    400: AuthErrorSchema,
+                },
+            },
+        },
+        async function (request, reply) {
+            const { code } = request.body;
+            cleanupExpiredCodes();
+
+            const data = oauthCodeStore.get(code);
+
+            if (!data) {
+                return reply.status(400).send({
+                    error: 'token_invalid',
+                    message: 'Invalid or expired code',
+                });
+            }
+
+            oauthCodeStore.delete(code);
+
+            return {
+                access_token: data.access_token,
+                expires_in: data.expires_in,
+            };
         },
     );
 
@@ -305,14 +373,22 @@ export default async function (fastify: FastifyInstance) {
                     // Set refresh token as httpOnly cookie
                     reply.setCookie('refresh_token', result.tokens.refresh_token, {
                         httpOnly: true,
-                        secure: process.env.NODE_ENV === 'production',
+                        secure: env.NODE_ENV === 'production',
                         sameSite: 'lax',
                         path: '/auth',
                         maxAge: 7 * 24 * 60 * 60, // 7 days
                     });
 
-                    // Redirect to frontend with access token
-                    const successUrl = `${env.CORS_ORIGIN}/login/callback?access_token=${result.tokens.access_token}&expires_in=${result.tokens.expires_in}`;
+                    // Use short-lived code instead of token in URL (avoids token in logs/history)
+                    const code = nanoid(32);
+                    oauthCodeStore.set(code, {
+                        access_token: result.tokens.access_token,
+                        expires_in: result.tokens.expires_in,
+                        expiresAt: Date.now() + TTL_MS,
+                    });
+                    cleanupExpiredCodes();
+
+                    const successUrl = `${env.CORS_ORIGIN}/login/callback?code=${code}`;
 
                     return reply.redirect(successUrl);
                 } catch (err) {

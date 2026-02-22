@@ -94,6 +94,12 @@ export class LocalStorageProvider implements IStorageProvider {
     }
 
     getAbsolutePath(storagePath: string): string {
-        return path.join(this._rootPath, storagePath);
+        const root = path.resolve(this._rootPath);
+        const absolute = path.resolve(root, storagePath);
+        const rootWithSep = root + path.sep;
+        if (absolute !== root && !absolute.startsWith(rootWithSep)) {
+            throw new Error('Path traversal detected');
+        }
+        return absolute;
     }
 }

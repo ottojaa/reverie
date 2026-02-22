@@ -129,6 +129,7 @@ export type LlmResultUpdate = Updateable<LlmResultsTable>;
 // Processing Jobs table
 export interface ProcessingJobsTable {
     id: Generated<string>;
+    user_id: string;
     job_type: JobType;
     target_type: TargetType;
     target_id: string;
@@ -175,10 +176,22 @@ export interface PhotoMetadataTable {
 export type PhotoMetadata = Selectable<PhotoMetadataTable>;
 export type NewPhotoMetadata = Insertable<PhotoMetadataTable>;
 export type PhotoMetadataUpdate = Updateable<PhotoMetadataTable>;
+// Refresh Tokens table (for rotation - one-time use)
+export interface RefreshTokensTable {
+    id: Generated<string>;
+    user_id: string;
+    token_hash: string;
+    expires_at: Date;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type RefreshToken = Selectable<RefreshTokensTable>;
+export type NewRefreshToken = Insertable<RefreshTokensTable>;
 
 // Database interface
 export interface Database {
     users: UsersTable;
+    refresh_tokens: RefreshTokensTable;
     folders: FoldersTable;
     documents: DocumentsTable;
     ocr_results: OcrResultsTable;

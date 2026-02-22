@@ -1,6 +1,7 @@
 import type { JobStatus, JobType, TargetType } from '../db/schema';
 
 export interface CreateJobParams {
+    userId: string;
     jobType: JobType;
     targetType: TargetType;
     targetId: string;

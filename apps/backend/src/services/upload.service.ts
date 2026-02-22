@@ -254,6 +254,7 @@ export class UploadService {
 
         // OCR job - create for all files (will be skipped by worker if not applicable)
         const ocrJob: NewProcessingJob = {
+            user_id: userId,
             job_type: 'ocr',
             target_type: 'document',
             target_id: document.id,
@@ -281,6 +282,7 @@ export class UploadService {
         // Thumbnail job - only create if file type supports thumbnails
         if (canThumbnail) {
             const thumbnailJob: NewProcessingJob = {
+                user_id: userId,
                 job_type: 'thumbnail',
                 target_type: 'document',
                 target_id: document.id,
