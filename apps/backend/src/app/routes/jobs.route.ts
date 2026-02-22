@@ -31,8 +31,9 @@ export default async function jobsRoute(fastify: FastifyInstance) {
         },
         async (request, reply) => {
             const { id } = request.params;
+            const userId = request.user.id;
 
-            const job = await jobService.getJob(id);
+            const job = await jobService.getJob(id, userId);
 
             if (!job) {
                 return reply.status(404).send({
@@ -70,8 +71,9 @@ export default async function jobsRoute(fastify: FastifyInstance) {
         async (request) => {
             const { ids } = request.query;
             const jobIds = ids.split(',').filter(Boolean);
+            const userId = request.user.id;
 
-            const jobs = await jobService.getJobsByIds(jobIds);
+            const jobs = await jobService.getJobsByIds(jobIds, userId);
 
             return jobs.map((job) => ({
                 id: job.id,

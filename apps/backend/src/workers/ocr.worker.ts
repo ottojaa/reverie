@@ -128,6 +128,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             const createdJob = await db
                 .insertInto('processing_jobs')
                 .values({
+                    user_id: document.user_id,
                     job_type: 'llm_summary',
                     target_type: 'document',
                     target_id: documentId,

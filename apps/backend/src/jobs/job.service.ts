@@ -8,6 +8,7 @@ export class JobService {
      */
     async createJob(params: CreateJobParams): Promise<ProcessingJob> {
         const newJob: NewProcessingJob = {
+            user_id: params.userId,
             job_type: params.jobType,
             target_type: params.targetType,
             target_id: params.targetId,
@@ -21,17 +22,27 @@ export class JobService {
     /**
      * Get a job by ID
      */
-    async getJob(jobId: string): Promise<ProcessingJob | undefined> {
-        return db.selectFrom('processing_jobs').selectAll().where('id', '=', jobId).executeTakeFirst();
+    async getJob(jobId: string, userId: string): Promise<ProcessingJob | undefined> {
+        return db
+            .selectFrom('processing_jobs')
+            .selectAll()
+            .where('id', '=', jobId)
+            .where('user_id', '=', userId)
+            .executeTakeFirst();
     }
 
     /**
      * Get multiple jobs by IDs
      */
-    async getJobsByIds(jobIds: string[]): Promise<ProcessingJob[]> {
+    async getJobsByIds(jobIds: string[], userId: string): Promise<ProcessingJob[]> {
         if (jobIds.length === 0) return [];
 
-        return db.selectFrom('processing_jobs').selectAll().where('id', 'in', jobIds).execute();
+        return db
+            .selectFrom('processing_jobs')
+            .selectAll()
+            .where('id', 'in', jobIds)
+            .where('user_id', '=', userId)
+            .execute();
     }
 
     /**

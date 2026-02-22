@@ -228,7 +228,7 @@ def main():
         ocr = PaddleOCR(
             ocr_version="PP-OCRv4",
             use_textline_orientation=True,
-            enable_mkldnn=True,                 # CPU optimization
+            enable_mkldnn=False,                 
         )
     except Exception as e:
         _print_json({"error": f"Failed to initialize PaddleOCR: {e}"})

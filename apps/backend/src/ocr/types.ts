@@ -110,7 +110,7 @@ export const OCR_LIMITS = {
     /** Target minimum width for OCR (upscale small images) */
     targetMinWidth: 2000,
     /** Maximum longest side in pixels — images exceeding this are downscaled before OCR */
-    targetMaxDimension: 4000,
+    targetMaxDimension: 2048,
     /** Maximum processing time per image in ms */
     maxProcessingTime: 60000,
 } as const;
