@@ -1,5 +1,5 @@
 import { CategorizedSections } from '@/components/categorizedSections';
-import { CreateSectionModal, type CreateFolderMode } from '@/components/sections';
+import { CreateSectionModal, type FolderMode } from '@/components/sections';
 import { useAuth } from '@/lib/auth';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
@@ -37,7 +37,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
     // Create modal state
     const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [createModalMode, setCreateModalMode] = useState<CreateFolderMode>('section');
+    const [createModalMode, setCreateModalMode] = useState<FolderMode>('section');
     const [createModalParent, setCreateModalParent] = useState<string | null>(null);
 
     const navRef = useRef<HTMLElement>(null);

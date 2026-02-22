@@ -7,6 +7,7 @@ import fp from 'fastify-plugin';
  */
 export default fp(async function (fastify: FastifyInstance) {
     await fastify.register(fastifyHelmet, {
-        contentSecurityPolicy: false, // Allow inline scripts for dev; tighten in production if needed
+        contentSecurityPolicy: false,
+        crossOriginResourcePolicy: false,
     });
 });

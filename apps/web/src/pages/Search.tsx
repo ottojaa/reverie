@@ -13,6 +13,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SortBy = 'relevance' | 'uploaded' | 'date' | 'filename' | 'size';
 
+const SKELETON_DELAY_MS = 200;
+
 const sortOptions: Array<{ value: SortBy; label: string; icon: typeof Star }> = [
     { value: 'relevance', label: 'Relevance', icon: Star },
     { value: 'uploaded', label: 'Upload date', icon: Clock },
@@ -25,12 +27,24 @@ export function SearchPage() {
     const { q, sort_by, sort_order } = useSearch({ from: '/search' });
     const navigate = useNavigate();
     const [localQuery, setLocalQuery] = useState(q);
+    const [showSkeleton, setShowSkeleton] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const observerRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const sortBy = (sort_by as SortBy) || 'relevance';
     const sortOrder = (sort_order as 'asc' | 'desc') || 'desc';
+
+    const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteSearch({
+        q,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        include_facets: true,
+    });
+
+    const results = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data]);
+    const total = data?.pages[0]?.total ?? 0;
+    const facets = data?.pages[0]?.facets;
 
     // Sync local query when URL changes (e.g., navigating back)
     useEffect(() => {
@@ -54,6 +68,18 @@ export function SearchPage() {
 
         return () => document.removeEventListener('keydown', handler);
     }, []);
+
+    useEffect(() => {
+        if (!isLoading) {
+            setShowSkeleton(false);
+
+            return;
+        }
+
+        const t = setTimeout(() => setShowSkeleton(true), SKELETON_DELAY_MS);
+
+        return () => clearTimeout(t);
+    }, [isLoading]);
 
     const handleQueryChange = useCallback(
         (value: string) => {
@@ -144,17 +170,6 @@ export function SearchPage() {
         },
         [sortBy, sortOrder, updateSearch],
     );
-
-    const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteSearch({
-        q,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        include_facets: true,
-    });
-
-    const results = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data]);
-    const total = data?.pages[0]?.total ?? 0;
-    const facets = data?.pages[0]?.facets;
 
     useEffect(() => {
         if (!observerRef.current || !hasNextPage) return;
@@ -258,9 +273,15 @@ export function SearchPage() {
             <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 md:px-6">
                 {isLoading && (
                     <div className="space-y-2">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                            <SearchResultSkeleton key={i} />
-                        ))}
+                        {Array.from({ length: 8 }).map((_, i) =>
+                            showSkeleton ? (
+                                <SearchResultSkeleton key={i} />
+                            ) : (
+                                <div key={i} className="opacity-0 pointer-events-none" aria-hidden>
+                                    <SearchResultSkeleton />
+                                </div>
+                            ),
+                        )}
                     </div>
                 )}
 
@@ -331,7 +352,7 @@ function EmptySearchState({ query }: { query: string }) {
 }
 
 const QUICK_FILTERS = [
-    { query: 'type:photo', label: 'All photos', icon: Image },
+    { query: 'category:photo', label: 'All photos', icon: Image },
     { query: 'format:pdf', label: 'PDF files', icon: FileText },
     { query: 'uploaded:last-week', label: 'Recent uploads', icon: Clock },
     { query: 'has:summary', label: 'With AI summary', icon: Star },

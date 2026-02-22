@@ -40,7 +40,7 @@ export function IconSelector({
     onOpenChange,
     children,
     searchPlaceholder = 'Search icons…',
-    triggerPlaceholder = 'Select icon',
+    triggerPlaceholder = 'No icon',
     ...props
 }: IconSelectorProps) {
     const [selectedIcon, setSelectedIcon] = useState<SectionIconName | null>(value ?? null);

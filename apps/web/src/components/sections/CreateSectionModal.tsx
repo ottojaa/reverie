@@ -5,8 +5,7 @@ import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
 import { useCreateFolder } from '@/lib/sections';
 import { useEffect, useState } from 'react';
-
-export type CreateFolderMode = 'category' | 'section';
+import type { FolderMode } from './folder-mode.js';
 
 const DEFAULT_SECTION_ICON: SectionIconName = 'folder';
 
@@ -14,7 +13,7 @@ export interface CreateSectionModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     parentId?: string | null;
-    mode?: CreateFolderMode;
+    mode?: FolderMode;
     onSuccess?: () => void;
 }
 
@@ -73,7 +72,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                     {isSection && (
                         <div>
                             <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
-                            <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="Select icon" searchPlaceholder="Search icons…" />
+                            <IconSelector value={icon} onValueChange={setIcon} />
                         </div>
                     )}
                     <div>

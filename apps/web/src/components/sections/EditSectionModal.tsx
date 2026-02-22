@@ -7,6 +7,7 @@ import { useUpdateFolder } from '@/lib/sections';
 import type { FolderWithChildren } from '@reverie/shared';
 import { dynamicIconImports } from 'lucide-react/dynamic';
 import { useEffect, useState } from 'react';
+import type { FolderMode } from './folder-mode.js';
 
 function toSectionIconName(emoji: string | null): SectionIconName | null {
     if (emoji == null || emoji === '') return null;
@@ -18,10 +19,14 @@ export interface EditSectionModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     section: FolderWithChildren | null;
+    mode: FolderMode;
     onSuccess?: () => void;
 }
 
-export function EditSectionModal({ open, onOpenChange, section, onSuccess }: EditSectionModalProps) {
+export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess }: EditSectionModalProps) {
+    const isCategory = mode === 'category';
+    const isSection = mode === 'section';
+
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [icon, setIcon] = useState<SectionIconName | null>(null);
@@ -45,8 +50,10 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
                 id: section.id,
                 data: {
                     name: name.trim(),
-                    description: description.trim() || null,
-                    emoji: icon ?? null,
+                    ...(isSection && {
+                        description: description.trim() || null,
+                        emoji: icon ?? null,
+                    }),
                 },
             },
             {
@@ -60,37 +67,58 @@ export function EditSectionModal({ open, onOpenChange, section, onSuccess }: Edi
 
     if (!section) return null;
 
+    const title = isCategory ? 'Edit category' : 'Edit section';
+    const namePlaceholder = isCategory ? 'Category name' : 'Section name';
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Edit section</DialogTitle>
+                    <DialogTitle>{title}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div className="flex flex-row gap-2">
-                        <IconSelector value={icon} onValueChange={setIcon} triggerPlaceholder="Select icon" searchPlaceholder="Search icons…" />
-                        <Input
-                            id="edit-section-name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Section name"
-                            required
-                            maxLength={255}
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="edit-section-desc" className="mb-1.5 block text-sm font-medium">
-                            Description (optional)
-                        </label>
-                        <textarea
-                            id="edit-section-desc"
-                            className="border-input min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Brief description"
-                            rows={3}
-                        />
-                    </div>
+                    {isSection ? (
+                        <div className="flex flex-row gap-2">
+                            <IconSelector value={icon} onValueChange={setIcon} />
+                            <Input
+                                id="edit-section-name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder={namePlaceholder}
+                                required
+                                maxLength={255}
+                            />
+                        </div>
+                    ) : (
+                        <div>
+                            <label htmlFor="edit-section-name" className="mb-1.5 block text-sm font-medium">
+                                Name
+                            </label>
+                            <Input
+                                id="edit-section-name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder={namePlaceholder}
+                                required
+                                maxLength={255}
+                            />
+                        </div>
+                    )}
+                    {isSection && (
+                        <div>
+                            <label htmlFor="edit-section-desc" className="mb-1.5 block text-sm font-medium">
+                                Description (optional)
+                            </label>
+                            <textarea
+                                id="edit-section-desc"
+                                className="border-input min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Brief description"
+                                rows={3}
+                            />
+                        </div>
+                    )}
                     <DialogFooter showCloseButton>
                         <Button type="submit" disabled={!name.trim() || updateFolder.isPending}>
                             {updateFolder.isPending ? 'Saving…' : 'Save'}

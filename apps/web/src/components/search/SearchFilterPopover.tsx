@@ -4,21 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSearchSuggestions } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import type { FacetItem, SearchFacets, SuggestionType } from '@reverie/shared';
-import {
-    ArrowLeft,
-    Calendar as CalendarIcon,
-    Check,
-    ChevronRight,
-    FileText,
-    Folder,
-    Hash,
-    Image,
-    MapPin,
-    Search,
-    SlidersHorizontal,
-    Tag,
-    X,
-} from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -35,10 +21,9 @@ interface FilterDefinition {
 }
 
 const FILTER_DEFS: FilterDefinition[] = [
-    { key: 'type', label: 'Type', icon: Image, prefix: 'type', mode: 'list' },
-    { key: 'format', label: 'Format', icon: FileText, prefix: 'format', mode: 'list' },
     { key: 'category', label: 'Category', icon: Hash, prefix: 'category', mode: 'list' },
     { key: 'folder', label: 'Folder', icon: Folder, prefix: 'folder', mode: 'searchable', suggestionType: 'folder' },
+    { key: 'format', label: 'File format', icon: FileText, prefix: 'format', mode: 'list' },
     { key: 'tag', label: 'Tag', icon: Tag, prefix: 'tag', mode: 'searchable', suggestionType: 'tag' },
     { key: 'location', label: 'Location', icon: MapPin, prefix: 'location', mode: 'searchable', suggestionType: 'location' },
     { key: 'uploaded', label: 'Upload date', icon: CalendarIcon, prefix: 'uploaded', mode: 'date' },
