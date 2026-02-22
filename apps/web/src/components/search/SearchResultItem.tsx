@@ -71,7 +71,7 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
             type="button"
             onClick={onClick}
             className={cn(
-                'flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors',
+                'flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-left transition-colors',
                 'hover:bg-secondary/80 focus-visible:bg-secondary/80 focus-visible:outline-none',
                 isActive && 'bg-secondary',
             )}
@@ -105,9 +105,9 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
                     />
                 )}
 
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
                     {containingFolder && (
-                        <span className="flex items-center gap-1 truncate">
+                        <span className="flex min-w-0 shrink items-center gap-1">
                             <Folder className="size-3 shrink-0" />
                             <span className="truncate">{containingFolder}</span>
                         </span>
@@ -123,7 +123,7 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
                             {result.tags.length > 2 && <span className="shrink-0 text-[10px]">+{result.tags.length - 2}</span>}
                         </>
                     )}
-                    <span className="shrink-0">{formatFileSize(result.size_bytes)}</span>
+                    <span className="ml-auto shrink-0">{formatFileSize(result.size_bytes)}</span>
                 </div>
             </div>
         </button>

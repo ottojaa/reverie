@@ -1,5 +1,6 @@
 import { CategorizedSections } from '@/components/categorizedSections';
 import { CreateSectionModal, type FolderMode } from '@/components/sections';
+import { useOrganize } from '@/components/layout/Layout';
 import { useAuth } from '@/lib/auth';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
@@ -8,7 +9,7 @@ import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } fro
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useParams } from '@tanstack/react-router';
-import { Settings } from 'lucide-react';
+import { Settings, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useRef, useState } from 'react';
@@ -34,6 +35,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const updateFolder = useUpdateFolder();
 
     const { openEdit } = useSectionEdit();
+    const { openOrganize } = useOrganize();
 
     // Create modal state
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -119,7 +121,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     to="/browse"
                     onClick={onClose}
                     className={cn(
-                        'mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
                         !currentSectionId
                             ? 'bg-sidebar-accent text-sidebar-primary'
                             : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
@@ -127,6 +129,18 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 >
                     All Documents
                 </Link>
+
+                <button
+                    type="button"
+                    onClick={() => { openOrganize(); onClose?.(); }}
+                    className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                >
+                    <Sparkles className="size-3.5 text-primary" />
+                    Organize
+                    <span className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-medium tracking-wide opacity-60">
+                        ⌘⇧O
+                    </span>
+                </button>
 
                 {isLoading ? (
                     <div className="space-y-0.5">

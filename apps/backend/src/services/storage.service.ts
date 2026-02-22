@@ -85,9 +85,9 @@ export interface UserStorageContext {
 }
 
 const THUMBNAIL_SIZES = {
-    sm: 150,
-    md: 300,
-    lg: 600,
+    sm: 256,
+    md: 512,
+    lg: 1024,
 } as const;
 
 export class StorageService {

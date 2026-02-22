@@ -5,8 +5,12 @@
  */
 
 import OpenAI from 'openai';
+import type { ResponseStreamEvent, FunctionTool, ResponseInputItem } from 'openai/resources/responses/responses';
+import type { Stream } from 'openai/core/streaming';
 import { env } from '../config/env';
 import type { LlmPrompt, LlmSummaryResponse, VisionResponse } from './types';
+
+export type { ResponseStreamEvent, FunctionTool, ResponseInputItem };
 
 let openaiClient: OpenAI | null = null;
 
@@ -161,6 +165,35 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
         },
         tokenCount: response.tokenCount,
     };
+}
+
+// ── Responses API (for Organize feature) ──────────────────────────────────────
+
+export interface ResponsesApiCallOptions {
+    input: string | ResponseInputItem[];
+    tools?: FunctionTool[];
+    previousResponseId?: string;
+}
+
+/**
+ * Call the OpenAI Responses API with streaming.
+ * Returns a Stream<ResponseStreamEvent> for the caller to consume.
+ * Supports function calling and multi-turn via previousResponseId.
+ */
+export async function streamResponsesAPI(options: ResponsesApiCallOptions): Promise<Stream<ResponseStreamEvent>> {
+    const client = getOpenAIClient();
+    const reasoningEffort = env.OPENAI_MODEL === 'gpt-5-mini' ? env.OPENAI_REASONING_EFFORT : undefined;
+
+    const stream = await client.responses.create({
+        model: env.OPENAI_MODEL,
+        input: options.input as OpenAI.Responses.ResponseInput,
+        tools: options.tools as OpenAI.Responses.Tool[] | undefined,
+        previous_response_id: options.previousResponseId,
+        stream: true,
+        ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+    });
+
+    return stream;
 }
 
 /**

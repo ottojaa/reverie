@@ -1,4 +1,5 @@
 import { GlobalDropzone, UploadModal } from '@/components/upload';
+import { OrganizeModal } from '@/components/organize';
 import { usePathnameTracker } from '@/lib/hooks/useNavigationDirection';
 import { ScrollContainerProvider } from '@/lib/ScrollContainerContext';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
@@ -6,9 +7,21 @@ import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
 import { SelectionProvider } from '@/lib/selection';
 import type { Announcements, DragCancelEvent, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { DndContext, pointerWithin } from '@dnd-kit/core';
-import { ReactNode, useRef, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+
+// ── Organize modal context ────────────────────────────────────────────────────
+
+interface OrganizeContextType {
+    openOrganize: () => void;
+}
+
+const OrganizeContext = createContext<OrganizeContextType>({ openOrganize: () => undefined });
+
+export function useOrganize() {
+    return useContext(OrganizeContext);
+}
 
 export interface SortableTreeHandlers {
     handleDragStart: (event: DragStartEvent) => void;
@@ -27,9 +40,26 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [organizeOpen, setOrganizeOpen] = useState(false);
     const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
     const mainRef = useRef<HTMLElement | null>(null);
     const defaultSensors = useDefaultSensors();
+
+    const openOrganize = useCallback(() => setOrganizeOpen(true), []);
+
+    // Global keyboard shortcut: Cmd/Ctrl+Shift+O
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+                e.preventDefault();
+                setOrganizeOpen((v) => !v);
+            }
+        };
+
+        document.addEventListener('keydown', handler);
+
+        return () => document.removeEventListener('keydown', handler);
+    }, []);
 
     // Global pathname tracker for useIsReturningFromDocument
     usePathnameTracker();
@@ -43,6 +73,7 @@ export function Layout({ children }: LayoutProps) {
     };
 
     return (
+        <OrganizeContext.Provider value={{ openOrganize }}>
         <SectionEditProvider>
             <SelectionProvider>
                 <DndContext
@@ -73,9 +104,11 @@ export function Layout({ children }: LayoutProps) {
                             </GlobalDropzone>
                         </div>
                         <UploadModal />
+                        <OrganizeModal open={organizeOpen} onOpenChange={setOrganizeOpen} />
                     </div>
                 </DndContext>
             </SelectionProvider>
         </SectionEditProvider>
+        </OrganizeContext.Provider>
     );
 }

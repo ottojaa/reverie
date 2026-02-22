@@ -1,6 +1,6 @@
-import { spawn } from 'child_process';
 import { encode } from 'blurhash';
 import { Job, Worker } from 'bullmq';
+import { spawn } from 'child_process';
 import { mkdtemp, unlink, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -17,9 +17,9 @@ const logger = createWorkerLogger('Thumbnail');
 
 // Thumbnail sizes
 const THUMBNAIL_SIZES = {
-    sm: 150,
-    md: 300,
-    lg: 600,
+    sm: 256,
+    md: 512,
+    lg: 1024,
 } as const;
 
 /**
@@ -170,7 +170,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
 
     // Generate thumbnails in parallel
     const thumbnailPromises = Object.entries(THUMBNAIL_SIZES).map(async ([size, width]) => {
-        const resized = await sharp(imageBuffer).resize(width, null, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+        const resized = await sharp(imageBuffer).resize(width, null, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 90 }).toBuffer();
 
         // Store thumbnail
         const thumbnailPath = `thumbnails/${documentId}/${size}.webp`;

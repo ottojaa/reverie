@@ -10,7 +10,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
     const thumbnailRef = useRef<HTMLDivElement>(null);
     const fileConfig = getFileTypeConfig(document.mime_type);
     const extension = getFileExtension(document.original_filename);
-    const thumbnailUrl = getThumbnailUrl(document);
+    const thumbnailUrl = getThumbnailUrl(document, 'lg');
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
 
     return (

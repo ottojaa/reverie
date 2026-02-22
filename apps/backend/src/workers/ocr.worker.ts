@@ -121,6 +121,13 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             });
         }
 
+        // Sync has_meaningful_text from OCR result back to documents table
+        await db
+            .updateTable('documents')
+            .set({ has_meaningful_text: result.hasMeaningfulText })
+            .where('id', '=', documentId)
+            .execute();
+
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {
             await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', documentId).execute();

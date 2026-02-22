@@ -194,16 +194,19 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
         const allCategories = parsed.types.flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
         const uniqueCategories = [...new Set(allCategories)];
 
-        // For "photo" type, also filter by has_meaningful_text = false
-        if (parsed.types.includes('photo') && !parsed.types.some((t) => t !== 'photo')) {
-            query = query.where('d.has_meaningful_text', '=', false);
-        } else if (uniqueCategories.length > 0) {
-            query = query.where((eb) =>
-                eb.or([
-                    eb('d.document_category' as any, 'in', uniqueCategories),
-                    ...(parsed.types!.includes('photo') ? [eb('d.has_meaningful_text' as any, '=', false)] : []),
-                ]),
-            );
+        // Match by document_category, and for "photo" also include has_meaningful_text = false
+        // (some image files may have category='other' but no meaningful text)
+        if (uniqueCategories.length > 0) {
+            if (parsed.types.includes('photo')) {
+                query = query.where((eb) =>
+                    eb.or([
+                        eb('d.document_category' as any, 'in', uniqueCategories),
+                        eb('d.has_meaningful_text' as any, '=', false),
+                    ]),
+                );
+            } else {
+                query = query.where('d.document_category' as any, 'in', uniqueCategories);
+            }
         }
     }
 
