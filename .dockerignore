@@ -1,0 +1,49 @@
+# Dependencies
+node_modules
+
+# Git
+.git
+.gitignore
+
+# Build outputs
+dist
+apps/backend/dist
+apps/web/dist
+apps/web/dist-electron
+
+# Nx cache
+.nx/cache
+.nx/workspace-data
+
+# Environment files (managed on server, never in image)
+.env
+.env.*
+!.env.example
+
+# Editor/IDE
+.cursor
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android app (not needed for backend image)
+apps/android
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+
+# Test files
+coverage
+
+# Temporary
+tmp
+*.timestamp*

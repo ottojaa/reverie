@@ -49,6 +49,7 @@ vite.config.*.timestamp*
 .env
 .env.local
 .env.*.local
+.env.*
 
 # Android
 apps/android/.gradle/

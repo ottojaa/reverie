@@ -1,5 +1,5 @@
-import { useOrganizeChat } from '@/lib/api/organize';
 import { Button } from '@/components/ui/button';
+import { useOrganizeChat } from '@/lib/api/organize';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
 import { X } from 'lucide-react';
@@ -121,19 +121,19 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
                                                 exit={{ opacity: 0, x: -8 }}
                                                 transition={{ duration: 0.15 }}
                                             >
-                                                        <OrganizeChat chatState={chatState} />
+                                                <OrganizeChat chatState={chatState} />
                                             </motion.div>
                                         ) : (
-                        <motion.div
-                                key="manual"
-                                className="h-full"
-                                initial={{ opacity: 0, x: 8 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 8 }}
-                                transition={{ duration: 0.15 }}
-                            >
-                                <OrganizeManual />
-                            </motion.div>
+                                            <motion.div
+                                                key="manual"
+                                                className="h-full"
+                                                initial={{ opacity: 0, x: 8 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: 8 }}
+                                                transition={{ duration: 0.15 }}
+                                            >
+                                                <OrganizeManual />
+                                            </motion.div>
                                         )}
                                     </AnimatePresence>
                                 </div>
