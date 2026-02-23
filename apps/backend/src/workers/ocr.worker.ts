@@ -77,40 +77,34 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         await publishJobProgress(job.id!, 80, documentId, job.data.sessionId);
 
-        // Store EXIF metadata if extracted
+        // Store EXIF metadata if extracted (skip when all fields are null - doUpdateSet
+        // with empty object produces invalid SQL: "syntax error at end of input")
         const exif = result.exifMetadata;
+        const hasExifData =
+            exif &&
+            (exif.latitude != null ||
+                exif.longitude != null ||
+                exif.city != null ||
+                exif.country != null ||
+                exif.takenAt != null);
 
-        if (exif) {
+        if (hasExifData) {
+            const exifValues = {
+                ...(exif.latitude != null && { latitude: exif.latitude }),
+                ...(exif.longitude != null && { longitude: exif.longitude }),
+                ...(exif.city != null && { city: exif.city }),
+                ...(exif.country != null && { country: exif.country }),
+                ...(exif.takenAt != null && { taken_at: exif.takenAt }),
+            };
+
             await db
                 .insertInto('photo_metadata')
                 .values({
                     document_id: documentId,
-                    latitude: exif.latitude ?? undefined,
-                    longitude: exif.longitude ?? undefined,
-                    city: exif.city ?? undefined,
-                    country: exif.country ?? undefined,
-                    taken_at: exif.takenAt ?? undefined,
+                    ...exifValues,
                 })
-                .onConflict((oc) =>
-                    oc.column('document_id').doUpdateSet({
-                        latitude: exif.latitude ?? undefined,
-                        longitude: exif.longitude ?? undefined,
-                        city: exif.city ?? undefined,
-                        country: exif.country ?? undefined,
-                        taken_at: exif.takenAt ?? undefined,
-                    }),
-                )
+                .onConflict((oc) => oc.column('document_id').doUpdateSet(exifValues))
                 .execute();
-
-            // Use photo taken_at as extracted_date if not already set
-            if (exif.takenAt) {
-                await db
-                    .updateTable('documents')
-                    .set({ extracted_date: exif.takenAt })
-                    .where('id', '=', documentId)
-                    .where('extracted_date', 'is', null)
-                    .execute();
-            }
 
             logger.info('Stored EXIF metadata', {
                 documentId,
@@ -119,6 +113,15 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
                 country: exif.country,
                 takenAt: exif.takenAt,
             });
+
+            if (exif.takenAt) {
+                await db
+                    .updateTable('documents')
+                    .set({ extracted_date: exif.takenAt })
+                    .where('id', '=', documentId)
+                    .where('extracted_date', 'is', null)
+                    .execute();
+            }
         }
 
         // Sync has_meaningful_text from OCR result back to documents table
