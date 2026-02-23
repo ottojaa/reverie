@@ -18,6 +18,7 @@ import { Route as BrowseIndexRouteImport } from './routes/browse.index'
 import { Route as LoginCallbackRouteImport } from './routes/login.callback'
 import { Route as DocumentIdRouteImport } from './routes/document.$id'
 import { Route as BrowseSectionIdRouteImport } from './routes/browse.$sectionId'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -64,6 +65,11 @@ const BrowseSectionIdRoute = BrowseSectionIdRouteImport.update({
   path: '/$sectionId',
   getParentRoute: () => BrowseRoute,
 } as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
   '/login/callback': typeof LoginCallbackRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/admin/users'
     | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/admin/users'
     | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/admin/users'
     | '/browse/$sectionId'
     | '/document/$id'
     | '/login/callback'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRouteWithChildren
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
   DocumentIdRoute: typeof DocumentIdRoute
 }
 
@@ -207,6 +220,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BrowseSectionIdRouteImport
       parentRoute: typeof BrowseRoute
     }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -239,6 +259,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRouteWithChildren,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
   DocumentIdRoute: DocumentIdRoute,
 }
 export const routeTree = rootRouteImport

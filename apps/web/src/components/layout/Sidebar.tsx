@@ -9,8 +9,8 @@ import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
-import { Link, useParams } from '@tanstack/react-router';
-import { Settings, Sparkles } from 'lucide-react';
+import { Link, useLocation, useParams } from '@tanstack/react-router';
+import { Settings, Sparkles, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useRef, useState } from 'react';
@@ -25,6 +25,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: SidebarProps) {
     const params = useParams({ strict: false });
+    const location = useLocation();
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { user } = useAuth();
     const { data: sections = [], isLoading } = useSections();
@@ -203,6 +204,21 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     <Settings className="size-4" />
                     Settings
                 </Link>
+                {user?.role === 'admin' && (
+                    <Link
+                        to="/admin/users"
+                        className={cn(
+                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                            location.pathname.startsWith('/admin')
+                                ? 'bg-sidebar-accent text-sidebar-primary'
+                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                        )}
+                        onClick={onClose}
+                    >
+                        <Users className="size-4" />
+                        Users
+                    </Link>
+                )}
             </div>
 
             <CreateSectionModal open={createModalOpen} onOpenChange={setCreateModalOpen} parentId={createModalParent} mode={createModalMode} />

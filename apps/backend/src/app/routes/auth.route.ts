@@ -46,6 +46,7 @@ function serializeUser(user: User) {
         storage_quota_bytes: Number(user.storage_quota_bytes),
         storage_used_bytes: Number(user.storage_used_bytes),
         is_active: user.is_active,
+        role: user.role ?? 'user',
         created_at: user.created_at.toISOString(),
         last_login_at: user.last_login_at?.toISOString() ?? null,
     };

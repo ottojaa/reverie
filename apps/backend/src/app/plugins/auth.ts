@@ -22,6 +22,7 @@ export interface AuthUser {
 declare module 'fastify' {
     interface FastifyInstance {
         authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+        authenticateAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
         googleOAuth2?: typeof fastifyOauth2;
     }
 }
@@ -73,7 +74,6 @@ export default fp(async function (fastify) {
     fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
         try {
             const decoded = await request.jwtVerify<JwtPayload>();
-            // Attach user info to request
             request.user = {
                 id: decoded.sub,
                 email: decoded.email,
@@ -82,6 +82,23 @@ export default fp(async function (fastify) {
             reply.status(401).send({
                 error: 'token_invalid',
                 message: 'Invalid or expired token',
+            });
+        }
+    });
+
+    // Decorate fastify with authenticateAdmin - must be used after authenticate in preHandler
+    fastify.decorate('authenticateAdmin', async function (request: FastifyRequest, reply: FastifyReply) {
+        const { db } = await import('../../db/kysely.js');
+        const user = await db
+            .selectFrom('users')
+            .select('role')
+            .where('id', '=', request.user.id)
+            .executeTakeFirst();
+
+        if (!user || user.role !== 'admin') {
+            reply.status(403).send({
+                error: 'forbidden',
+                message: 'Admin access required',
             });
         }
     });

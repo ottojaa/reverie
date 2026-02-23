@@ -8,6 +8,8 @@ export type TargetType = 'document' | 'folder';
 export type TagSource = 'user' | 'auto';
 
 // Users table
+export type UserRole = 'admin' | 'user';
+
 export interface UsersTable {
     id: Generated<string>;
     email: string;
@@ -18,6 +20,7 @@ export interface UsersTable {
     storage_used_bytes: ColumnType<number, number | undefined, number>;
     storage_path: string;
     is_active: ColumnType<boolean, boolean | undefined, boolean>;
+    role: ColumnType<UserRole, UserRole | undefined, UserRole>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
     last_login_at: Date | null;

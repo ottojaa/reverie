@@ -102,6 +102,7 @@ async function createUser(options: CreateUserOptions): Promise<void> {
             storage_used_bytes: 0,
             storage_path: storagePath,
             is_active: true,
+            role: 'user',
         })
         .returning(['id', 'email', 'display_name', 'storage_path'])
         .execute();

@@ -1,20 +1,11 @@
 import { config } from 'dotenv';
-import { existsSync } from 'fs';
-import { isAbsolute } from 'path';
 import { join } from 'path';
 import { z } from 'zod';
 
-// ENV_FILE or DOTENV_CONFIG_PATH overrides default .env (for prod: ENV_FILE=.env.prod)
-const repoRoot = join(__dirname, '../../../../');
-const envFile = process.env.ENV_FILE || process.env.DOTENV_CONFIG_PATH;
-const envPath = envFile
-    ? isAbsolute(envFile)
-        ? envFile
-        : existsSync(join(process.cwd(), envFile))
-          ? join(process.cwd(), envFile)
-          : join(repoRoot, envFile)
-    : join(repoRoot, '.env');
-config({ path: envPath });
+// Load .env from repo root (path relative to this file so it works from any cwd)
+// ENV_FILE can override (e.g. .env.prod) when set before import (e.g. create-user --prod)
+const envFile = process.env.ENV_FILE || '.env';
+config({ path: join(__dirname, '../../../../', envFile) });
 
 const envSchema = z.object({
     // Server

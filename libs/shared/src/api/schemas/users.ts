@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { DateStringSchema, UuidSchema } from './common.js';
 
+export const UserRoleSchema = z.enum(['admin', 'user']);
+export type UserRole = z.infer<typeof UserRoleSchema>;
+
 // User entity schema (public-facing, excludes password_hash)
 export const UserSchema = z.object({
     id: UuidSchema,
@@ -9,6 +12,7 @@ export const UserSchema = z.object({
     storage_quota_bytes: z.number(),
     storage_used_bytes: z.number(),
     is_active: z.boolean(),
+    role: UserRoleSchema,
     created_at: DateStringSchema,
     last_login_at: DateStringSchema.nullable(),
 });
