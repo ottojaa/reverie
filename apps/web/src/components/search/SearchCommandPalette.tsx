@@ -1,4 +1,6 @@
+import { Button } from '@/components/ui/button';
 import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
+import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSearchState } from '@/lib/hooks/useSearchState';
 import { cn } from '@/lib/utils';
 import type { SearchResult, SuggestionType } from '@reverie/shared';
@@ -168,16 +170,18 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                             />
                             {isLoading && <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />}
                             {hasQuery && !isLoading && (
-                                <button
+                                <Button
                                     type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
                                     onClick={() => {
                                         clearQuery();
                                         inputRef.current?.focus();
                                     }}
-                                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                                    className="text-muted-foreground"
                                 >
                                     <X className="size-3.5" />
-                                </button>
+                                </Button>
                             )}
                         </div>
 
@@ -263,16 +267,18 @@ function EmptyState({ recentSearches, quickFilters, onRecentSearch, onRemoveRece
                         >
                             <Clock className="size-3.5 shrink-0 text-muted-foreground" />
                             <span className="min-w-0 flex-1 truncate">{recent.query}</span>
-                            <button
+                            <Button
                                 type="button"
+                                variant="ghost"
+                                size="icon-sm"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onRemoveRecent(recent.query);
                                 }}
-                                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-data-[selected=true]:opacity-100 [div[aria-selected=true]>&]:opacity-100 hover:opacity-100"
+                                className="shrink-0 size-6 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-data-[selected=true]:opacity-100 [div[aria-selected=true]>&]:opacity-100 hover:opacity-100"
                             >
                                 <X className="size-3" />
-                            </button>
+                            </Button>
                         </Command.Item>
                     ))}
                 </Command.Group>
@@ -285,15 +291,16 @@ function EmptyState({ recentSearches, quickFilters, onRecentSearch, onRemoveRece
                             const Icon = filter.icon ? (quickFilterIcons[filter.icon] ?? FileText) : FileText;
 
                             return (
-                                <button
+                                <Button
                                     key={filter.query}
                                     type="button"
+                                    variant="outline"
                                     onClick={() => onQuickFilter(filter.query)}
-                                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary hover:border-border"
+                                    className="rounded-full gap-1.5 px-3 py-1.5 text-xs"
                                 >
                                     <Icon className="size-3 text-muted-foreground" />
                                     {filter.label}
-                                </button>
+                                </Button>
                             );
                         })}
                     </div>
@@ -372,19 +379,20 @@ function SearchResults({
                             const isActive = activeSuggestionType === type;
 
                             return (
-                                <button
+                                <Button
                                     key={type}
                                     type="button"
+                                    variant="ghost"
                                     onClick={() => onSuggestionTypeChange(type)}
                                     className={cn(
-                                        'relative inline-flex items-center gap-1 px-2.5 pb-2 pt-1 text-xs font-medium transition-colors',
+                                        'relative h-auto gap-1 px-2.5 pb-2 pt-1 text-xs font-medium',
                                         isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     <Icon className="size-3" />
                                     {suggestionTypeLabels[type]}
                                     {isActive && <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-primary" />}
-                                </button>
+                                </Button>
                             );
                         })}
                     </div>
@@ -456,7 +464,7 @@ const resultCategoryIcons: Record<string, typeof FileText> = {
 function PreviewResultItem({ result, onSelect }: { result: SearchResult; onSelect: () => void }) {
     const categoryIcon = result.category ? resultCategoryIcons[result.category] : undefined;
     const Icon = categoryIcon ?? (result.mime_type.startsWith('image/') ? Image : FileText);
-    const thumbnailUrl = result.thumbnail_url ? `${import.meta.env.VITE_API_URL}${result.thumbnail_url}` : null;
+    const thumbnailUrl = getThumbnailUrl(result, 'sm');
     const displayName = result.display_name ?? result.filename;
 
     return (

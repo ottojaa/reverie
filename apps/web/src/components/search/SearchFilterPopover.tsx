@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSearchSuggestions } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
@@ -116,33 +117,21 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
                 <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
                     <div className="flex items-center gap-2">
                         {activePanel && (
-                            <button
-                                type="button"
-                                onClick={handleBack}
-                                className="rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                            >
+                            <Button type="button" variant="ghost" size="icon-sm" onClick={handleBack} className="text-muted-foreground">
                                 <ArrowLeft className="size-4" />
-                            </button>
+                            </Button>
                         )}
                         <span className="text-sm font-medium">{activeDef?.label ?? 'Filters'}</span>
                     </div>
                     <div className="flex items-center gap-1">
                         {activeCount > 0 && !activePanel && (
-                            <button
-                                type="button"
-                                onClick={handleClearAll}
-                                className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                            >
+                            <Button type="button" variant="ghost" size="sm" onClick={handleClearAll} className="text-xs text-muted-foreground">
                                 Clear
-                            </button>
+                            </Button>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => setOpen(false)}
-                            className="rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                        >
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} className="text-xs font-medium text-primary">
                             Done
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -163,11 +152,12 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
                                     const count = filterValues?.size ?? 0;
 
                                     return (
-                                        <button
+                                        <Button
                                             key={def.key}
                                             type="button"
+                                            variant="ghost"
                                             onClick={() => setActivePanel(def.key)}
-                                            className="flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary"
+                                            className="w-full justify-start gap-3 px-3 py-2 text-sm"
                                         >
                                             <def.icon className="size-4 shrink-0 text-muted-foreground" />
                                             <span className="flex-1 text-left">{def.label}</span>
@@ -177,7 +167,7 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
                                                 </span>
                                             )}
                                             <ChevronRight className="size-3.5 text-muted-foreground" />
-                                        </button>
+                                        </Button>
                                     );
                                 })}
                             </motion.div>
@@ -299,11 +289,11 @@ function ListFilterPanel({ prefix, items, activeValues, onToggle }: ListFilterPa
                 <div className="border-b border-border px-3 py-2">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <input
+                        <Input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder={`Search ${prefix}s...`}
-                            className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring/30 focus:outline-none"
+                            className="h-8 pl-8 pr-3 text-sm"
                         />
                     </div>
                 </div>
@@ -314,11 +304,12 @@ function ListFilterPanel({ prefix, items, activeValues, onToggle }: ListFilterPa
                     const isActive = activeValues.has(item.name);
 
                     return (
-                        <button
+                        <Button
                             key={item.name}
                             type="button"
+                            variant="ghost"
                             onClick={() => onToggle(item.name)}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary"
+                            className="w-full justify-start gap-3 px-3 py-2 text-sm"
                         >
                             <div
                                 className={cn(
@@ -330,7 +321,7 @@ function ListFilterPanel({ prefix, items, activeValues, onToggle }: ListFilterPa
                             </div>
                             <span className="flex-1 truncate text-left">{formatFacetName(item.name)}</span>
                             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.count}</span>
-                        </button>
+                        </Button>
                     );
                 })}
             </div>
@@ -360,12 +351,12 @@ function SearchableFilterPanel({ prefix, suggestionType, activeValues, onToggle 
             <div className="border-b border-border px-3 py-2">
                 <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input
+                    <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder={`Search ${prefix}s...`}
                         autoFocus
-                        className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring/30 focus:outline-none"
+                        className="h-8 pl-8 pr-3 text-sm"
                     />
                 </div>
             </div>
@@ -375,18 +366,19 @@ function SearchableFilterPanel({ prefix, suggestionType, activeValues, onToggle 
                 {activeArray.length > 0 && !search && (
                     <>
                         {activeArray.map((value) => (
-                            <button
+                            <Button
                                 key={value}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => onToggle(value)}
-                                className="flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary"
+                                className="w-full justify-start gap-3 px-3 py-2 text-sm"
                             >
                                 <div className="flex size-4 shrink-0 items-center justify-center rounded border border-primary bg-primary text-primary-foreground transition-colors">
                                     <Check className="size-3" />
                                 </div>
                                 <span className="flex-1 truncate text-left">{value}</span>
                                 <X className="size-3 text-muted-foreground" />
-                            </button>
+                            </Button>
                         ))}
                         <div className="mx-3 my-1 border-t border-border" />
                     </>
@@ -400,11 +392,12 @@ function SearchableFilterPanel({ prefix, suggestionType, activeValues, onToggle 
                         const isActive = activeValues.has(suggestion);
 
                         return (
-                            <button
+                            <Button
                                 key={suggestion}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => onToggle(suggestion)}
-                                className="flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary"
+                                className="w-full justify-start gap-3 px-3 py-2 text-sm"
                             >
                                 <div
                                     className={cn(
@@ -415,7 +408,7 @@ function SearchableFilterPanel({ prefix, suggestionType, activeValues, onToggle 
                                     {isActive && <Check className="size-3" />}
                                 </div>
                                 <span className="flex-1 truncate text-left">{suggestion}</span>
-                            </button>
+                            </Button>
                         );
                     })}
 
@@ -496,11 +489,12 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                     const isActive = activeValue === preset.value;
 
                     return (
-                        <button
+                        <Button
                             key={preset.value}
                             type="button"
+                            variant="ghost"
                             onClick={() => (isActive ? handleClear() : handlePreset(preset.value))}
-                            className={cn('flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary', isActive && 'bg-primary/5')}
+                            className={cn('w-full justify-start gap-3 px-3 py-2 text-sm', isActive && 'bg-primary/5')}
                         >
                             <div
                                 className={cn(
@@ -511,7 +505,7 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                                 {isActive && <Check className="size-2.5" />}
                             </div>
                             <span className="flex-1 text-left">{preset.label}</span>
-                        </button>
+                        </Button>
                     );
                 })}
 
@@ -520,17 +514,18 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                 {/* Custom range - nested Popover so calendar floats independently */}
                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
-                        <button
+                        <Button
                             type="button"
+                            variant="ghost"
                             className={cn(
-                                'flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-secondary',
+                                'w-full justify-start gap-3 px-3 py-2 text-sm',
                                 calendarOpen && 'bg-primary/5',
                             )}
                         >
                             <CalendarIcon className="size-4 text-muted-foreground" />
                             <span className="flex-1 text-left">Custom range</span>
                             {activeValue?.includes('..') && <span className="text-xs text-primary">{formatDateRangeDisplay(activeValue)}</span>}
-                        </button>
+                        </Button>
                     </PopoverTrigger>
                     <PopoverContent side="right" align="center" className="w-auto p-0">
                         <div className="p-2">
@@ -540,13 +535,9 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                                     <span className="text-xs text-muted-foreground">
                                         {formatDateDisplay(dateRange.from)} - {formatDateDisplay(dateRange.to)}
                                     </span>
-                                    <button
-                                        type="button"
-                                        onClick={handleClear}
-                                        className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                    >
+                                    <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="text-xs text-muted-foreground h-auto py-0">
                                         Clear
-                                    </button>
+                                    </Button>
                                 </div>
                             )}
                         </div>

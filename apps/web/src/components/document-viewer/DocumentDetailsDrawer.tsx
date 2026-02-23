@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { FileTypeIcon, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { useReprocessLlm, useRetryOcr } from '@/lib/api/documents';
@@ -61,14 +62,16 @@ function StatusBadge({ status, onClick, disabled }: { status: string; onClick?: 
 
     if (onClick && !disabled) {
         return (
-            <button
+            <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={onClick}
-                className={cn(baseClasses, 'cursor-pointer transition-opacity hover:opacity-80')}
+                className={cn(baseClasses, 'h-auto min-h-0 cursor-pointer border-0 px-2 py-0.5 shadow-none transition-opacity hover:opacity-80 hover:bg-transparent')}
                 title="Click to reprocess"
             >
                 {status}
-            </button>
+            </Button>
         );
     }
 
@@ -323,14 +326,16 @@ function DrawerBody({ document }: { document: Document }) {
                 </div>
 
                 {/* OCR Result link */}
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setOcrDialogOpen(true)}
-                    className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    className="mt-3 h-auto gap-1 px-0 py-0 text-[11px] text-muted-foreground hover:text-foreground"
                 >
                     <ExternalLink className="size-3" />
                     View OCR Result
-                </button>
+                </Button>
             </motion.div>
 
             <OcrResultDialog documentId={document.id} ocrStatus={ocrStatus} open={ocrDialogOpen} onOpenChange={setOcrDialogOpen} />
@@ -345,8 +350,10 @@ export function DocumentDetailsDrawer({ document, isOpen, onClose }: DocumentDet
                 <DrawerHeader className="border-b border-border/50 px-5 py-4">
                     <div className="flex items-center justify-between">
                         <DrawerTitle className="text-sm font-semibold tracking-tight">Details</DrawerTitle>
-                        <DrawerClose className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                            <X className="size-4" />
+                        <DrawerClose asChild>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                <X className="size-4" />
+                            </Button>
                         </DrawerClose>
                     </div>
                     <DrawerDescription className="sr-only">Document details and metadata</DrawerDescription>

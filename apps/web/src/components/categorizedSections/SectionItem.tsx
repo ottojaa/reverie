@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { cn } from '@/lib/utils';
@@ -66,9 +67,11 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
                         {section.name}
                     </Link>
                     {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
-                    <button
+                    <Button
                         type="button"
-                        className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-auto w-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
                         aria-label="Section actions"
                         onClick={(e) => {
                             e.preventDefault();
@@ -78,7 +81,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
                         onPointerDown={(e) => e.stopPropagation()}
                     >
                         <MoreHorizontal className="size-4" />
-                    </button>
+                    </Button>
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent>

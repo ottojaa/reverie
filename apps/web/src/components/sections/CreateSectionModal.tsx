@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import type { SectionIconName } from '@/components/ui/icons-data';
 import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useCreateFolder } from '@/lib/sections';
 import { useEffect, useState } from 'react';
 import type { FolderMode } from './folder-mode.js';
@@ -95,9 +96,9 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                             <label htmlFor="create-section-desc" className="mb-1.5 block text-sm font-medium">
                                 Description (optional)
                             </label>
-                            <textarea
+                            <Textarea
                                 id="create-section-desc"
-                                className="border-input min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="min-h-[80px]"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Brief description"

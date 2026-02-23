@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { FileUp, Upload } from 'lucide-react';
@@ -40,7 +41,7 @@ export function UploadDropzone({ className, disabled }: UploadDropzoneProps) {
                 className,
             )}
         >
-            <input {...getInputProps()} />
+            <Input {...getInputProps()} className="hidden" />
 
             <AnimatePresence mode="wait">
                 {isDragActive ? (

@@ -26,6 +26,7 @@ import { getStorageService } from '../../services/storage.service';
 import { getUploadService } from '../../services/upload.service';
 import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
+import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
 
 const uploadService = getUploadService();
 const storageService = getStorageService();
@@ -314,11 +315,7 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            const llmResult = await db
-                .selectFrom('llm_results')
-                .selectAll()
-                .where('document_id', '=', request.params.id)
-                .executeTakeFirst();
+            const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             return await serializeDocument(document, llmResult);
         },
@@ -752,11 +749,7 @@ export default async function (fastify: FastifyInstance) {
             }
 
             // Check if already processed
-            const existingLlmResult = await db
-                .selectFrom('llm_results')
-                .select('id')
-                .where('document_id', '=', request.params.id)
-                .executeTakeFirst();
+            const existingLlmResult = await db.selectFrom('llm_results').select('id').where('document_id', '=', request.params.id).executeTakeFirst();
 
             if (existingLlmResult) {
                 return { job_id: '', status: 'already_complete' as const };
@@ -775,11 +768,7 @@ export default async function (fastify: FastifyInstance) {
                 };
             }
 
-            await db
-                .updateTable('documents')
-                .set({ llm_status: 'pending' })
-                .where('id', '=', request.params.id)
-                .execute();
+            await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', request.params.id).execute();
 
             const createdJob = await db
                 .insertInto('processing_jobs')
@@ -829,11 +818,7 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            const llmResult = await db
-                .selectFrom('llm_results')
-                .selectAll()
-                .where('document_id', '=', request.params.id)
-                .executeTakeFirst();
+            const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             if (!llmResult) {
                 return reply.notFound('LLM result not found. Document may not have been processed yet.');
@@ -879,11 +864,7 @@ export default async function (fastify: FastifyInstance) {
             // Clear existing LLM result and set status to pending
             await db.deleteFrom('llm_results').where('document_id', '=', request.params.id).execute();
 
-            await db
-                .updateTable('documents')
-                .set({ llm_status: 'pending' })
-                .where('id', '=', request.params.id)
-                .execute();
+            await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', request.params.id).execute();
 
             // Create processing_job first (UUID required for worker tracking)
             const createdJob = await db
@@ -951,11 +932,7 @@ export default async function (fastify: FastifyInstance) {
                 }
 
                 // Skip if already processed
-                const existingResult = await db
-                    .selectFrom('llm_results')
-                    .select('id')
-                    .where('document_id', '=', documentId)
-                    .executeTakeFirst();
+                const existingResult = await db.selectFrom('llm_results').select('id').where('document_id', '=', documentId).executeTakeFirst();
 
                 if (existingResult) {
                     skipped.push({ document_id: documentId, reason: 'already_processed' });
@@ -972,11 +949,7 @@ export default async function (fastify: FastifyInstance) {
                     continue;
                 }
 
-                await db
-                    .updateTable('documents')
-                    .set({ llm_status: 'pending' })
-                    .where('id', '=', documentId)
-                    .execute();
+                await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', documentId).execute();
 
                 const createdJob = await db
                     .insertInto('processing_jobs')
@@ -1010,16 +983,7 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null):
     // Generate signed URLs for file access
     const fileUrl = await storageService.getFileUrl(doc.file_path);
 
-    // Generate signed URLs for thumbnails if they exist
-    let thumbnailUrls: Document['thumbnail_urls'] = null;
-
-    if (doc.thumbnail_paths) {
-        thumbnailUrls = {
-            sm: await storageService.getFileUrl(doc.thumbnail_paths.sm),
-            md: await storageService.getFileUrl(doc.thumbnail_paths.md),
-            lg: await storageService.getFileUrl(doc.thumbnail_paths.lg),
-        };
-    }
+    const thumbnailUrls = await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
 
     return {
         id: doc.id,

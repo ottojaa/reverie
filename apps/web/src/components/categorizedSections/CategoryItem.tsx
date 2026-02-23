@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -56,9 +57,11 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                         {...listeners}
                     >
                         {/* Collapse chevron */}
-                        <button
+                        <Button
                             type="button"
-                            className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:text-sidebar-foreground"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground"
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -70,7 +73,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                             <motion.div initial={false} animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
                                 <ChevronDown className="size-3.5" />
                             </motion.div>
-                        </button>
+                        </Button>
 
                         {/* Category name - uppercase label style */}
                         <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -78,9 +81,11 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                         </span>
 
                         {/* Add section */}
-                        <button
+                        <Button
                             type="button"
-                            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                             aria-label="Add section"
                             onClick={(e) => {
                                 e.preventDefault();
@@ -90,11 +95,13 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                             onPointerDown={(e) => e.stopPropagation()}
                         >
                             <Plus className="size-3.5" />
-                        </button>
+                        </Button>
                         {/* Actions button */}
-                        <button
+                        <Button
                             type="button"
-                            className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-auto w-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
                             aria-label="Category actions"
                             onClick={(e) => {
                                 e.preventDefault();
@@ -104,7 +111,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                             onPointerDown={(e) => e.stopPropagation()}
                         >
                             <MoreHorizontal className="size-3.5" />
-                        </button>
+                        </Button>
                     </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -130,7 +137,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                         transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
                         className="overflow-hidden"
                     >
-                        <div className="space-y-px pb-1">{children}</div>
+                        <div className="space-y-px pb-0.5">{children}</div>
                     </motion.div>
                 )}
             </AnimatePresence>

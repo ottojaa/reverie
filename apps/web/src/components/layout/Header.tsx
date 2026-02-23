@@ -40,17 +40,18 @@ export function Header({ onMenuClick }: HeaderProps) {
                         </Button>
                     )}
                     {!isSearchPage && (
-                        <button
+                        <Button
                             type="button"
+                            variant="outline"
                             onClick={openSearch}
-                            className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-input bg-card px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-secondary/50 hover:border-border md:max-w-96"
+                            className="relative min-w-0 flex-1 justify-start gap-2.5 px-3.5 py-2 text-sm text-muted-foreground md:max-w-96"
                         >
                             <Search className="size-4 shrink-0" />
                             <span className="truncate">Search documents...</span>
                             <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground md:inline-block">
                                 ⌘K
                             </kbd>
-                        </button>
+                        </Button>
                     )}
                 </div>
 
