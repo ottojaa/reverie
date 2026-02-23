@@ -61,4 +61,5 @@ ENV PYTHON_PATH=/opt/paddleocr-env/bin/python3
 
 EXPOSE 3000
 
+# Create user (in container): docker exec -it reverie-backend sh -c 'cd apps/backend/dist && pnpm run create-user'
 CMD ["node", "apps/backend/dist/main.js"]
