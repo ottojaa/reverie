@@ -7,6 +7,7 @@
 
 import type { OrganizeDocumentPreview, OrganizeOperation } from '@reverie/shared';
 import type { ServerResponse } from 'http';
+import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { streamResponsesAPI, type FunctionTool, type ResponseInputItem } from '../llm/openai.client';
 import { parseQuery } from '../search/query-parser';
@@ -91,7 +92,7 @@ const TOOLS: FunctionTool[] = [
         type: 'function',
         name: 'propose_organization',
         description:
-            'Propose a set of document organization operations for the user to review. Call this once you have found the relevant documents via search_documents and determined appropriate folder destinations. Each operation moves a group of documents to a single target folder.',
+            'Propose a set of document organization operations for the user to review. Call this once you have found the relevant documents via search_documents and determined appropriate folder destinations. Operations can move documents to folders or delete empty folders (e.g. after moving all docs out).',
         parameters: {
             type: 'object',
             properties: {
@@ -102,23 +103,24 @@ const TOOLS: FunctionTool[] = [
                 },
                 operations: {
                     type: 'array',
-                    description: 'List of move operations, each targeting one folder.',
+                    description: 'List of operations: move/create_and_move for document moves, delete_folder for removing empty folders.',
                     items: {
                         type: 'object',
                         properties: {
                             type: {
                                 type: 'string',
-                                enum: ['move', 'create_and_move'],
-                                description: 'Use "move" for existing folders, "create_and_move" when creating a new folder.',
+                                enum: ['move', 'create_and_move', 'delete_folder'],
+                                description:
+                                    'Use "move" for existing folders, "create_and_move" when creating a new folder, "delete_folder" to remove an empty folder (e.g. after moving all docs out).',
                             },
                             document_ids: {
                                 type: 'array',
                                 items: { type: 'string' },
-                                description: 'Array of document UUIDs to move.',
+                                description: 'Array of document UUIDs to move. Required for move/create_and_move, omit for delete_folder.',
                             },
                             target_folder_name: {
                                 type: 'string',
-                                description: 'Name of the target folder (new or existing section name).',
+                                description: 'Name of the target folder (new or existing section name). Required for move/create_and_move.',
                             },
                             target_folder_id: {
                                 type: ['string', 'null'],
@@ -127,27 +129,27 @@ const TOOLS: FunctionTool[] = [
                             target_folder_parent_id: {
                                 type: ['string', 'null'],
                                 description:
-                                    'UUID of an existing parent category when creating a new section. Use when the parent category already exists. Null if creating a new parent category or moving to an existing folder.',
+                                    'UUID of an existing parent category when creating a new section. Null if creating a new parent category or moving to an existing folder.',
                             },
                             target_folder_new_parent_name: {
                                 type: ['string', 'null'],
                                 description:
-                                    'Name for a NEW top-level category to create as the parent. Use when no suitable existing category exists. Set this instead of target_folder_parent_id when you want to create both a new category and a new section inside it.',
+                                    'Name for a NEW top-level category to create as the parent. Set this instead of target_folder_parent_id when you want to create both a new category and a new section inside it.',
                             },
                             is_new: {
                                 type: 'boolean',
-                                description: 'Whether this is a new folder that does not exist yet.',
+                                description: 'Whether this is a new folder that does not exist yet. Required for move/create_and_move.',
+                            },
+                            folder_id: {
+                                type: 'string',
+                                description: 'UUID of the folder to delete. Required when type is "delete_folder".',
+                            },
+                            folder_name: {
+                                type: 'string',
+                                description: 'Name of the folder to delete (for display). Required when type is "delete_folder".',
                             },
                         },
-                        required: [
-                            'type',
-                            'document_ids',
-                            'target_folder_name',
-                            'is_new',
-                            'target_folder_id',
-                            'target_folder_parent_id',
-                            'target_folder_new_parent_name',
-                        ],
+                        required: ['type'],
                         additionalProperties: false,
                     },
                 },
@@ -155,7 +157,7 @@ const TOOLS: FunctionTool[] = [
             required: ['summary', 'operations'],
             additionalProperties: false,
         },
-        strict: true,
+        strict: false, // oneOf not supported; we validate server-side for move vs delete_folder
     },
 ];
 
@@ -168,7 +170,7 @@ interface SearchDocumentsArgs {
 
 interface ListFoldersArgs {}
 
-interface ProposeOperationRaw {
+interface ProposeMoveOperationRaw {
     type: 'move' | 'create_and_move';
     document_ids: string[];
     target_folder_name: string;
@@ -177,6 +179,14 @@ interface ProposeOperationRaw {
     target_folder_new_parent_name?: string | null;
     is_new: boolean;
 }
+
+interface ProposeDeleteFolderOperationRaw {
+    type: 'delete_folder';
+    folder_id: string;
+    folder_name: string;
+}
+
+type ProposeOperationRaw = ProposeMoveOperationRaw | ProposeDeleteFolderOperationRaw;
 
 interface ProposeOrganizationArgs {
     summary: string;
@@ -243,6 +253,46 @@ async function execListFolders(_args: ListFoldersArgs, userId: string): Promise<
     return JSON.stringify({ folders: simplified });
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * LLMs sometimes truncate UUIDs (e.g. drop last char). Resolve invalid IDs by
+ * prefix-matching against user's documents. Returns deduplicated valid UUIDs.
+ */
+async function resolveDocumentIds(rawIds: string[], userId: string): Promise<string[]> {
+    const valid: string[] = [];
+    const toResolve: string[] = [];
+
+    for (const id of rawIds) {
+        const trimmed = id.trim();
+
+        if (UUID_REGEX.test(trimmed)) {
+            valid.push(trimmed);
+        } else if (trimmed.length >= 32 && /^[0-9a-f-]+$/i.test(trimmed)) {
+            toResolve.push(trimmed);
+        }
+    }
+
+    if (toResolve.length === 0) return [...new Set(valid)];
+
+    const resolved: string[] = [];
+
+    for (const prefix of toResolve) {
+        const rows = await db
+            .selectFrom('documents')
+            .select('id')
+            .where('user_id', '=', userId)
+            .where(sql<SqlBool>`id::text like concat(${prefix}, '%')`)
+            .execute();
+
+        const first = rows[0];
+
+        if (rows.length === 1 && first) resolved.push(first.id);
+    }
+
+    return [...new Set([...valid, ...resolved])];
+}
+
 async function buildDocumentPreviews(documentIds: string[], userId: string): Promise<OrganizeDocumentPreview[]> {
     if (documentIds.length === 0) return [];
 
@@ -283,6 +333,8 @@ Available tools:
 - list_folders: See the current folder structure
 - propose_organization: Present a structured organization plan to the user
 
+CRITICAL - You MUST call propose_organization to present any organization plan. Never describe a plan in text alone—the user cannot confirm or execute without the proposal panel appearing on the right. If you have document IDs and a plan, call propose_organization immediately.
+
 How documents are indexed (important for forming good queries):
 - Photos: location (city, country) and taken date come from EXIF metadata and are plain-text searchable. Use "type:photo spain date:2025" to find Spain photos from 2025 - plain text for location, date: filter for year.
 - Other documents: may have AI-generated tags, categories, and summaries. Use category:, tag:, and plain text for content search.
@@ -292,13 +344,17 @@ Guidelines:
   Good photo query example: "category:photo spain date:2025"
   Good document query example: "category:receipt uploaded:2024"
 - When the user asks for help or is vague, call list_folders and search_documents for unorganized documents, then describe what you found and ask what they'd like to do.
+- When presenting multiple options, always number them (1, 2, 3, etc.). Accept short replies like "1", "2", "option 3" as selecting that option—interpret and proceed accordingly.
 - Keep text responses concise and friendly. Don't explain your tool usage, just focus on helping.
 - If the user's message makes no sense or is off-topic, politely explain what you can help with and give 2-3 examples.
 - Only call propose_organization when you have found the actual document IDs via search_documents.
 - Documents are moved into "section" type folders. Sections live inside "category" folders (two-level hierarchy).
 - If a suitable section doesn't exist, use create_and_move with target_folder_parent_id set to an existing category's UUID.
 - If no suitable category exists either, use create_and_move with target_folder_new_parent_name set to a new category name AND target_folder_parent_id null. This creates both a new top-level category and the section inside it.
-- Prefer creating new categories when the user's content clearly belongs to a new top-level grouping (e.g. "Trips", "Work", "Family"). Don't force documents into irrelevant existing categories.`;
+- Prefer creating new categories when the user's content clearly belongs to a new top-level grouping (e.g. "Trips", "Work", "Family"). Don't force documents into irrelevant existing categories.
+- When moving all documents out of a folder, you can include a delete_folder operation to remove the now-empty folder. Use the folder's UUID and name from list_folders.
+
+After proposing: Tell the user to review the changes in the right panel (OrganizePreview) and use the Confirm or Discard button there. Do NOT ask "ready to apply?" or similar—that is confusing. The user must use the panel's Confirm/Discard buttons. Never claim you have applied changes—only the user can do that by clicking Confirm.`;
 
 export async function runOrganizeChat(options: OrganizeChatOptions): Promise<void> {
     const { message, responseId, userId, res } = options;
@@ -405,24 +461,39 @@ export async function runOrganizeChat(options: OrganizeChatOptions): Promise<voi
             if (tc.name === 'propose_organization') {
                 // Parse and emit the proposal as a structured SSE event
                 const args = JSON.parse(tc.argumentsJson) as ProposeOrganizationArgs;
-                const operations: OrganizeOperation[] = await Promise.all(
+                const rawOps = await Promise.all(
                     args.operations.map(async (op) => {
-                        const previews = await buildDocumentPreviews(op.document_ids, userId);
+                        if (op.type === 'delete_folder') {
+                            return {
+                                type: 'delete_folder' as const,
+                                folder_id: op.folder_id,
+                                folder_name: op.folder_name,
+                            };
+                        }
+
+                        // Move or create_and_move
+                        const documentIds = await resolveDocumentIds(op.document_ids ?? [], userId);
+
+                        if (documentIds.length === 0) return null;
+
+                        const previews = await buildDocumentPreviews(documentIds, userId);
 
                         return {
                             type: op.type,
-                            document_ids: op.document_ids,
+                            document_ids: documentIds,
                             document_previews: previews,
                             target_folder: {
-                                id: op.target_folder_id ?? undefined,
+                                ...(op.target_folder_id != null && { id: op.target_folder_id }),
                                 name: op.target_folder_name,
-                                parent_id: op.target_folder_parent_id ?? undefined,
-                                new_parent_name: op.target_folder_new_parent_name ?? undefined,
+                                ...(op.target_folder_parent_id != null && { parent_id: op.target_folder_parent_id }),
+                                ...(op.target_folder_new_parent_name != null && { new_parent_name: op.target_folder_new_parent_name }),
                                 is_new: op.is_new,
                             },
                         };
                     }),
                 );
+
+                const operations = rawOps.filter((o) => o !== null) as OrganizeOperation[];
 
                 writeSse(res, 'proposal', {
                     summary: args.summary,
@@ -469,44 +540,78 @@ export interface ExecuteOrganizeOptions {
 export interface ExecuteOrganizeResult {
     moved_count: number;
     folders_created: number;
+    folders_deleted: number;
+}
+
+function isMoveOperation(op: OrganizeOperation): op is Extract<OrganizeOperation, { type: 'move' | 'create_and_move' }> {
+    return op.type === 'move' || op.type === 'create_and_move';
 }
 
 export async function executeOrganize(options: ExecuteOrganizeOptions): Promise<ExecuteOrganizeResult> {
     const { operations, userId } = options;
-    let movedCount = 0;
-    let foldersCreated = 0;
+    const moveOps = operations.filter(isMoveOperation);
+    const deleteOps = operations.filter((op): op is Extract<OrganizeOperation, { type: 'delete_folder' }> => op.type === 'delete_folder');
 
-    for (const op of operations) {
-        let folderId = op.target_folder.id;
+    return db.transaction().execute(async (trx) => {
+        let movedCount = 0;
+        let foldersCreated = 0;
+        let foldersDeleted = 0;
 
-        // Create new folder if needed
-        if (op.target_folder.is_new || !folderId) {
-            let parentId = op.target_folder.parent_id;
+        const resolveFolderId = async (op: Extract<OrganizeOperation, { type: 'move' | 'create_and_move' }>): Promise<string | null> => {
+            let folderId = op.target_folder.id;
 
-            // If a new parent category is requested, create it first
+            if (folderId) return folderId;
+
+            if (!op.target_folder.is_new) return null;
+
+            let path: string;
+
             if (op.target_folder.new_parent_name) {
-                const newCategory = await folderService.createFolder(userId, op.target_folder.new_parent_name, undefined, undefined, null, 'category');
-                parentId = newCategory.id;
-                foldersCreated++;
+                path = `/${op.target_folder.new_parent_name}/${op.target_folder.name}`;
+            } else if (op.target_folder.parent_id) {
+                const parent = await folderService.getFolder(op.target_folder.parent_id, userId, trx);
+
+                if (!parent) return null;
+
+                path = `${parent.path}/${op.target_folder.name}`;
+            } else {
+                return null;
             }
 
-            const newFolder = await folderService.createFolder(userId, op.target_folder.name, parentId, undefined, null, 'section');
-            folderId = newFolder.id;
-            foldersCreated++;
+            const { folder, createdCount } = await folderService.getOrCreateFolderByPath(path, userId, trx);
+
+            foldersCreated += createdCount;
+
+            return folder.id;
+        };
+
+        // Process moves first so folders we intend to delete can become empty.
+        // If a folder still has docs (e.g. user removed some moves from the proposal), deleteEmptyFolder throws and we skip.
+        for (const op of moveOps) {
+            const folderId = await resolveFolderId(op);
+
+            if (!folderId || op.document_ids.length === 0) continue;
+
+            const result = await trx
+                .updateTable('documents')
+                .set({ folder_id: folderId, updated_at: new Date() })
+                .where('id', 'in', op.document_ids)
+                .where('user_id', '=', userId)
+                .executeTakeFirst();
+
+            movedCount += Number(result.numUpdatedRows ?? 0);
         }
 
-        if (!folderId || op.document_ids.length === 0) continue;
+        // Process deletes (folders should now be empty after moves)
+        for (const op of deleteOps) {
+            try {
+                await folderService.deleteEmptyFolder(op.folder_id, userId, trx);
+                foldersDeleted++;
+            } catch {
+                // Skip if folder is not empty (e.g. user removed some docs from proposal)
+            }
+        }
 
-        // Move documents to the target folder
-        const result = await db
-            .updateTable('documents')
-            .set({ folder_id: folderId, updated_at: new Date() })
-            .where('id', 'in', op.document_ids)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
-
-        movedCount += Number(result.numUpdatedRows ?? 0);
-    }
-
-    return { moved_count: movedCount, folders_created: foldersCreated };
+        return { moved_count: movedCount, folders_created: foldersCreated, folders_deleted: foldersDeleted };
+    });
 }

@@ -37,12 +37,23 @@ export const OrganizeTargetFolderSchema = z.object({
 
 export type OrganizeTargetFolder = z.infer<typeof OrganizeTargetFolderSchema>;
 
-export const OrganizeOperationSchema = z.object({
+export const OrganizeMoveOperationSchema = z.object({
     type: z.enum(['move', 'create_and_move']),
     document_ids: z.array(UuidSchema).min(1),
     document_previews: z.array(OrganizeDocumentPreviewSchema),
     target_folder: OrganizeTargetFolderSchema,
 });
+
+export const OrganizeDeleteFolderOperationSchema = z.object({
+    type: z.literal('delete_folder'),
+    folder_id: UuidSchema,
+    folder_name: z.string(),
+});
+
+export const OrganizeOperationSchema = z.discriminatedUnion('type', [
+    OrganizeMoveOperationSchema,
+    OrganizeDeleteFolderOperationSchema,
+]);
 
 export type OrganizeOperation = z.infer<typeof OrganizeOperationSchema>;
 
@@ -82,6 +93,7 @@ export type OrganizeExecuteRequest = z.infer<typeof OrganizeExecuteRequestSchema
 export const OrganizeExecuteResponseSchema = z.object({
     moved_count: z.number(),
     folders_created: z.number(),
+    folders_deleted: z.number(),
 });
 
 export type OrganizeExecuteResponse = z.infer<typeof OrganizeExecuteResponseSchema>;

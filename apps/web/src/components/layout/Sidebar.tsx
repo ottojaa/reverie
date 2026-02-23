@@ -1,7 +1,7 @@
-import { Button } from '@/components/ui/button';
 import { CategorizedSections } from '@/components/categorizedSections';
-import { CreateSectionModal, type FolderMode } from '@/components/sections';
 import { useOrganize } from '@/components/layout/Layout';
+import { CreateSectionModal, type FolderMode } from '@/components/sections';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
@@ -131,19 +131,6 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     All Documents
                 </Link>
 
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => { openOrganize(); onClose?.(); }}
-                    className="mb-2 w-full justify-start gap-2 px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                >
-                    <Sparkles className="size-3.5 text-primary" />
-                    Organize
-                    <span className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-medium tracking-wide opacity-60">
-                        ⌘⇧O
-                    </span>
-                </Button>
-
                 {isLoading ? (
                     <div className="space-y-0.5">
                         {[0, 1, 2, 3, 4].map((i) => (
@@ -175,6 +162,19 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 >
                     <span className="text-base">+</span>
                     New category
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                        openOrganize();
+                        onClose?.();
+                    }}
+                    className="mb-2 w-full justify-start gap-2 px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                >
+                    <Sparkles className="size-3.5 text-primary" />
+                    Organize
+                    <span className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-medium tracking-wide opacity-60">⌘⇧O</span>
                 </Button>
             </nav>
 

@@ -1,12 +1,26 @@
 import { ConflictError, NotFoundError } from '@reverie/shared';
+import type { Kysely } from 'kysely';
+import type { Database } from '../db/schema';
 import { db } from '../db/kysely';
 import type { Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
 
+type DbOrTrx = Kysely<Database>;
+
 export class FolderService {
     /**
-     * Create a new folder (scoped to user)
+     * Create a new folder (scoped to user).
+     * Pass trx for transactional use (e.g. from organize execute).
      */
-    async createFolder(userId: string, name: string, parentId?: string, description?: string, emoji?: string | null, type?: FolderType): Promise<Folder> {
+    async createFolder(
+        userId: string,
+        name: string,
+        parentId?: string,
+        description?: string,
+        emoji?: string | null,
+        type?: FolderType,
+        trx?: DbOrTrx,
+    ): Promise<Folder> {
+        const dbToUse = trx ?? db;
         const folderType: FolderType = type ?? 'section';
 
         // Enforce two-level hierarchy
@@ -19,7 +33,7 @@ export class FolderService {
         }
 
         if (folderType === 'section' && parentId) {
-            const parent = await this.getFolder(parentId, userId);
+            const parent = await this.getFolder(parentId, userId, trx);
 
             if (!parent) throw new NotFoundError('Folder', parentId);
 
@@ -32,7 +46,7 @@ export class FolderService {
         let path = `/${name}`;
 
         if (parentId) {
-            const parent = await this.getFolder(parentId, userId);
+            const parent = await this.getFolder(parentId, userId, trx);
 
             if (!parent) {
                 throw new NotFoundError('Folder', parentId);
@@ -42,16 +56,16 @@ export class FolderService {
         }
 
         // Check for existing folder with same path (for this user)
-        const existing = await db.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
+        const existing = await dbToUse.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
 
         if (existing) {
             throw new ConflictError(`Folder already exists at path: ${path}`);
         }
 
         // Next sort_order among siblings
-        const maxOrder = await db
+        const maxOrder = await dbToUse
             .selectFrom('folders')
-            .select(db.fn.max('sort_order').as('max_order'))
+            .select(dbToUse.fn.max('sort_order').as('max_order'))
             .where('user_id', '=', userId)
             .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
             .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
@@ -69,21 +83,61 @@ export class FolderService {
             type: folderType,
         };
 
-        return db.insertInto('folders').values(newFolder).returningAll().executeTakeFirstOrThrow();
+        return dbToUse.insertInto('folders').values(newFolder).returningAll().executeTakeFirstOrThrow();
     }
 
     /**
-     * Get folder by ID (scoped to user)
+     * Get folder by ID (scoped to user).
+     * Pass trx for transactional use.
      */
-    async getFolder(id: string, userId: string): Promise<Folder | undefined> {
-        return db.selectFrom('folders').selectAll().where('id', '=', id).where('user_id', '=', userId).executeTakeFirst();
+    async getFolder(id: string, userId: string, trx?: DbOrTrx): Promise<Folder | undefined> {
+        const dbToUse = trx ?? db;
+
+        return dbToUse.selectFrom('folders').selectAll().where('id', '=', id).where('user_id', '=', userId).executeTakeFirst();
     }
 
     /**
-     * Get folder by path (scoped to user)
+     * Get folder by path (scoped to user).
+     * Pass trx for transactional use.
      */
-    async getFolderByPath(path: string, userId: string): Promise<Folder | undefined> {
-        return db.selectFrom('folders').selectAll().where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
+    async getFolderByPath(path: string, userId: string, trx?: DbOrTrx): Promise<Folder | undefined> {
+        const dbToUse = trx ?? db;
+
+        return dbToUse.selectFrom('folders').selectAll().where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
+    }
+
+    /**
+     * Get folder by path, or create it if it doesn't exist.
+     * For path /X creates category X; for /X/Y creates section Y under category X (creating X if needed).
+     * Pass trx for transactional use.
+     * Returns { folder, createdCount } so callers can count creations (includes recursive parent creations).
+     */
+    async getOrCreateFolderByPath(path: string, userId: string, trx?: DbOrTrx): Promise<{ folder: Folder; createdCount: number }> {
+        const existing = await this.getFolderByPath(path, userId, trx);
+
+        if (existing) return { folder: existing, createdCount: 0 };
+
+        const segments = path.split('/').filter(Boolean);
+
+        if (segments.length === 0) {
+            throw new ConflictError('Invalid path');
+        }
+
+        const name = segments[segments.length - 1]!;
+        const isCategory = segments.length === 1;
+        let parentId: string | null = null;
+        let parentCreatedCount = 0;
+
+        if (!isCategory) {
+            const parentPath = '/' + segments.slice(0, -1).join('/');
+            const parentResult = await this.getOrCreateFolderByPath(parentPath, userId, trx);
+            parentId = parentResult.folder.id;
+            parentCreatedCount = parentResult.createdCount;
+        }
+
+        const folder = await this.createFolder(userId, name, parentId ?? undefined, undefined, null, isCategory ? 'category' : 'section', trx);
+
+        return { folder, createdCount: parentCreatedCount + 1 };
     }
 
     /**
@@ -308,17 +362,57 @@ export class FolderService {
     }
 
     /**
-     * Delete a folder (scoped to user)
+     * Delete a folder (scoped to user).
+     * Pass trx for transactional use.
      */
-    async deleteFolder(id: string, userId: string): Promise<void> {
-        const folder = await this.getFolder(id, userId);
+    async deleteFolder(id: string, userId: string, trx?: DbOrTrx): Promise<void> {
+        const dbToUse = trx ?? db;
+        const folder = await this.getFolder(id, userId, trx);
 
         if (!folder) {
             throw new NotFoundError('Folder', id);
         }
 
         // Cascade delete handled by FK constraint
-        await db.deleteFrom('folders').where('id', '=', id).where('user_id', '=', userId).execute();
+        await dbToUse.deleteFrom('folders').where('id', '=', id).where('user_id', '=', userId).execute();
+    }
+
+    /**
+     * Delete a folder only if it is empty (no documents, no child folders).
+     * Throws ConflictError if folder has content.
+     * Pass trx for transactional use.
+     */
+    async deleteEmptyFolder(id: string, userId: string, trx?: DbOrTrx): Promise<void> {
+        const dbToUse = trx ?? db;
+        const folder = await this.getFolder(id, userId, trx);
+
+        if (!folder) {
+            throw new NotFoundError('Folder', id);
+        }
+
+        const docCount = await dbToUse
+            .selectFrom('documents')
+            .select(dbToUse.fn.countAll().as('count'))
+            .where('folder_id', '=', id)
+            .where('user_id', '=', userId)
+            .executeTakeFirst();
+
+        if (Number(docCount?.count ?? 0) > 0) {
+            throw new ConflictError('Cannot delete folder: it contains documents');
+        }
+
+        const childCount = await dbToUse
+            .selectFrom('folders')
+            .select(dbToUse.fn.countAll().as('count'))
+            .where('parent_id', '=', id)
+            .where('user_id', '=', userId)
+            .executeTakeFirst();
+
+        if (Number(childCount?.count ?? 0) > 0) {
+            throw new ConflictError('Cannot delete folder: it contains subfolders');
+        }
+
+        await this.deleteFolder(id, userId, trx);
     }
 }
 
