@@ -1,4 +1,3 @@
-
 /**
  * Format byte count for human display.
  */
@@ -9,7 +8,9 @@ export function formatFileSize(bytes: number): string {
 
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+
+    return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`;
 }
 
 /**
@@ -42,7 +43,10 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 /**
  * Get pre-signed thumbnail URL for a document.
  */
-export function getThumbnailUrl<T extends { thumbnail_urls?: { sm: string; md: string; lg: string } | null }>(document: T, size: 'sm' | 'md' | 'lg' = 'md'): string | null {
+export function getThumbnailUrl<T extends { thumbnail_urls?: { sm: string; md: string; lg: string } | null }>(
+    document: T,
+    size: 'sm' | 'md' | 'lg' = 'md',
+): string | null {
     const url = document.thumbnail_urls?.[size];
 
     if (!url) return null;
