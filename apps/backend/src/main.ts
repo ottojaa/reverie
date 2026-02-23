@@ -1,4 +1,8 @@
-import 'dotenv/config';
+// In production, env vars come from the container (docker-compose). No dotenv needed.
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv/config');
+}
+
 import Fastify from 'fastify';
 import { createServer } from 'http';
 import { app } from './app/app';

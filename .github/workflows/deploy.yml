@@ -11,56 +11,15 @@ concurrency:
 
 jobs:
     deploy:
-        runs-on: self-hosted
+        runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Load production env
-              run: cp /opt/reverie/.env.production .env.production
-
-            # Build the full backend image (runtime stage with PaddleOCR).
-            # Docker layer cache means the expensive Python/pip layer is reused
-            # across deploys as long as requirements.txt doesn't change.
-            - name: Build backend image
-              run: |
-                  docker compose -f docker-compose.prod.yml \
-                      --env-file .env.production \
-                      build backend
-
-            # Extract the web SPA from the builder stage (already cached from above).
-            # Separate `docker build --target builder` hits the layer cache — no
-            # rebuild of pnpm install or TypeScript compilation happens again.
-            - name: Extract web dist
-              run: |
-                  docker build \
-                      --target builder \
-                      --build-arg VITE_API_URL=https://api.reverieapp.dev \
-                      -t reverie-builder \
-                      .
-                  cid=$(docker create reverie-builder)
-                  sudo mkdir -p /opt/reverie/web
-                  sudo rm -rf /opt/reverie/web/*
-                  sudo docker cp "$cid:/app/apps/web/dist/." /opt/reverie/web/
-                  docker rm "$cid"
-                  docker rmi reverie-builder
-
-            # Recreate containers that use the newly built image, leave others untouched
-            - name: Deploy containers
-              run: |
-                  docker compose -f docker-compose.prod.yml \
-                      --env-file .env.production \
-                      up -d
-
-            # Run pending migrations against the live database inside the container
-            - name: Run migrations
-              run: |
-                  docker compose -f docker-compose.prod.yml \
-                      --env-file .env.production \
-                      exec -T backend \
-                      node apps/backend/dist/db/migrate.js
-
-            # Remove old Docker images to keep disk usage in check
-            - name: Prune old images
-              run: docker image prune -f
+            - name: Deploy via SSH
+              uses: appleboy/ssh-action@v1.0.3
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  username: ${{ secrets.SSH_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.SSH_PORT }}
+                  script: |
+                      cd /opt/reverie && git pull origin main && bash scripts/deploy.sh

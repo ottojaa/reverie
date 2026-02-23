@@ -16,27 +16,23 @@ RUN pnpm install --frozen-lockfile
 # Copy all source
 COPY . .
 
-# 1. Build shared lib (backend + web both depend on it)
-RUN pnpm nx run @reverie/shared:build
-
-# 2. Build backend in production mode, then prune to a standalone dist
-#    prune generates: dist/package.json, dist/pnpm-lock.yaml, dist/workspace_modules/
-RUN pnpm nx run @reverie/backend:build:production
-RUN pnpm nx run @reverie/backend:prune
-
-# 3. Install production-only node_modules inside the pruned dist
-RUN cd apps/backend/dist && pnpm install --frozen-lockfile --prod
-
-# 4. Build web SPA (VITE_API_URL baked in at build time)
+# 1. Build shared, backend, and web in parallel (nx respects dependency graph)
 ARG VITE_API_URL=https://api.reverieapp.dev
 ENV VITE_API_URL=$VITE_API_URL
-RUN pnpm nx run @reverie/web:build:production
+ENV CI=true
+RUN pnpm nx run-many -t build --configuration=production
+
+# 2. Prune backend to standalone dist (package.json + lockfile + workspace_modules)
+RUN pnpm nx run @reverie/backend:prune
 
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
 # Minimal Node.js image with Python + PaddleOCR for the OCR subprocess.
 FROM node:22-slim AS runtime
 WORKDIR /app
+
+# Install deps in runtime — no pnpm-workspace here, so pnpm creates local node_modules
+RUN npm install -g pnpm
 
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -51,8 +47,9 @@ COPY apps/backend/ocr_service/requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/paddleocr-env && \
     /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Copy pruned backend dist (JS files + node_modules + workspace_modules)
+# Copy pruned backend dist (JS, package.json, lockfile, workspace_modules)
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+RUN cd apps/backend/dist && pnpm install --frozen-lockfile --prod
 
 # Copy OCR runner script.
 # Must be at apps/backend/ocr_service/ relative to WORKDIR (/app) because
