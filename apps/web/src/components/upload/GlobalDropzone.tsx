@@ -1,3 +1,4 @@
+import { Input } from '@/components/ui/input';
 import { useUpload } from '@/lib/upload';
 import { FileUp } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -29,7 +30,7 @@ export function GlobalDropzone({ children }: GlobalDropzoneProps) {
 
     return (
         <div {...getRootProps()} className="relative flex flex-1 flex-col overflow-hidden">
-            <input {...getInputProps()} />
+            <Input {...getInputProps()} className="hidden" />
 
             <AnimatePresence>
                 {isDragActive && (

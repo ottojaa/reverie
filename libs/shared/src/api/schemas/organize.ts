@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema } from './common.js';
+import { ThumbnailUrlsSchema } from './documents.js';
 
 // ── SSE Event Types ─────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ export const OrganizeDeltaEventSchema = z.object({
 export const OrganizeDocumentPreviewSchema = z.object({
     id: UuidSchema,
     display_name: z.string(),
-    thumbnail_url: z.string().nullable(),
+    thumbnail_urls: ThumbnailUrlsSchema.nullable(),
     mime_type: z.string(),
 });
 

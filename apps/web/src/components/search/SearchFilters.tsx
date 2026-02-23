@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { formatFilterChip } from '@reverie/shared';
@@ -120,9 +121,9 @@ export const ActiveFilters = memo(function ActiveFilters({ query, onRemoveFilter
                 <FilterChip key={filter.label} filter={filter} onRemove={() => onRemoveFilter(filter)} />
             ))}
             {filters.length > 1 && (
-                <button type="button" onClick={onClearAll} className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+                <Button type="button" variant="ghost" size="sm" onClick={onClearAll} className="h-auto py-0 text-xs text-muted-foreground">
                     Clear all
-                </button>
+                </Button>
             )}
         </div>
     );
@@ -143,21 +144,23 @@ function FilterChip({ filter, onRemove }: { filter: ActiveFilter; onRemove: () =
         <Popover open={open} onOpenChange={setOpen}>
             <div className={cn('inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium', colors.chip)}>
                 <PopoverTrigger asChild>
-                    <button type="button" className="inline-flex items-center gap-1 transition-opacity hover:opacity-80">
+                    <Button type="button" variant="ghost" size="sm" className="h-auto gap-1 rounded-sm px-1 py-0.5 opacity-100 hover:opacity-80">
                         <Icon className={cn('size-3', colors.icon)} />
                         <span>{humanLabel}</span>
-                    </button>
+                    </Button>
                 </PopoverTrigger>
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={(e) => {
                         e.stopPropagation();
                         onRemove();
                     }}
-                    className="ml-0.5 rounded-sm p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                    className="ml-0.5 size-5 rounded-sm p-0"
                 >
                     <X className="size-2.5" />
-                </button>
+                </Button>
             </div>
             <PopoverContent align="start" sideOffset={4} className="w-48 p-2 text-sm">
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">

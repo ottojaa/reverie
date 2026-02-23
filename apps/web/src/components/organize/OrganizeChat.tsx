@@ -1,5 +1,7 @@
 import { useOrganizeChat, type ChatMessage } from '@/lib/api/organize';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
@@ -176,7 +178,7 @@ export function OrganizeChat({ chatState }: OrganizeChatProps) {
             {/* Input area */}
             <div className="border-t border-border p-3">
                 <div className="flex items-end gap-2 rounded-2xl border border-input bg-background px-3 py-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring transition-all">
-                    <textarea
+                    <Textarea
                         ref={inputRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -184,7 +186,7 @@ export function OrganizeChat({ chatState }: OrganizeChatProps) {
                         placeholder="Describe what to organize..."
                         rows={1}
                         disabled={isStreaming}
-                        className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-32 leading-relaxed"
+                        className="flex-1 min-h-0 resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 disabled:opacity-50 max-h-32 leading-relaxed"
                         style={{ overflowY: input.split('\n').length > 4 ? 'auto' : 'hidden' }}
                         onInput={(e) => {
                             const el = e.currentTarget;
@@ -192,19 +194,18 @@ export function OrganizeChat({ chatState }: OrganizeChatProps) {
                             el.style.height = `${el.scrollHeight}px`;
                         }}
                     />
-                    <button
+                    <Button
                         type="button"
+                        size="icon"
                         onClick={handleSend}
                         disabled={!input.trim() || isStreaming}
                         className={cn(
-                            'flex size-7 shrink-0 items-center justify-center rounded-full transition-all',
-                            input.trim() && !isStreaming
-                                ? 'bg-primary text-primary-foreground hover:opacity-90'
-                                : 'bg-muted text-muted-foreground cursor-not-allowed',
+                            'size-7 shrink-0 rounded-full',
+                            input.trim() && !isStreaming ? '' : 'bg-muted text-muted-foreground',
                         )}
                     >
                         {isStreaming ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
-                    </button>
+                    </Button>
                 </div>
                 <p className="mt-1.5 text-center text-[10px] text-muted-foreground/60">Powered by AI · Review before confirming</p>
             </div>

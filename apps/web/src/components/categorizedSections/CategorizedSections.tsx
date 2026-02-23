@@ -1,4 +1,5 @@
 import type { SortableTreeHandlers } from '@/components/layout/Layout';
+import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { checkDuplicates } from '@/lib/api/documents';
 import { useAuthenticatedFetch } from '@/lib/auth';
@@ -390,14 +391,15 @@ export function CategorizedSections({
                                     />
                                 ))}
                                 {category.children.length === 0 && !collapsed[category.id] && (
-                                    <button
+                                    <Button
                                         type="button"
-                                        className="flex w-full items-center gap-2 rounded-md px-6 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                        variant="ghost"
+                                        className="h-auto w-full opacity-50 justify-start gap-2 px-6 py-1.5 ml-3 text-left text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                                         onClick={() => onAddSection?.(category)}
                                     >
                                         <Plus className="size-4 shrink-0" />
                                         Add section
-                                    </button>
+                                    </Button>
                                 )}
                             </SortableContext>
                         </CategoryItem>

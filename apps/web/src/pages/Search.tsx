@@ -3,6 +3,7 @@ import { ActiveFilters } from '@/components/search/SearchFilters';
 import { SearchResultItem } from '@/components/search/SearchResultItem';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteSearch } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
@@ -199,22 +200,24 @@ export function SearchPage() {
                     {/* Row 1: Search input (full width) */}
                     <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
+                        <Input
                             ref={inputRef}
                             type="text"
                             value={localQuery}
                             onChange={(e) => handleQueryChange(e.target.value)}
                             placeholder="Search documents..."
-                            className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-9 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:ring-1 focus:ring-ring/30 focus:outline-none"
+                            className="h-11 rounded-lg pl-10 pr-9"
                         />
                         {localQuery && (
-                            <button
+                            <Button
                                 type="button"
+                                variant="ghost"
+                                size="icon"
                                 onClick={handleClearQuery}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 size-8"
                             >
                                 <X className="size-3.5" />
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -366,15 +369,16 @@ function NoQueryState({ onFilter }: { onFilter: (query: string) => void }) {
             <p className="mb-3 text-xs font-medium text-muted-foreground">Try one of these quick filters:</p>
             <div className="flex flex-wrap justify-center gap-2">
                 {QUICK_FILTERS.map((filter) => (
-                    <button
+                    <Button
                         key={filter.query}
                         type="button"
+                        variant="outline"
                         onClick={() => onFilter(filter.query)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary hover:border-border"
+                        className="gap-2"
                     >
                         <filter.icon className="size-4 text-muted-foreground" />
                         {filter.label}
-                    </button>
+                    </Button>
                 ))}
             </div>
         </div>

@@ -3,6 +3,7 @@ import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
+import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { generateFacets } from './facets';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
 import { buildPrefixTsQuery, buildSearchQuery, type SearchQueryOptions } from './query-builder';
@@ -184,9 +185,8 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
             // Get file extension from mime type
             const format = mimeToExtension(row.mime_type);
 
-            // Build signed thumbnail URL
             const thumbnailPaths = row.thumbnail_paths as { sm: string; md: string; lg: string } | null;
-            const thumbnailUrl = thumbnailPaths ? await storageService.getFileUrl(thumbnailPaths.md) : null;
+            const thumbnailUrls = await resolveThumbnailUrls(storageService, thumbnailPaths);
 
             const displayName = computeDisplayName(row);
 
@@ -203,7 +203,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
                 format,
                 snippet,
                 has_text: row.has_meaningful_text,
-                thumbnail_url: thumbnailUrl,
+                thumbnail_urls: thumbnailUrls,
                 blurhash: row.thumbnail_blurhash,
                 size_bytes: Number(row.size_bytes),
                 tags: tagMap.get(row.id) ?? [],

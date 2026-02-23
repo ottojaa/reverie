@@ -1,3 +1,4 @@
+import { Input } from '@/components/ui/input';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { Upload } from 'lucide-react';
@@ -33,7 +34,7 @@ export function UploadFAB() {
 
     return (
         <>
-            <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileChange} tabIndex={-1} aria-hidden />
+            <Input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileChange} tabIndex={-1} aria-hidden />
 
             <motion.button
                 type="button"

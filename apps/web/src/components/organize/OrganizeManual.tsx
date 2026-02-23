@@ -1,31 +1,58 @@
 import { SearchFilterPopover } from '@/components/search/SearchFilterPopover';
+import { SearchResultItem } from '@/components/search/SearchResultItem';
 import { Button } from '@/components/ui/button';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useExecuteOrganize } from '@/lib/api/organize';
 import { useInfiniteSearch } from '@/lib/api/search';
+import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
-import type { FolderWithChildren, OrganizeOperation, OrganizeProposalEvent, SearchResult } from '@reverie/shared';
-import { Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, Search, X } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import type { FolderWithChildren, OrganizeOperation, SearchResult } from '@reverie/shared';
+import { Check, ChevronDown, FolderPlus, Search, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { SectionIcon } from '../ui/SectionIcon';
 
-interface OrganizeManualProps {
-    onProposal: (proposal: OrganizeProposalEvent) => void;
+const NEW_FOLDER_SENTINEL = '__new__';
+
+function useIsDesktop() {
+    const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches);
+
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 768px)');
+
+        const handler = () => setIsDesktop(mq.matches);
+
+        mq.addEventListener('change', handler);
+
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+
+    return isDesktop;
 }
 
-function FolderPicker({
+function FolderPickerPanel({
     sections,
     selectedId,
+    selectedName,
     onSelect,
+    onConfirm,
+    isPending,
 }: {
     sections: FolderWithChildren[];
     selectedId: string | null;
+    selectedName: string;
     onSelect: (id: string, name: string, parentId?: string) => void;
+    onConfirm: () => void;
+    isPending?: boolean;
 }) {
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(sections.map((s) => s.id)));
     const [showNewForm, setShowNewForm] = useState(false);
     const [newName, setNewName] = useState('');
     const [newParentId, setNewParentId] = useState<string | null>(sections[0]?.id ?? null);
-    const NEW_FOLDER_SENTINEL = '__new__';
 
     const toggleCategory = (id: string) => {
         setExpandedCategories((prev) => {
@@ -46,164 +73,286 @@ function FolderPicker({
         setNewName('');
     };
 
+    const canConfirm = selectedId !== null && selectedName.trim().length > 0;
+
     return (
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Move to folder</div>
-            <div className="max-h-48 overflow-y-auto">
-                {sections.map((category) => (
-                    <div key={category.id}>
-                        <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-secondary transition-colors"
-                            onClick={() => toggleCategory(category.id)}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="space-y-1">
+                    {sections.map((category) => (
+                        <div key={category.id} className="rounded-md">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="group w-full justify-start gap-1.5 px-2 py-1.5 text-left hover:bg-secondary/80"
+                                onClick={() => toggleCategory(category.id)}
+                            >
+                                <span className="flex shrink-0 items-center justify-center text-muted-foreground">
+                                    <motion.span
+                                        initial={false}
+                                        animate={{ rotate: expandedCategories.has(category.id) ? 0 : -90 }}
+                                        transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                                    >
+                                        <ChevronDown className="size-3.5" />
+                                    </motion.span>
+                                </span>
+                                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {category.name}
+                                </span>
+                            </Button>
+                            <AnimatePresence initial={false}>
+                                {expandedCategories.has(category.id) && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="space-y-px pb-1">
+                                            {category.children.map((section) => (
+                                                <Button
+                                                    key={section.id}
+                                                    type="button"
+                                                    variant="ghost"
+                                                    className={cn(
+                                                        'w-full justify-start gap-2 px-2 py-1.5 pl-6 text-left text-sm hover:bg-secondary/80',
+                                                        selectedId === section.id
+                                                            ? 'border-l-2 border-l-primary bg-primary/8 text-primary'
+                                                            : 'border-l-2 border-l-transparent',
+                                                    )}
+                                                    onClick={() => onSelect(section.id, section.name, category.id)}
+                                                >
+                                                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                                                        <SectionIcon value={section.emoji} className="shrink-0" />
+                                                        <span className="min-w-0 truncate font-medium">{section.name}</span>
+                                                    </div>
+                                                    {selectedId === section.id && <Check className="size-4 shrink-0 text-primary" />}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    ))}
+                </div>
+
+                {/* New folder */}
+                <div className="mt-2 border-t border-border pt-2">
+                    {showNewForm ? (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="p-3 space-y-2 overflow-hidden"
                         >
-                            {expandedCategories.has(category.id) ? (
-                                <ChevronDown className="size-3 text-muted-foreground" />
-                            ) : (
-                                <ChevronRight className="size-3 text-muted-foreground" />
+                            <Input
+                                autoFocus
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                                placeholder="New folder name"
+                            />
+                            <select
+                                value={newParentId ?? ''}
+                                onChange={(e) => setNewParentId(e.target.value)}
+                                className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
+                            >
+                                {sections.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="flex gap-2">
+                                <Button size="sm" className="flex-1" onClick={handleCreate} disabled={!newName.trim()}>
+                                    Create
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setShowNewForm(false)}>
+                                    <X className="size-4" />
+                                </Button>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className={cn(
+                                'w-full justify-start gap-2 rounded-md px-3 py-2.5 text-sm',
+                                selectedId === NEW_FOLDER_SENTINEL && 'bg-primary/8 text-primary',
                             )}
-                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{category.name}</span>
-                        </button>
-                        {expandedCategories.has(category.id) &&
-                            category.children.map((section) => (
-                                <button
-                                    key={section.id}
-                                    type="button"
-                                    onClick={() => onSelect(section.id, section.name, category.id)}
-                                    className={cn(
-                                        'flex w-full items-center gap-2 py-1.5 pl-8 pr-3 text-left text-sm transition-colors',
-                                        selectedId === section.id ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground',
-                                    )}
-                                >
-                                    <FolderOpen className="size-3.5 shrink-0" />
-                                    <span className="truncate">{section.name}</span>
-                                    {selectedId === section.id && <Check className="ml-auto size-3.5" />}
-                                </button>
-                            ))}
-                    </div>
-                ))}
+                            onClick={() => {
+                                onSelect(NEW_FOLDER_SENTINEL, '', undefined);
+                                setShowNewForm(true);
+                            }}
+                        >
+                            <FolderPlus className="size-4 shrink-0" />
+                            New folder
+                        </Button>
+                    )}
+                </div>
             </div>
 
-            {/* Create new folder */}
-            <div className="border-t border-border">
-                {showNewForm ? (
-                    <div className="p-2 space-y-2">
-                        <input
-                            autoFocus
-                            type="text"
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                            placeholder="New folder name"
-                            className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                        <select
-                            value={newParentId ?? ''}
-                            onChange={(e) => setNewParentId(e.target.value)}
-                            className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                            {sections.map((cat) => (
-                                <option key={cat.id} value={cat.id}>
-                                    {cat.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="flex gap-1.5">
-                            <Button size="sm" className="flex-1 h-7" onClick={handleCreate} disabled={!newName.trim()}>
-                                Create
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7" onClick={() => setShowNewForm(false)}>
-                                <X className="size-3" />
-                            </Button>
-                        </div>
-                    </div>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onSelect(NEW_FOLDER_SENTINEL, '', undefined);
-                            setShowNewForm(true);
-                        }}
-                        className={cn(
-                            'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors',
-                            selectedId === NEW_FOLDER_SENTINEL
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                        )}
-                    >
-                        <FolderPlus className="size-3.5" />
-                        New folder
-                    </button>
-                )}
+            <div className="shrink-0 border-t border-border px-4 py-3">
+                <Button onClick={onConfirm} disabled={!canConfirm || isPending} className="w-full">
+                    {isPending ? 'Moving...' : canConfirm ? `Move to "${selectedName}"` : 'Select a folder'}
+                </Button>
             </div>
         </div>
     );
 }
 
-function SearchResultCard({ result, selected, onToggle }: { result: SearchResult; selected: boolean; onToggle: (id: string) => void }) {
-    const thumbnailUrl = result.thumbnail_url ? `${import.meta.env.VITE_API_URL}${result.thumbnail_url}` : null;
+function FloatingSelectionBar({
+    selectedResults,
+    selectedCount,
+    onClear,
+    onMove,
+}: {
+    selectedResults: SearchResult[];
+    selectedCount: number;
+    onClear: () => void;
+    onMove: () => void;
+}) {
+    const thumbnails = selectedResults.slice(0, 3);
 
     return (
-        <button
-            type="button"
-            onClick={() => onToggle(result.document_id)}
-            className={cn(
-                'group flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors',
-                selected ? 'bg-primary/5' : 'hover:bg-secondary/60',
-            )}
+        <motion.div
+            initial={{ y: 16, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 16, opacity: 0 }}
+            transition={{ type: 'spring', duration: 0.35, bounce: 0.2 }}
+            className="absolute bottom-3 left-3 right-3 z-10 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5 shadow-lg"
         >
-            {/* Checkbox - inline, vertically centered */}
-            <div
-                className={cn(
-                    'flex size-4 shrink-0 items-center justify-center rounded border transition-all',
-                    selected ? 'border-primary bg-primary' : 'border-muted-foreground/30 bg-background group-hover:border-primary/50',
-                )}
-            >
-                {selected && <Check className="size-2.5 text-primary-foreground" />}
-            </div>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex -space-x-1.5 shrink-0">
+                    {thumbnails.map((r, i) => {
+                        const url = getThumbnailUrl(r, 'sm');
 
-            {/* Thumbnail */}
-            <div className="size-9 shrink-0 overflow-hidden rounded bg-secondary">
-                {thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt={result.display_name} className="h-full w-full object-cover" />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                        <span className="text-[9px] font-medium uppercase text-muted-foreground">{result.format}</span>
-                    </div>
-                )}
+                        return (
+                            <div
+                                key={r.document_id}
+                                className="size-8 rounded-full overflow-hidden border-2 border-card bg-secondary shrink-0"
+                                style={{ zIndex: thumbnails.length - i }}
+                            >
+                                {url ? (
+                                    <img src={url} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center">
+                                        <span className="text-[8px] font-medium uppercase text-muted-foreground">{r.format}</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                <span className="text-sm font-medium text-foreground truncate">
+                    {selectedCount} {selectedCount === 1 ? 'selected' : 'selected'}
+                </span>
             </div>
-
-            {/* Info */}
-            <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium text-foreground">{result.display_name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                    {result.folder_path ?? 'No folder'} · {result.format}
-                </p>
+            <div className="flex items-center gap-1 shrink-0">
+                <Button variant="ghost" size="icon-sm" onClick={onClear} aria-label="Clear selection">
+                    <X className="size-4" />
+                </Button>
+                <Button size="sm" onClick={onMove}>
+                    Move to folder →
+                </Button>
             </div>
-        </button>
+        </motion.div>
     );
 }
 
-export function OrganizeManual({ onProposal }: OrganizeManualProps) {
+function MoveToFolderDrawer({
+    open,
+    onOpenChange,
+    selectedResults,
+    sections,
+    targetFolderId,
+    targetFolderName,
+    onFolderSelect,
+    onConfirm,
+    isPending,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    selectedResults: SearchResult[];
+    sections: FolderWithChildren[];
+    targetFolderId: string | null;
+    targetFolderName: string;
+    onFolderSelect: (id: string, name: string, parentId?: string) => void;
+    onConfirm: () => void;
+    isPending?: boolean;
+}) {
+    const isDesktop = useIsDesktop();
+    const thumbnails = selectedResults.slice(0, 5);
+
+    return (
+        <Drawer open={open} onOpenChange={onOpenChange} direction={isDesktop ? 'right' : 'bottom'}>
+            <DrawerContent
+                className={cn('flex flex-col border-border', isDesktop ? 'h-full max-h-none w-80 max-w-[90vw] rounded-none' : 'max-h-[85vh] rounded-t-xl')}
+            >
+                <DrawerHeader className="shrink-0 border-b border-border px-4 py-3 gap-2">
+                    <DrawerTitle className="text-sm font-medium">Move to folder</DrawerTitle>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                        {thumbnails.map((r) => {
+                            const url = getThumbnailUrl(r, 'md');
+
+                            return (
+                                <div key={r.document_id} className="size-10 shrink-0 overflow-hidden rounded-md border border-border bg-secondary">
+                                    {url ? (
+                                        <img src={url} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center">
+                                            <span className="text-[8px] font-medium uppercase text-muted-foreground">{r.format}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {selectedResults.length > 5 && (
+                            <span className="shrink-0 self-center pl-1 text-xs text-muted-foreground">+{selectedResults.length - 5}</span>
+                        )}
+                    </div>
+                </DrawerHeader>
+                <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
+                    <FolderPickerPanel
+                        sections={sections}
+                        selectedId={targetFolderId}
+                        selectedName={targetFolderName}
+                        onSelect={onFolderSelect}
+                        onConfirm={onConfirm}
+                        isPending={isPending}
+                    />
+                </div>
+            </DrawerContent>
+        </Drawer>
+    );
+}
+
+export function OrganizeManual() {
     const [query, setQuery] = useState('');
     const [activeQuery, setActiveQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
     const [targetFolderName, setTargetFolderName] = useState('');
     const [targetParentId, setTargetParentId] = useState<string | undefined>(undefined);
     const [isNewFolder, setIsNewFolder] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const NEW_FOLDER_SENTINEL = '__new__';
-
     const { data: sectionsData } = useSections();
     const sections = sectionsData ?? [];
 
-    const { data: searchData, isLoading } = useInfiniteSearch({ q: activeQuery, include_facets: true, limit: 30, sort_by: 'uploaded', sort_order: 'desc' });
+    const { data: searchData, isLoading } = useInfiniteSearch({
+        q: activeQuery,
+        include_facets: true,
+        limit: 30,
+        sort_by: 'uploaded',
+        sort_order: 'desc',
+    });
 
     const results = useMemo(() => searchData?.pages.flatMap((p) => p.results) ?? [], [searchData]);
     const facets = searchData?.pages[0]?.facets;
+    const selectedResults = useMemo(() => results.filter((r) => selectedIds.has(r.document_id)), [results, selectedIds]);
 
-    // Auto-search as filters are added/removed
     useEffect(() => {
         setActiveQuery(query);
     }, [query]);
@@ -225,45 +374,38 @@ export function OrganizeManual({ onProposal }: OrganizeManualProps) {
         setSelectedIds((prev) => {
             const next = new Set(prev);
 
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
 
             return next;
         });
     };
 
-    const selectAll = () => {
-        setSelectedIds(new Set(results.map((r) => r.document_id)));
-    };
-
+    const selectAll = () => setSelectedIds(new Set(results.map((r) => r.document_id)));
     const clearSelection = () => setSelectedIds(new Set());
 
     const handleFolderSelect = (id: string, name: string, parentId?: string) => {
-        if (id === NEW_FOLDER_SENTINEL) {
-            setTargetFolderId(id);
-            setTargetFolderName(name);
-            setTargetParentId(parentId);
-            setIsNewFolder(true);
-        } else {
-            setTargetFolderId(id);
-            setTargetFolderName(name);
-            setTargetParentId(parentId);
-            setIsNewFolder(false);
-        }
+        setTargetFolderId(id);
+        setTargetFolderName(name);
+        setTargetParentId(parentId);
+        setIsNewFolder(id === NEW_FOLDER_SENTINEL);
     };
 
-    const handlePreview = () => {
-        const selected = results.filter((r) => selectedIds.has(r.document_id));
+    const execute = useExecuteOrganize();
 
-        if (selected.length === 0 || !targetFolderName) return;
+    const handleConfirmMove = async () => {
+        if (selectedResults.length === 0 || !targetFolderName.trim()) return;
 
         const operation: OrganizeOperation = {
             type: isNewFolder ? 'create_and_move' : 'move',
-            document_ids: selected.map((r) => r.document_id),
-            document_previews: selected.map((r) => ({
+            document_ids: selectedResults.map((r) => r.document_id),
+            document_previews: selectedResults.map((r) => ({
                 id: r.document_id,
                 display_name: r.display_name,
-                thumbnail_url: r.thumbnail_url,
+                thumbnail_urls: r.thumbnail_urls,
                 mime_type: r.mime_type,
             })),
             target_folder: {
@@ -274,33 +416,32 @@ export function OrganizeManual({ onProposal }: OrganizeManualProps) {
             },
         };
 
-        onProposal({
-            type: 'proposal',
-            summary: `Move ${selected.length} ${selected.length === 1 ? 'document' : 'documents'} to "${targetFolderName}".`,
-            operations: [operation],
-        });
+        try {
+            await execute.mutateAsync([operation]);
+            const n = selectedResults.length;
+            toast.success(`Moved ${n} ${n === 1 ? 'document' : 'documents'} to "${targetFolderName}"`);
+            setDrawerOpen(false);
+            setSelectedIds(new Set());
+        } catch {
+            toast.error('Failed to move documents');
+        }
     };
 
-    const canPreview = selectedIds.size > 0 && targetFolderName.trim().length > 0;
     const hasSelection = selectedIds.size > 0;
 
     return (
         <div className="flex h-full flex-col overflow-hidden">
-            {/* Search bar + filters — sticky header */}
+            {/* Search bar */}
             <div className="shrink-0 border-b border-border px-3 py-2.5">
                 <div className="flex items-center gap-2">
                     <div className="relative flex-1 min-w-0">
-                        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            ref={inputRef}
-                            type="text"
+                        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <Input
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') setActiveQuery(query);
-                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && setActiveQuery(query)}
                             placeholder="Filter documents..."
-                            className="w-full rounded-lg border border-input bg-background py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="pl-8"
                         />
                     </div>
                     <SearchFilterPopover
@@ -313,28 +454,26 @@ export function OrganizeManual({ onProposal }: OrganizeManualProps) {
                 </div>
             </div>
 
-            {/* Scrollable results area */}
-            <div className="min-h-0 flex-1 overflow-y-auto">
-                {/* Selection count bar */}
+            {/* Results area */}
+            <div className="relative min-h-0 flex-1 overflow-y-auto pb-24">
                 {results.length > 0 && (
-                    <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-border">
+                    <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-border sticky top-0 z-1 bg-background">
                         <span>
                             {results.length} results · {selectedIds.size} selected
                         </span>
                         <div className="flex gap-2">
-                            <button type="button" onClick={selectAll} className="hover:text-foreground transition-colors">
+                            <Button variant="ghost" size="sm" className="h-auto p-0 text-xs" onClick={selectAll}>
                                 Select all
-                            </button>
-                            {selectedIds.size > 0 && (
-                                <button type="button" onClick={clearSelection} className="hover:text-foreground transition-colors">
+                            </Button>
+                            {hasSelection && (
+                                <Button variant="ghost" size="sm" className="h-auto p-0 text-xs" onClick={clearSelection}>
                                     Clear
-                                </button>
+                                </Button>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* Results list */}
                 {isLoading ? (
                     <div className="py-1">
                         {Array.from({ length: 5 }).map((_, i) => (
@@ -362,25 +501,34 @@ export function OrganizeManual({ onProposal }: OrganizeManualProps) {
                 ) : (
                     <div>
                         {results.map((result) => (
-                            <SearchResultCard key={result.document_id} result={result} selected={selectedIds.has(result.document_id)} onToggle={toggleSelect} />
+                            <SearchResultItem key={result.document_id} result={result} selected={selectedIds.has(result.document_id)} onToggle={toggleSelect} />
                         ))}
                     </div>
                 )}
+
+                <AnimatePresence>
+                    {hasSelection && sections.length > 0 && (
+                        <FloatingSelectionBar
+                            selectedResults={selectedResults}
+                            selectedCount={selectedIds.size}
+                            onClear={clearSelection}
+                            onMove={() => setDrawerOpen(true)}
+                        />
+                    )}
+                </AnimatePresence>
             </div>
 
-            {/* Sticky footer — always visible when items are selected */}
-            {hasSelection && sections.length > 0 && (
-                <div className="shrink-0 border-t border-border bg-background">
-                    <FolderPicker sections={sections} selectedId={targetFolderId} onSelect={handleFolderSelect} />
-                    <div className="px-3 py-2.5">
-                        <Button onClick={handlePreview} disabled={!canPreview} className="w-full">
-                            {canPreview
-                                ? `Move ${selectedIds.size} ${selectedIds.size === 1 ? 'document' : 'documents'} to "${targetFolderName}"`
-                                : `Select a destination folder (${selectedIds.size} selected)`}
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <MoveToFolderDrawer
+                open={drawerOpen}
+                onOpenChange={setDrawerOpen}
+                selectedResults={selectedResults}
+                sections={sections}
+                targetFolderId={targetFolderId}
+                targetFolderName={targetFolderName}
+                onFolderSelect={handleFolderSelect}
+                onConfirm={handleConfirmMove}
+                isPending={execute.isPending}
+            />
         </div>
     );
 }

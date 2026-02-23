@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import type { SectionIconName } from '@/components/ui/icons-data';
 import { IconSelector } from '@/components/ui/IconSelector';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useUpdateFolder } from '@/lib/sections';
 import type { FolderWithChildren } from '@reverie/shared';
 import { dynamicIconImports } from 'lucide-react/dynamic';
@@ -109,9 +110,9 @@ export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess 
                             <label htmlFor="edit-section-desc" className="mb-1.5 block text-sm font-medium">
                                 Description (optional)
                             </label>
-                            <textarea
+                            <Textarea
                                 id="edit-section-desc"
-                                className="border-input min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="min-h-[80px]"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Brief description"

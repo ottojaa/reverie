@@ -223,18 +223,20 @@ export function IconSelector({
                                 return (
                                     <div key={virtualItem.key} style={style} className="grid grid-cols-5 gap-1 p-1">
                                         {item.icons.map((icon) => (
-                                            <button
+                                            <Button
                                                 key={icon.name}
                                                 type="button"
+                                                variant="outline"
+                                                size="icon"
                                                 title={icon.name}
                                                 className={cn(
-                                                    'flex items-center justify-center rounded-md border p-2 transition-colors hover:bg-muted',
+                                                    'size-9 p-2',
                                                     displayValue === icon.name && 'border-primary bg-primary/10',
                                                 )}
                                                 onClick={() => handleSelect(icon.name)}
                                             >
                                                 <IconRenderer name={icon.name} />
-                                            </button>
+                                            </Button>
                                         ))}
                                     </div>
                                 );

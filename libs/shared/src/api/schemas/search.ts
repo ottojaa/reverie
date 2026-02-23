@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema, DateOnlySchema, PaginationQuerySchema } from './common.js';
-import { DocumentCategoryEnum } from './documents.js';
+import { DocumentCategoryEnum, ThumbnailUrlsSchema } from './documents.js';
 
 // ============================================================================
 // Parsed Query Types (internal representation of search query)
@@ -102,7 +102,7 @@ export const SearchResultSchema = z.object({
     has_text: z.boolean(),
 
     // Visual
-    thumbnail_url: z.string().nullable(),
+    thumbnail_urls: ThumbnailUrlsSchema.nullable(),
     blurhash: z.string().nullable(),
 
     // Metadata

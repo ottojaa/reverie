@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -84,15 +86,17 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                 <span className="text-xs text-muted-foreground">
                     {lineCount} line{lineCount !== 1 ? 's' : ''}
                 </span>
-                <button
+                <Button
+                    variant={isEditing ? 'secondary' : 'ghost'}
+                    size="sm"
                     onClick={toggleEdit}
                     className={cn(
-                        'rounded-md px-3 py-1 text-xs font-medium transition-colors',
-                        isEditing ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground',
+                        'text-xs',
+                        isEditing && 'bg-primary/10 text-primary hover:bg-primary/15',
                     )}
                 >
                     {isEditing ? 'Viewing' : 'Edit'}
-                </button>
+                </Button>
             </div>
 
             {/* Text area with synced line numbers */}
@@ -111,12 +115,12 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                 {/* Content — this is the only scrollable area */}
                 <div ref={contentRef} className="flex-1 overflow-auto" onScroll={handleContentScroll}>
                     {isEditing ? (
-                        <textarea
+                        <Textarea
                             ref={textareaRef}
                             value={editedContent}
                             onChange={(e) => setEditedContent(e.target.value)}
                             spellCheck={false}
-                            className="min-h-full w-full resize-none bg-transparent p-4 font-mono text-sm leading-6 text-foreground outline-none"
+                            className="min-h-full w-full resize-none border-0 bg-transparent p-4 font-mono text-sm leading-6 shadow-none outline-none focus-visible:ring-0"
                         />
                     ) : (
                         <pre className="whitespace-pre-wrap wrap-break-word p-4 font-mono text-sm leading-6 text-foreground">{content}</pre>

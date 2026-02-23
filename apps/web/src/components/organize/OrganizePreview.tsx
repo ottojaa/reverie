@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { useExecuteOrganize } from '@/lib/api/organize';
-import type { OrganizeDocumentPreview, OrganizeOperation, OrganizeProposalEvent } from '@reverie/shared';
+import { getThumbnailUrl } from '@/lib/commonhelpers';
+import type { OrganizeOperation, OrganizeProposalEvent } from '@reverie/shared';
 import { produce } from 'immer';
 import { CheckCircle2, FolderOpen, FolderPlus, Loader2, Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -44,10 +45,6 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
     const handleConfirm = async () => {
         const result = await execute.mutateAsync(proposal.operations as OrganizeOperation[]);
         setDone({ moved: result.moved_count, folders: result.folders_created });
-    };
-
-    const getThumbnailUrl = (doc: OrganizeDocumentPreview) => {
-        return `${import.meta.env.VITE_API_URL}${doc.thumbnail_url}`;
     };
 
     if (done) {
@@ -131,39 +128,45 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                             {/* Thumbnail grid */}
                             <div className="grid grid-cols-3 gap-1.5 p-2">
                                 <AnimatePresence initial={false}>
-                                    {op.document_previews.map((doc) => (
-                                        <motion.div
-                                            key={doc.id}
-                                            layout
-                                            initial={{ opacity: 0, scale: 0.8 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.7 }}
-                                            className="group relative aspect-square rounded overflow-hidden bg-secondary"
-                                        >
-                                            {doc.thumbnail_url ? (
-                                                <img src={getThumbnailUrl(doc)} alt={doc.display_name} className="h-full w-full object-cover" />
-                                            ) : (
-                                                <div className="flex h-full w-full items-center justify-center">
-                                                    <span className="text-[10px] text-muted-foreground uppercase font-medium">
-                                                        {doc.mime_type.split('/')[1]?.slice(0, 3) ?? 'file'}
-                                                    </span>
-                                                </div>
-                                            )}
+                                    {op.document_previews.map((doc) => {
+                                        const thumbUrl = getThumbnailUrl(doc, 'sm');
+
+                                        return (
+                                            <motion.div
+                                                key={doc.id}
+                                                layout
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.7 }}
+                                                className="group relative aspect-square rounded overflow-hidden bg-secondary"
+                                            >
+                                                {thumbUrl ? (
+                                                    <img src={thumbUrl} alt={doc.display_name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <div className="flex h-full w-full items-center justify-center">
+                                                        <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                                                            {doc.mime_type.split('/')[1]?.slice(0, 3) ?? 'file'}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/40">
-                                                <button
+                                                <Button
                                                     type="button"
+                                                    variant="ghost"
+                                                    size="icon-sm"
                                                     onClick={() => removeDocument(opIdx, doc.id)}
-                                                    className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                                    className="absolute right-0.5 top-0.5 size-6 rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/70 hover:text-white"
                                                     title="Remove from proposal"
                                                 >
                                                     <X className="size-2.5" />
-                                                </button>
+                                                </Button>
                                             </div>
                                             <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pb-0.5 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <p className="truncate text-[9px] text-white leading-tight">{doc.display_name}</p>
                                             </div>
                                         </motion.div>
-                                    ))}
+                                        );
+                                    })}
                                 </AnimatePresence>
                             </div>
                         </motion.div>

@@ -1,14 +1,20 @@
-import { formatDate, formatFileSize } from '@/lib/commonhelpers';
+import { formatDate, getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { SearchResult } from '@reverie/shared';
-import { FileText, Folder, Image, Receipt, Tag } from 'lucide-react';
+import { FileText, Image, Receipt } from 'lucide-react';
 import { memo } from 'react';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 
 interface SearchResultItemProps {
     result: SearchResult;
     isActive?: boolean;
     compact?: boolean;
     onClick?: () => void;
+    /** When set, shows a checkbox for multi-select and row click toggles selection instead of calling onClick */
+    selected?: boolean;
+    onToggle?: (id: string) => void;
 }
 
 const categoryIcons: Record<string, typeof FileText> = {
@@ -33,27 +39,42 @@ function isImageResult(result: SearchResult): boolean {
     return (result.category !== null && IMAGE_CATEGORIES.has(result.category)) || result.mime_type.startsWith('image/');
 }
 
-export const SearchResultItem = memo(function SearchResultItem({ result, isActive, compact, onClick }: SearchResultItemProps) {
+export const SearchResultItem = memo(function SearchResultItem({
+    result,
+    isActive,
+    compact,
+    onClick,
+    selected,
+    onToggle,
+}: SearchResultItemProps) {
     const Icon = getCategoryIcon(result.category, result.mime_type);
-    const thumbnailUrl = result.thumbnail_url ? `${import.meta.env.VITE_API_URL}${result.thumbnail_url}` : null;
+    const thumbnailUrl = getThumbnailUrl(result, compact ? 'sm' : 'md');
     const isPhoto = isImageResult(result);
     const displayName = result.display_name;
     const date = result.extracted_date ?? result.uploaded_at;
     const datePrefix = result.extracted_date ? '' : 'Uploaded ';
-    const showFilename = displayName !== result.filename;
     const containingFolder = result.folder_path ? result.folder_path.split('/').reverse()[1] : null;
+
+    const isSelectable = onToggle !== undefined;
+    const handleClick = isSelectable ? () => onToggle(result.document_id) : onClick;
 
     if (compact) {
         return (
-            <button
+            <Button
                 type="button"
-                onClick={onClick}
+                variant="ghost"
+                onClick={handleClick}
                 className={cn(
-                    'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors',
-                    'hover:bg-secondary/80 focus-visible:bg-secondary/80 focus-visible:outline-none',
+                    'h-auto flex w-full min-w-0 shrink justify-start gap-3 px-3 py-2 text-left',
                     isActive && 'bg-secondary',
+                    isSelectable && selected && 'bg-primary/5',
                 )}
             >
+                {isSelectable && (
+                    <div role="presentation" onClick={(e) => e.stopPropagation()} className="shrink-0">
+                        <Checkbox checked={selected} onCheckedChange={() => onToggle(result.document_id)} />
+                    </div>
+                )}
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt="" className="size-8 shrink-0 rounded object-cover bg-muted" />
                 ) : (
@@ -62,20 +83,26 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
                     </div>
                 )}
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{displayName}</span>
-            </button>
+            </Button>
         );
     }
 
     return (
-        <button
+        <Button
             type="button"
-            onClick={onClick}
+            variant="ghost"
+            onClick={handleClick}
             className={cn(
-                'flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-md px-3 py-2.5 text-left transition-colors',
-                'hover:bg-secondary/80 focus-visible:bg-secondary/80 focus-visible:outline-none',
+                'h-auto flex w-full min-w-0 shrink items-start justify-start gap-3 overflow-hidden px-3 py-2.5 text-left',
                 isActive && 'bg-secondary',
+                isSelectable && selected && 'bg-primary/5',
             )}
         >
+            {isSelectable && (
+                <div role="presentation" onClick={(e) => e.stopPropagation()} className="shrink-0 pt-0.5">
+                    <Checkbox checked={selected} onCheckedChange={() => onToggle(result.document_id)} />
+                </div>
+            )}
             {/* Thumbnail / Icon */}
             {thumbnailUrl ? (
                 <img src={thumbnailUrl} alt="" className={cn('shrink-0 rounded-md object-cover bg-muted', isPhoto ? 'h-12 w-16' : 'size-10')} />
@@ -90,12 +117,8 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
-                        {showFilename && <p className="truncate text-xs text-muted-foreground">{result.filename}</p>}
                     </div>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {datePrefix}
-                        {formatDate(date)}
-                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground"></span>
                 </div>
 
                 {result.snippet && (
@@ -108,24 +131,15 @@ export const SearchResultItem = memo(function SearchResultItem({ result, isActiv
                 <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
                     {containingFolder && (
                         <span className="flex min-w-0 shrink items-center gap-1">
-                            <Folder className="size-3 shrink-0" />
-                            <span className="truncate">{containingFolder}</span>
+                            <Badge>{containingFolder}</Badge>
                         </span>
                     )}
-                    {result.tags.length > 0 && (
-                        <>
-                            {result.tags.slice(0, 2).map((tag) => (
-                                <span key={tag} className="inline-flex shrink-0 items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-                                    <Tag className="size-2.5" />
-                                    {tag}
-                                </span>
-                            ))}
-                            {result.tags.length > 2 && <span className="shrink-0 text-[10px]">+{result.tags.length - 2}</span>}
-                        </>
-                    )}
-                    <span className="ml-auto shrink-0">{formatFileSize(result.size_bytes)}</span>
+                    <span className="ml-auto shrink-0">
+                        {datePrefix}
+                        {formatDate(date)}
+                    </span>
                 </div>
             </div>
-        </button>
+        </Button>
     );
 });

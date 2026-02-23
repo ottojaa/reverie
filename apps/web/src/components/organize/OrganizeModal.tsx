@@ -1,4 +1,5 @@
 import { useOrganizeChat } from '@/lib/api/organize';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
 import { X } from 'lucide-react';
@@ -39,11 +40,6 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
         if (newMode === 'ai') chatState.reset();
     };
 
-    // For manual mode: set proposal directly into chatState
-    const handleProposal = (p: OrganizeProposalEvent) => {
-        chatState.updateProposal(p);
-    };
-
     const handleProposalChange = (p: OrganizeProposalEvent | null) => {
         chatState.updateProposal(p);
     };
@@ -82,40 +78,35 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
 
                                     {/* Mode toggle */}
                                     <div className="ml-auto flex items-center rounded-lg border border-border bg-secondary p-0.5">
-                                        <button
+                                        <Button
                                             type="button"
-                                            onClick={() => handleModeChange('ai')}
+                                            variant="ghost"
+                                            size="sm"
                                             className={cn(
-                                                'rounded-md px-3 py-1 text-xs font-medium transition-all',
-                                                mode === 'ai'
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground',
+                                                'h-7 rounded-md px-3 text-xs font-medium',
+                                                mode === 'ai' ? 'bg-background text-foreground shadow-sm hover:bg-background' : 'text-muted-foreground',
                                             )}
+                                            onClick={() => handleModeChange('ai')}
                                         >
                                             AI Assistant
-                                        </button>
-                                        <button
+                                        </Button>
+                                        <Button
                                             type="button"
-                                            onClick={() => handleModeChange('manual')}
+                                            variant="ghost"
+                                            size="sm"
                                             className={cn(
-                                                'rounded-md px-3 py-1 text-xs font-medium transition-all',
-                                                mode === 'manual'
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground',
+                                                'h-7 rounded-md px-3 text-xs font-medium',
+                                                mode === 'manual' ? 'bg-background text-foreground shadow-sm hover:bg-background' : 'text-muted-foreground',
                                             )}
+                                            onClick={() => handleModeChange('manual')}
                                         >
                                             Manual
-                                        </button>
+                                        </Button>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={handleClose}
-                                        className="ml-2 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                                        aria-label="Close"
-                                    >
+                                    <Button variant="ghost" size="icon-sm" onClick={handleClose} aria-label="Close">
                                         <X className="size-4" />
-                                    </button>
+                                    </Button>
                                 </div>
 
                                 {/* Content */}
@@ -141,7 +132,7 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
                                 exit={{ opacity: 0, x: 8 }}
                                 transition={{ duration: 0.15 }}
                             >
-                                <OrganizeManual onProposal={handleProposal} />
+                                <OrganizeManual />
                             </motion.div>
                                         )}
                                     </AnimatePresence>

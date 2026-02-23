@@ -1,7 +1,7 @@
 ---
 description: Web app conventions for Electron + React
 globs: apps/web/**/*.{ts,tsx}
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Web App (Electron + React)
@@ -47,7 +47,8 @@ function useDocuments(folderId: string) {
 
 ## Component Patterns
 
-- Use shadcn components from `components/ui/`
+- Use shadcn components from `components/ui/`. If a component is not yet installed, install it first: `pnpm dlx shadcn@latest add <component>`
+- **Never use native `<button>`, `<input>`, or `<textarea>`** – always use `Button`, `Input`, and `Textarea` from `components/ui/`. Exception: `motion.button` is fine. For file inputs (e.g. react-dropzone), use `Input {...getInputProps()}` with `className="hidden"` when the input is hidden.
 - Functional components only
 - Extract reusable logic into custom hooks
 - Use Motion for animations, don't overuse - focus on page transitions and meaningful feedback

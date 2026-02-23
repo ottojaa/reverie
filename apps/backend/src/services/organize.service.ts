@@ -13,6 +13,7 @@ import { parseQuery } from '../search/query-parser';
 import { search } from '../search/search.service';
 import { getFolderService } from './folder.service';
 import { getStorageService } from './storage.service';
+import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 
 const folderService = getFolderService();
 const storageService = getStorageService();
@@ -254,12 +255,12 @@ async function buildDocumentPreviews(documentIds: string[], userId: string): Pro
 
     return Promise.all(
         docs.map(async (doc) => {
-            const thumbnailUrl = doc.thumbnail_paths ? await storageService.getFileUrl(doc.thumbnail_paths.sm) : null;
+            const thumbnailUrls = await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
 
             return {
                 id: doc.id,
                 display_name: doc.original_filename,
-                thumbnail_url: thumbnailUrl,
+                thumbnail_urls: thumbnailUrls,
                 mime_type: doc.mime_type,
             };
         }),
