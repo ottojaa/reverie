@@ -1,0 +1,135 @@
+---
+description: When to delegate tasks to sub-agents via mcp_task
+alwaysApply: true
+---
+
+# Sub-Agent Delegation
+
+For these task types, consider launching `mcp_task` instead of doing the work directly.
+
+| Task | Subagent type | Trigger terms |
+|------|---------------|---------------|
+| API endpoint across stack | generalPurpose | "new endpoint", "add API", "API route", "contract sync" |
+| BullMQ job/worker | generalPurpose | "new worker", "job queue", "BullMQ", "background job" |
+| DB migration | generalPurpose | "migration", "add column", "new table", "schema change" |
+| Document viewer | generalPurpose | "new viewer", "add format", ".epub", "viewer for X" |
+| Schema change propagation | explore → generalPurpose | "schema changed", "propagate schema", "update consumers" |
+| Dependency trace | explore | "who uses", "what depends on", "impact of removing" |
+| Search filter | generalPurpose | "search filter", "facet", "SearchParams" |
+
+**How to invoke:** Call `mcp_task` with `description` (3–5 words), `prompt` (from below), and `subagent_type`. Pass user-specific details into placeholders.
+
+---
+
+## 1. API Contract Sync
+
+```
+subagent_type: generalPurpose
+description: "API contract sync"
+prompt: |
+  Add/update API endpoint [METHOD /path]:
+  - Request: [body/query params]
+  - Response: [shape]
+  - Auth: required/admin/none
+
+  Ensure: shared schema in libs/shared, route in apps/backend, API method + use* hook in apps/web.
+  Reference: apps/backend/src/app/routes/documents.route.ts, apps/web/src/lib/api/search.ts, libs/shared/src/api/contracts.ts
+```
+
+## 2. Worker/Job Pipeline
+
+```
+subagent_type: generalPurpose
+description: "Worker job pipeline"
+prompt: |
+  Add new job type [name]:
+  - Input data: [fields]
+  - Output/result: [fields]
+  - Triggered from: [route or service]
+  - Retry policy: retryable/non-retryable
+
+  Create: queue in queues/, worker in workers/, add Nx target worker:[name], wire from [caller].
+  Reference: .cursor/rules/workers.mdc, apps/backend/src/queues/ocr.queue.ts, apps/backend/src/workers/ocr.worker.ts
+```
+
+## 3. Migration Writer
+
+```
+subagent_type: generalPurpose
+description: "Migration writer"
+prompt: |
+  Create migration for: [describe change]
+
+  Reference apps/backend/src/db/schema.ts for existing types.
+  Output Kysely format with up() and down(). File: apps/backend/src/db/migrations/YYYYMMDDHHMMSS_description.ts
+  Reference: .cursor/rules/database.mdc
+```
+
+## 4. Document Viewer
+
+```
+subagent_type: generalPurpose
+description: "Document viewer"
+prompt: |
+  Add viewer for [format, e.g. .epub, .md]:
+  - MIME types: [...]
+  - Extensions: [...]
+  - Component: [Name]Viewer
+
+  Create component in apps/web/src/components/document-viewer/, register in viewer-registry.ts.
+  Reference: ImageViewer.tsx, viewer-registry.ts, .cursor/skills/brand-guidelines
+```
+
+## 5. Schema Change Propagator (two-phase)
+
+```
+Phase 1 - Discovery:
+subagent_type: explore
+description: "Schema change discovery"
+prompt: |
+  Schema [SchemaName] in libs/shared was changed: [describe change]
+  Find all usages in apps/backend and apps/web. List files that need updates.
+
+Phase 2 - Apply edits:
+subagent_type: generalPurpose
+description: "Schema change propagation"
+prompt: |
+  [Include list from Phase 1]
+  For each file: apply edits to align with new schema.
+```
+
+## 6. Dependency Trace
+
+```
+subagent_type: explore
+description: "Dependency trace"
+prompt: |
+  Trace dependencies for [file path or symbol]:
+  - Who imports this?
+  - What does it import?
+  - Which Nx projects are affected?
+  - What would break if we change/remove it?
+```
+
+## 7. Search/Filter Sync
+
+```
+subagent_type: generalPurpose
+description: "Search filter sync"
+prompt: |
+  Add search filter [name]:
+  - Type: string/number/date/array
+  - Backend: update search route and query
+  - Shared: update SearchResponseSchema, SearchParams in libs/shared/src/api/schemas/search.ts
+  - Web: update SearchFilters, searchApi, useSearch in apps/web/src/lib/api/search.ts
+```
+
+---
+
+## Subagent Type Guide
+
+| Type | Use when |
+|------|----------|
+| `explore` | Read-only discovery, tracing, impact analysis |
+| `generalPurpose` | Multi-file edits, scaffolding, cross-stack changes |
+| `shell` | Running nx/pnpm commands, migrations, builds |
