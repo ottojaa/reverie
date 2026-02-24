@@ -7,16 +7,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentCard } from './DocumentCard';
 
 const GAP = 16; // gap-4 = 1rem = 16px
+const COL_DEBOUNCE_MS = 80;
+const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
 
 /** Match Tailwind responsive grid breakpoints: sm:2 / md:3 / lg:4 / xl:5 */
-function getColumnCount(width: number): number {
-    if (width >= 1280) return 5;
+function getColumnCount(width: number, prevCols?: number): number {
+    const raw = (() => {
+        if (width >= 1280) return 5;
 
-    if (width >= 1024) return 4;
+        if (width >= 1024) return 4;
 
-    if (width >= 768) return 3;
+        if (width >= 768) return 3;
 
-    return 2;
+        return 2;
+    })();
+
+    if (prevCols === undefined) return raw;
+
+    // Hysteresis: resist switching down until we're clearly below breakpoint
+    if (raw < prevCols) {
+        const thresholds: Record<number, number> = { 5: 1280, 4: 1024, 3: 768 };
+        const threshold = thresholds[prevCols];
+
+        if (threshold != null && width >= threshold - HYSTERESIS) return prevCols;
+    }
+
+    return raw;
 }
 
 interface DocumentGridProps {
@@ -32,6 +48,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     const { recentlyCompletedDocumentIds, markPulseComplete } = useUpload();
     const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
     const [columnCount, setColumnCount] = useState(() => (typeof window !== 'undefined' ? getColumnCount(window.innerWidth) : 2));
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Memoize orderedIds once for all cards
     const orderedIds = useMemo(() => documents.map((d) => d.id), [documents]);
@@ -72,17 +89,35 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
         if (!el) return;
 
-        const observer = new ResizeObserver(() => {
-            const width = window.innerWidth;
+        const latestWidthRef = { current: 0 };
 
-            setColumnCount(getColumnCount(width));
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+
+            if (!entry) return;
+
+            latestWidthRef.current = entry.contentRect.width;
+
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+
+            debounceRef.current = setTimeout(() => {
+                debounceRef.current = null;
+                const width = latestWidthRef.current;
+
+                setColumnCount((prev) => getColumnCount(width, prev));
+            }, COL_DEBOUNCE_MS);
         });
 
-        // Set initial column count
-        setColumnCount(getColumnCount(el.clientWidth));
+        // Set initial from observed element (not window)
+        const width = el.getBoundingClientRect().width;
+        setColumnCount(getColumnCount(width));
         observer.observe(el);
 
-        return () => observer.disconnect();
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+
+            observer.disconnect();
+        };
     }, []);
 
     // --- Virtualizer ---

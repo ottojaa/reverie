@@ -209,3 +209,33 @@ export const FacetsResponseSchema = z.object({
 });
 
 export type FacetsResponse = z.infer<typeof FacetsResponseSchema>;
+
+// ============================================================================
+// Quick filters and help
+// ============================================================================
+
+export const QuickFilterSchema = z.object({
+    label: z.string(),
+    query: z.string(),
+    icon: z.string().optional(),
+});
+
+export type QuickFilter = z.infer<typeof QuickFilterSchema>;
+
+export const QuickFiltersResponseSchema = z.array(QuickFilterSchema);
+
+export const SearchHelpFilterSchema = z.object({
+    name: z.string(),
+    syntax: z.string(),
+    examples: z.array(z.string()),
+    description: z.string(),
+});
+
+export type SearchHelpFilter = z.infer<typeof SearchHelpFilterSchema>;
+
+export const SearchHelpSchema = z.object({
+    filters: z.array(SearchHelpFilterSchema),
+    examples: z.array(z.object({ query: z.string(), description: z.string() })),
+});
+
+export type SearchHelp = z.infer<typeof SearchHelpSchema>;

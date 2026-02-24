@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DateOnlySchema, PaginationQuerySchema, UuidSchema } from './common.js';
+import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, UuidSchema } from './common.js';
 import { JobStatusEnum } from './jobs.js';
 
 /**
@@ -94,6 +94,10 @@ export const DocumentSchema = z.object({
 
 export type Document = z.infer<typeof DocumentSchema>;
 
+export const DocumentListResponseSchema = PaginatedResponseSchema(DocumentSchema);
+
+export type DocumentListResponse = z.infer<typeof DocumentListResponseSchema>;
+
 export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     folder_id: UuidSchema.optional(),
     category: DocumentCategoryEnum.optional(),
@@ -146,3 +150,15 @@ export const MoveDocumentsRequestSchema = z.object({
     conflict_strategy: ConflictStrategyEnum.optional(),
 });
 export type MoveDocumentsRequest = z.infer<typeof MoveDocumentsRequestSchema>;
+
+export const DocumentOcrResultSchema = z.object({
+    document_id: UuidSchema,
+    raw_text: z.string(),
+    confidence_score: z.number().nullable(),
+    text_density: z.number().nullable(),
+    has_meaningful_text: z.boolean(),
+    metadata: z.record(z.unknown()).nullable(),
+    processed_at: z.string().datetime(),
+});
+
+export type DocumentOcrResult = z.infer<typeof DocumentOcrResultSchema>;

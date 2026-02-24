@@ -1,18 +1,27 @@
-import { type Document, type FolderWithChildren } from '@reverie/shared';
+import {
+    CheckDuplicatesResponseSchema,
+    DocumentListResponseSchema,
+    DocumentOcrResultSchema,
+    DocumentSchema,
+    JobIdResponseSchema,
+    type CheckDuplicatesResponse,
+    type Document,
+    type DocumentOcrResult,
+    type FolderWithChildren,
+} from '@reverie/shared';
 import type { InfiniteData } from '@tanstack/react-query';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-import { useAuth, useAuthenticatedFetch } from '../auth';
+import { apiClient } from './client';
+import { useAuth } from '../auth';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-export interface DocumentsResponse {
+export type DocumentsResponse = {
     items: Document[];
     total: number;
     limit: number;
     offset: number;
-}
+};
 
 interface UseDocumentsOptions {
     folderId?: string | null;
@@ -20,54 +29,88 @@ interface UseDocumentsOptions {
     offset?: number;
 }
 
-type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
+export const documentsApi = {
+    async list(options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
+        const params: Record<string, string> = {};
 
-export interface CheckDuplicatesResult {
-    duplicates: string[];
-}
+        if (options.folderId) params.folder_id = options.folderId;
 
-export async function checkDuplicates(authFetch: AuthFetch, folderId: string, filenames: string[]): Promise<CheckDuplicatesResult> {
-    if (filenames.length === 0) return { duplicates: [] };
+        if (options.limit) params.limit = String(options.limit);
 
-    const response = await authFetch(`${API_BASE}/documents/check-duplicates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ folder_id: folderId, filenames }),
-    });
+        if (options.offset !== undefined && options.offset > 0) params.offset = String(options.offset);
 
-    if (!response.ok) throw new Error('Failed to check duplicates');
+        const { data } = await apiClient.get('/documents', { params });
 
-    return response.json();
-}
+        return DocumentListResponseSchema.parse(data);
+    },
 
-async function fetchDocumentsWithAuth(authFetch: AuthFetch, options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
-    const params = new URLSearchParams();
+    async get(documentId: string): Promise<Document> {
+        const { data } = await apiClient.get(`/documents/${documentId}`);
 
-    if (options.folderId) params.set('folder_id', options.folderId);
+        return DocumentSchema.parse(data);
+    },
 
-    if (options.limit) params.set('limit', String(options.limit));
+    async delete(ids: string[]): Promise<void> {
+        if (ids.length === 0) return;
 
-    if (options.offset !== undefined && options.offset > 0) params.set('offset', String(options.offset));
+        if (ids.length === 1) {
+            await apiClient.delete(`/documents/${ids[0]}`);
 
-    const url = `${API_BASE}/documents${params.toString() ? `?${params}` : ''}`;
-    const response = await authFetch(url, { credentials: 'include' });
+            return;
+        }
 
-    if (!response.ok) throw new Error('Failed to fetch documents');
+        await apiClient.delete('/documents', { data: { ids } });
+    },
 
-    return response.json();
-}
+    async checkDuplicates(folderId: string, filenames: string[]): Promise<CheckDuplicatesResponse> {
+        if (filenames.length === 0) return { duplicates: [] };
+
+        const { data } = await apiClient.post('/documents/check-duplicates', {
+            folder_id: folderId,
+            filenames,
+        });
+
+        return CheckDuplicatesResponseSchema.parse(data);
+    },
+
+    async reprocessLlm(documentId: string) {
+        const { data } = await apiClient.post(`/documents/${documentId}/reprocess-llm`);
+
+        return JobIdResponseSchema.parse(data);
+    },
+
+    async getOcr(documentId: string): Promise<DocumentOcrResult> {
+        const { data } = await apiClient.get(`/documents/${documentId}/ocr`);
+
+        return DocumentOcrResultSchema.parse(data);
+    },
+
+    async retryOcr(documentId: string) {
+        const { data } = await apiClient.post(`/documents/${documentId}/ocr/retry`);
+
+        return JobIdResponseSchema.parse(data);
+    },
+
+    async move(params: {
+        document_ids: string[];
+        folder_id: string;
+        conflict_strategy?: 'replace' | 'keep_both';
+    }): Promise<void> {
+        await apiClient.patch('/documents/move', params);
+    },
+};
+
+export type { CheckDuplicatesResponse, DocumentOcrResult };
 
 /**
  * Hook to fetch documents (uses auth fetch so 401 triggers refresh + retry)
  */
 export function useDocuments(options: UseDocumentsOptions = {}) {
     const { isAuthenticated } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     return useQuery({
         queryKey: ['documents', options],
-        queryFn: () => fetchDocumentsWithAuth(authFetch, options),
+        queryFn: () => documentsApi.list(options),
         enabled: isAuthenticated,
     });
 }
@@ -79,7 +122,6 @@ const DEFAULT_PAGE_SIZE = 24;
  */
 export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
     const { isAuthenticated } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     const stableOptions = {
         folderId: options.folderId ?? null,
@@ -89,7 +131,7 @@ export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
     return useInfiniteQuery({
         queryKey: ['documents', 'infinite', stableOptions],
         queryFn: ({ pageParam }) =>
-            fetchDocumentsWithAuth(authFetch, {
+            documentsApi.list({
                 ...stableOptions,
                 offset: pageParam as number,
             }),
@@ -109,42 +151,17 @@ export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
  */
 export function usePrefetchDocuments() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useCallback(
         (folderId: string | null | undefined) => {
             const options = { limit: 50, ...(folderId && { folderId }) };
             queryClient.prefetchQuery({
                 queryKey: ['documents', options],
-                queryFn: () => fetchDocumentsWithAuth(authFetch, options),
+                queryFn: () => documentsApi.list(options),
             });
         },
-        [queryClient, authFetch],
+        [queryClient],
     );
-}
-
-async function fetchDocumentWithAuth(authFetch: AuthFetch, documentId: string): Promise<Document> {
-    const response = await authFetch(`${API_BASE}/documents/${documentId}`, { credentials: 'include' });
-
-    if (!response.ok) throw new Error('Failed to fetch document');
-
-    return response.json();
-}
-
-export interface ReprocessLlmResponse {
-    job_id: string;
-    status: 'pending';
-}
-
-async function reprocessLlmWithAuth(authFetch: AuthFetch, documentId: string): Promise<ReprocessLlmResponse> {
-    const response = await authFetch(`${API_BASE}/documents/${documentId}/reprocess-llm`, {
-        method: 'POST',
-        credentials: 'include',
-    });
-
-    if (!response.ok) throw new Error('Failed to reprocess LLM');
-
-    return response.json();
 }
 
 /**
@@ -152,12 +169,13 @@ async function reprocessLlmWithAuth(authFetch: AuthFetch, documentId: string): P
  */
 export function useReprocessLlm() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (documentId: string) => reprocessLlmWithAuth(authFetch, documentId),
+        mutationFn: (documentId: string) => documentsApi.reprocessLlm(documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, llm_status: 'pending' } : old));
+            queryClient.setQueryData<Document>(['document', documentId], (old) =>
+                old ? { ...old, llm_status: 'pending' } : old,
+            );
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
         onError: () => {
@@ -171,35 +189,12 @@ export function useReprocessLlm() {
  */
 export function useDocument(documentId: string) {
     const { isAuthenticated } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     return useQuery({
         queryKey: ['document', documentId],
-        queryFn: () => fetchDocumentWithAuth(authFetch, documentId),
+        queryFn: () => documentsApi.get(documentId),
         enabled: isAuthenticated && !!documentId,
     });
-}
-
-export interface OcrResult {
-    document_id: string;
-    raw_text: string;
-    confidence_score: number | null;
-    text_density: number | null;
-    has_meaningful_text: boolean;
-    metadata: {
-        companies?: string[];
-        dates?: string[];
-        values?: Array<{ amount: number; currency: string }>;
-    } | null;
-    processed_at: string;
-}
-
-async function fetchOcrResultWithAuth(authFetch: AuthFetch, documentId: string): Promise<OcrResult> {
-    const response = await authFetch(`${API_BASE}/documents/${documentId}/ocr`, { credentials: 'include' });
-
-    if (!response.ok) throw new Error('Failed to fetch OCR result');
-
-    return response.json();
 }
 
 /**
@@ -207,29 +202,12 @@ async function fetchOcrResultWithAuth(authFetch: AuthFetch, documentId: string):
  */
 export function useOcrResult(documentId: string, enabled: boolean) {
     const { isAuthenticated } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     return useQuery({
         queryKey: ['document', documentId, 'ocr'],
-        queryFn: () => fetchOcrResultWithAuth(authFetch, documentId),
+        queryFn: () => documentsApi.getOcr(documentId),
         enabled: isAuthenticated && !!documentId && enabled,
     });
-}
-
-export interface RetryOcrResponse {
-    job_id: string;
-    status: 'pending';
-}
-
-async function retryOcrWithAuth(authFetch: AuthFetch, documentId: string): Promise<RetryOcrResponse> {
-    const response = await authFetch(`${API_BASE}/documents/${documentId}/ocr/retry`, {
-        method: 'POST',
-        credentials: 'include',
-    });
-
-    if (!response.ok) throw new Error('Failed to run OCR');
-
-    return response.json();
 }
 
 /**
@@ -237,12 +215,13 @@ async function retryOcrWithAuth(authFetch: AuthFetch, documentId: string): Promi
  */
 export function useRetryOcr() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (documentId: string) => retryOcrWithAuth(authFetch, documentId),
+        mutationFn: (documentId: string) => documentsApi.retryOcr(documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, ocr_status: 'pending' } : old));
+            queryClient.setQueryData<Document>(['document', documentId], (old) =>
+                old ? { ...old, ocr_status: 'pending' } : old,
+            );
             queryClient.removeQueries({ queryKey: ['document', documentId, 'ocr'] });
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
@@ -252,39 +231,14 @@ export function useRetryOcr() {
     });
 }
 
-async function deleteDocumentsWithAuth(authFetch: AuthFetch, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-
-    if (ids.length === 1) {
-        const response = await authFetch(`${API_BASE}/documents/${ids[0]}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-
-        if (!response.ok) throw new Error('Failed to delete document');
-
-        return;
-    }
-
-    const response = await authFetch(`${API_BASE}/documents`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ids }),
-    });
-
-    if (!response.ok) throw new Error('Failed to delete documents');
-}
-
 /**
  * Hook to delete documents with optimistic updates (uses auth fetch for 401 refresh + retry)
  */
 export function useDeleteDocuments() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (ids: string[]) => deleteDocumentsWithAuth(authFetch, ids),
+        mutationFn: (ids: string[]) => documentsApi.delete(ids),
         onMutate: async (ids) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });

@@ -1,4 +1,17 @@
-export { useDocument, useDocuments, useInfiniteDocuments } from './documents';
-export { useInfiniteSearch, useQuickFilters, useSearch, useSearchHelp, useSearchSuggestions } from './search';
-export type { QuickFilter, SearchHelp, SearchParams } from './search';
-
+export { adminApi } from './admin';
+export { authApi } from './auth-api';
+export {
+    documentsApi,
+    useDeleteDocuments,
+    useDocument,
+    useDocuments,
+    useInfiniteDocuments,
+    useOcrResult,
+    usePrefetchDocuments,
+    useReprocessLlm,
+    useRetryOcr,
+} from './documents';
+export type { CheckDuplicatesResponse, DocumentOcrResult, DocumentsResponse } from './documents';
+export { foldersApi } from './folders';
+export { organizeApi, useExecuteOrganize, useOrganizeChat } from './organize';
+export { searchApi, useInfiniteSearch, useQuickFilters, useSearch, useSearchHelp, useSearchSuggestions } from './search';

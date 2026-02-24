@@ -1,25 +1,15 @@
-import type { Folder, FolderWithChildren } from '@reverie/shared';
+import type { FolderWithChildren } from '@reverie/shared';
 import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
 import { toast } from 'sonner';
 import type { DocumentsResponse } from './api/documents';
-import { useAuth, useAuthenticatedFetch } from './auth';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { documentsApi } from './api/documents';
+import { foldersApi } from './api/folders';
+import { useAuth } from './auth';
 
 /** Droppable id prefix for folder drop zones (sidebar sections). Parse folder id as overId.slice(prefix.length). */
 export const FOLDER_DROP_PREFIX = 'folder-';
-
-type AuthFetch = (url: string, options?: RequestInit) => Promise<Response>;
-
-async function fetchSectionTreeWithAuth(authFetch: AuthFetch): Promise<FolderWithChildren[]> {
-    const response = await authFetch(`${API_BASE}/folders/tree`, { credentials: 'include' });
-
-    if (!response.ok) throw new Error('Failed to fetch sections');
-
-    return response.json();
-}
 
 /**
  * Flatten tree to find section by id
@@ -185,11 +175,10 @@ export function moveSectionInTree(tree: FolderWithChildren[], sectionId: string,
 
 export function useSections() {
     const { isAuthenticated } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     return useQuery({
         queryKey: ['sections', 'tree'],
-        queryFn: () => fetchSectionTreeWithAuth(authFetch),
+        queryFn: () => foldersApi.getTree(),
         enabled: isAuthenticated,
         staleTime: 5 * 60 * 1000,
     });
@@ -206,49 +195,17 @@ export function useCurrentSection(sectionId: string | undefined) {
     return findSectionById(tree, sectionId);
 }
 
-async function reorderSectionsWithAuth(authFetch: AuthFetch, updates: Array<{ id: string; sort_order: number }>): Promise<void> {
-    const response = await authFetch(`${API_BASE}/folders/reorder`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ updates }),
-    });
-
-    if (!response.ok) throw new Error('Failed to reorder sections');
-}
-
 export interface MoveDocumentsParams {
     document_ids: string[];
     folder_id: string;
     conflict_strategy?: 'replace' | 'keep_both';
 }
 
-async function moveDocumentsWithAuth(authFetch: AuthFetch, data: MoveDocumentsParams): Promise<void> {
-    const body: MoveDocumentsParams = {
-        document_ids: data.document_ids,
-        folder_id: data.folder_id,
-    };
-
-    if (data.conflict_strategy) {
-        body.conflict_strategy = data.conflict_strategy;
-    }
-
-    const response = await authFetch(`${API_BASE}/documents/move`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to move documents');
-}
-
 export function useReorderSections() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (updates: Array<{ id: string; sort_order: number }>) => reorderSectionsWithAuth(authFetch, updates),
+        mutationFn: (updates: Array<{ id: string; sort_order: number }>) => foldersApi.reorder(updates),
         onMutate: async (updates) => {
             await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
@@ -271,55 +228,12 @@ export function useReorderSections() {
     });
 }
 
-async function createFolderWithAuth(
-    authFetch: AuthFetch,
-    data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' },
-): Promise<Folder> {
-    const response = await authFetch(`${API_BASE}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-    });
-
-    if (!response.ok) throw new Error('Failed to create section');
-
-    return response.json();
-}
-
-async function updateFolderWithAuth(
-    authFetch: AuthFetch,
-    id: string,
-    data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null },
-): Promise<Folder> {
-    const response = await authFetch(`${API_BASE}/folders/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-    });
-
-    if (!response.ok) throw new Error('Failed to update section');
-
-    return response.json();
-}
-
-async function deleteFolderWithAuth(authFetch: AuthFetch, id: string): Promise<void> {
-    const response = await authFetch(`${API_BASE}/folders/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-    });
-
-    if (!response.ok) throw new Error('Failed to delete section');
-}
-
 export function useCreateFolder() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
         mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' }) =>
-            createFolderWithAuth(authFetch, data),
+            foldersApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
@@ -339,11 +253,10 @@ export function useCreateCategory() {
 
 export function useUpdateFolder() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
-            updateFolderWithAuth(authFetch, id, data),
+            foldersApi.patch(id, data),
         onMutate: async ({ id, data }) => {
             const { parent_id, ...patch } = data;
 
@@ -379,10 +292,9 @@ export function useUpdateFolder() {
 
 export function useDeleteFolder() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (id: string) => deleteFolderWithAuth(authFetch, id),
+        mutationFn: (id: string) => foldersApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
@@ -392,10 +304,9 @@ export function useDeleteFolder() {
 
 export function useMoveDocuments() {
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     return useMutation({
-        mutationFn: (data: MoveDocumentsParams) => moveDocumentsWithAuth(authFetch, data),
+        mutationFn: (data: MoveDocumentsParams) => documentsApi.move(data),
         onMutate: async ({ document_ids, folder_id }) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
             const previous = queryClient.getQueriesData<DocumentsResponse | InfiniteData<DocumentsResponse>>({ queryKey: ['documents'] });

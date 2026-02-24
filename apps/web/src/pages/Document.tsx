@@ -9,7 +9,7 @@ import { FileWarning } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ComponentType, useCallback, useEffect, useState } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE } from '../lib/api/client';
 
 function buildFileUrl(fileUrl: string | null): string | null {
     if (!fileUrl) return null;

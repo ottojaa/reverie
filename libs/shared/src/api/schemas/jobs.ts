@@ -38,3 +38,10 @@ export const JobBatchResponseSchema = z.array(
 );
 
 export type JobBatchResponse = z.infer<typeof JobBatchResponseSchema>;
+
+export const JobIdResponseSchema = z.object({
+    job_id: z.string().uuid(),
+    status: JobStatusEnum,
+});
+
+export type JobIdResponse = z.infer<typeof JobIdResponseSchema>;

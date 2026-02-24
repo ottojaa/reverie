@@ -61,3 +61,7 @@ export const FolderWithChildrenSchema: z.ZodType<FolderWithChildren> = FolderSch
     children: z.lazy(() => z.array(FolderWithChildrenSchema)),
     document_count: z.number(),
 });
+
+export const FolderTreeResponseSchema = z.array(FolderWithChildrenSchema);
+
+export type FolderTreeResponse = z.infer<typeof FolderTreeResponseSchema>;

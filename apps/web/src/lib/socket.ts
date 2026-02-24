@@ -1,7 +1,7 @@
 import type { JobEvent } from '@reverie/shared';
 import { io, Socket } from 'socket.io-client';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_BASE } from './api/client';
 
 let socket: Socket | null = null;
 const subscribedSessions = new Set<string>();

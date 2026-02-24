@@ -3,9 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { useAuth, useAuthenticatedFetch } from '../lib/auth';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { authApi } from '../lib/api/auth-api';
+import { useAuth } from '../lib/auth';
 
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -13,7 +12,6 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
     const { user, logout } = useAuth();
-    const authFetch = useAuthenticatedFetch();
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -52,22 +50,7 @@ function SettingsPage() {
         setIsLoading(true);
 
         try {
-            const response = await authFetch(`${API_BASE}/auth/change-password`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    current_password: currentPassword,
-                    new_password: newPassword,
-                }),
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.message || 'Failed to change password');
-            }
-
+            await authApi.changePassword(currentPassword, newPassword);
             setSuccess('Password changed successfully');
             setCurrentPassword('');
             setNewPassword('');

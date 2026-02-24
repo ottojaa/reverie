@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { createUser, listUsers, updateUser } from '@/lib/api/admin';
+import { adminApi } from '@/lib/api/admin';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import type { User } from '@reverie/shared';
@@ -37,12 +37,12 @@ function AdminUsersPage() {
 
     const { data: users = [], isLoading: usersLoading } = useQuery({
         queryKey: ['admin', 'users'],
-        queryFn: () => listUsers(accessToken!),
+        queryFn: () => adminApi.listUsers(),
         enabled: !!accessToken && user?.role === 'admin',
     });
 
     const updateUserMutation = useMutation({
-        mutationFn: ({ id, body }: { id: string; body: { email?: string; display_name?: string; quota?: string } }) => updateUser(id, body, accessToken!),
+        mutationFn: ({ id, body }: { id: string; body: { email?: string; display_name?: string; quota?: string } }) => adminApi.updateUser(id, body),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
             setEditDialogOpen(false);
@@ -80,7 +80,7 @@ function AdminUsersPage() {
                 ...(generatePassword ? {} : { password }),
             };
 
-            const result = await createUser(body, accessToken);
+            const result = await adminApi.createUser(body);
 
             setSuccess({
                 email: result.user.email,

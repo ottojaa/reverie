@@ -26,6 +26,7 @@ function LoginCallbackPage() {
                     if (data.user) {
                         localStorage.setItem('reverie_user', JSON.stringify(data.user));
                     }
+
                     navigate({ to: '/browse' });
                 })
                 .catch(() => navigate({ to: '/browse' }));
@@ -40,6 +41,7 @@ function LoginCallbackPage() {
             })
                 .then((res) => {
                     if (!res.ok) throw new Error('Invalid code');
+
                     return res.json();
                 })
                 .then((data) => completeLogin(data.access_token))

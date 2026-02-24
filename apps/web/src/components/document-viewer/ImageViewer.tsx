@@ -1,18 +1,55 @@
 import { cn } from '@/lib/utils';
-import { motion } from 'motion/react';
-import { useCallback, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ViewerProps } from './viewer-registry';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 const ZOOM_STEP = 0.4;
+const SPINNER_DELAY_MS = 150;
+
+function ImageLoadingSpinner() {
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="absolute inset-0 z-10 flex items-center justify-center"
+            aria-label="Loading image"
+        >
+            <div className="relative">
+                {/* Outer ring — smooth rotation with primary accent */}
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="size-8 rounded-full border-2 border-muted-foreground/20 border-t-primary"
+                />
+                {/* Inner pulse — subtle breathing glow */}
+                <motion.div
+                    animate={{ opacity: [0.25, 0.6, 0.25] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute inset-0 -m-2 rounded-full bg-primary/15"
+                />
+            </div>
+        </motion.div>
+    );
+}
 
 export default function ImageViewer({ document, fileUrl }: ViewerProps) {
     const [scale, setScale] = useState(1);
     const [translate, setTranslate] = useState({ x: 0, y: 0 });
     const [isLoaded, setIsLoaded] = useState(false);
+    const [showSpinner, setShowSpinner] = useState(false);
     const isDragging = useRef(false);
     const hasDragged = useRef(false);
+
+    useEffect(() => {
+        setIsLoaded(false);
+        setShowSpinner(false);
+        const t = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
+
+        return () => clearTimeout(t);
+    }, [fileUrl]);
     const dragStart = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -106,8 +143,6 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
         isDragging.current = false;
     }, []);
 
-    // Build thumbnail URL for blur-up
-
     return (
         <div
             ref={containerRef}
@@ -121,11 +156,18 @@ export default function ImageViewer({ document, fileUrl }: ViewerProps) {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
         >
-            {/* Entrance animation wrapper — only controls opacity, no transform */}
+            {/* Loading overlay — only after delay to avoid flash on fast loads */}
+            <AnimatePresence>{!isLoaded && showSpinner && <ImageLoadingSpinner key="image-loading" />}</AnimatePresence>
+
+            {/* Entrance animation wrapper — crossfade with spinner exit */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: isLoaded ? 1 : 0 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                transition={{
+                    duration: isLoaded ? 0.55 : 0.2,
+                    delay: isLoaded ? 0.08 : 0,
+                    ease: [0.22, 1, 0.36, 1],
+                }}
                 className="flex items-center justify-center"
             >
                 {/* Plain img — owns all transform for zoom/pan (no motion conflict) */}

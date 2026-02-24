@@ -1,3 +1,4 @@
+import { API_BASE } from '@/lib/api/client';
 import { motion } from 'motion/react';
 import { useRef, useState } from 'react';
 import type { ViewerProps } from './viewer-registry';
@@ -5,8 +6,6 @@ import type { ViewerProps } from './viewer-registry';
 export default function VideoViewer({ document, fileUrl }: ViewerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isReady, setIsReady] = useState(false);
-
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     const posterUrl = document.thumbnail_urls?.lg ? `${API_BASE}${document.thumbnail_urls.lg}` : undefined;
 
     return (

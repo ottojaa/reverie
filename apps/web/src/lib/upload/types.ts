@@ -1,4 +1,4 @@
-import type { Job, JobEvent, UploadedDocument } from '@reverie/shared';
+import type { Job, JobEvent } from '@reverie/shared';
 
 /**
  * Status of a file in the upload queue
@@ -63,10 +63,6 @@ export interface UploadState {
 }
 
 /**
- * Upload result from the API
+ * Upload result from the API (alias for UploadResponse from shared)
  */
-export interface UploadApiResult {
-    session_id: string;
-    documents: UploadedDocument[];
-    jobs: Job[];
-}
+export type UploadApiResult = import('@reverie/shared').UploadResponse;

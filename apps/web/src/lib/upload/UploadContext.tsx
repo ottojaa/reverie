@@ -1,6 +1,5 @@
 import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { useAuth } from '../auth';
 import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFiles } from './uploadApi';
@@ -355,7 +354,6 @@ const UploadContext = createContext<UploadContextType | null>(null);
 const noop = () => {};
 
 export function UploadProvider({ children }: { children: ReactNode }) {
-    const { accessToken } = useAuth();
     const [state, dispatch] = useReducer(uploadReducer, initialState);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const jobEventsCleanupRef = useRef<() => void>(noop);
@@ -421,10 +419,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
     const startUpload = useCallback(
         async (folderId?: string, conflictStrategy?: 'replace' | 'keep_both') => {
-            if (!accessToken) {
-                throw new Error('Not authenticated');
-            }
-
             const queuedFiles = Array.from(state.files.values()).filter((f) => f.status === 'queued');
 
             if (queuedFiles.length === 0) {
@@ -456,10 +450,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
             dispatch({ type: 'START_UPLOAD' });
 
             try {
-                const result = await uploadFiles(
-                    queuedFiles.map((f) => f.file),
-                    accessToken,
-                    {
+                const result = await uploadFiles(queuedFiles.map((f) => f.file), {
                         ...(folderId && { folderId }),
                         sessionId,
                         ...(conflictStrategy && { conflictStrategy }),
@@ -507,7 +498,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 });
             }
         },
-        [accessToken, state.files],
+        [state.files],
     );
 
     const files = useMemo(() => Array.from(state.files.values()), [state.files]);

@@ -1,6 +1,7 @@
 import type { LoginResponse, User } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { initApiAuth } from './api/client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -182,6 +183,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.location.href = `${API_BASE}/auth/google`;
     };
 
+    useEffect(() => {
+        initApiAuth({
+            getToken: () => state.accessToken,
+            refresh: refreshToken,
+            logout,
+        });
+    }, [state.accessToken, refreshToken, logout]);
+
     return (
         <AuthContext.Provider
             value={{
@@ -205,52 +214,4 @@ export function useAuth() {
     }
 
     return context;
-}
-
-/**
- * Hook for making authenticated API requests
- */
-export function useAuthenticatedFetch() {
-    const { accessToken, refreshToken, logout } = useAuth();
-
-    return useCallback(
-        async (url: string, options: RequestInit = {}) => {
-            const headers = new Headers(options.headers);
-
-            if (accessToken) {
-                headers.set('Authorization', `Bearer ${accessToken}`);
-            }
-
-            let response = await fetch(url, {
-                ...options,
-                headers,
-                credentials: 'include',
-            });
-
-            // If unauthorized, try to refresh token
-            if (response.status === 401) {
-                const refreshed = await refreshToken();
-
-                if (refreshed) {
-                    // Retry with new token
-                    const newToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-
-                    if (newToken) {
-                        headers.set('Authorization', `Bearer ${newToken}`);
-                        response = await fetch(url, {
-                            ...options,
-                            headers,
-                            credentials: 'include',
-                        });
-                    }
-                } else {
-                    // Refresh failed, logout
-                    await logout();
-                }
-            }
-
-            return response;
-        },
-        [accessToken, refreshToken, logout],
-    );
 }

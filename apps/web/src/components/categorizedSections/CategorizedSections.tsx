@@ -1,8 +1,7 @@
 import type { SortableTreeHandlers } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
-import { checkDuplicates } from '@/lib/api/documents';
-import { useAuthenticatedFetch } from '@/lib/auth';
+import { documentsApi } from '@/lib/api/documents';
 import { FOLDER_DROP_PREFIX, useMoveDocuments } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
 import type { DragEndEvent, DragOverEvent, DragStartEvent, DropAnimation } from '@dnd-kit/core';
@@ -108,7 +107,6 @@ export function CategorizedSections({
     const moveDocuments = useMoveDocuments();
     const selection = useSelectionOptional();
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
 
     // Sortable IDs for categories (prefixed) and sections
     const categoryIds = useMemo(() => categories.map((c) => categoryIdToSortableId(c.id)), [categories]);
@@ -221,7 +219,7 @@ export function CategorizedSections({
         }
 
         try {
-            const { duplicates } = await checkDuplicates(authFetch, targetSectionId, filenames);
+            const { duplicates } = await documentsApi.checkDuplicates(targetSectionId, filenames);
 
             if (duplicates.length > 0) {
                 setMoveDuplicateState({

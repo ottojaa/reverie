@@ -1,72 +1,30 @@
-import type {
-    CreateUserRequest,
-    CreateUserResponse,
-    ListUsersResponse,
-    UpdateUserRequest,
-    UpdateUserResponse,
-    User,
+import {
+    CreateUserResponseSchema,
+    ListUsersResponseSchema,
+    UpdateUserResponseSchema,
+    type CreateUserRequest,
+    type CreateUserResponse,
+    type UpdateUserRequest,
+    type User,
 } from '@reverie/shared';
+import { apiClient } from './client';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+export const adminApi = {
+    async listUsers(): Promise<User[]> {
+        const { data } = await apiClient.get('/admin/users');
 
-function adminFetch(path: string, accessToken: string, init?: RequestInit) {
-    return fetch(`${API_BASE}${path}`, {
-        ...init,
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            ...init?.headers,
-        },
-        credentials: 'include',
-    });
-}
+        return ListUsersResponseSchema.parse(data).users;
+    },
 
-export async function listUsers(accessToken: string): Promise<User[]> {
-    const res = await adminFetch('/admin/users', accessToken);
+    async updateUser(userId: string, body: UpdateUserRequest): Promise<User> {
+        const { data } = await apiClient.patch(`/admin/users/${userId}`, body);
 
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        return UpdateUserResponseSchema.parse(data).user;
+    },
 
-        throw new Error((data as { message?: string }).message ?? 'Failed to list users');
-    }
+    async createUser(body: CreateUserRequest): Promise<CreateUserResponse> {
+        const { data } = await apiClient.post('/admin/users', body);
 
-    const data: ListUsersResponse = await res.json();
-
-    return data.users;
-}
-
-export async function updateUser(
-    userId: string,
-    body: UpdateUserRequest,
-    accessToken: string,
-): Promise<User> {
-    const res = await adminFetch(`/admin/users/${userId}`, accessToken, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-
-        throw new Error((data as { message?: string }).message ?? 'Failed to update user');
-    }
-
-    const data: UpdateUserResponse = await res.json();
-
-    return data.user;
-}
-
-export async function createUser(body: CreateUserRequest, accessToken: string): Promise<CreateUserResponse> {
-    const res = await adminFetch('/admin/users', accessToken, {
-        method: 'POST',
-        body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-
-        throw new Error((data as { message?: string }).message ?? 'Failed to create user');
-    }
-
-    return res.json();
-}
+        return CreateUserResponseSchema.parse(data);
+    },
+};

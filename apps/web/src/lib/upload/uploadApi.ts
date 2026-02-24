@@ -1,6 +1,5 @@
-import type { UploadApiResult } from './types';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
+import { API_BASE, getAccessToken } from '../api/client';
 
 /**
  * Upload files to the server
@@ -9,14 +8,13 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
  */
 export async function uploadFiles(
     files: File[],
-    accessToken: string,
     options: {
         folderId?: string;
         sessionId: string;
         conflictStrategy?: 'replace' | 'keep_both';
         onProgress?: (loaded: number, total: number) => void;
     },
-): Promise<UploadApiResult> {
+): Promise<UploadResponse> {
     const { folderId, sessionId, conflictStrategy, onProgress } = options;
     const formData = new FormData();
 
@@ -46,8 +44,8 @@ export async function uploadFiles(
         xhr.addEventListener('load', () => {
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
-                    const result = JSON.parse(xhr.responseText) as UploadApiResult;
-                    resolve(result);
+                    const parsed = JSON.parse(xhr.responseText);
+                    resolve(UploadResponseSchema.parse(parsed));
                 } catch {
                     reject(new Error('Invalid response from server'));
                 }
@@ -69,8 +67,16 @@ export async function uploadFiles(
             reject(new Error('Upload was aborted'));
         });
 
+        const token = getAccessToken();
+
+        if (!token) {
+            reject(new Error('Not authenticated'));
+
+            return;
+        }
+
         xhr.open('POST', `${API_BASE}/upload`);
-        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.withCredentials = true;
         xhr.send(formData);
     });

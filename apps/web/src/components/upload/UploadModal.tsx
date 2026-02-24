@@ -1,8 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { checkDuplicates } from '@/lib/api/documents';
-import { useAuthenticatedFetch } from '@/lib/auth';
+import { documentsApi } from '@/lib/api/documents';
 import { flattenSectionTree, useSections } from '@/lib/sections';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -151,7 +150,6 @@ export function UploadModal() {
     } = useUpload();
 
     const queryClient = useQueryClient();
-    const authFetch = useAuthenticatedFetch();
     const prevAllComplete = useRef(false);
     const [successPhase, setSuccessPhase] = useState(false);
     const [duplicateFilenames, setDuplicateFilenames] = useState<string[] | null>(null);
@@ -344,7 +342,7 @@ export function UploadModal() {
                                         const filenames = queued.map((f) => f.file.name);
 
                                         try {
-                                            const { duplicates } = await checkDuplicates(authFetch, folderId, filenames);
+                                            const { duplicates } = await documentsApi.checkDuplicates(folderId, filenames);
 
                                             if (duplicates.length > 0) {
                                                 setDuplicateFilenames(duplicates);
