@@ -159,6 +159,8 @@ export function UploadModal() {
     const hasQueued = stats.queued > 0;
     const hasFailed = stats.error > 0;
     const allComplete = total > 0 && stats.complete === total;
+    const allCompleteRef = useRef(allComplete);
+    allCompleteRef.current = allComplete;
 
     const uploadStarted = stats.uploading > 0 || stats.processing > 0 || stats.complete > 0;
 
@@ -170,6 +172,9 @@ export function UploadModal() {
 
             return;
         }
+
+        // Already started countdown (effect re-ran due to files/other deps changing) – don't restart
+        if (prevAllComplete.current) return;
 
         prevAllComplete.current = true;
         const completedIds = files.filter((f) => f.status === 'complete' && f.documentId).map((f) => f.documentId!);
@@ -190,8 +195,11 @@ export function UploadModal() {
         }, ALL_COMPLETE_CLOSE_DELAY_MS);
 
         return () => {
-            clearTimeout(timer);
-            setSuccessPhase(false);
+            // Only clear when transitioning away from allComplete; avoid resetting countdown on dep changes
+            if (!allCompleteRef.current) {
+                clearTimeout(timer);
+                setSuccessPhase(false);
+            }
         };
     }, [allComplete, stats.complete, closeModal, queryClient, clearCompleted, clearFailed, files, recordCompletedDocumentIds, startCountdown]);
 

@@ -22,6 +22,8 @@ export interface UploadFile {
     status: UploadFileStatus;
     /** Upload progress (0-100) */
     uploadProgress: number;
+    /** Bytes loaded so far (for aggregate progress when uploading in parallel) */
+    uploadLoaded?: number;
     /** Processing progress (0-100, average of all jobs) */
     processingProgress: number;
     /** Server-assigned document ID after upload */

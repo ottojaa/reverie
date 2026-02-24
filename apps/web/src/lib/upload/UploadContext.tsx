@@ -2,7 +2,7 @@ import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
 import type { UploadFile, UploadSession, UploadState } from './types';
-import { uploadFiles } from './uploadApi';
+import { uploadFile } from './uploadApi';
 
 // Generate unique IDs for files
 let fileIdCounter = 0;
@@ -19,14 +19,12 @@ type UploadAction =
     | { type: 'CLEAR_FAILED' }
     | { type: 'RETRY_FAILED' }
     | { type: 'RETRY_FILE'; fileId: string }
-    | { type: 'START_UPLOAD' }
-    | { type: 'UPLOAD_PROGRESS'; progress: number; loaded: number; total: number }
-    | {
-          type: 'UPLOAD_SUCCESS';
-          sessionId: string;
-          fileDocumentMap: Map<string, { documentId: string; jobs: Array<{ id: string }> }>; // key is file ID
-      }
-    | { type: 'UPLOAD_ERROR'; error: string }
+    | { type: 'START_UPLOAD'; totalBytes: number }
+    | { type: 'START_FILE_UPLOAD'; fileId: string }
+    | { type: 'UPLOAD_PROGRESS'; fileId: string; progress: number; loaded: number; total: number }
+    | { type: 'FILE_UPLOAD_SUCCESS'; fileId: string; documentId: string; jobs: Array<{ id: string }> }
+    | { type: 'UPLOAD_ERROR'; fileId: string; error: string }
+    | { type: 'UPLOAD_FINISHED'; sessionId: string; fileIds: string[] }
     | { type: 'JOB_EVENT'; event: JobEvent }
     | { type: 'RESET' };
 
@@ -165,106 +163,103 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
         }
 
         case 'START_UPLOAD': {
-            const newFiles = new Map(state.files);
-
-            for (const [id, file] of newFiles) {
-                if (file.status === 'queued') {
-                    newFiles.set(id, { ...file, status: 'uploading', uploadProgress: 0 });
-                }
-            }
-
             return {
                 ...state,
-                files: newFiles,
                 isUploading: true,
                 uploadBytesLoaded: 0,
-                uploadBytesTotal: 0,
+                uploadBytesTotal: action.totalBytes,
             };
+        }
+
+        case 'START_FILE_UPLOAD': {
+            const newFiles = new Map(state.files);
+            const file = newFiles.get(action.fileId);
+
+            if (file && file.status === 'queued') {
+                newFiles.set(action.fileId, { ...file, status: 'uploading', uploadProgress: 0 });
+            }
+
+            return { ...state, files: newFiles };
         }
 
         case 'UPLOAD_PROGRESS': {
             const newFiles = new Map(state.files);
+            const file = newFiles.get(action.fileId);
 
-            for (const [id, file] of newFiles) {
-                if (file.status === 'uploading') {
-                    newFiles.set(id, { ...file, uploadProgress: action.progress });
-                }
+            if (file && file.status === 'uploading') {
+                newFiles.set(action.fileId, { ...file, uploadProgress: action.progress, uploadLoaded: action.loaded });
             }
+
+            // Aggregate: sum of completed/processing file sizes + sum of loaded for all uploading files
+            const completedBytes = Array.from(newFiles.values()).reduce(
+                (sum, f) => (f.status === 'complete' || f.status === 'processing' ? sum + f.file.size : sum),
+                0,
+            );
+            const uploadingBytes = Array.from(newFiles.values()).reduce((sum, f) => sum + (f.status === 'uploading' ? (f.uploadLoaded ?? 0) : 0), 0);
+            const uploadBytesLoaded = completedBytes + uploadingBytes;
 
             return {
                 ...state,
                 files: newFiles,
-                uploadBytesLoaded: action.loaded,
-                uploadBytesTotal: action.total,
+                uploadBytesLoaded,
             };
         }
 
-        case 'UPLOAD_SUCCESS': {
+        case 'FILE_UPLOAD_SUCCESS': {
             const newFiles = new Map(state.files);
-            const fileIds: string[] = [];
             const pendingJobEvents = new Map(state.pendingJobEvents);
+            const file = newFiles.get(action.fileId);
 
-            for (const [id, file] of newFiles) {
-                if (file.status === 'uploading') {
-                    const mapping = action.fileDocumentMap.get(id); // Look up by file ID
+            if (file && file.status === 'uploading') {
+                const { error: _, ...fileRest } = file;
+                const jobs = action.jobs as Job[];
+                const hasThumbnailJobs = jobs.some((j) => j.job_type === 'thumbnail');
+                let nextFile: UploadFile = {
+                    ...fileRest,
+                    status: hasThumbnailJobs ? 'processing' : 'complete',
+                    uploadProgress: 100,
+                    processingProgress: hasThumbnailJobs ? 0 : 100,
+                    documentId: action.documentId,
+                    jobs,
+                };
 
-                    if (mapping) {
-                        const { error: _, ...fileRest } = file;
-                        const jobs = mapping.jobs as Job[];
-                        // Only thumbnail jobs block the upload modal — OCR/LLM run in background
-                        const hasThumbnailJobs = jobs.some((j) => j.job_type === 'thumbnail');
-                        let nextFile: UploadFile = {
-                            ...fileRest,
-                            status: hasThumbnailJobs ? 'processing' : 'complete',
-                            uploadProgress: 100,
-                            processingProgress: hasThumbnailJobs ? 0 : 100,
-                            documentId: mapping.documentId,
-                            jobs,
-                        };
+                const pendingForDocument = pendingJobEvents.get(action.documentId);
 
-                        const pendingForDocument = pendingJobEvents.get(mapping.documentId);
-
-                        if (pendingForDocument && pendingForDocument.size > 0) {
-                            for (const pendingEvent of pendingForDocument.values()) {
-                                nextFile = applyJobEventToFile(nextFile, pendingEvent);
-                            }
-
-                            pendingJobEvents.delete(mapping.documentId);
-                        }
-
-                        newFiles.set(id, nextFile);
-                        fileIds.push(id);
+                if (pendingForDocument && pendingForDocument.size > 0) {
+                    for (const pendingEvent of pendingForDocument.values()) {
+                        nextFile = applyJobEventToFile(nextFile, pendingEvent);
                     }
+
+                    pendingJobEvents.delete(action.documentId);
                 }
+
+                newFiles.set(action.fileId, nextFile);
             }
 
-            return {
-                ...state,
-                files: newFiles,
-                pendingJobEvents,
-                isUploading: false,
-                session: {
-                    sessionId: action.sessionId,
-                    fileIds,
-                    startedAt: new Date(),
-                },
-            };
+            return { ...state, files: newFiles, pendingJobEvents };
         }
 
         case 'UPLOAD_ERROR': {
             const newFiles = new Map(state.files);
+            const file = newFiles.get(action.fileId);
 
-            for (const [id, file] of newFiles) {
-                if (file.status === 'uploading') {
-                    newFiles.set(id, {
-                        ...file,
-                        status: 'error',
-                        error: action.error,
-                    });
-                }
+            if (file && file.status === 'uploading') {
+                newFiles.set(action.fileId, { ...file, status: 'error', error: action.error });
             }
 
-            return { ...state, files: newFiles, isUploading: false };
+            return { ...state, files: newFiles };
+        }
+
+        case 'UPLOAD_FINISHED': {
+            return {
+                ...state,
+                isUploading: false,
+                session: {
+                    sessionId: action.sessionId,
+                    fileIds: action.fileIds,
+                    startedAt: new Date(),
+                },
+            };
         }
 
         case 'JOB_EVENT': {
@@ -426,7 +421,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
             }
 
             // Generate session ID and subscribe to WebSocket BEFORE upload so we don't miss job events.
-            // Must await connection: fast jobs can complete before client joins session room otherwise.
             const sessionId = crypto.randomUUID();
             jobEventsCleanupRef.current();
 
@@ -447,56 +441,57 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 dispatch({ type: 'JOB_EVENT', event });
             });
 
-            dispatch({ type: 'START_UPLOAD' });
+            const totalBytes = queuedFiles.reduce((sum, f) => sum + f.file.size, 0);
+            dispatch({ type: 'START_UPLOAD', totalBytes });
 
-            try {
-                const result = await uploadFiles(queuedFiles.map((f) => f.file), {
-                        ...(folderId && { folderId }),
-                        sessionId,
-                        ...(conflictStrategy && { conflictStrategy }),
-                        onProgress: (loaded, total) => {
-                            const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
-                            dispatch({ type: 'UPLOAD_PROGRESS', progress, loaded, total });
-                        },
-                    },
-                );
-
-                // Map file IDs to document IDs and jobs (using index-based correspondence)
-                const fileDocumentMap = new Map<string, { documentId: string; jobs: Array<{ id: string }> }>();
-
-                for (let i = 0; i < Math.min(result.documents.length, queuedFiles.length); i++) {
-                    const doc = result.documents[i];
-                    const queuedFile = queuedFiles[i];
-
-                    if (!doc || !queuedFile) continue;
-
-                    const docJobs = result.jobs.filter((j) => j.target_id === doc.id);
-
-                    // Use queued file ID as key for reliable matching
-                    fileDocumentMap.set(queuedFile.id, {
-                        documentId: doc.id,
-                        jobs: docJobs,
-                    });
-                }
-
-                for (const doc of result.documents) {
-                    if (!subscribedDocumentIdsRef.current.has(doc.id)) {
-                        subscribeToDocument(doc.id);
-                        subscribedDocumentIdsRef.current.add(doc.id);
-                    }
-                }
-
-                dispatch({
-                    type: 'UPLOAD_SUCCESS',
-                    sessionId: result.session_id,
-                    fileDocumentMap,
-                });
-            } catch (error) {
-                dispatch({
-                    type: 'UPLOAD_ERROR',
-                    error: error instanceof Error ? error.message : 'Upload failed',
-                });
+            // Mark all as uploading and start all uploads in parallel
+            for (const queuedFile of queuedFiles) {
+                dispatch({ type: 'START_FILE_UPLOAD', fileId: queuedFile.id });
             }
+
+            const completedFileIds: string[] = [];
+
+            await Promise.all(
+                queuedFiles.map(async (queuedFile) => {
+                    try {
+                        const result = await uploadFile(queuedFile.file, {
+                            sessionId,
+                            ...(folderId && { folderId }),
+                            ...(conflictStrategy && { conflictStrategy }),
+                            onProgress: (loaded, total) => {
+                                const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                                dispatch({ type: 'UPLOAD_PROGRESS', fileId: queuedFile.id, progress, loaded, total });
+                            },
+                        });
+
+                        const doc = result.documents[0];
+                        const docJobs = result.jobs.filter((j) => doc && j.target_id === doc.id);
+
+                        if (doc) {
+                            if (!subscribedDocumentIdsRef.current.has(doc.id)) {
+                                subscribeToDocument(doc.id);
+                                subscribedDocumentIdsRef.current.add(doc.id);
+                            }
+
+                            dispatch({
+                                type: 'FILE_UPLOAD_SUCCESS',
+                                fileId: queuedFile.id,
+                                documentId: doc.id,
+                                jobs: docJobs,
+                            });
+                            completedFileIds.push(queuedFile.id);
+                        }
+                    } catch (error) {
+                        dispatch({
+                            type: 'UPLOAD_ERROR',
+                            fileId: queuedFile.id,
+                            error: error instanceof Error ? error.message : 'Upload failed',
+                        });
+                    }
+                }),
+            );
+
+            dispatch({ type: 'UPLOAD_FINISHED', sessionId, fileIds: completedFileIds });
         },
         [state.files],
     );

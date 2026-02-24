@@ -4,6 +4,7 @@ import type { UploadFile } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, RefreshCw, X } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import { Spinner } from '../ui/spinner';
 
 interface UploadFileItemProps {
@@ -55,6 +56,17 @@ function getFileIcon(mimeType: string): { icon: typeof File; color: string } {
 
 export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }: UploadFileItemProps) {
     const { icon: FileIcon, color: iconColor } = getFileIcon(file.file.type);
+    const isImage = file.file.type.startsWith('image/');
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isImage) return;
+
+        const url = URL.createObjectURL(file.file);
+        setPreviewUrl(url);
+
+        return () => URL.revokeObjectURL(url);
+    }, [file.file, isImage]);
 
     const progress =
         file.status === 'uploading' ? file.uploadProgress : file.status === 'processing' ? file.processingProgress : file.status === 'complete' ? 100 : 0;
@@ -89,9 +101,18 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
             )}
 
             <div className="relative flex items-center gap-4">
-                {/* File icon */}
-                <div className={cn('shrink-0', iconColor)}>
-                    <FileIcon className="size-8" />
+                {/* File preview (image) or icon */}
+                <div className={cn('flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted', !previewUrl && iconColor)}>
+                    {previewUrl ? (
+                        <img
+                            src={previewUrl}
+                            alt=""
+                            className="size-full object-cover"
+                            onError={() => setPreviewUrl(null)}
+                        />
+                    ) : (
+                        <FileIcon className="size-8" />
+                    )}
                 </div>
 
                 {/* File info */}
