@@ -215,7 +215,7 @@ async function execSearchDocuments(args: SearchDocumentsArgs, userId: string): P
     console.log('[organize:search] total=%d returning=%d', result.total, result.results.length);
 
     if (result.results.length === 0) {
-        return JSON.stringify({ found: 0, documents: [] });
+        return JSON.stringify({ found: 0, document_ids: [], sample: [] });
     }
 
     const documents = result.results.map((r) => ({
@@ -231,7 +231,18 @@ async function execSearchDocuments(args: SearchDocumentsArgs, userId: string): P
         tags: r.tags,
     }));
 
-    return JSON.stringify({ found: result.total, showing: documents.length, documents });
+    // Return slim payload to LLM: all IDs for propose_organization, but only a small sample
+    // with full metadata to avoid context bloat (200 docs × ~250 chars = ~15k tokens)
+    const SAMPLE_SIZE = 15;
+    const sample = documents.slice(0, SAMPLE_SIZE);
+    const document_ids = documents.map((d) => d.id);
+
+    return JSON.stringify({
+        found: result.total,
+        showing: documents.length,
+        document_ids,
+        sample,
+    });
 }
 
 async function execListFolders(_args: ListFoldersArgs, userId: string): Promise<string> {
@@ -505,7 +516,7 @@ export async function runOrganizeChat(options: OrganizeChatOptions): Promise<voi
             } else if (tc.name === 'search_documents') {
                 const args = JSON.parse(tc.argumentsJson) as SearchDocumentsArgs;
                 writeSse(res, 'status', {
-                    action: `Searching for "${args.query}"...`,
+                    action: 'Searching documents that match the criteria...',
                 });
                 result = await execSearchDocuments(args, userId);
             } else if (tc.name === 'list_folders') {

@@ -1,11 +1,13 @@
 import { Button } from '@/components/ui/button';
+import { MinimizedPill } from '@/components/ui/MinimizedPill';
 import { useOrganizeChat } from '@/lib/api/organize';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
-import { X } from 'lucide-react';
+import { Minimize2, Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { OrganizeChat } from './OrganizeChat';
 import { OrganizeManual } from './OrganizeManual';
 import { OrganizePreview } from './OrganizePreview';
@@ -15,23 +17,47 @@ type Mode = 'ai' | 'manual';
 interface OrganizeModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    isMinimized: boolean;
+    setIsMinimized: (minimized: boolean) => void;
 }
 
-export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
+export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized }: OrganizeModalProps) {
     const [mode, setMode] = useState<Mode>('ai');
+    const [isMinimizing, setIsMinimizing] = useState(false);
     const chatState = useOrganizeChat();
 
     // Single source of truth: chatState.currentProposal
     const proposal = chatState.currentProposal;
 
-    // Reset state when modal closes
+    // Reset state when modal closes (not when minimizing)
     useEffect(() => {
         if (!open) {
             chatState.reset();
+            setIsMinimized(false);
+            setIsMinimizing(false);
         }
-    }, [open]);
+    }, [open, setIsMinimized]);
 
     const handleClose = () => onOpenChange(false);
+
+    const minimizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleMinimize = () => {
+        setIsMinimizing(true);
+        minimizeTimeoutRef.current = setTimeout(() => {
+            setIsMinimizing(false);
+            setIsMinimized(true);
+            minimizeTimeoutRef.current = null;
+        }, 280);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (minimizeTimeoutRef.current) clearTimeout(minimizeTimeoutRef.current);
+        };
+    }, []);
+
+    const handleRestore = () => setIsMinimized(false);
 
     const handleModeChange = (newMode: Mode) => {
         setMode(newMode);
@@ -43,6 +69,23 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
     const handleProposalChange = (p: OrganizeProposalEvent | null) => {
         chatState.updateProposal(p);
     };
+
+    // Minimized: show floating pill only
+    if (open && isMinimized) {
+        return createPortal(
+            <AnimatePresence>
+                <MinimizedPill
+                    icon={<Sparkles />}
+                    label="Organize"
+                    subtitle={chatState.messages.length > 0 ? `${chatState.messages.length} messages` : 'AI assistant'}
+                    onClick={handleRestore}
+                    onClose={handleClose}
+                    className="right-[calc(3.5rem+2rem)]"
+                />
+            </AnimatePresence>,
+            document.body,
+        );
+    }
 
     return (
         <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -64,10 +107,11 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
                             // Desktop: floating with rounded corners
                             'md:rounded-2xl md:overflow-hidden',
                         )}
+                        style={{ transformOrigin: '100% 100%' }}
                         initial={{ opacity: 0, scale: 0.97, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        animate={isMinimizing ? { opacity: 0, scale: 0.3, y: 40 } : { opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                        transition={{ type: 'spring', duration: 0.35, bounce: 0.1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     >
                         <div className="flex h-full flex-col md:flex-row">
                             {/* Left panel: chat or manual */}
@@ -104,6 +148,9 @@ export function OrganizeModal({ open, onOpenChange }: OrganizeModalProps) {
                                         </Button>
                                     </div>
 
+                                    <Button variant="ghost" size="icon-sm" onClick={handleMinimize} aria-label="Minimize">
+                                        <Minimize2 className="size-4" />
+                                    </Button>
                                     <Button variant="ghost" size="icon-sm" onClick={handleClose} aria-label="Close">
                                         <X className="size-4" />
                                     </Button>

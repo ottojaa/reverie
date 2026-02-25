@@ -16,6 +16,16 @@ type SortBy = 'relevance' | 'uploaded' | 'date' | 'filename' | 'size';
 
 const SKELETON_DELAY_MS = 200;
 
+const ALL_FILTERS_REGEX = /-?\w+:(?:"[^"]*"|\S+)/g;
+
+function getFreeText(query: string): string {
+    return query.replace(ALL_FILTERS_REGEX, '').replace(/\s+/g, ' ').trim();
+}
+
+function getFilterPart(query: string): string {
+    return (query.match(ALL_FILTERS_REGEX) ?? []).join(' ').trim();
+}
+
 const sortOptions: Array<{ value: SortBy; label: string; icon: typeof Star }> = [
     { value: 'relevance', label: 'Relevance', icon: Star },
     { value: 'uploaded', label: 'Upload date', icon: Clock },
@@ -27,7 +37,7 @@ const sortOptions: Array<{ value: SortBy; label: string; icon: typeof Star }> = 
 export function SearchPage() {
     const { q, sort_by, sort_order } = useSearch({ from: '/search' });
     const navigate = useNavigate();
-    const [localQuery, setLocalQuery] = useState(q);
+    const [localQuery, setLocalQuery] = useState(() => getFreeText(q));
     const [showSkeleton, setShowSkeleton] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const observerRef = useRef<HTMLDivElement>(null);
@@ -49,7 +59,7 @@ export function SearchPage() {
 
     // Sync local query when URL changes (e.g., navigating back)
     useEffect(() => {
-        setLocalQuery(q);
+        setLocalQuery(getFreeText(q));
     }, [q]);
 
     // Keyboard shortcut: "/" to focus search input
@@ -87,14 +97,16 @@ export function SearchPage() {
             setLocalQuery(value);
             clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
+                const filterPart = getFilterPart(q);
+                const newQuery = filterPart ? `${filterPart} ${value}`.trim() : value;
                 navigate({
                     to: '/search',
-                    search: { q: value, sort_by: sort_by ?? 'relevance', sort_order: sort_order ?? 'desc' },
+                    search: { q: newQuery, sort_by: sort_by ?? 'relevance', sort_order: sort_order ?? 'desc' },
                     replace: true,
                 });
             }, 300);
         },
-        [navigate, sort_by, sort_order],
+        [navigate, q, sort_by, sort_order],
     );
 
     const handleClearQuery = useCallback(() => {
@@ -208,7 +220,7 @@ export function SearchPage() {
                             placeholder="Search documents..."
                             className="h-11 rounded-lg pl-10 pr-9"
                         />
-                        {localQuery && (
+                        {q && (
                             <Button
                                 type="button"
                                 variant="ghost"

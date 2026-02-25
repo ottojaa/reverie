@@ -277,12 +277,16 @@ async function suggestFilenames(prefix: string, userId: string, limit: number): 
  * Suggest folders
  */
 async function suggestFolders(prefix: string, userId: string, limit: number): Promise<string[]> {
+    // Folder paths start with "/" (e.g. "/Documents/Photos").
+    // Use contains match so "Doc" matches "/Documents/Photos".
+    const pattern = `%${prefix}%`;
+
     const results = await db
         .selectFrom('folders')
         .select('path')
         .distinct()
         .where('user_id', '=', userId)
-        .where('path', 'ilike', `${prefix}%`)
+        .where('path', 'ilike', pattern)
         .orderBy('path', 'asc')
         .limit(limit)
         .execute();

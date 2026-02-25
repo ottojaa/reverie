@@ -41,11 +41,15 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [organizeOpen, setOrganizeOpen] = useState(false);
+    const [organizeMinimized, setOrganizeMinimized] = useState(false);
     const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
     const mainRef = useRef<HTMLElement | null>(null);
     const defaultSensors = useDefaultSensors();
 
-    const openOrganize = useCallback(() => setOrganizeOpen(true), []);
+    const openOrganize = useCallback(() => {
+        setOrganizeOpen(true);
+        setOrganizeMinimized(false);
+    }, []);
 
     // Global keyboard shortcut: Cmd/Ctrl+Shift+O
     useEffect(() => {
@@ -104,7 +108,12 @@ export function Layout({ children }: LayoutProps) {
                             </GlobalDropzone>
                         </div>
                         <UploadModal />
-                        <OrganizeModal open={organizeOpen} onOpenChange={setOrganizeOpen} />
+                        <OrganizeModal
+                            open={organizeOpen}
+                            onOpenChange={setOrganizeOpen}
+                            isMinimized={organizeMinimized}
+                            setIsMinimized={setOrganizeMinimized}
+                        />
                     </div>
                 </DndContext>
             </SelectionProvider>
