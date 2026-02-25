@@ -158,6 +158,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         scrollMargin,
         gap: GAP,
         initialOffset: scrollEntry?.scrollY,
+        paddingEnd: 60,
     });
 
     // --- Infinite scroll trigger ---

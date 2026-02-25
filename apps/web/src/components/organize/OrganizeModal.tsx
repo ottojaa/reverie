@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { MinimizedPill } from '@/components/ui/MinimizedPill';
+import { ProcessingIndicator } from '@/components/ui/ProcessingIndicator';
+import { useDocuments } from '@/lib/api';
 import { useOrganizeChatContext } from '@/lib/api/OrganizeChatContext';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
@@ -25,6 +27,9 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
     const [mode, setMode] = useState<Mode>('ai');
     const [isMinimizing, setIsMinimizing] = useState(false);
     const chatState = useOrganizeChatContext();
+
+    const { data: documentsData } = useDocuments({ limit: 100 });
+    const documents = documentsData?.items ?? [];
 
     // Single source of truth: chatState.currentProposal
     const proposal = chatState.currentProposal;
@@ -156,6 +161,13 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
                                         <X className="size-4" />
                                     </Button>
                                 </div>
+
+                                <ProcessingIndicator
+                                    documents={documents}
+                                    variant="banner"
+                                    className="text-center flex align-center"
+                                    tooltipText="Your files are being processed. Wait for processing to finish before organising for better results."
+                                />
 
                                 {/* Content */}
                                 <div className="min-h-0 flex-1 overflow-hidden">

@@ -1,14 +1,14 @@
 import { DocumentGrid, DocumentSkeleton, EmptyDocumentsState, SelectionBanner } from '@/components/documents';
 import { Button } from '@/components/ui/button';
+import { ProcessingIndicator } from '@/components/ui/ProcessingIndicator';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { UploadFAB } from '@/components/upload';
 import { useInfiniteDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
-import { useDocumentsStatus } from '@/lib/useDocumentStatus';
 import { Pencil } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const SKELETON_DELAY_MS = 200;
 
@@ -59,25 +59,6 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
         return () => clearTimeout(t);
     }, [isLoading]);
 
-    // Subscribe to real-time updates for documents that are still processing
-    const processingDocumentIds = useMemo(
-        () =>
-            documents
-                .filter(
-                    (doc) =>
-                        doc.ocr_status === 'processing' ||
-                        doc.ocr_status === 'pending' ||
-                        doc.thumbnail_status === 'processing' ||
-                        doc.thumbnail_status === 'pending' ||
-                        (doc.llm_status ?? 'skipped') === 'processing' ||
-                        (doc.llm_status ?? 'skipped') === 'pending',
-                )
-                .map((doc) => doc.id),
-        [documents],
-    );
-
-    useDocumentsStatus(processingDocumentIds);
-
     const title = section ? section.name : 'My Files';
     const subtitle = section
         ? total
@@ -88,7 +69,13 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
           : null;
 
     return (
-        <div className="flex min-h-full flex-col p-6">
+        <div className="relative flex min-h-full flex-col p-6">
+            <ProcessingIndicator
+                documents={documents}
+                variant="badge"
+                className="absolute top-6 right-6"
+                visible={!isLoading}
+            />
             <div className="mb-6">
                 {sectionId && (
                     <nav className="mb-1 flex justify-between items-center text-sm gap-2">

@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
  */
 export default fp(async function (fastify: FastifyInstance) {
     await fastify.register(fastifyRateLimit, {
-        max: 500,
+        max: 2500,
         timeWindow: '15 minutes',
     });
 });
