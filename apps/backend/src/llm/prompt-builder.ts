@@ -30,6 +30,7 @@ Core principles:
 
 Entity rules:
 - Always preserve the exact OCR string in "raw_text".
+- Keep entity names (canonical_name, raw_text) under 20 characters when possible. For long phrases, extract the core identifier or split into separate entities.
 - "canonical_name" may fix obvious single-character OCR errors (0/O, 1/I, l/I).
 - canonical_name may restore a single missing trailing character when the word strongly resembles a common organization name.
 - Do not invent new entity names.

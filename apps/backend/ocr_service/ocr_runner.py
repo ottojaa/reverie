@@ -25,6 +25,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 # Suppress the slow connectivity check
@@ -34,6 +35,27 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 # Handwritten text / noise typically scores well below 0.50 while
 # printed text lands in the 0.80–0.99 range.
 MIN_BLOCK_CONFIDENCE = 0.7
+
+# Max PDF pages to process (avoids OOM/timeout for very long docs)
+PDF_PAGE_LIMIT = 50
+
+# Embedded text: min chars to trust it, skip OCR
+MIN_EMBEDDED_CHARS = 300
+# Page coverage: if images cover more than this, prefer OCR over embedded
+IMAGE_COVERAGE_THRESHOLD = 0.5
+
+
+def _is_readable_text(text):
+    """Heuristic: text looks like real content, not garbage."""
+    if not text or len(text.strip()) < 20:
+        return False
+    alnum = sum(1 for c in text if c.isalnum() or c.isspace())
+    if alnum / len(text) < 0.5:
+        return False
+    # Reject if too many repeated chars (e.g. "aaaaaaa")
+    if len(set(text)) < 5:
+        return False
+    return True
 
 
 def _print_json(obj):
@@ -50,11 +72,63 @@ def _build_empty_result():
     }
 
 
+# Min horizontal gap (px) between blocks to insert space (avoids "word1word2")
+SPACE_GAP_THRESHOLD = 8
+
+# Heuristic: min line length and max spaces to consider "concatenated"
+CONCATENATED_MIN_LEN = 40
+CONCATENATED_MAX_SPACES = 3
+
+
+def _insert_spaces_heuristic(text):
+    """
+    Insert spaces in concatenated OCR output (e.g. Tyosopimuslain5 -> Tyosopimuslain 5).
+    Apply only when line looks concatenated: long and few spaces.
+    """
+    if not text or len(text) < CONCATENATED_MIN_LEN:
+        return text
+    if text.count(" ") > CONCATENATED_MAX_SPACES:
+        return text
+
+    result = []
+    for i, c in enumerate(text):
+        result.append(c)
+        if i + 1 >= len(text):
+            break
+        next_c = text[i + 1]
+        # Space before digit when preceded by letter
+        if c.isalpha() and next_c.isdigit():
+            result.append(" ")
+        # Space before ( when preceded by letter
+        elif c.isalpha() and next_c == "(":
+            result.append(" ")
+    return "".join(result)
+
+
+def _join_blocks_with_spaces(blocks):
+    """
+    Join block texts with spaces. PaddleOCR returns one block per detected region
+    (often a word); no space between blocks causes "word1word2".
+    Use bbox gap: small gap = same word, large gap = space between words.
+    """
+    if not blocks:
+        return ""
+    parts = []
+    for i, b in enumerate(blocks):
+        parts.append(b["text"])
+        if i + 1 < len(blocks):
+            curr_right = b["bbox"][2][0] if len(b["bbox"]) > 2 else b["bbox"][1][0]
+            next_left = blocks[i + 1]["bbox"][0][0]
+            gap = next_left - curr_right
+            # Always add space between blocks; use double space for larger gaps (new clause)
+            parts.append("  " if gap > SPACE_GAP_THRESHOLD * 3 else " ")
+    return "".join(parts)
+
+
 def _group_lines_by_row(blocks, row_threshold=15):
     """
     Group text blocks that share approximately the same Y position
-    into single lines, separated by spaces. Different rows are
-    separated by newlines.
+    into single lines. Inserts spaces based on bbox gap to fix "word1word2".
     Returns list of row dicts: {"text": str, "y": float, "blocks": [...]}
     """
     if not blocks:
@@ -78,7 +152,7 @@ def _group_lines_by_row(blocks, row_threshold=15):
     result = []
     for row in rows:
         row.sort(key=lambda b: b["bbox"][0][0])
-        line_text = "  ".join(b["text"] for b in row)
+        line_text = _join_blocks_with_spaces(row)
         row_y = row[0]["bbox"][0][1]
         result.append({"text": line_text, "y": row_y, "blocks": row})
 
@@ -153,7 +227,7 @@ def _build_structured_text(blocks, row_threshold=15):
             output_lines.append(f"[{effective_section.capitalize()}]")
             last_effective = effective_section
 
-        output_lines.append(text)
+        output_lines.append(_insert_spaces_heuristic(text))
 
     return "\n".join(output_lines)
 
@@ -215,6 +289,109 @@ def process_image(ocr, image_path):
     }
 
 
+def process_pdf(ocr, pdf_path):
+    """
+    Run OCR on a PDF. Uses embedded text when available (perfect spacing);
+    falls back to OCR for scanned/image-heavy pages.
+    """
+    if not Path(pdf_path).is_file():
+        return {"error": f"File not found: {pdf_path}"}
+
+    try:
+        import fitz
+    except ImportError as e:
+        return {"error": f"PyMuPDF not installed: {e}"}
+
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        return {"error": f"Failed to open PDF: {e}"}
+
+    all_text_parts = []
+    all_confidences = []
+    temp_files = []
+    page_count = min(len(doc), PDF_PAGE_LIMIT)
+
+    try:
+        for page_num in range(page_count):
+            page = doc[page_num]
+            embedded = page.get_text().strip()
+
+            # Compute page coverage: images vs text blocks
+            img_cov = 0.0
+            try:
+                info = page.get_text("dict")
+                blocks = info.get("blocks", []) if isinstance(info, dict) else []
+            except Exception:
+                blocks = []
+            pr = page.rect
+            page_area = max(1.0, pr.width * pr.height)
+            img_area = 0.0
+            for b in blocks:
+                bbox = b.get("bbox") if isinstance(b, dict) else None
+                if not bbox or len(bbox) != 4:
+                    continue
+                x0, y0, x1, y1 = bbox
+                area = max(0.0, (x1 - x0) * (y1 - y0))
+                if b.get("type") == 1:  # image block
+                    img_area += area
+            img_cov = img_area / page_area
+
+            # Use embedded text when: long enough, readable, page not image-dominated
+            if (
+                embedded
+                and len(embedded) >= MIN_EMBEDDED_CHARS
+                and _is_readable_text(embedded)
+                and img_cov < IMAGE_COVERAGE_THRESHOLD
+            ):
+                all_text_parts.append(embedded)
+                all_confidences.append(100.0)  # embedded is "perfect"
+                continue
+
+            # Fall back to OCR
+            mat = fitz.Matrix(2, 2)
+            pm = page.get_pixmap(matrix=mat, alpha=False)
+            if pm.width > 2000 or pm.height > 2000:
+                mat = fitz.Matrix(1, 1)
+                pm = page.get_pixmap(matrix=mat, alpha=False)
+
+            fd, temp_path = tempfile.mkstemp(suffix=".png")
+            os.close(fd)
+            temp_files.append(temp_path)
+            pm.save(temp_path)
+
+            result = process_image(ocr, temp_path)
+            if "error" in result:
+                return result
+            if result["text"]:
+                all_text_parts.append(result["text"])
+                all_confidences.append(result["confidence"])
+            elif embedded and _is_readable_text(embedded):
+                # OCR produced nothing; fall back to embedded
+                all_text_parts.append(embedded)
+                all_confidences.append(100.0)
+    finally:
+        doc.close()
+        for p in temp_files:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    if not all_text_parts:
+        return _build_empty_result()
+
+    combined_text = "\n\n".join(all_text_parts)
+    avg_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
+
+    return {
+        "text": combined_text,
+        "confidence": round(avg_confidence, 2),
+        "blocks": [],
+        "engine": "paddleocr/PP-OCRv3",
+    }
+
+
 def main():
     # ── Load models once ─────────────────────────────────────────
     try:
@@ -228,7 +405,7 @@ def main():
         ocr = PaddleOCR(
             ocr_version="PP-OCRv4",
             use_textline_orientation=True,
-            enable_mkldnn=False,                 
+            enable_mkldnn=False,
         )
     except Exception as e:
         _print_json({"error": f"Failed to initialize PaddleOCR: {e}"})
@@ -260,7 +437,10 @@ def main():
             continue
 
         try:
-            result = process_image(ocr, image_path)
+            if image_path.lower().endswith(".pdf"):
+                result = process_pdf(ocr, image_path)
+            else:
+                result = process_image(ocr, image_path)
             _print_json(result)
         except Exception as e:
             _print_json({"error": f"OCR processing failed: {e}"})

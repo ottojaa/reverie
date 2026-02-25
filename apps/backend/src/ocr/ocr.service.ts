@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
@@ -5,9 +8,10 @@ import { getStorageService } from '../services/storage.service';
 import { classifyNonTextImage } from './category-classifier';
 import { extractExifMetadata } from './exif-extractor';
 import { getImageMetadata, getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
-import { recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
+import { recognizeFromFilePath, recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
 import { recognizeText as recognizeWithTesseract, terminateWorker } from './tesseract.client';
 import { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from './text-detector';
+import { extractTextFromBuffer, isTextExtractable } from './text-extractor';
 import type { DocumentCategory, OcrOutput, OcrProcessingResult } from './types';
 
 /**
@@ -82,7 +86,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 2. Check if file type is processable
     if (!isProcessableImage(document.mime_type)) {
-        return handleNonImageFile(documentId, document.mime_type);
+        return handleNonImageFile(documentId, document);
     }
 
     // 3. Load image from storage
@@ -160,10 +164,10 @@ export async function processDocument(documentId: string, options: ProcessDocume
 }
 
 /**
- * Handle non-image files that don't need OCR
+ * Handle non-image files: PDF (via PaddleOCR) or TXT/MD/CSV (direct extraction)
  */
-async function handleNonImageFile(documentId: string, mimeType: string): Promise<OcrProcessingResult> {
-    const result: OcrProcessingResult = {
+async function handleNonImageFile(documentId: string, document: Document): Promise<OcrProcessingResult> {
+    const baseResult: OcrProcessingResult = {
         rawText: '',
         confidenceScore: 0,
         textDensity: 0,
@@ -173,15 +177,51 @@ async function handleNonImageFile(documentId: string, mimeType: string): Promise
         ocrEngine: 'none',
     };
 
-    // For text-based files (txt, md, csv), text extraction happens in upload service
-    const textTypes = ['text/plain', 'text/markdown', 'text/csv'];
-
-    if (textTypes.includes(mimeType)) {
-        result.hasMeaningfulText = true;
+    if (!isTextExtractable(document.mime_type)) {
+        await saveOcrResult(documentId, baseResult);
+        return baseResult;
     }
 
-    await saveOcrResult(documentId, result);
+    const storageService = getStorageService();
+    const buffer = await storageService.getFile(document.file_path);
 
+    // PDF: PaddleOCR only (skip when tesseract)
+    if (document.mime_type === 'application/pdf') {
+        if (env.OCR_ENGINE !== 'paddleocr') {
+            await saveOcrResult(documentId, baseResult);
+            return baseResult;
+        }
+
+        const tempDir = await mkdtemp(join(tmpdir(), 'reverie-pdf-'));
+        const tempPath = join(tempDir, `input-${Date.now()}.pdf`);
+        await writeFile(tempPath, buffer);
+
+        try {
+            const ocrOutput = await recognizeFromFilePath(tempPath);
+            const result: OcrProcessingResult = {
+                ...baseResult,
+                rawText: ocrOutput.text,
+                confidenceScore: ocrOutput.confidence,
+                hasMeaningfulText: ocrOutput.text.trim().length > 0,
+                ocrEngine: ocrOutput.engine ?? 'paddleocr',
+            };
+            await saveOcrResult(documentId, result);
+            return result;
+        } finally {
+            await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        }
+    }
+
+    // TXT/MD/CSV: direct text extraction
+    const { text } = await extractTextFromBuffer(buffer, document.mime_type);
+    const result: OcrProcessingResult = {
+        ...baseResult,
+        rawText: text,
+        confidenceScore: 100,
+        hasMeaningfulText: text.trim().length > 0,
+        ocrEngine: 'text_extract',
+    };
+    await saveOcrResult(documentId, result);
     return result;
 }
 

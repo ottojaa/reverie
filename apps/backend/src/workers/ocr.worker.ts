@@ -1,7 +1,7 @@
 import { Job, Worker } from 'bullmq';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
-import { isProcessableImage, processDocument, shouldQueueLlmJob } from '../ocr';
+import { isProcessableImage, isTextExtractable, processDocument, shouldQueueLlmJob } from '../ocr';
 import { addLlmJob } from '../queues/llm.queue';
 import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -30,21 +30,19 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     await db.updateTable('documents').set({ ocr_status: 'processing' }).where('id', '=', documentId).execute();
 
     try {
-        // Check if file is processable for OCR
-        if (!isProcessableImage(document.mime_type)) {
-            logger.info('Skipping OCR for non-image file', { documentId, mimeType: document.mime_type });
+        // Check if file is processable: images go through OCR; PDF/TXT go through processDocument (handleNonImageFile)
+        const isImage = isProcessableImage(document.mime_type);
+        const isPdfOrTxt = isTextExtractable(document.mime_type);
 
-            // Mark as complete with no text
+        if (!isImage && !isPdfOrTxt) {
+            logger.info('Skipping OCR for unsupported file type', { documentId, mimeType: document.mime_type });
+
             await db
                 .updateTable('documents')
-                .set({
-                    ocr_status: 'complete',
-                    has_meaningful_text: false,
-                })
+                .set({ ocr_status: 'complete', has_meaningful_text: false })
                 .where('id', '=', documentId)
                 .execute();
 
-            // Insert empty OCR result
             await db
                 .insertInto('ocr_results')
                 .values({
@@ -69,7 +67,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
 
-        // Run OCR processing
+        // Run OCR processing (images) or text extraction (PDF/TXT)
         const result = await processDocument(documentId, {
             ...(forceReprocess ? { forceReprocess: true } : {}),
             document,

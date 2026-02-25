@@ -219,37 +219,39 @@ export async function startPaddleOcr(): Promise<void> {
 }
 
 /**
+ * Recognize text from a file path (image or PDF).
+ * Caller is responsible for the file existing; used when file is already on disk (e.g. temp PDF).
+ */
+export async function recognizeFromFilePath(filePath: string): Promise<OcrOutput> {
+    const response = await sendRequest({ image_path: filePath });
+
+    if ('error' in response) {
+        throw new Error(`PaddleOCR error: ${response.error}`);
+    }
+
+    const result = response as PaddleOcrResult;
+
+    return {
+        text: result.text ?? '',
+        confidence: result.confidence ?? 0,
+        engine: result.engine ?? 'paddleocr/PP-OCRv3',
+    };
+}
+
+/**
  * Recognize text in an image buffer using PaddleOCR
  */
 export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
-    let tempImagePath: string | null = null;
+    const tempDir = await getSharedTempDir();
+    const tempImagePath = join(tempDir, `input-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
+    await writeFile(tempImagePath, imageBuffer);
 
     try {
-        // Write buffer to a temp file (PaddleOCR needs a file path).
-        // Reuse a shared temp directory to avoid mkdir/rm overhead per request.
-        const tempDir = await getSharedTempDir();
-        tempImagePath = join(tempDir, `input-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
-        await writeFile(tempImagePath, imageBuffer);
-
-        const response = await sendRequest({ image_path: tempImagePath });
-
-        if ('error' in response) {
-            throw new Error(`PaddleOCR error: ${response.error}`);
-        }
-
-        const result = response as PaddleOcrResult;
-
-        return {
-            text: result.text ?? '',
-            confidence: result.confidence ?? 0,
-            engine: result.engine ?? 'paddleocr/PP-OCRv3',
-        };
+        return await recognizeFromFilePath(tempImagePath);
     } finally {
-        if (tempImagePath) {
-            await rm(tempImagePath, { force: true }).catch(() => {
-                /* ignore cleanup errors */
-            });
-        }
+        await rm(tempImagePath, { force: true }).catch(() => {
+            /* ignore cleanup errors */
+        });
     }
 }
 
