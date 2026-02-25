@@ -1,14 +1,15 @@
 import bcrypt from 'bcrypt';
 import { mkdir } from 'fs/promises';
-import { join } from 'path';
 import { nanoid } from 'nanoid';
+import { join } from 'path';
 import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
 import type { User } from '../db/schema.js';
 
 const SALT_ROUNDS = 12;
-const GB = 1024 * 1024 * 1024;
-const TB = 1024 * GB;
+const MB = 1_000_000;
+const GB = 1_000_000_000;
+const TB = 1_000_000_000_000;
 
 export interface CreateUserOptions {
     email: string;
@@ -23,7 +24,7 @@ export interface CreatedUser {
 }
 
 function parseQuota(quotaStr: string): number {
-    const match = quotaStr.match(/^(\d+(?:\.\d+)?)\s*(GB|TB)$/i);
+    const match = quotaStr.match(/^(\d+(?:\.\d+)?)\s*(GB|TB|MB)$/i);
 
     if (!match) {
         throw new Error(`Invalid quota format: "${quotaStr}". Use format like "500GB" or "1TB"`);
@@ -32,7 +33,16 @@ function parseQuota(quotaStr: string): number {
     const value = parseFloat(match[1]!);
     const unit = match[2]!.toUpperCase();
 
-    return unit === 'GB' ? Math.floor(value * GB) : Math.floor(value * TB);
+    switch (unit) {
+        case 'GB':
+            return Math.floor(value * GB);
+        case 'TB':
+            return Math.floor(value * TB);
+        case 'MB':
+            return Math.floor(value * MB);
+        default:
+            throw new Error(`Invalid quota unit: "${unit}". Use format like "500GB" or "1TB"`);
+    }
 }
 
 function generatePassword(): string {
@@ -49,11 +59,7 @@ async function createStorageDirectory(storagePath: string): Promise<void> {
 export async function createUser(options: CreateUserOptions): Promise<CreatedUser> {
     const { email, display_name, quota } = options;
 
-    const existingUser = await db
-        .selectFrom('users')
-        .selectAll()
-        .where('email', '=', email.toLowerCase())
-        .executeTakeFirst();
+    const existingUser = await db.selectFrom('users').selectAll().where('email', '=', email.toLowerCase()).executeTakeFirst();
 
     if (existingUser) {
         throw new Error(`User with email "${email}" already exists`);
@@ -96,17 +102,7 @@ export async function createUser(options: CreateUserOptions): Promise<CreatedUse
 export async function listUsers(): Promise<User[]> {
     return db
         .selectFrom('users')
-        .select([
-            'id',
-            'email',
-            'display_name',
-            'storage_quota_bytes',
-            'storage_used_bytes',
-            'is_active',
-            'role',
-            'created_at',
-            'last_login_at',
-        ])
+        .select(['id', 'email', 'display_name', 'storage_quota_bytes', 'storage_used_bytes', 'is_active', 'role', 'created_at', 'last_login_at'])
         .orderBy('created_at', 'desc')
         .execute() as Promise<User[]>;
 }
@@ -122,12 +118,8 @@ export async function updateUser(options: UpdateUserOptions): Promise<User> {
     const { id, email, display_name, quota } = options;
 
     if (email !== undefined) {
-        const existing = await db
-            .selectFrom('users')
-            .select('id')
-            .where('email', '=', email.toLowerCase())
-            .where('id', '!=', id)
-            .executeTakeFirst();
+        const existing = await db.selectFrom('users').select('id').where('email', '=', email.toLowerCase()).where('id', '!=', id).executeTakeFirst();
+
         if (existing) throw new Error(`User with email "${email}" already exists`);
     }
 
@@ -140,17 +132,15 @@ export async function updateUser(options: UpdateUserOptions): Promise<User> {
 
     if (Object.keys(updates).length === 0) {
         const existing = await db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst();
+
         if (!existing) throw new Error('User not found');
+
         return existing;
     }
 
-    const [updated] = await db
-        .updateTable('users')
-        .set(updates)
-        .where('id', '=', id)
-        .returningAll()
-        .execute();
+    const [updated] = await db.updateTable('users').set(updates).where('id', '=', id).returningAll().execute();
 
     if (!updated) throw new Error('User not found');
+
     return updated;
 }

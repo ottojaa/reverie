@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { authApi } from '../lib/api/auth-api';
+import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
 
 export const Route = createFileRoute('/settings')({
@@ -19,16 +20,6 @@ function SettingsPage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-
-    const formatBytes = (bytes: number): string => {
-        if (bytes < 1024) return `${bytes} B`;
-
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-
-        if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
-        return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-    };
 
     const handleChangePassword = async (e: FormEvent) => {
         e.preventDefault();
@@ -99,8 +90,8 @@ function SettingsPage() {
                     <CardContent className="space-y-4">
                         <div>
                             <div className="flex justify-between text-sm mb-2">
-                                <span>{formatBytes(user.storage_used_bytes)} used</span>
-                                <span>{formatBytes(user.storage_quota_bytes)} total</span>
+                                <span>{formatFileSize(user.storage_used_bytes)} used</span>
+                                <span>{formatFileSize(user.storage_quota_bytes)} total</span>
                             </div>
                             <div className="h-2 bg-secondary rounded-full overflow-hidden">
                                 <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(storagePercentage, 100)}%` }} />

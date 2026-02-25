@@ -2,6 +2,12 @@
 
 Self-hosted document manager with OCR, AI summaries, and smart organization—like a private Google Drive with built-in intelligence.
 
+# This project is a work in progress. Here are some things to note:
+
+- Organize chat assistant needs fine-tuning and prompt work, as well as context management improvements.
+- Performance: PaddleOCR is currently running on my server's CPU, which is not ideal and 4k images can take 10s+, so processing can take quite a while. Increasing concurrency is not possible yet due to lack of RAM. TODO(self): get at least a 10GB+ VRAM GPU and migrate to paddleocr-gpu.
+- UI work needed in various areas
+
 ## Features
 
 - **Document management**: Upload, browse, organize in folder hierarchy (categories → sections)

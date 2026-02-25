@@ -248,7 +248,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 className={cn(
                     'flex flex-col border-r border-sidebar-border bg-sidebar',
                     'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out md:relative md:transform-none',
-                    isMobile ? 'w-85' : 'w-64',
+                    isMobile ? 'w-80' : 'w-64',
                     !isOpen && '-translate-x-full md:translate-x-0',
                 )}
             >

@@ -12,7 +12,6 @@
 const prodIdx = process.argv.indexOf('--prod');
 
 if (prodIdx !== -1) {
-
     const next = process.argv[prodIdx + 1];
 
     if (next !== 'false' && next !== '0') {
@@ -54,10 +53,10 @@ function parseQuota(quotaStr: string): number {
     const unit = match[2]!.toUpperCase();
 
     if (unit === 'GB') {
-        return Math.floor(value * 1024 * 1024 * 1024);
+        return Math.floor(value * 1_000_000_000);
     }
 
-    return Math.floor(value * 1024 * 1024 * 1024 * 1024);
+    return Math.floor(value * 1_000_000_000_000);
 }
 
 function generatePassword(): string {
@@ -110,6 +109,7 @@ async function createUser(options: CreateUserOptions): Promise<void> {
     if (!created) {
         throw new Error('Failed to create user');
     }
+
     await createStorageDirectory(storagePath);
 
     console.log('\n✅ User created successfully!\n');
