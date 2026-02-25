@@ -61,7 +61,6 @@ export function getCategoryDescription(category: DocumentCategory): string {
         graphic: 'Graphic, diagram, or illustration',
         receipt: 'Receipt or purchase record',
         invoice: 'Invoice or bill',
-        statement: 'Account or bank statement',
         letter: 'Letter or correspondence',
         contract: 'Contract or legal agreement',
         form: 'Form or application',
@@ -71,13 +70,9 @@ export function getCategoryDescription(category: DocumentCategory): string {
         memo: 'Memo or internal note',
         newsletter: 'Newsletter or publication',
         stock_statement: 'Stock or investment statement',
-        dividend_notice: 'Dividend notice',
-        tax_document: 'Tax document or form',
         bank_statement: 'Bank statement',
-        insurance_policy: 'Insurance policy',
         medical_record: 'Medical record',
         bill_of_materials: 'Bill of materials',
-        securities_statement: 'Securities statement',
         other: 'Other document',
     };
 

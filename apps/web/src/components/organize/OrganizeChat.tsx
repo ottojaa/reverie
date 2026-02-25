@@ -11,7 +11,7 @@ const SUGGESTED_PROMPTS = [
     'Help me organize my documents',
     'Create a folder for all my receipts and invoices from last year',
     'Find unorganized documents and suggest a structure',
-    'Group my photos by location and year',
+    'Group my photos by country and year',
 ];
 
 interface OrganizeChatProps {

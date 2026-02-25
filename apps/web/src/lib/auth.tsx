@@ -2,6 +2,7 @@ import type { LoginResponse, User } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { initApiAuth } from './api/client';
+import { getQueryClient } from './query-client/queryClient';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: 'POST',
                 credentials: 'include',
             });
+            getQueryClient().clear();
         } catch {
             // Ignore logout errors
         } finally {

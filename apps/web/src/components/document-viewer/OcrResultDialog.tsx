@@ -1,11 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useOcrResult, useRetryOcr } from '@/lib/api/documents';
 import { formatDateTime } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
@@ -19,11 +13,7 @@ interface OcrResultDialogProps {
 }
 
 function Badge({ children, className }: { children: React.ReactNode; className?: string }) {
-    return (
-        <span className={cn('inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium', className)}>
-            {children}
-        </span>
-    );
+    return <span className={cn('inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium', className)}>{children}</span>;
 }
 
 export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: OcrResultDialogProps) {
@@ -56,12 +46,7 @@ export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: O
                     {ocrStatus === 'failed' && (
                         <div className="space-y-3 py-4">
                             <p className="text-sm text-muted-foreground">OCR processing failed.</p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => retryOcr.mutate(documentId)}
-                                disabled={retryOcr.isPending}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => retryOcr.mutate(documentId)} disabled={retryOcr.isPending}>
                                 {retryOcr.isPending ? (
                                     <>
                                         <Loader2 className="mr-1.5 size-3.5 animate-spin" />
@@ -78,12 +63,7 @@ export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: O
                     {ocrStatus === 'skipped' && (
                         <div className="space-y-3 py-4">
                             <p className="text-sm text-muted-foreground">OCR was not run for this document.</p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => retryOcr.mutate(documentId)}
-                                disabled={retryOcr.isPending}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => retryOcr.mutate(documentId)} disabled={retryOcr.isPending}>
                                 {retryOcr.isPending ? (
                                     <>
                                         <Loader2 className="mr-1.5 size-3.5 animate-spin" />
@@ -105,9 +85,7 @@ export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: O
                     )}
 
                     {/* Complete — error loading */}
-                    {ocrStatus === 'complete' && ocrResultQuery.isError && (
-                        <p className="py-4 text-sm text-destructive">Failed to load OCR result.</p>
-                    )}
+                    {ocrStatus === 'complete' && ocrResultQuery.isError && <p className="py-4 text-sm text-destructive">Failed to load OCR result.</p>}
 
                     {/* Complete — data */}
                     {ocrStatus === 'complete' && ocrResultQuery.data && (
@@ -115,21 +93,13 @@ export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: O
                             {/* Stats badges */}
                             <div className="flex flex-wrap gap-2">
                                 {ocrResultQuery.data.confidence_score != null && (
-                                    <Badge className="bg-muted text-muted-foreground">
-                                        Confidence: {ocrResultQuery.data.confidence_score}%
-                                    </Badge>
+                                    <Badge className="bg-muted text-muted-foreground">Confidence: {ocrResultQuery.data.confidence_score}%</Badge>
                                 )}
                                 {ocrResultQuery.data.text_density != null && (
-                                    <Badge className="bg-muted text-muted-foreground">
-                                        Density: {ocrResultQuery.data.text_density.toFixed(1)}
-                                    </Badge>
+                                    <Badge className="bg-muted text-muted-foreground">Density: {ocrResultQuery.data.text_density.toFixed(1)}</Badge>
                                 )}
                                 <Badge
-                                    className={cn(
-                                        ocrResultQuery.data.has_meaningful_text
-                                            ? 'bg-success/15 text-success'
-                                            : 'bg-muted text-muted-foreground',
-                                    )}
+                                    className={cn(ocrResultQuery.data.has_meaningful_text ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}
                                 >
                                     {ocrResultQuery.data.has_meaningful_text ? 'Meaningful text' : 'No meaningful text'}
                                 </Badge>
@@ -144,46 +114,10 @@ export function OcrResultDialog({ documentId, ocrStatus, open, onOpenChange }: O
                                 <p className="text-sm text-muted-foreground italic">No text extracted.</p>
                             )}
 
-                            {/* Extracted metadata */}
-                            {ocrResultQuery.data.metadata &&
-                                (Boolean(ocrResultQuery.data.metadata.companies?.length) ||
-                                    Boolean(ocrResultQuery.data.metadata.dates?.length) ||
-                                    Boolean(ocrResultQuery.data.metadata.values?.length)) && (
-                                    <div className="space-y-2 rounded-lg bg-muted/30 p-3">
-                                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                                            Extracted Metadata
-                                        </p>
-                                        <div className="space-y-1.5 text-xs">
-                                            {ocrResultQuery.data.metadata.companies?.length ? (
-                                                <p>
-                                                    <span className="text-muted-foreground">Companies: </span>
-                                                    {ocrResultQuery.data.metadata.companies.join(', ')}
-                                                </p>
-                                            ) : null}
-                                            {ocrResultQuery.data.metadata.dates?.length ? (
-                                                <p>
-                                                    <span className="text-muted-foreground">Dates: </span>
-                                                    {ocrResultQuery.data.metadata.dates.join(', ')}
-                                                </p>
-                                            ) : null}
-                                            {ocrResultQuery.data.metadata.values?.length ? (
-                                                <p>
-                                                    <span className="text-muted-foreground">Values: </span>
-                                                    {ocrResultQuery.data.metadata.values
-                                                        .map((v) => `${v.currency} ${v.amount}`)
-                                                        .join(', ')}
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                )}
-
                             {/* Timestamp + retry */}
                             <div className="flex items-center justify-between">
                                 {ocrResultQuery.data.processed_at && (
-                                    <p className="text-[10px] text-muted-foreground/50">
-                                        Processed {formatDateTime(ocrResultQuery.data.processed_at)}
-                                    </p>
+                                    <p className="text-[10px] text-muted-foreground/50">Processed {formatDateTime(ocrResultQuery.data.processed_at)}</p>
                                 )}
                                 {canRetry && (
                                     <Button

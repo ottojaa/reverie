@@ -92,12 +92,11 @@ export interface OcrResultsTable {
     document_id: string;
     raw_text: string;
     confidence_score: number | null;
-    text_density: number | null; // Added in Plan 05: chars per 1000px²
-    has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
+    text_density: number | null; // chars per 1000px²
+    has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>;
     metadata: OcrMetadata | null;
     text_vector: unknown | null; // tsvector type
     processed_at: ColumnType<Date, Date | undefined, never>;
-    /** OCR engine identifier, e.g. "paddleocr/PP-OCRv4" or "tesseract/5.x-fin+eng" */
     ocr_engine: ColumnType<string, string | undefined, string>;
     duration_ms: number | null;
 }
