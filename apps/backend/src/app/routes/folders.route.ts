@@ -2,13 +2,13 @@ import {
     CreateFolderRequestSchema,
     FolderSchema,
     FolderWithChildrenSchema,
-    ReorderSectionsRequestSchema,
+    ReorderFoldersRequestSchema,
     UpdateFolderRequestSchema,
     UuidSchema,
     type CreateFolderRequest,
     type Folder,
     type FolderWithChildren,
-    type ReorderSectionsRequest,
+    type ReorderFoldersRequest,
     type UpdateFolderRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
@@ -38,13 +38,13 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
-    // Get full section tree (requires authentication)
+    // Get full folder tree (requires authentication)
     fastify.get<{ Reply: FolderWithChildren[] }>(
         '/folders/tree',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Get section tree with nested children and document counts',
+                description: 'Get folder tree with nested children and document counts',
                 response: {
                     200: z.array(FolderWithChildrenSchema),
                 },
@@ -52,22 +52,22 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const tree = await folderService.getSectionTree(userId);
+            const tree = await folderService.getFolderTree(userId);
 
             return tree.map((node) => serializeFolderWithChildren(node));
         },
     );
 
-    // Reorder sections (requires authentication)
+    // Reorder folders (requires authentication)
     fastify.put<{
-        Body: ReorderSectionsRequest;
+        Body: ReorderFoldersRequest;
     }>(
         '/folders/reorder',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Batch update section sort order',
-                body: ReorderSectionsRequestSchema,
+                description: 'Batch update folder sort order',
+                body: ReorderFoldersRequestSchema,
                 response: {
                     204: z.null(),
                 },
@@ -75,7 +75,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            await folderService.reorderSections(userId, request.body.updates);
+            await folderService.reorderFolders(userId, request.body.updates);
             reply.status(204).send();
         },
     );

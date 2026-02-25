@@ -201,7 +201,7 @@ export interface MoveDocumentsParams {
     conflict_strategy?: 'replace' | 'keep_both';
 }
 
-export function useReorderSections() {
+export function useReorderFolders() {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -222,7 +222,7 @@ export function useReorderSections() {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
 
-            toast.error('Failed to reorder sections');
+            toast.error('Failed to reorder folders');
         },
         // Don't invalidate on success: refetch can return stale order and overwrite optimistic UI
     });

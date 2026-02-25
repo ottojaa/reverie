@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Spinner } from './spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
-const DEFAULT_TOOLTIP = 'Processing files in the background. It may take a few minutes.';
+const DEFAULT_TOOLTIP = 'Processing files in the background. It may take a few minutes before your files are searchable.';
 
 interface ProcessingIndicatorProps {
     documents: Document[];
@@ -17,7 +17,8 @@ interface ProcessingIndicatorProps {
 }
 
 export function ProcessingIndicator({ documents, tooltipText = DEFAULT_TOOLTIP, variant = 'badge', visible = true, className }: ProcessingIndicatorProps) {
-    const { processingDocumentIds, totalFiles, completedFiles, isProcessing } = useProcessingProgress(documents);
+    const { processingDocumentIds, isProcessing } = useProcessingProgress(documents);
+
     useDocumentsStatus(processingDocumentIds);
 
     const shouldShow = visible && isProcessing;
@@ -31,9 +32,6 @@ export function ProcessingIndicator({ documents, tooltipText = DEFAULT_TOOLTIP, 
             )}
         >
             <Spinner className="size-4" />
-            <span>
-                {completedFiles}/{totalFiles}
-            </span>
         </div>
     );
 

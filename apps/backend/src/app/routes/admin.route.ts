@@ -11,7 +11,17 @@ import { z } from 'zod';
 import { createUser, listUsers, updateUser } from '../../services/user.service.js';
 
 // Serialize user for API response (exclude sensitive fields)
-function serializeUser(user: { id: string; email: string; display_name: string; storage_quota_bytes: number; storage_used_bytes: number; is_active: boolean; role: string; created_at: Date; last_login_at: Date | null }) {
+function serializeUser(user: {
+    id: string;
+    email: string;
+    display_name: string;
+    storage_quota_bytes: number;
+    storage_used_bytes: number;
+    is_active: boolean;
+    role: string;
+    created_at: Date;
+    last_login_at: Date | null;
+}) {
     return {
         id: user.id,
         email: user.email,
@@ -38,6 +48,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async (_request, reply) => {
             const users = await listUsers();
+
             return reply.send({
                 users: users.map((u) =>
                     serializeUser({
@@ -72,9 +83,11 @@ export default async function (fastify: FastifyInstance) {
                     display_name: body.display_name,
                     quota: body.quota,
                 });
+
                 return reply.send({ user: serializeUser(user) });
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to update user';
+
                 return reply.status(400).send({
                     error: 'update_user_failed',
                     message,

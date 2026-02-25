@@ -71,7 +71,6 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     return (
         <div className="relative flex min-h-full flex-col">
             <div className="flex-1 p-6">
-                <ProcessingIndicator documents={documents} variant="badge" className="absolute top-6 right-6" visible={!isLoading} />
                 <div className="mb-6">
                     {sectionId && (
                         <nav className="mb-1 flex justify-between items-center text-sm gap-2">
@@ -81,7 +80,8 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                                     {title}
                                 </h1>
                             </div>
-                            <div>
+                            <div className="flex items-center gap-2">
+                                <ProcessingIndicator documents={documents} variant="badge" visible={!isLoading} />
                                 {section && (
                                     <Button variant="outline" size="sm" className="shrink-0" onClick={() => openEdit(section)}>
                                         <Pencil className="mr-2 size-4" />
@@ -100,7 +100,9 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 </div>
 
                 {error && (
-                    <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">Failed to load documents. Please try again.</div>
+                    <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
+                        Failed to load documents. Please try again.
+                    </div>
                 )}
 
                 {isLoading ? (

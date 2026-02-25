@@ -55,20 +55,18 @@ export default async function (fastify: FastifyInstance) {
                 return reply.badRequest('No files provided');
             }
 
-            // Require a section: use provided folder_id or get/create default section
-            let resolvedFolderId: string;
-
-            if (folderId) {
-                const folder = await folderService.getFolder(folderId, userId);
-
-                if (!folder || folder.type !== 'folder') {
-                    return reply.badRequest('Folder not found or documents can only be uploaded to folders');
-                }
-
-                resolvedFolderId = folder.id;
-            } else {
-                resolvedFolderId = (await folderService.getOrCreateDefaultSection(userId)).id;
+            // Require a folder
+            if (!folderId) {
+                return reply.badRequest('folder_id is required');
             }
+
+            const folder = await folderService.getFolder(folderId, userId);
+
+            if (!folder || folder.type !== 'folder') {
+                return reply.badRequest('Folder not found or documents can only be uploaded to folders');
+            }
+
+            const resolvedFolderId = folder.id;
 
 
             const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy);

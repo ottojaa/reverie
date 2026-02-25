@@ -1,8 +1,7 @@
 import { ConflictError, NotFoundError } from '@reverie/shared';
 import type { Kysely } from 'kysely';
-import type { Database } from '../db/schema';
 import { db } from '../db/kysely';
-import type { Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
+import type { Database, Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
 
 type DbOrTrx = Kysely<Database>;
 
@@ -156,9 +155,9 @@ export class FolderService {
     }
 
     /**
-     * Get full section tree (root folders with nested children and document_count)
+     * Get full folder tree (root folders with nested children and document_count)
      */
-    async getSectionTree(
+    async getFolderTree(
         userId: string,
     ): Promise<Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>> {
         const buildTree = async (parentId: string | null): Promise<Array<Folder & { children: unknown[]; document_count: number }>> => {
@@ -204,9 +203,9 @@ export class FolderService {
     }
 
     /**
-     * Reorder sections (batch update sort_order)
+     * Reorder folders (batch update sort_order)
      */
-    async reorderSections(userId: string, updates: Array<{ id: string; sort_order: number }>): Promise<void> {
+    async reorderFolders(userId: string, updates: Array<{ id: string; sort_order: number }>): Promise<void> {
         if (updates.length === 0) return;
 
         await db.transaction().execute(async (trx) => {
@@ -217,32 +216,13 @@ export class FolderService {
     }
 
     /**
-     * Get or create the default section for a user.
-     * Returns a section (not a category) where documents can be stored.
+     * Create the default folder structure for a new user.
+     * Creates collection "My Documents" + folder "Documents" (the umbrella "all documents" folder).
      */
-    async getOrCreateDefaultSection(userId: string): Promise<Folder> {
-        // Find an existing section
-        const existingSection = await db
-            .selectFrom('folders')
-            .selectAll()
-            .where('user_id', '=', userId)
-            .where('type', '=', 'folder')
-            .orderBy('sort_order', 'asc')
-            .executeTakeFirst();
+    async createDefaultFolderForUser(userId: string): Promise<Folder> {
+        const category = await this.createFolder(userId, 'My Documents', undefined, undefined, undefined, 'collection');
 
-        if (existingSection) return existingSection;
-
-        // No sections exist; create a default category + section
-        const categories = await this.listChildren(null, userId);
-        let category: Folder;
-
-        if (categories.length > 0) {
-            category = categories[0]!;
-        } else {
-            category = await this.createFolder(userId, 'My Documents', undefined, undefined, '📁', 'collection');
-        }
-
-        return this.createFolder(userId, 'Documents', category.id, undefined, '📄', 'folder');
+        return this.createFolder(userId, 'Documents', category.id, undefined, 'folder-open', 'folder');
     }
 
     /**

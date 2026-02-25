@@ -112,7 +112,7 @@ async function execSearchDocuments(args: SearchDocumentsArgs, userId: string): P
 }
 
 async function execListFolders(_args: ListFoldersArgs, userId: string): Promise<string> {
-    const tree = await folderService.getSectionTree(userId);
+    const tree = await folderService.getFolderTree(userId);
 
     const simplified = tree.map((category) => ({
         id: category.id,

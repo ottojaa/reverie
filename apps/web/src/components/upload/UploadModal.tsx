@@ -110,10 +110,10 @@ export function UploadModal() {
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sectionsTree = [] } = useSections();
     const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'folder'), [sectionsTree]);
-    const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
+    const defaultFolderId = currentSectionId ?? flatSections[0]?.id;
 
-    const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
-    const selectedSection = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
+    const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultFolderId);
+    const selectedFolder = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
 
     useEffect(() => {
         setSelectedFolderId(currentSectionId);
@@ -122,8 +122,8 @@ export function UploadModal() {
     useEffect(() => {
         if (!selectedFolderId) return;
 
-        setSelectedFolderId(defaultSectionId);
-    }, [defaultSectionId]);
+        setSelectedFolderId(defaultFolderId);
+    }, [defaultFolderId]);
 
     const {
         files,
@@ -211,12 +211,12 @@ export function UploadModal() {
                             {isUploading ? 'Uploading' : 'Upload'} {files.length} {files.length === 1 ? 'file' : 'files'}
                         </DialogTitle>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">To section:</span>
+                            <span className="text-sm text-muted-foreground">To folder:</span>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="sm" className="gap-1.5">
-                                        <SectionIcon value={selectedSection?.emoji} />
-                                        <span className="truncate">{selectedSection?.name ?? 'Select section'}</span>
+                                        <SectionIcon value={selectedFolder?.emoji} />
+                                        <span className="truncate">{selectedFolder?.name ?? 'Select folder'}</span>
                                         <ChevronDown className="size-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
@@ -334,7 +334,7 @@ export function UploadModal() {
                                     size="sm"
                                     disabled={isUploading}
                                     onClick={async () => {
-                                        const folderId = selectedFolderId ?? defaultSectionId;
+                                        const folderId = selectedFolderId ?? defaultFolderId;
 
                                         if (!folderId) return;
 
@@ -377,7 +377,7 @@ export function UploadModal() {
                 duplicateFilenames={duplicateFilenames ?? []}
                 action="upload"
                 onConfirm={(strategy) => {
-                    const folderId = selectedFolderId ?? defaultSectionId;
+                    const folderId = selectedFolderId ?? defaultFolderId;
 
                     if (folderId) startUpload(folderId, strategy).catch((err) => toast.error(err instanceof Error ? err.message : 'Upload failed'));
 

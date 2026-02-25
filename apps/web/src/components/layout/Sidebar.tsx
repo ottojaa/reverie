@@ -7,7 +7,7 @@ import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useSectionEdit } from '@/lib/SectionEditContext';
-import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
+import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
@@ -15,6 +15,7 @@ import { Settings, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { Separator } from '../ui/separator';
 import { Skeleton } from '../ui/skeleton';
 import type { SortableTreeHandlers } from './Layout';
 
@@ -36,7 +37,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const user = userFromQuery ?? authUser;
     const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
     const deleteFolder = useDeleteFolder();
-    const reorderSections = useReorderSections();
+    const reorderFolders = useReorderFolders();
     const updateFolder = useUpdateFolder();
 
     const { openEdit } = useSectionEdit();
@@ -114,7 +115,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             await Promise.all(parentChanges.map(({ id, parent_id }) => updateFolder.mutateAsync({ id, data: { parent_id } })));
         }
 
-        reorderSections.mutate(orderUpdates);
+        reorderFolders.mutate(orderUpdates);
     };
 
     const navContent = (
@@ -135,7 +136,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     to="/browse"
                     onClick={onClose}
                     className={cn(
-                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-2 ml-1 mb-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
                         !currentSectionId
                             ? 'bg-sidebar-accent text-sidebar-primary'
                             : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
@@ -143,6 +144,8 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 >
                     All Documents
                 </Link>
+
+                <Separator />
 
                 {isLoading ? (
                     <div className="space-y-0.5">

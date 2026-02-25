@@ -38,7 +38,7 @@ export const UpdateFolderRequestSchema = z.object({
 
 export type UpdateFolderRequest = z.infer<typeof UpdateFolderRequestSchema>;
 
-export const ReorderSectionsRequestSchema = z.object({
+export const ReorderFoldersRequestSchema = z.object({
     updates: z
         .array(
             z.object({
@@ -50,7 +50,7 @@ export const ReorderSectionsRequestSchema = z.object({
         .max(500),
 });
 
-export type ReorderSectionsRequest = z.infer<typeof ReorderSectionsRequestSchema>;
+export type ReorderFoldersRequest = z.infer<typeof ReorderFoldersRequestSchema>;
 
 export interface FolderWithChildren extends z.infer<typeof FolderSchema> {
     children: FolderWithChildren[];
