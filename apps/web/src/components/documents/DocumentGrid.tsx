@@ -14,11 +14,13 @@ const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
 /** Match Tailwind responsive grid breakpoints: sm:2 / md:3 / lg:4 / xl:5 */
 function getColumnCount(width: number, prevCols?: number): number {
     const raw = (() => {
-        if (width >= 1280) return 4;
+        if (width >= 1280) return 5;
 
-        if (width >= 1024) return 3;
+        if (width >= 1024) return 4;
 
-        if (width >= 768) return 2;
+        if (width >= 768) return 3;
+
+        if (width >= 640) return 2;
 
         return 1;
     })();
@@ -27,7 +29,7 @@ function getColumnCount(width: number, prevCols?: number): number {
 
     // Hysteresis: resist switching down until we're clearly below breakpoint
     if (raw < prevCols) {
-        const thresholds: Record<number, number> = { 5: 1280, 4: 1024, 3: 768 };
+        const thresholds: Record<number, number> = { 5: 1280, 4: 1024, 3: 768, 2: 640 };
         const threshold = thresholds[prevCols];
 
         if (threshold != null && width >= threshold - HYSTERESIS) return prevCols;
