@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { MinimizedPill } from '@/components/ui/MinimizedPill';
-import { useOrganizeChat } from '@/lib/api/organize';
+import { useOrganizeChatContext } from '@/lib/api/OrganizeChatContext';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
 import { Minimize2, Sparkles, X } from 'lucide-react';
@@ -24,7 +24,7 @@ interface OrganizeModalProps {
 export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized }: OrganizeModalProps) {
     const [mode, setMode] = useState<Mode>('ai');
     const [isMinimizing, setIsMinimizing] = useState(false);
-    const chatState = useOrganizeChat();
+    const chatState = useOrganizeChatContext();
 
     // Single source of truth: chatState.currentProposal
     const proposal = chatState.currentProposal;
@@ -33,10 +33,11 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
     useEffect(() => {
         if (!open) {
             chatState.reset();
+            chatState.setInput('');
             setIsMinimized(false);
             setIsMinimizing(false);
         }
-    }, [open, setIsMinimized]);
+    }, [open, setIsMinimized, chatState.reset, chatState.setInput]);
 
     const handleClose = () => onOpenChange(false);
 

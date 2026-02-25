@@ -1,10 +1,11 @@
-import { useOrganizeChat, type ChatMessage } from '@/lib/api/organize';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useOrganizeChatContext } from '@/lib/api/OrganizeChatContext';
+import type { ChatMessage } from '@/lib/api/organize';
+import { cn } from '@/lib/utils';
 import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 const SUGGESTED_PROMPTS = [
     'Help me organize my documents',
@@ -14,7 +15,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 interface OrganizeChatProps {
-    chatState: ReturnType<typeof useOrganizeChat>;
+    chatState: ReturnType<typeof useOrganizeChatContext>;
 }
 
 function TypingDots() {
@@ -82,8 +83,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 export function OrganizeChat({ chatState }: OrganizeChatProps) {
-    const { messages, isStreaming, error, sendMessage } = chatState;
-    const [input, setInput] = useState('');
+    const { messages, isStreaming, error, sendMessage, input, setInput } = chatState;
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const hasMessages = messages.length > 0;
@@ -199,10 +199,7 @@ export function OrganizeChat({ chatState }: OrganizeChatProps) {
                         size="icon"
                         onClick={handleSend}
                         disabled={!input.trim() || isStreaming}
-                        className={cn(
-                            'size-7 shrink-0 rounded-full',
-                            input.trim() && !isStreaming ? '' : 'bg-muted text-muted-foreground',
-                        )}
+                        className={cn('size-7 shrink-0 rounded-full', input.trim() && !isStreaming ? '' : 'bg-muted text-muted-foreground')}
                     >
                         {isStreaming ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
                     </Button>

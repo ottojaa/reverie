@@ -12,9 +12,9 @@ import { db } from '../db/kysely';
 import { streamResponsesAPI, type FunctionTool, type ResponseInputItem } from '../llm/openai.client';
 import { parseQuery } from '../search/query-parser';
 import { search } from '../search/search.service';
+import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { getFolderService } from './folder.service';
 import { getStorageService } from './storage.service';
-import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 
 const folderService = getFolderService();
 const storageService = getStorageService();
@@ -365,7 +365,7 @@ Guidelines:
 - Prefer creating new categories when the user's content clearly belongs to a new top-level grouping (e.g. "Trips", "Work", "Family"). Don't force documents into irrelevant existing categories.
 - When moving all documents out of a folder, you can include a delete_folder operation to remove the now-empty folder. Use the folder's UUID and name from list_folders.
 
-After proposing: Tell the user to review the changes in the right panel (OrganizePreview) and use the Confirm or Discard button there. Do NOT ask "ready to apply?" or similar—that is confusing. The user must use the panel's Confirm/Discard buttons. Never claim you have applied changes—only the user can do that by clicking Confirm.`;
+After proposing: Tell the user to review the changes in the right panel and use the Confirm or Discard button there. Do NOT ask "ready to apply?" or similar—that is confusing. The user must use the panel's Confirm/Discard buttons. Never claim you have applied changes—only the user can do that by clicking Confirm.`;
 
 export async function runOrganizeChat(options: OrganizeChatOptions): Promise<void> {
     const { message, responseId, userId, res } = options;

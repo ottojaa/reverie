@@ -1,3 +1,4 @@
+import { OrganizeChatProvider } from '@/lib/api/OrganizeChatContext';
 import { GlobalDropzone, UploadModal } from '@/components/upload';
 import { OrganizeModal } from '@/components/organize';
 import { usePathnameTracker } from '@/lib/hooks/useNavigationDirection';
@@ -78,6 +79,7 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <OrganizeContext.Provider value={{ openOrganize }}>
+        <OrganizeChatProvider>
         <SectionEditProvider>
             <SelectionProvider>
                 <DndContext
@@ -118,6 +120,7 @@ export function Layout({ children }: LayoutProps) {
                 </DndContext>
             </SelectionProvider>
         </SectionEditProvider>
+        </OrganizeChatProvider>
         </OrganizeContext.Provider>
     );
 }
