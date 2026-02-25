@@ -1,11 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { Spinner } from '@/components/ui/spinner';
+import { authenticatedFetch } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { useRouter } from '@tanstack/react-router';
 import { ArrowLeft, Download, Edit3, Info, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useState } from 'react';
 
 interface ViewerToolbarProps {
     document: Document;
@@ -51,8 +53,34 @@ function ProcessingIndicator({ document }: { document: Document }) {
 
 export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false }: ViewerToolbarProps) {
     const router = useRouter();
+    const [isDownloading, setIsDownloading] = useState(false);
     const fileConfig = getFileTypeConfig(document.mime_type);
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
+
+    const handleDownload = useCallback(async () => {
+        if (!fileUrl) return;
+
+        setIsDownloading(true);
+
+        try {
+            const res = await authenticatedFetch(fileUrl);
+
+            if (!res.ok) throw new Error('Download failed');
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = window.document.createElement('a');
+            a.href = url;
+            a.download = document.original_filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            // Fallback: open in new tab (original behavior)
+            window.open(fileUrl, '_blank', 'noopener,noreferrer');
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [fileUrl, document.original_filename]);
 
     return (
         <motion.div
@@ -94,10 +122,8 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
 
                 {/* Download */}
                 {fileUrl && (
-                    <Button variant="ghost" size="icon-sm" asChild className="text-muted-foreground">
-                        <a href={fileUrl} download={document.original_filename} target="_blank" rel="noopener noreferrer">
-                            <Download className="size-4" />
-                        </a>
+                    <Button variant="ghost" size="icon-sm" onClick={handleDownload} disabled={isDownloading} title="Download" className="text-muted-foreground">
+                        {isDownloading ? <Spinner className="size-4" /> : <Download className="size-4" />}
                     </Button>
                 )}
 
