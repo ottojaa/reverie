@@ -14,6 +14,9 @@ export { getImageSize, isProcessableImage, preprocessImage, validateImageForOcr 
 // Text detection
 export { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from './text-detector';
 
+// Text extraction (PDF/TXT)
+export { isTextExtractable } from './text-extractor';
+
 // Category classification (non-text images only)
 export { classifyNonTextImage, getCategoryDescription } from './category-classifier';
 

@@ -23,21 +23,71 @@ import type { LlmPrompt, PreparedText } from './types';
 const SYSTEM_MESSAGE = `
 You analyze OCR text from scanned documents and return strict JSON only.
 
-Core principles:
-- OCR text may contain noise (0↔O, 1↔I, missing letters, spacing errors).
-- Extract structured facts without inventing new information.
-- Never guess missing data.
+Your task:
+1) Determine what this specific document is.
+2) Extract only high-value, instance-level structured data.
 
-Entity rules:
-- Always preserve the exact OCR string in "raw_text".
-- "canonical_name" may fix obvious single-character OCR errors (0/O, 1/I, l/I).
-- canonical_name may restore a single missing trailing character when the word strongly resembles a common organization name.
-- Do not invent new entity names.
-- For person names: do not modify surname structure or guess corrections.
+GENERAL RULES
+- OCR may contain noise (0↔O, 1↔I, spacing errors).
+- Do not invent or guess missing information.
+- If unsure, omit.
+- Prefer omission over speculation.
+
+INSTANCE-LEVEL ENTITY RULE
+
+Extract entities ONLY if they refer to a specific real-world instance in this document.
+
+Valid entities typically:
+- Identify a specific person
+- Identify a specific organization or institution
+- Identify a specific address tied to this document
+- Identify a specific account, contract, case, or document number
+- Identify a specific product, instrument, or named item
+
+Do NOT extract:
+- Field labels (Employer, Employee, Address, Phone, Signature, etc.)
+- Generic role names
+- Section headings
+- Checkbox options
+- Instructions or boilerplate
+- Template structure text
+- Static legal citations inside standard forms
+- Words that merely define document layout
+
+If the document is a blank or largely unfilled template, return no entities.
+
+ROW-LEVEL IDENTIFIER PROTECTION
+
+If the document contains tabular or repeated row structures:
+- Extract distinct named entries that function as row-level identifiers.
+- A row-level identifier anchors quantities, prices, totals, or dates.
+- Do not discard short or uppercase names solely due to brevity.
+- Exclude obvious column headers or structural labels.
+
+ENTITY QUALITY FILTER
+
+Before adding an entity, verify:
+- Does this help uniquely identify, search, filter, or understand this specific document?
+- Would this likely vary across different documents of the same template?
+
+If not clearly useful, omit it.
+
+NORMALIZATION RULES
+
+- Always preserve exact OCR string in "raw_text".
+- canonical_name may fix obvious single-character OCR errors only.
+- Do not invent new names.
+- Do not expand abbreviations unless explicitly written.
+- Do not modify surname structure.
+- Do not merge distinct entities.
 - Do not include numeric identifiers inside organization names.
-- Extract account numbers, references, and IDs separately as entities of type "identifier" or in key_values.
-- If unsure about normalization, keep canonical_name equal to raw_text and set confidence to "low".
-- Street addresses and postal codes must be classified as type "location", not organization.
+- Extract account numbers and references separately as type "account" or "identifier".
+- Identifiers must uniquely identify an account, document, transaction, or party.
+- Do NOT extract standalone numbers, totals, balances, or amounts unless clearly labeled and uniquely meaningful.
+- Street addresses and postal codes are type "location".
+- Keep canonical_name concise (under 20 characters when possible without losing meaning).
+
+OUTPUT
 
 Return JSON with these fields when present:
 {
@@ -51,7 +101,7 @@ Return JSON with these fields when present:
       "raw_text": "...",
     }
   ],
-  "topics": [],
+  "topics": ["high-level themes"],
   "extracted_date": "YYYY-MM-DD",
 }
 
