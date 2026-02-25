@@ -67,7 +67,10 @@ function StatusBadge({ status, onClick, disabled }: { status: string; onClick?: 
                 variant="ghost"
                 size="sm"
                 onClick={onClick}
-                className={cn(baseClasses, 'h-auto min-h-0 cursor-pointer border-0 px-2 py-0.5 shadow-none transition-opacity hover:opacity-80 hover:bg-transparent')}
+                className={cn(
+                    baseClasses,
+                    'h-auto min-h-0 cursor-pointer border-0 px-2 py-0.5 shadow-none transition-opacity hover:opacity-80 hover:bg-transparent',
+                )}
                 title="Click to reprocess"
             >
                 {status}
@@ -310,10 +313,6 @@ function DrawerBody({ document }: { document: Document }) {
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">OCR</span>
                         <StatusBadge status={ocrStatus} {...(canRunOcr && { onClick: () => retryOcr.mutate(document.id) })} disabled={retryOcr.isPending} />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Thumbnail</span>
-                        <StatusBadge status={document.thumbnail_status} />
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">LLM</span>
