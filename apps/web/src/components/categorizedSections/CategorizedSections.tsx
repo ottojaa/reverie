@@ -31,6 +31,7 @@ interface CategorizedSectionsProps {
     onAddSection?: (category: FolderWithChildren) => void;
     onDeleteSection?: (section: FolderWithChildren) => void;
     onDeleteCategory?: (category: FolderWithChildren) => void;
+    onClose?: () => void;
     treeDndHandlersRef?: RefObject<SortableTreeHandlers | null>;
 }
 
@@ -75,6 +76,7 @@ export function CategorizedSections({
     onAddSection,
     onDeleteSection,
     onDeleteCategory,
+    onClose,
     treeDndHandlersRef,
 }: CategorizedSectionsProps) {
     // Categories are root-level items (type=category), sections are their children
@@ -386,6 +388,7 @@ export function CategorizedSections({
                                         isHighlighted={highlightedSectionId === section.id}
                                         onEditSection={onEditSection}
                                         onDeleteSection={onDeleteSection}
+                                        onClose={onClose}
                                     />
                                 ))}
                                 {category.children.length === 0 && !collapsed[category.id] && (

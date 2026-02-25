@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
+import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,8 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const [createModalParent, setCreateModalParent] = useState<string | null>(null);
 
     const navRef = useRef<HTMLElement>(null);
+
+    const isMobile = useIsMobile();
 
     const openCreateCategory = () => {
         setCreateModalMode('category');
@@ -152,6 +155,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                         onAddSection={(category) => openCreateSection(category.id)}
                         onDeleteSection={handleDeleteSection}
                         onDeleteCategory={handleDeleteCategory}
+                        onClose={onClose}
                         {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
                 )}
@@ -246,8 +250,9 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             {/* Sidebar: drawer on mobile, static on desktop */}
             <aside
                 className={cn(
-                    'flex w-64 flex-col border-r border-sidebar-border bg-sidebar',
+                    'flex flex-col border-r border-sidebar-border bg-sidebar',
                     'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out md:relative md:transform-none',
+                    isMobile ? 'w-85' : 'w-64',
                     !isOpen && '-translate-x-full md:translate-x-0',
                 )}
             >

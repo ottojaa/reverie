@@ -89,7 +89,7 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
             e.preventDefault();
             e.stopPropagation();
 
-            if(longPressFiredRef.current) {
+            if (longPressFiredRef.current) {
                 longPressFiredRef.current = false;
 
                 return;
@@ -101,11 +101,8 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
                 return;
             }
 
-            if (isDoubleTap()) {
-                navigateToDocument();
-            }
-
-            return;
+            // Single tap navigates; long-press selects
+            navigateToDocument();
         };
 
         const handleDesktopClick = () => {

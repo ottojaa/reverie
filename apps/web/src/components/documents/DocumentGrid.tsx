@@ -1,3 +1,4 @@
+import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
 import { useUpload } from '@/lib/upload';
 import type { Document } from '@reverie/shared';
@@ -13,13 +14,13 @@ const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
 /** Match Tailwind responsive grid breakpoints: sm:2 / md:3 / lg:4 / xl:5 */
 function getColumnCount(width: number, prevCols?: number): number {
     const raw = (() => {
-        if (width >= 1280) return 5;
+        if (width >= 1280) return 4;
 
-        if (width >= 1024) return 4;
+        if (width >= 1024) return 3;
 
-        if (width >= 768) return 3;
+        if (width >= 768) return 2;
 
-        return 2;
+        return 1;
     })();
 
     if (prevCols === undefined) return raw;
@@ -45,9 +46,14 @@ interface DocumentGridProps {
 export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage }: DocumentGridProps) {
     const scrollContainerRef = useScrollContainer();
     const gridRef = useRef<HTMLDivElement>(null);
+    const isMobile = useIsMobile();
     const { recentlyCompletedDocumentIds, markPulseComplete } = useUpload();
     const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-    const [columnCount, setColumnCount] = useState(() => (typeof window !== 'undefined' ? getColumnCount(window.innerWidth) : 2));
+    const [columnCount, setColumnCount] = useState(() => {
+        if (typeof window === 'undefined') return 1;
+
+        return window.matchMedia('(pointer: coarse)').matches ? 1 : getColumnCount(window.innerWidth);
+    });
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Memoize orderedIds once for all cards
@@ -104,13 +110,13 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
                 debounceRef.current = null;
                 const width = latestWidthRef.current;
 
-                setColumnCount((prev) => getColumnCount(width, prev));
+                setColumnCount((prev) => (isMobile ? 1 : getColumnCount(width, prev)));
             }, COL_DEBOUNCE_MS);
         });
 
         // Set initial from observed element (not window)
         const width = el.getBoundingClientRect().width;
-        setColumnCount(getColumnCount(width));
+        setColumnCount(isMobile ? 1 : getColumnCount(width));
         observer.observe(el);
 
         return () => {
@@ -118,7 +124,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
             observer.disconnect();
         };
-    }, []);
+    }, [isMobile]);
 
     // --- Virtualizer ---
 
@@ -172,7 +178,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {Array.from({ length: 12 }).map((_, i) => (
                     <div key={i} className="aspect-4/3 animate-pulse rounded-xl bg-muted" />
                 ))}

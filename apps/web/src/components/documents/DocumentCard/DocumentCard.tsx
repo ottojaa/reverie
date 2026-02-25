@@ -24,7 +24,7 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                 <div
                     ref={dragRef}
                     data-document-card
-                    style={{ touchAction: 'none' }}
+                    style={{ touchAction: isMobile ? 'pan-y' : 'none' }}
                     {...dragAttributes}
                     {...dragListeners}
                     {...longPressHandlers}
