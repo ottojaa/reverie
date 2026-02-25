@@ -111,7 +111,7 @@ function LoginPage() {
                             {isLoading ? 'Signing in...' : 'Sign in'}
                         </Button>
 
-                        <div className="relative">
+                        {/* <div className="relative">
                             <div className="absolute inset-0 flex items-center">
                                 <span className="w-full border-t" />
                             </div>
@@ -140,7 +140,7 @@ function LoginPage() {
                                 />
                             </svg>
                             Sign in with Google
-                        </Button>
+                        </Button> */}
                     </form>
                 </CardContent>
             </Card>
