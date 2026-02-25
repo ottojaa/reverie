@@ -36,8 +36,8 @@ interface CategorizedSectionsProps {
 }
 
 type ActiveDragData =
-    | { type: 'category'; category: FolderWithChildren }
-    | { type: 'section'; section: FolderWithChildren }
+    | { type: 'collection'; category: FolderWithChildren }
+    | { type: 'folder'; section: FolderWithChildren }
     | { type: 'documents'; documentIds: string[] }
     | null;
 
@@ -122,12 +122,12 @@ export function CategorizedSections({
     function handleDragStart({ active }: DragStartEvent) {
         const data = active.data.current;
 
-        if (data?.type === 'category') {
-            setActiveDragData({ type: 'category', category: data.category });
+        if (data?.type === 'collection') {
+            setActiveDragData({ type: 'collection', category: data.category });
         }
 
-        if (data?.type === 'section') {
-            setActiveDragData({ type: 'section', section: data.section });
+        if (data?.type === 'folder') {
+            setActiveDragData({ type: 'folder', section: data.section });
         }
 
         if (data?.type === 'documents' && Array.isArray(data.documentIds)) {
@@ -153,10 +153,10 @@ export function CategorizedSections({
             return;
         }
 
-        if (activeData?.type !== 'section' || !overData) return;
+        if (activeData?.type !== 'folder' || !overData) return;
 
         const activeSectionId = String(active.id);
-        const targetCategoryId = overData.type === 'category' ? overData.category.id : findParentCategoryId(categoriesRef.current, String(over.id));
+        const targetCategoryId = overData.type === 'collection' ? overData.category.id : findParentCategoryId(categoriesRef.current, String(over.id));
 
         if (!targetCategoryId) return;
 
@@ -177,14 +177,14 @@ export function CategorizedSections({
             return;
         }
 
-        if (activeData?.type === 'category' && over) {
+        if (activeData?.type === 'collection' && over) {
             handleCategoryReorderEnd(active.id, over.id);
             setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
 
             return;
         }
 
-        if (activeData?.type === 'section' && over) {
+        if (activeData?.type === 'folder' && over) {
             handleSectionReorderEnd(active.id, over);
             setTimeout(resetState, DROP_ANIMATION_DURATION_MS);
 
@@ -198,7 +198,7 @@ export function CategorizedSections({
         activeData: { type: 'documents'; documentIds: string[] },
         over: { id: string | number; data?: { current?: unknown } },
     ) {
-        const targetSectionId = (over.data?.current as { type?: string })?.type === 'section' ? String(over.id) : null;
+        const targetSectionId = (over.data?.current as { type?: string })?.type === 'folder' ? String(over.id) : null;
 
         if (!targetSectionId || activeData.documentIds.length === 0) return;
 
@@ -277,7 +277,7 @@ export function CategorizedSections({
 
     function handleSectionReorderEnd(activeId: string | number, over: { id: string | number; data?: { current?: unknown } }) {
         const activeSectionId = String(activeId);
-        const isOverSection = (over.data?.current as { type?: string })?.type === 'section';
+        const isOverSection = (over.data?.current as { type?: string })?.type === 'folder';
         const needsReorder = isOverSection && activeSectionId !== String(over.id);
 
         if (!needsReorder) {
@@ -399,7 +399,7 @@ export function CategorizedSections({
                                         onClick={() => onAddSection?.(category)}
                                     >
                                         <Plus className="size-4 shrink-0" />
-                                        Add section
+                                        Add folder
                                     </Button>
                                 )}
                             </SortableContext>
@@ -414,11 +414,11 @@ export function CategorizedSections({
                         <div className="rounded-md border border-primary/50 bg-primary/15 px-3 py-2 text-sm font-medium text-primary shadow-md">
                             {activeDragData.documentIds.length === 1 ? '1 document' : `${activeDragData.documentIds.length} documents`}
                         </div>
-                    ) : activeDragData?.type === 'category' ? (
+                    ) : activeDragData?.type === 'collection' ? (
                         <div className="rounded-md bg-sidebar-accent px-2 py-1.5 shadow-lg">
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{activeDragData.category.name}</span>
                         </div>
-                    ) : activeDragData?.type === 'section' ? (
+                    ) : activeDragData?.type === 'folder' ? (
                         <div className="flex opacity-30 items-center gap-2 rounded-md bg-sidebar-accent px-2 py-1.5 shadow-lg">
                             <SectionIcon value={activeDragData.section.emoji} />
                             <Link
@@ -474,7 +474,7 @@ function getDocumentFilenamesFromCache(queryClient: ReturnType<typeof useQueryCl
 }
 
 function getDocumentDropHighlightId(overId: string, overData: unknown): string | null {
-    const isOverSection = overData && typeof overData === 'object' && 'type' in overData && overData.type === 'section';
+    const isOverSection = overData && typeof overData === 'object' && 'type' in overData && overData.type === 'folder';
 
     if (isOverSection) return String(overId);
 

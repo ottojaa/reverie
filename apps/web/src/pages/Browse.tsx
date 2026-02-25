@@ -1,4 +1,4 @@
-import { DocumentGrid, DocumentSkeleton, SelectionBanner } from '@/components/documents';
+import { DocumentGrid, DocumentSkeleton, EmptyDocumentsState, SelectionBanner } from '@/components/documents';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { UploadFAB } from '@/components/upload';
@@ -7,7 +7,7 @@ import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
 import { useDocumentsStatus } from '@/lib/useDocumentStatus';
-import { FolderOpen, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 const SKELETON_DELAY_MS = 200;
@@ -81,14 +81,14 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     const title = section ? section.name : 'My Files';
     const subtitle = section
         ? total
-            ? `${total} ${total === 1 ? 'file' : 'files'} in this section`
+            ? `${total} ${total === 1 ? 'file' : 'files'} in this folder`
             : null
         : total
           ? `${total} ${total === 1 ? 'file' : 'files'} in your collection`
           : null;
 
     return (
-        <div className="flex flex-1 flex-col p-6">
+        <div className="flex min-h-full flex-col p-6">
             <div className="mb-6">
                 {sectionId && (
                     <nav className="mb-1 flex justify-between items-center text-sm gap-2">
@@ -102,7 +102,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                             {section && (
                                 <Button variant="outline" size="sm" className="shrink-0" onClick={() => openEdit(section)}>
                                     <Pencil className="mr-2 size-4" />
-                                    Edit section
+                                    Edit folder
                                 </Button>
                             )}
                         </div>
@@ -133,15 +133,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                     )}
                 </div>
             ) : isEmpty ? (
-                <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed py-8">
-                    <div className="flex flex-col items-center text-center">
-                        <FolderOpen className="size-12 text-muted-foreground/50" />
-                        <p className="mt-4 text-lg font-medium">{sectionId ? 'No documents in this section' : 'No documents yet'}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {sectionId ? 'Move or upload files here' : 'Drop files here or use the upload button'}
-                        </p>
-                    </div>
-                </div>
+                <EmptyDocumentsState isFolderView={!!sectionId} />
             ) : (
                 <>
                     <SelectionBanner />

@@ -176,10 +176,12 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
         const thumbnailPath = `thumbnails/${documentId}/${size}.webp`;
         await storageService.writeFile(thumbnailPath, resized);
 
-        return { size, path: thumbnailPath };
+        return { size, path: thumbnailPath, bytes: resized.length };
     });
 
     const thumbnails = await Promise.all(thumbnailPromises);
+    const totalThumbnailSize = thumbnails.reduce((sum, t) => sum + t.bytes, 0);
+    await storageService.updateStorageUsage(document.user_id, totalThumbnailSize);
 
     await publishJobProgress(job.id!, 70, documentId, job.data.sessionId);
 

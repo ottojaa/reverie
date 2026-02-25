@@ -31,7 +31,7 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 
 // Folders table
-export type FolderType = 'category' | 'section';
+export type FolderType = 'collection' | 'folder';
 
 export interface FoldersTable {
     id: Generated<string>;

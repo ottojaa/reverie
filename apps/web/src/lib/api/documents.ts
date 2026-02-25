@@ -322,6 +322,7 @@ export function useDeleteDocuments() {
         },
         onSettled: (_, __, ids) => {
             queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['user'] });
             ids.forEach((id) => queryClient.removeQueries({ queryKey: ['document', id] }));
         },
     });

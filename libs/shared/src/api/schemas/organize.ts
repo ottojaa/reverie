@@ -30,7 +30,7 @@ export const OrganizeTargetFolderSchema = z.object({
     id: UuidSchema.optional(),
     name: z.string(),
     parent_id: UuidSchema.optional(),
-    /** When set, a new top-level category with this name is created first, then the section is nested under it */
+    /** When set, a new top-level collection with this name is created first, then the folder is nested under it */
     new_parent_name: z.string().optional(),
     is_new: z.boolean(),
 });

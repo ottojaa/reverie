@@ -18,10 +18,10 @@ export interface CreateSectionModalProps {
     onSuccess?: () => void;
 }
 
-export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'section', onSuccess }: CreateSectionModalProps) {
+export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'folder', onSuccess }: CreateSectionModalProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [icon, setIcon] = useState<SectionIconName | null>(mode === 'category' ? null : DEFAULT_SECTION_ICON);
+    const [icon, setIcon] = useState<SectionIconName | null>(mode === 'collection' ? null : DEFAULT_SECTION_ICON);
     const createFolder = useCreateFolder();
 
     // Reset form when modal opens or mode changes
@@ -29,14 +29,14 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
         if (open) {
             setName('');
             setDescription('');
-            setIcon(mode === 'category' ? null : DEFAULT_SECTION_ICON);
+            setIcon(mode === 'collection' ? null : DEFAULT_SECTION_ICON);
         }
     }, [open, mode]);
 
-    const isCategory = mode === 'category';
-    const isSection = mode === 'section';
-    const title = isCategory ? 'New category' : parentId ? 'New section' : 'New section';
-    const namePlaceholder = isCategory ? 'Category name' : 'Section name';
+    const isCollection = mode === 'collection';
+    const isFolder = mode === 'folder';
+    const title = isCollection ? 'New collection' : parentId ? 'New folder' : 'New folder';
+    const namePlaceholder = isCollection ? 'Collection name' : 'Folder name';
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,7 +46,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
         createFolder.mutate(
             {
                 name: name.trim(),
-                ...(isCategory ? { type: 'category' as const } : { type: 'section' as const }),
+                ...(isCollection ? { type: 'collection' as const } : { type: 'folder' as const }),
                 ...(parentId && { parent_id: parentId }),
                 ...(description.trim() && { description: description.trim() }),
                 ...(icon && { emoji: icon }),
@@ -55,7 +55,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                 onSuccess: () => {
                     setName('');
                     setDescription('');
-                    setIcon(isCategory ? null : DEFAULT_SECTION_ICON);
+                    setIcon(isCollection ? null : DEFAULT_SECTION_ICON);
                     onOpenChange(false);
                     onSuccess?.();
                 },
@@ -70,16 +70,8 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                     <DialogTitle>{title}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    {isSection && (
-                        <div>
-                            <label className="mb-1.5 block text-sm font-medium">Icon (optional)</label>
-                            <IconSelector value={icon} onValueChange={setIcon} />
-                        </div>
-                    )}
-                    <div>
-                        <label htmlFor="create-section-name" className="mb-1.5 block text-sm font-medium">
-                            Name
-                        </label>
+                    <div className="flex flex-row gap-2">
+                        {isFolder && <IconSelector value={icon} onValueChange={setIcon} />}
                         <Input
                             id="create-section-name"
                             value={name}
@@ -91,7 +83,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'secti
                         />
                     </div>
 
-                    {isSection && (
+                    {isFolder && (
                         <div>
                             <label htmlFor="create-section-desc" className="mb-1.5 block text-sm font-medium">
                                 Description (optional)

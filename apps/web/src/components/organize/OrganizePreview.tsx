@@ -185,7 +185,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                     <div className="min-w-0 flex-1">
                                         {op.target_folder.new_parent_name && (
                                             <p className="truncate text-[10px] text-muted-foreground">
-                                                New category: {op.target_folder.new_parent_name}
+                                                New collection: {op.target_folder.new_parent_name}
                                             </p>
                                         )}
                                         <span className="text-sm font-medium text-foreground truncate block">{op.target_folder.name}</span>

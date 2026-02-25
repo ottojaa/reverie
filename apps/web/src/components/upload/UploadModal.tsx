@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { documentsApi } from '@/lib/api/documents';
+import { formatFileSize } from '@/lib/commonhelpers';
 import { flattenSectionTree, useSections } from '@/lib/sections';
 import { useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -56,16 +57,6 @@ function AnimatedCheckCircle({ className }: { className?: string }) {
 const UPLOAD_WEIGHT = 50;
 const PROCESSING_WEIGHT = 50;
 
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
 const ALL_COMPLETE_CLOSE_DELAY_MS = 2000;
 
 function useOverallProgress() {
@@ -96,7 +87,7 @@ function useOverallProgress() {
                 completedCount,
                 total,
                 phase: 'uploading' as const,
-                phaseLabel: `Uploading ${formatBytes(uploadBytesLoaded)} of ${formatBytes(uploadBytesTotal)}`,
+                phaseLabel: `Uploading ${formatFileSize(uploadBytesLoaded)} of ${formatFileSize(uploadBytesTotal)}`,
             };
         }
 
@@ -118,7 +109,7 @@ export function UploadModal() {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sectionsTree = [] } = useSections();
-    const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'section'), [sectionsTree]);
+    const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'folder'), [sectionsTree]);
     const defaultSectionId = currentSectionId ?? flatSections[0]?.id;
 
     const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultSectionId);
@@ -191,6 +182,7 @@ export function UploadModal() {
             clearFailed();
             queryClient.invalidateQueries({ queryKey: ['documents'] });
             queryClient.invalidateQueries({ queryKey: ['sections'] });
+            queryClient.invalidateQueries({ queryKey: ['user'] });
             toast.success(n === 1 ? '1 document uploaded' : `${n} documents uploaded`);
         }, ALL_COMPLETE_CLOSE_DELAY_MS);
 

@@ -25,8 +25,8 @@ export interface EditSectionModalProps {
 }
 
 export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess }: EditSectionModalProps) {
-    const isCategory = mode === 'category';
-    const isSection = mode === 'section';
+    const isCollection = mode === 'collection';
+    const isFolder = mode === 'folder';
 
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -51,7 +51,7 @@ export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess 
                 id: section.id,
                 data: {
                     name: name.trim(),
-                    ...(isSection && {
+                    ...(isFolder && {
                         description: description.trim() || null,
                         emoji: icon ?? null,
                     }),
@@ -68,8 +68,8 @@ export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess 
 
     if (!section) return null;
 
-    const title = isCategory ? 'Edit category' : 'Edit section';
-    const namePlaceholder = isCategory ? 'Category name' : 'Section name';
+    const title = isCollection ? 'Edit collection' : 'Edit folder';
+    const namePlaceholder = isCollection ? 'Collection name' : 'Folder name';
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -78,7 +78,7 @@ export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess 
                     <DialogTitle>{title}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    {isSection ? (
+                    {isFolder ? (
                         <div className="flex flex-row gap-2">
                             <IconSelector value={icon} onValueChange={setIcon} />
                             <Input
@@ -105,7 +105,7 @@ export function EditSectionModal({ open, onOpenChange, section, mode, onSuccess 
                             />
                         </div>
                     )}
-                    {isSection && (
+                    {isFolder && (
                         <div>
                             <label htmlFor="edit-section-desc" className="mb-1.5 block text-sm font-medium">
                                 Description (optional)

@@ -1,8 +1,9 @@
+import { useOrganize } from '@/components/layout/Layout';
 import { SearchCommandPalette } from '@/components/search/SearchCommandPalette';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/lib/theme';
 import { useLocation } from '@tanstack/react-router';
-import { Bell, Menu, Moon, Search, Sun } from 'lucide-react';
+import { Bell, Menu, Moon, Search, Sparkles, Sun } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface HeaderProps {
@@ -11,6 +12,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
     const { isDark, setIsDark } = useTheme();
+    const { openOrganize } = useOrganize();
     const [searchOpen, setSearchOpen] = useState(false);
     const { pathname } = useLocation();
     const isSearchPage = pathname === '/search';
@@ -56,6 +58,11 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 md:gap-2">
+                    <Button variant="ghost" className="gap-2 px-2 md:px-3" onClick={openOrganize} aria-label="Organize with AI">
+                        <Sparkles className="size-4 shrink-0 text-primary" />
+                        <span className="hidden sm:inline">Organize</span>
+                        <kbd className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] opacity-60">⌘⇧O</kbd>
+                    </Button>
                     <Button variant="ghost" size="icon" aria-label="Notifications">
                         <Bell className="size-4" />
                     </Button>

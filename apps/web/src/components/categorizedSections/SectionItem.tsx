@@ -29,7 +29,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: section.id,
-        data: { type: 'section' as const, section },
+        data: { type: 'folder' as const, section },
         animateLayoutChanges,
     });
 
@@ -80,7 +80,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
                             variant="ghost"
                             size="icon-sm"
                             className="h-auto w-auto shrink-0 rounded p-0.5 hover:bg-sidebar-accent"
-                            aria-label="Section actions"
+                            aria-label="Folder actions"
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                         >
@@ -105,7 +105,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
                     variant="ghost"
                     size="icon-sm"
                     className="h-auto w-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
-                    aria-label="Section actions"
+                    aria-label="Folder actions"
                     onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

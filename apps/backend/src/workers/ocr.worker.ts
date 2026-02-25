@@ -80,13 +80,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Store EXIF metadata if extracted (skip when all fields are null - doUpdateSet
         // with empty object produces invalid SQL: "syntax error at end of input")
         const exif = result.exifMetadata;
-        const hasExifData =
-            exif &&
-            (exif.latitude != null ||
-                exif.longitude != null ||
-                exif.city != null ||
-                exif.country != null ||
-                exif.takenAt != null);
+        const hasExifData = exif && (exif.latitude != null || exif.longitude != null || exif.city != null || exif.country != null || exif.takenAt != null);
 
         if (hasExifData) {
             const exifValues = {
@@ -125,11 +119,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         }
 
         // Sync has_meaningful_text from OCR result back to documents table
-        await db
-            .updateTable('documents')
-            .set({ has_meaningful_text: result.hasMeaningfulText })
-            .where('id', '=', documentId)
-            .execute();
+        await db.updateTable('documents').set({ has_meaningful_text: result.hasMeaningfulText }).where('id', '=', documentId).execute();
 
         // Queue LLM job if appropriate
         if (shouldQueueLlmJob(result)) {

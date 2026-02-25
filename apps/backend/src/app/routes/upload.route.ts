@@ -61,8 +61,8 @@ export default async function (fastify: FastifyInstance) {
             if (folderId) {
                 const folder = await folderService.getFolder(folderId, userId);
 
-                if (!folder || folder.type !== 'section') {
-                    return reply.badRequest('Folder not found or documents can only be uploaded to sections');
+                if (!folder || folder.type !== 'folder') {
+                    return reply.badRequest('Folder not found or documents can only be uploaded to folders');
                 }
 
                 resolvedFolderId = folder.id;

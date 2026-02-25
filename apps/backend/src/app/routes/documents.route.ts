@@ -194,8 +194,8 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Folder not found');
             }
 
-            if (folder.type !== 'section') {
-                return reply.badRequest('Documents can only be moved to sections, not categories');
+            if (folder.type !== 'folder') {
+                return reply.badRequest('Documents can only be moved to folders, not collections');
             }
 
             if (document_ids.length === 0) {

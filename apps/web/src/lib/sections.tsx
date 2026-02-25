@@ -232,7 +232,7 @@ export function useCreateFolder() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'category' | 'section' }) =>
+        mutationFn: (data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'collection' | 'folder' }) =>
             foldersApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
@@ -247,7 +247,7 @@ export function useCreateCategory() {
     return {
         ...createFolder,
         mutate: (data: { name: string; description?: string; emoji?: string }, options?: Parameters<typeof createFolder.mutate>[1]) =>
-            createFolder.mutate({ ...data, type: 'category' as const }, options),
+            createFolder.mutate({ ...data, type: 'collection' as const }, options),
     };
 }
 

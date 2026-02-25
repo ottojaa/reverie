@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { UuidSchema } from './common.js';
 
-export const FolderTypeSchema = z.enum(['category', 'section']);
+export const FolderTypeSchema = z.enum(['collection', 'folder']);
 export type FolderType = z.infer<typeof FolderTypeSchema>;
 
 export const FolderSchema = z.object({

@@ -1,7 +1,7 @@
 import { CategorizedSections } from '@/components/categorizedSections';
-import { useOrganize } from '@/components/layout/Layout';
 import { CreateSectionModal, type FolderMode } from '@/components/sections';
 import { Button } from '@/components/ui/button';
+import { useUser } from '@/lib/api/users';
 import { useAuth } from '@/lib/auth';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
@@ -11,10 +11,10 @@ import { useDeleteFolder, useReorderSections, useSections, useUpdateFolder } fro
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { Settings, Sparkles, Users } from 'lucide-react';
+import { Settings, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Skeleton } from '../ui/skeleton';
 import type { SortableTreeHandlers } from './Layout';
 
@@ -28,38 +28,47 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const params = useParams({ strict: false });
     const location = useLocation();
     const currentSectionId = (params as { sectionId?: string }).sectionId;
-    const { user } = useAuth();
+    const { user: authUser } = useAuth();
+    const { data: userFromQuery } = useUser();
     const { data: sections = [], isLoading } = useSections();
     const confirm = useConfirm();
 
+    const user = userFromQuery ?? authUser;
     const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
     const deleteFolder = useDeleteFolder();
     const reorderSections = useReorderSections();
     const updateFolder = useUpdateFolder();
 
     const { openEdit } = useSectionEdit();
-    const { openOrganize } = useOrganize();
 
     // Create modal state
     const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [createModalMode, setCreateModalMode] = useState<FolderMode>('section');
+    const [createModalMode, setCreateModalMode] = useState<FolderMode>('folder');
     const [createModalParent, setCreateModalParent] = useState<string | null>(null);
 
     const navRef = useRef<HTMLElement>(null);
 
     const isMobile = useIsMobile();
 
-    const openCreateCategory = () => {
-        setCreateModalMode('category');
+    const openCreateCollection = () => {
+        setCreateModalMode('collection');
         setCreateModalParent(null);
         setCreateModalOpen(true);
     };
 
-    const openCreateSection = (categoryId: string) => {
-        setCreateModalMode('section');
-        setCreateModalParent(categoryId);
+    const openCreateFolder = (collectionId: string) => {
+        setCreateModalMode('folder');
+        setCreateModalParent(collectionId);
         setCreateModalOpen(true);
     };
+
+    useEffect(() => {
+        const handler = () => openCreateCollection();
+
+        window.addEventListener('reverie:openCreateCollection', handler);
+
+        return () => window.removeEventListener('reverie:openCreateCollection', handler);
+    }, []);
 
     const handleEditSection = (section: FolderWithChildren) => {
         openEdit(section);
@@ -71,8 +80,8 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
     const handleDeleteSection = async (section: FolderWithChildren) => {
         const ok = await confirm({
-            title: 'Delete section?',
-            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a section.`,
+            title: 'Delete folder?',
+            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a folder.`,
             confirmText: 'Delete',
             variant: 'destructive',
         });
@@ -90,8 +99,8 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
         }
 
         const ok = await confirm({
-            title: 'Delete category?',
-            description: `"${category.name}" and its ${sectionCount} section${sectionCount !== 1 ? 's' : ''} will be deleted. Documents inside sections will remain but will no longer be in a section.`,
+            title: 'Delete collection?',
+            description: `"${category.name}" and its ${sectionCount} folder${sectionCount !== 1 ? 's' : ''} will be deleted. Documents inside folders will remain but will no longer be in a folder.`,
             confirmText: 'Delete',
             variant: 'destructive',
         });
@@ -152,7 +161,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                         onSectionsChange={handleSectionsChange}
                         onEditSection={handleEditSection}
                         onEditCategory={handleEditCategory}
-                        onAddSection={(category) => openCreateSection(category.id)}
+                        onAddSection={(category) => openCreateFolder(category.id)}
                         onDeleteSection={handleDeleteSection}
                         onDeleteCategory={handleDeleteCategory}
                         onClose={onClose}
@@ -163,23 +172,10 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     type="button"
                     variant="ghost"
                     className="mt-2 w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    onClick={openCreateCategory}
+                    onClick={openCreateCollection}
                 >
                     <span className="text-base">+</span>
-                    New category
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                        openOrganize();
-                        onClose?.();
-                    }}
-                    className="mb-2 w-full justify-start gap-2 px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                >
-                    <Sparkles className="size-3.5 text-primary" />
-                    Organize
-                    <span className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-medium tracking-wide opacity-60">⌘⇧O</span>
+                    New collection
                 </Button>
             </nav>
 

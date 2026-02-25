@@ -37,7 +37,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: sortableId,
-        data: { type: 'category' as const, category },
+        data: { type: 'collection' as const, category },
     });
 
     const style = {
@@ -78,7 +78,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
             {/* Category name - uppercase label style */}
             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{category.name}</span>
 
-            {/* Add section */}
+            {/* Add folder */}
             <Button
                 type="button"
                 variant="ghost"
@@ -87,7 +87,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                     'h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
                     !isMobile && 'opacity-0 transition-opacity group-hover:opacity-100',
                 )}
-                aria-label="Add section"
+                aria-label="Add folder"
                 onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -106,7 +106,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                             variant="ghost"
                             size="icon-sm"
                             className="h-auto w-auto shrink-0 rounded p-0.5 hover:bg-sidebar-accent"
-                            aria-label="Category actions"
+                            aria-label="Collection actions"
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                         >
@@ -131,7 +131,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
                     variant="ghost"
                     size="icon-sm"
                     className="h-auto w-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent"
-                    aria-label="Category actions"
+                    aria-label="Collection actions"
                     onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

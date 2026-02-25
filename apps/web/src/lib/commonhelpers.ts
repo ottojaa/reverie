@@ -1,16 +1,17 @@
 /**
- * Format byte count for human display.
+ * Format byte count for human display (base-10 SI units: 1 KB = 1000 B, 1 MB = 1000 KB).
+ * Matches macOS Finder and modern storage conventions.
  */
 export function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1000) return `${bytes} B`;
 
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1000 * 1000) return `${(bytes / 1000).toFixed(1)} KB`;
 
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
 
-    if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    if (bytes < 1000 * 1000 * 1000 * 1000) return `${(bytes / (1000 * 1000 * 1000)).toFixed(2)} GB`;
 
-    return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`;
+    return `${(bytes / (1000 * 1000 * 1000 * 1000)).toFixed(2)} TB`;
 }
 
 /**

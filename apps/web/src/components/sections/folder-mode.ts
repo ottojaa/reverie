@@ -1,1 +1,1 @@
-export type FolderMode = 'category' | 'section';
+export type FolderMode = 'collection' | 'folder';

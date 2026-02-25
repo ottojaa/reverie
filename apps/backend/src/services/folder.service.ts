@@ -21,24 +21,24 @@ export class FolderService {
         trx?: DbOrTrx,
     ): Promise<Folder> {
         const dbToUse = trx ?? db;
-        const folderType: FolderType = type ?? 'section';
+        const folderType: FolderType = type ?? 'folder';
 
         // Enforce two-level hierarchy
-        if (folderType === 'category' && parentId) {
-            throw new ConflictError('Categories must be root-level (no parent)');
+        if (folderType === 'collection' && parentId) {
+            throw new ConflictError('Collections must be root-level (no parent)');
         }
 
-        if (folderType === 'section' && !parentId) {
-            throw new ConflictError('Sections must have a parent category');
+        if (folderType === 'folder' && !parentId) {
+            throw new ConflictError('Folders must have a parent collection');
         }
 
-        if (folderType === 'section' && parentId) {
+        if (folderType === 'folder' && parentId) {
             const parent = await this.getFolder(parentId, userId, trx);
 
             if (!parent) throw new NotFoundError('Folder', parentId);
 
-            if (parent.type !== 'category') {
-                throw new ConflictError('Sections can only be nested under categories');
+            if (parent.type !== 'collection') {
+                throw new ConflictError('Folders can only be nested under collections');
             }
         }
 
@@ -135,7 +135,7 @@ export class FolderService {
             parentCreatedCount = parentResult.createdCount;
         }
 
-        const folder = await this.createFolder(userId, name, parentId ?? undefined, undefined, null, isCategory ? 'category' : 'section', trx);
+        const folder = await this.createFolder(userId, name, parentId ?? undefined, undefined, null, isCategory ? 'collection' : 'folder', trx);
 
         return { folder, createdCount: parentCreatedCount + 1 };
     }
@@ -226,7 +226,7 @@ export class FolderService {
             .selectFrom('folders')
             .selectAll()
             .where('user_id', '=', userId)
-            .where('type', '=', 'section')
+            .where('type', '=', 'folder')
             .orderBy('sort_order', 'asc')
             .executeTakeFirst();
 
@@ -239,10 +239,10 @@ export class FolderService {
         if (categories.length > 0) {
             category = categories[0]!;
         } else {
-            category = await this.createFolder(userId, 'My Documents', undefined, undefined, '📁', 'category');
+            category = await this.createFolder(userId, 'My Documents', undefined, undefined, '📁', 'collection');
         }
 
-        return this.createFolder(userId, 'Documents', category.id, undefined, '📄', 'section');
+        return this.createFolder(userId, 'Documents', category.id, undefined, '📄', 'folder');
     }
 
     /**
@@ -273,22 +273,22 @@ export class FolderService {
                 throw new ConflictError('Folder cannot be its own parent');
             }
 
-            // Enforce two-level model: categories stay root, sections stay under categories
-            if (folder.type === 'category' && newParentId !== null) {
-                throw new ConflictError('Categories must remain at root level');
+            // Enforce two-level model: collections stay root, folders stay under collections
+            if (folder.type === 'collection' && newParentId !== null) {
+                throw new ConflictError('Collections must remain at root level');
             }
 
-            if (folder.type === 'section') {
+            if (folder.type === 'folder') {
                 if (newParentId === null) {
-                    throw new ConflictError('Sections must have a parent category');
+                    throw new ConflictError('Folders must have a parent collection');
                 }
 
                 const newParent = await this.getFolder(newParentId, userId);
 
                 if (!newParent) throw new NotFoundError('Folder', newParentId);
 
-                if (newParent.type !== 'category') {
-                    throw new ConflictError('Sections can only be moved to categories');
+                if (newParent.type !== 'collection') {
+                    throw new ConflictError('Folders can only be moved to collections');
                 }
             }
 

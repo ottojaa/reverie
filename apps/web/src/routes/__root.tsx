@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { Layout } from '../components/layout/Layout';
+import { TooltipProvider } from '../components/ui/tooltip';
 import { useAuth } from '../lib/auth';
 import { UploadProvider } from '../lib/upload';
 
@@ -43,11 +44,13 @@ function RootComponent() {
 
     // For authenticated routes, render with layout
     return (
-        <UploadProvider>
-            <Layout>
-                <Outlet />
-            </Layout>
-        </UploadProvider>
+        <TooltipProvider>
+            <UploadProvider>
+                <Layout>
+                    <Outlet />
+                </Layout>
+            </UploadProvider>
+        </TooltipProvider>
     );
 }
 

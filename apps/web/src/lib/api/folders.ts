@@ -22,7 +22,7 @@ export const foldersApi = {
         parent_id?: string;
         description?: string;
         emoji?: string;
-        type?: 'category' | 'section';
+        type?: 'collection' | 'folder';
     }): Promise<Folder> {
         const { data: folder } = await apiClient.post('/folders', data);
 
