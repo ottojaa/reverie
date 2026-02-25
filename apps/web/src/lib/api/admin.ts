@@ -27,4 +27,8 @@ export const adminApi = {
 
         return CreateUserResponseSchema.parse(data);
     },
+
+    async deleteUser(userId: string): Promise<void> {
+        await apiClient.delete(`/admin/users/${userId}`);
+    },
 };

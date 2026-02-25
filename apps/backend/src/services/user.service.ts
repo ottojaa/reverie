@@ -6,6 +6,7 @@ import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
 import type { User } from '../db/schema.js';
 import { getFolderService } from './folder.service.js';
+import { getStorageService } from './storage.service.js';
 
 const SALT_ROUNDS = 12;
 const MB = 1_000_000;
@@ -145,4 +146,45 @@ export async function updateUser(options: UpdateUserOptions): Promise<User> {
     if (!updated) throw new Error('User not found');
 
     return updated;
+}
+
+export interface DeleteUserOptions {
+    targetUserId: string;
+    callerUserId: string;
+}
+
+export async function deleteUser(options: DeleteUserOptions): Promise<void> {
+    const { targetUserId, callerUserId } = options;
+
+    const target = await db.selectFrom('users').select(['id', 'role']).where('id', '=', targetUserId).executeTakeFirst();
+
+    if (!target) throw new Error('User not found');
+
+    if (targetUserId === callerUserId) throw new Error('Cannot delete yourself');
+
+    if (target.role === 'admin') throw new Error('Cannot delete admin users');
+
+    const documents = await db
+        .selectFrom('documents')
+        .select(['file_path', 'thumbnail_paths'])
+        .where('user_id', '=', targetUserId)
+        .execute();
+
+    const storageService = getStorageService();
+
+    for (const doc of documents) {
+        try {
+            await storageService.deleteFile(doc.file_path);
+
+            if (doc.thumbnail_paths) {
+                for (const path of Object.values(doc.thumbnail_paths)) {
+                    await storageService.deleteFile(path);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to delete file from storage:', doc.file_path, err);
+        }
+    }
+
+    await db.deleteFrom('users').where('id', '=', targetUserId).execute();
 }

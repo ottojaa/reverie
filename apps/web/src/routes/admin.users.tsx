@@ -6,21 +6,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { adminApi } from '@/lib/api/admin';
 import { useAuth } from '@/lib/auth';
+import { useConfirm } from '@/lib/confirm';
 import { formatDate, formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import type { User } from '@reverie/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { Pencil, Users } from 'lucide-react';
+import { Pencil, Trash2, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { useEffect, useState, type FormEvent } from 'react';
 
 export const Route = createFileRoute('/admin/users')({
     component: AdminUsersPage,
 });
 
+function canDelete(user: User | null, target: User): boolean {
+    return !!user && target.id !== user.id && target.role !== 'admin';
+}
+
 function AdminUsersPage() {
     const { user, accessToken } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const confirm = useConfirm();
 
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -49,6 +56,14 @@ function AdminUsersPage() {
             setEditingUser(null);
         },
         onError: (err) => setError(err instanceof Error ? err.message : 'Failed to update user'),
+    });
+
+    const deleteUserMutation = useMutation({
+        mutationFn: (userId: string) => adminApi.deleteUser(userId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete user'),
     });
 
     useEffect(() => {
@@ -143,6 +158,18 @@ function AdminUsersPage() {
         setEditDialogOpen(open);
     };
 
+    const handleDeleteClick = async (u: User) => {
+        const confirmed = await confirm({
+            title: 'Delete user?',
+            description: `Permanently delete ${u.email}? This cannot be undone.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            variant: 'destructive',
+        });
+
+        if (confirmed) deleteUserMutation.mutate(u.id);
+    };
+
     if (!user) return null;
 
     if (user.role !== 'admin') {
@@ -175,7 +202,7 @@ function AdminUsersPage() {
                                 <TableHead>Storage</TableHead>
                                 <TableHead>Created</TableHead>
                                 <TableHead>Last Login</TableHead>
-                                <TableHead className="w-12" />
+                                <TableHead className="w-24" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -204,9 +231,23 @@ function AdminUsersPage() {
                                     <TableCell className="text-muted-foreground">{formatDate(u.created_at)}</TableCell>
                                     <TableCell className="text-muted-foreground">{u.last_login_at ? formatDateTime(u.last_login_at) : '—'}</TableCell>
                                     <TableCell>
-                                        <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(u)} aria-label={`Edit ${u.email}`}>
-                                            <Pencil className="size-4" />
-                                        </Button>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(u)} aria-label={`Edit ${u.email}`}>
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                            {canDelete(user, u) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleDeleteClick(u)}
+                                                    disabled={deleteUserMutation.isPending}
+                                                    aria-label={`Delete ${u.email}`}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}

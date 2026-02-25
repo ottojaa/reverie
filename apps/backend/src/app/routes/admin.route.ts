@@ -8,7 +8,7 @@ import {
 } from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createUser, listUsers, updateUser } from '../../services/user.service.js';
+import { createUser, deleteUser, listUsers, updateUser } from '../../services/user.service.js';
 
 // Serialize user for API response (exclude sensitive fields)
 function serializeUser(user: {
@@ -90,6 +90,37 @@ export default async function (fastify: FastifyInstance) {
 
                 return reply.status(400).send({
                     error: 'update_user_failed',
+                    message,
+                });
+            }
+        },
+    );
+
+    fastify.delete(
+        '/admin/users/:id',
+        {
+            preHandler: [fastify.authenticate, fastify.authenticateAdmin],
+            schema: {
+                description: 'Delete user (admin only). Cannot delete self or other admins.',
+                tags: ['Admin'],
+                params: z.object({ id: UuidSchema }),
+                response: {
+                    204: z.null(),
+                    400: { type: 'object', properties: { error: { type: 'string' }, message: { type: 'string' } } },
+                },
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { id } = request.params as { id: string };
+                await deleteUser({ targetUserId: id, callerUserId: request.user.id });
+
+                return reply.status(204).send();
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Failed to delete user';
+
+                return reply.status(400).send({
+                    error: 'delete_user_failed',
                     message,
                 });
             }
