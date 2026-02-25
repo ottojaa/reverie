@@ -18,7 +18,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
         let cancelled = false;
         setError(null);
 
-        fetch(fileUrl, { credentials: 'include' })
+        fetch(fileUrl)
             .then((res) => {
                 if (!res.ok) throw new Error(`Failed to load (${res.status})`);
 
