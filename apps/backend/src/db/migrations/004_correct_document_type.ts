@@ -7,4 +7,4 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     await sql`UPDATE documents SET document_category = 'bank_statement' WHERE document_category = 'tax_document'`.execute(db);
 }
 
-export async function down(db: Kysely<unknown>): Promise<void> {}
+export async function down(): Promise<void> {}
