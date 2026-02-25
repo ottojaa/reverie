@@ -3,7 +3,7 @@ import { useProcessingProgress } from '@/lib/useProcessingProgress';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { AnimatePresence, motion } from 'motion/react';
-import { CircularProgress } from './CircularProgress';
+import { Spinner } from './spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 const DEFAULT_TOOLTIP = 'Processing files in the background. It may take a few minutes.';
@@ -21,7 +21,6 @@ export function ProcessingIndicator({ documents, tooltipText = DEFAULT_TOOLTIP, 
     useDocumentsStatus(processingDocumentIds);
 
     const shouldShow = visible && isProcessing;
-    const percent = totalFiles > 0 ? Math.round((completedFiles / totalFiles) * 100) : 0;
 
     const progressContent = (
         <div
@@ -31,7 +30,7 @@ export function ProcessingIndicator({ documents, tooltipText = DEFAULT_TOOLTIP, 
                 variant === 'banner' && 'text-sm text-muted-foreground',
             )}
         >
-            <CircularProgress value={percent} className="size-4 shrink-0" />
+            <Spinner className="size-4" />
             <span>
                 {completedFiles}/{totalFiles}
             </span>

@@ -43,7 +43,7 @@ export function SelectionBanner() {
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ type: 'spring', stiffness: 180, damping: 21 }}
-                    className="overflow-hidden absolute bottom-0 left-0 right-0 flex justify-center w-full bg-card z-20"
+                    className="overflow-hidden sticky bottom-0 flex justify-center w-full bg-card z-20"
                 >
                     <div className="flex items-center justify-between gap-4 border-b border-border py-3">
                         <span className="text-sm font-medium text-primary">{count} selected</span>
