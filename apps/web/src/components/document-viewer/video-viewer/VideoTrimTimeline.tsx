@@ -12,6 +12,29 @@ function formatTime(seconds: number): string {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function computeTrimFromPointer(x: number, duration: number, handle: 'in' | 'out', currentStart: number, currentEnd: number): { start: number; end: number } {
+    const time = Math.max(0, Math.min(duration, x * duration));
+
+    if (handle === 'in') {
+        const newStart = time;
+        const newEnd = Math.max(newStart + MIN_TRIM_DURATION, currentEnd);
+
+        return { start: newStart, end: newEnd };
+    }
+
+    const newEnd = time;
+    const newStart = Math.min(newEnd - MIN_TRIM_DURATION, currentStart);
+
+    return { start: newStart, end: newEnd };
+}
+
+function updateTrackCSS(track: HTMLDivElement | null, start: number, end: number, duration: number): void {
+    if (!track) return;
+
+    track.style.setProperty('--start-pct', String((start / duration) * 100));
+    track.style.setProperty('--end-pct', String((end / duration) * 100));
+}
+
 interface VideoTrimTimelineProps {
     duration: number;
     start: number;
@@ -39,16 +62,32 @@ export function VideoTrimTimeline({
     onSeekToHandle,
     videoUrl,
     onDraggingChange,
-    isPlaying = false,
     className,
 }: VideoTrimTimelineProps) {
     const trackRef = useRef<HTMLDivElement>(null);
     const [dragging, setDragging] = useState<'in' | 'out' | null>(null);
     const dragPreviewRef = useRef<{ start: number; end: number } | null>(null);
-    const lastFlushedRef = useRef<{ start: number; end: number } | null>(null);
     const { frames, isLoading } = useVideoFrameStrip(videoUrl ?? '', duration);
 
     const clamp = useCallback((value: number) => Math.max(0, Math.min(duration, value)), [duration]);
+
+    const applyTrim = useCallback(
+        (x: number, seekToHandle: boolean) => {
+            if (!trackRef.current || dragging === null) return;
+
+            const { start: newStart, end: newEnd } = computeTrimFromPointer(x, duration, dragging, start, end);
+
+            dragPreviewRef.current = { start: newStart, end: newEnd };
+            onRangeChange(newStart, newEnd);
+
+            if (seekToHandle) {
+                onSeekToHandle?.(dragging === 'in' ? newStart : newEnd);
+            }
+
+            updateTrackCSS(trackRef.current, newStart, newEnd, duration);
+        },
+        [dragging, duration, start, end, onRangeChange, onSeekToHandle],
+    );
 
     const handlePointerDown = useCallback(
         (e: React.PointerEvent, handle: 'in' | 'out') => {
@@ -56,10 +95,8 @@ export function VideoTrimTimeline({
             setDragging(handle);
             onDraggingChange?.(true);
             e.currentTarget.setPointerCapture(e.pointerId);
-            const sp = (start / duration) * 100;
-            const ep = (end / duration) * 100;
-            trackRef.current?.style.setProperty('--start-pct', String(sp));
-            trackRef.current?.style.setProperty('--end-pct', String(ep));
+
+            updateTrackCSS(trackRef.current, start, end, duration);
         },
         [duration, start, end, onDraggingChange],
     );
@@ -70,35 +107,10 @@ export function VideoTrimTimeline({
 
             const rect = trackRef.current.getBoundingClientRect();
             const x = (e.clientX - rect.left) / rect.width;
-            const time = clamp(x * duration);
 
-            if (dragging === 'in') {
-                const newStart = clamp(time);
-                const newEnd = Math.max(newStart + MIN_TRIM_DURATION, end);
-                const preview = { start: newStart, end: newEnd };
-
-                dragPreviewRef.current = preview;
-                onRangeChange(newStart, newEnd);
-                onSeekToHandle?.(newStart);
-                const sp = (newStart / duration) * 100;
-                const ep = (newEnd / duration) * 100;
-                trackRef.current.style.setProperty('--start-pct', String(sp));
-                trackRef.current.style.setProperty('--end-pct', String(ep));
-            } else {
-                const newEnd = clamp(time);
-                const newStart = Math.min(newEnd - MIN_TRIM_DURATION, start);
-                const preview = { start: newStart, end: newEnd };
-
-                dragPreviewRef.current = preview;
-                onRangeChange(newStart, newEnd);
-                onSeekToHandle?.(newEnd);
-                const sp = (newStart / duration) * 100;
-                const ep = (newEnd / duration) * 100;
-                trackRef.current.style.setProperty('--start-pct', String(sp));
-                trackRef.current.style.setProperty('--end-pct', String(ep));
-            }
+            applyTrim(x, true);
         },
-        [dragging, duration, end, start, onRangeChange, onSeekToHandle, clamp],
+        [dragging, applyTrim],
     );
 
     const handlePointerUp = useCallback(
@@ -106,28 +118,16 @@ export function VideoTrimTimeline({
             if (trackRef.current && dragging !== null) {
                 const rect = trackRef.current.getBoundingClientRect();
                 const x = (e.clientX - rect.left) / rect.width;
-                const time = clamp(x * duration);
 
-                if (dragging === 'in') {
-                    const newStart = clamp(time);
-                    const newEnd = Math.max(newStart + MIN_TRIM_DURATION, end);
-
-                    lastFlushedRef.current = { start: newStart, end: newEnd };
-                    onRangeChange(newStart, newEnd);
-                } else {
-                    const newEnd = clamp(time);
-                    const newStart = Math.min(newEnd - MIN_TRIM_DURATION, start);
-
-                    lastFlushedRef.current = { start: newStart, end: newEnd };
-                    onRangeChange(newStart, newEnd);
-                }
+                applyTrim(x, false);
             }
 
             e.currentTarget.releasePointerCapture(e.pointerId);
+
             dragPreviewRef.current = null;
             setDragging(null);
         },
-        [dragging, duration, end, start, onRangeChange, clamp],
+        [dragging, applyTrim],
     );
 
     const handleTrackClick = useCallback(
@@ -148,7 +148,6 @@ export function VideoTrimTimeline({
             const preview = dragPreviewRef.current;
 
             if (preview) {
-                lastFlushedRef.current = { start: preview.start, end: preview.end };
                 onRangeChange(preview.start, preview.end);
                 dragPreviewRef.current = null;
             }
@@ -171,15 +170,10 @@ export function VideoTrimTimeline({
     }, [dragging, onDraggingChange]);
 
     // Sync CSS vars from props only when NOT dragging - prevents React re-renders (e.g. timeupdate)
-    // from overwriting our direct DOM updates during drag. Use lastFlushedRef when we just released
-    // so we don't overwrite with stale props before parent has re-rendered.
+    // from overwriting our direct DOM updates during drag.
     useEffect(() => {
-        if (!dragging && trackRef.current) {
-            const sp = (start / duration) * 100;
-            const ep = (end / duration) * 100;
-
-            trackRef.current.style.setProperty('--start-pct', String(sp));
-            trackRef.current.style.setProperty('--end-pct', String(ep));
+        if (!dragging) {
+            updateTrackCSS(trackRef.current, start, end, duration);
         }
     }, [dragging, start, end, duration]);
 
