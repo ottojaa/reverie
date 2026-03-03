@@ -13,7 +13,7 @@ export const Route = createFileRoute('/login')({
 });
 
 function LoginPage() {
-    const { login, loginWithGoogle, isAuthenticated } = useAuth();
+    const { login, isAuthenticated } = useAuth();
     const navigate = useNavigate();
     const { error: urlError } = useSearch({ from: '/login' });
 

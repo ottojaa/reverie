@@ -52,10 +52,11 @@ export function classifyNonTextImage(imageSize: ImageSize, filename: string): Do
 }
 
 /**
- * Get a human-readable description of a category
+ * Get a human-readable description of a category.
+ * Accepts any string (DB may have values not in DocumentCategory).
  */
-export function getCategoryDescription(category: DocumentCategory): string {
-    const descriptions: Record<DocumentCategory, string> = {
+export function getCategoryDescription(category: string): string {
+    const descriptions: Record<string, string> = {
         photo: 'Photo or personal image',
         screenshot: 'Screenshot or screen capture',
         graphic: 'Graphic, diagram, or illustration',
@@ -71,10 +72,14 @@ export function getCategoryDescription(category: DocumentCategory): string {
         newsletter: 'Newsletter or publication',
         stock_statement: 'Stock or investment statement',
         bank_statement: 'Bank statement',
+        transaction_receipt: 'Transaction receipt or purchase record',
+        dividend_statement: 'Dividend statement',
+        stock_overview: 'Stock or portfolio overview',
+        stock_split: 'Stock split document',
         medical_record: 'Medical record',
         bill_of_materials: 'Bill of materials',
         other: 'Other document',
     };
 
-    return descriptions[category] || 'Unknown document type';
+    return descriptions[category] ?? category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }

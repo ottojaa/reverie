@@ -3,55 +3,51 @@ import { FunctionTool } from './openai.client';
 export const TOOLS: FunctionTool[] = [
     {
         type: 'function',
-        name: 'search_documents',
+        name: 'find_documents',
         description:
-            'Search for documents matching the given criteria. Use this to find documents before proposing organization actions. Always call this before propose_organization.',
+            'Find documents matching criteria. Returns document IDs and summary. Use group_by for "organize better" requests to get groups per category or category+year. Call before propose_organization.',
         parameters: {
             type: 'object',
             properties: {
                 query: {
                     type: 'string',
-                    description: [
-                        'Search query using filter syntax and/or plain text. Combine as needed.',
-                        '',
-                        'IMPORTANT - how photos are indexed:',
-                        '  Photos are NOT processed by the LLM. Their location (city, country) and date come from',
-                        '  EXIF metadata and are stored as plain text in the search index.',
-                        '  To find photos by location, use plain text (e.g. "spain", "barcelona").',
-                        '  To filter by the date the photo was taken, use date:<year>.',
-                        '',
-                        'Supported filters (combine with plain text):',
-                        '  category:<value> - Document category. For photos use category:photo. Other values: receipt, screenshot, document, etc.',
-                        '  format:<value>   - File format. Values: pdf, jpg, png, heic, etc.',
-                        '  tag:<value>      - Tag applied to a document.',
-                        '  date:<value>     - Extracted/taken date. Examples: date:2025, date:2024-06, date:2022-2025',
-                        '  uploaded:<value> - Upload date. Examples: uploaded:2024, uploaded:last-week',
-                        '  folder:<name>    - Filter by folder name.',
-                        '  has:text         - Only documents with extracted text.',
-                        '',
-                        'Examples:',
-                        '  "category:photo spain date:2025"      ← photos from Spain taken in 2025',
-                        '  "category:photo barcelona"             ← photos from Barcelona (any year)',
-                        '  "category:photo date:2024"             ← all photos taken in 2024',
-                        '  "category:receipt uploaded:2024"       ← receipts uploaded in 2024',
-                        '  "invoice 2024"                         ← plain text full-text search',
-                    ].join('\n'),
+                    description:
+                        'Search query. Filters: category:photo, category:bank_statement, date:2025, uploaded:2024, tag:X. Plain text for location. Examples: "category:photo spain date:2025", "category:bank_statement category:stock_statement".',
                 },
                 limit: {
                     type: ['number', 'null'],
-                    description: 'Max results to return. Default 50, max 200. Pass null to use the default.',
+                    description: 'Max results. Default 200. Pass null for default.',
+                },
+                group_by: {
+                    type: ['string', 'null'],
+                    enum: ['category', 'category_year', null],
+                    description:
+                        'Use "category" to group by document type (e.g. bank_statement, stock_statement). Use "category_year" to group by type and year. Use for "organize better" requests to create separate folders per type or per type+year. Null for flat results.',
                 },
             },
-            required: ['query', 'limit'],
+            required: ['query', 'limit', 'group_by'],
             additionalProperties: false,
         },
         strict: true,
     },
     {
         type: 'function',
-        name: 'list_folders',
+        name: 'get_folder_overview',
         description:
-            'List the current folder structure so you can see what categories and sections already exist. Call this when the user wants help organizing, or when you need to know existing folders to avoid creating duplicates.',
+            'Returns aggregated folder stats (path, document_count, category_distribution, date_range). Use for destination context. Call when you need to pick or create a target folder.',
+        parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+            additionalProperties: false,
+        },
+        strict: true,
+    },
+    {
+        type: 'function',
+        name: 'get_category_overview',
+        description:
+            'Returns document categories this user has, with counts and labels. Call when user intent is fuzzy (e.g. "financial documents", "medical docs") to pick which categories match. Then use category:X in find_documents.',
         parameters: {
             type: 'object',
             properties: {},
@@ -64,7 +60,7 @@ export const TOOLS: FunctionTool[] = [
         type: 'function',
         name: 'propose_organization',
         description:
-            'Propose a set of document organization operations for the user to review. Call this once you have found the relevant documents via search_documents and determined appropriate folder destinations. Operations can move documents to folders or delete empty folders (e.g. after moving all docs out).',
+            'Propose organization operations for user review. Call after find_documents when you have document_ids and a target. Operations: move/create_and_move for moves, delete_folder for empty folders.',
         parameters: {
             type: 'object',
             properties: {
@@ -92,7 +88,8 @@ export const TOOLS: FunctionTool[] = [
                             },
                             target_folder_name: {
                                 type: 'string',
-                                description: 'Name of the target folder (new or existing section name). Required for move/create_and_move.',
+                                description:
+                                    'Name of the target folder only (e.g. "2024", "Misc"). No slashes. With new_parent_name, path is /new_parent_name/target_folder_name.',
                             },
                             target_folder_id: {
                                 type: ['string', 'null'],
@@ -106,7 +103,7 @@ export const TOOLS: FunctionTool[] = [
                             target_folder_new_parent_name: {
                                 type: ['string', 'null'],
                                 description:
-                                    'Name for a NEW top-level category to create as the parent. Set this instead of target_folder_parent_id when you want to create both a new category and a new section inside it.',
+                                    'Name for a NEW top-level collection. Path is /new_parent_name/target_folder_name only (2 levels). E.g. new_parent_name="Bank Statements", target_folder_name="2024" creates /Bank Statements/2024. Do NOT use slashes in target_folder_name.',
                             },
                             is_new: {
                                 type: 'boolean',

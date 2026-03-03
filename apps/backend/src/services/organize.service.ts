@@ -11,8 +11,7 @@ import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { streamResponsesAPI, type ResponseInputItem } from '../llm/openai.client';
 import { TOOLS } from '../llm/tools';
-import { parseQuery } from '../search/query-parser';
-import { search } from '../search/search.service';
+import { findDocumentsForOrganize, getCategoryOverview, getFolderOverview } from '../search/search.service';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { getFolderService } from './folder.service';
 import { getStorageService } from './storage.service';
@@ -29,12 +28,11 @@ function writeSse(res: ServerResponse, event: string, data: unknown): void {
 
 // ── Tool Execution ────────────────────────────────────────────────────────────
 
-interface SearchDocumentsArgs {
+interface FindDocumentsArgs {
     query: string;
     limit?: number;
+    group_by?: 'category' | 'category_year' | null;
 }
-
-interface ListFoldersArgs {}
 
 interface ProposeMoveOperationRaw {
     type: 'move' | 'create_and_move';
@@ -59,75 +57,34 @@ interface ProposeOrganizationArgs {
     operations: ProposeOperationRaw[];
 }
 
-async function execSearchDocuments(args: SearchDocumentsArgs, userId: string): Promise<string> {
-    const limit = Math.min(args.limit ?? 50, 200);
-
-    // Debug: log the raw args and parsed query so issues are visible in server logs
-    const parsedDebug = parseQuery(args.query);
-    console.log('[organize:search] query=%o parsed=%o', args.query, parsedDebug);
-
-    const result = await search(
-        {
-            q: args.query,
-            sort_by: 'relevance',
-            sort_order: 'desc',
-            include_facets: false,
-            limit,
-            offset: 0,
-        },
-        { userId },
-    );
-
-    console.log('[organize:search] total=%d returning=%d', result.total, result.results.length);
-
-    if (result.results.length === 0) {
-        return JSON.stringify({ found: 0, document_ids: [], sample: [] });
-    }
-
-    const documents = result.results.map((r) => ({
-        id: r.document_id,
-        display_name: r.display_name,
-        folder_path: r.folder_path,
-        folder_id: r.folder_id,
-        category: r.category,
-        format: r.format,
-        mime_type: r.mime_type,
-        extracted_date: r.extracted_date,
-        uploaded_at: r.uploaded_at,
-        tags: r.tags,
-    }));
-
-    // Return slim payload to LLM: all IDs for propose_organization, but only a small sample
-    // with full metadata to avoid context bloat (200 docs × ~250 chars = ~15k tokens)
-    const SAMPLE_SIZE = 15;
-    const sample = documents.slice(0, SAMPLE_SIZE);
-    const document_ids = documents.map((d) => d.id);
-
-    return JSON.stringify({
-        found: result.total,
-        showing: documents.length,
-        document_ids,
-        sample,
+async function execFindDocuments(args: FindDocumentsArgs, userId: string): Promise<string> {
+    const result = await findDocumentsForOrganize(args.query, {
+        userId,
+        limit: args.limit ?? 200,
+        group_by: args.group_by ?? undefined,
     });
+
+    const payload: Record<string, unknown> = {
+        total: result.total,
+        document_ids: result.document_ids,
+        summary: result.summary,
+    };
+
+    if (result.groups) payload.groups = result.groups;
+
+    return JSON.stringify(payload);
 }
 
-async function execListFolders(_args: ListFoldersArgs, userId: string): Promise<string> {
-    const tree = await folderService.getFolderTree(userId);
+async function execGetFolderOverview(userId: string): Promise<string> {
+    const { folders } = await getFolderOverview(userId);
 
-    const simplified = tree.map((category) => ({
-        id: category.id,
-        name: category.name,
-        type: category.type,
-        document_count: category.document_count,
-        sections: category.children.map((section) => ({
-            id: section.id,
-            name: section.name,
-            type: section.type,
-            document_count: section.document_count,
-        })),
-    }));
+    return JSON.stringify({ folders });
+}
 
-    return JSON.stringify({ folders: simplified });
+async function execGetCategoryOverview(userId: string): Promise<string> {
+    const { categories } = await getCategoryOverview(userId);
+
+    return JSON.stringify({ categories });
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -203,35 +160,51 @@ export interface OrganizeChatOptions {
     res: ServerResponse;
 }
 
-const SYSTEM_PROMPT = `You are Reverie's document organization assistant. Your job is to help users organize their uploaded files into folders.
+const SYSTEM_PROMPT = `You are Reverie's document organization assistant. You propose ONE concrete plan per request. You do not list options. You do not ask clarifying questions unless the answer materially changes the result.
 
-Available tools:
-- search_documents: Find documents matching criteria (locations, dates, categories, file types, tags, etc.)
-- list_folders: See the current folder structure
-- propose_organization: Present a structured organization plan to the user
+Tools:
+- get_category_overview: Returns document categories this user has (id, label, count). Call when user intent is vague (e.g. "financial documents", "medical docs") to pick which categories match. Then use category:X in find_documents.
+- get_folder_overview: Returns aggregated folder stats (path, document_count, category_distribution, date_range). Call when you need destination context.
+- find_documents: Returns document IDs and summary. Use group_by: "category" or "category_year" for "organize better" requests to get groups per type or type+year.
+- propose_organization: Present your plan. Call after find_documents when you have IDs and a target.
 
-CRITICAL - You MUST call propose_organization to present any organization plan. Never describe a plan in text alone—the user cannot confirm or execute without the proposal panel appearing on the right. If you have document IDs and a plan, call propose_organization immediately.
+Rules:
+1. When user intent is vague (e.g. "financial documents", "medical docs", "receipts"): Call get_category_overview first. Use the labels to decide which categories match, then call find_documents with category:X filters.
+2. On clear intent (e.g. "move bank docs to Finance"): Call find_documents with category/query, then propose_organization. One round.
+3. Never enumerate folders. Use get_folder_overview for structural context. If no suitable folder exists, use create_and_move with a new folder name.
+4. Never ask "which folder?"—pick the best match. If unsure, state your assumption: "I'm putting these in Finance—change the target in the panel if needed."
+5. One plan per message. No "Option 1, Option 2, Option 3."
+6. Keep responses under 2 sentences unless the user asks for explanation.
+7. After proposing: "Review the panel and Confirm or Discard." Do not ask "ready to apply?"
+8. Hierarchy: exactly 2 levels—collection (root) contains folder. Paths are /CollectionName/FolderName only. No nesting folders under folders.
+9. find_documents returns: { total, document_ids, summary, groups? }. When group_by is used, groups has { category, year?, document_ids, count, date_range }. Use document_ids from each group for separate operations.
 
-How documents are indexed (important for forming good queries):
-- Photos: location (city, country) and taken date come from EXIF metadata and are plain-text searchable. Use "type:photo spain date:2025" to find Spain photos from 2025 - plain text for location, date: filter for year.
-- Other documents: may have AI-generated tags, categories, and summaries. Use category:, tag:, and plain text for content search.
+Path structure (critical—must follow or execution fails):
+- target_folder_new_parent_name = collection name (e.g. "Bank Statements", "Stock Statements", "Invoices", "Photos"). Use document type as collection.
+- target_folder_name = folder name only (e.g. "2024", "1998", "Misc"). Do NOT use slashes like "Bank Statements/1998"—that creates invalid 3-level paths.
+- For "organize better": create separate top-level collections per type (Bank Statements, Stock Statements, Invoices). Each collection has folders named by year (2024, 2023, etc.) or "Misc" for undated.
 
-Guidelines:
-- When the user gives a clear intent, call search_documents first, then propose_organization.
-  Good photo query example: "category:photo spain date:2025"
-  Good document query example: "category:receipt uploaded:2024"
-- When the user asks for help or is vague, call list_folders and search_documents for unorganized documents, then describe what you found and ask what they'd like to do.
-- When presenting multiple options, always number them (1, 2, 3, etc.). Accept short replies like "1", "2", "option 3" as selecting that option—interpret and proceed accordingly.
-- Keep text responses concise and friendly. Don't explain your tool usage, just focus on helping.
-- If the user's message makes no sense or is off-topic, politely explain what you can help with and give 2-3 examples.
-- Only call propose_organization when you have found the actual document IDs via search_documents.
-- Documents are moved into "folder" type folders. Folders live inside "collection" folders (two-level hierarchy).
-- If a suitable folder doesn't exist, use create_and_move with target_folder_parent_id set to an existing collection's UUID.
-- If no suitable collection exists either, use create_and_move with target_folder_new_parent_name set to a new collection name AND target_folder_parent_id null. This creates both a new top-level collection and the folder inside it.
-- Prefer creating new collections when the user's content clearly belongs to a new top-level grouping (e.g. "Trips", "Work", "Family"). Don't force documents into irrelevant existing collections.
-- When moving all documents out of a folder, you can include a delete_folder operation to remove the now-empty folder. Use the folder's UUID and name from list_folders.
+Date matching (critical):
+- Only use an existing folder if its date_range matches the documents. get_folder_overview includes date_range per folder.
+- Folder names like "1998-2000" imply a date range. If documents span 1998-2026, do NOT put them in a folder named "1998-2000". Create new folders or use a folder whose date_range covers the documents.
+- When reusing a folder, check that folder.date_range.min/max overlap with the documents' summary.date_range.
 
-After proposing: Tell the user to review the changes in the right panel and use the Confirm or Discard button there. Do NOT ask "ready to apply?" or similar—that is confusing. The user must use the panel's Confirm/Discard buttons. Never claim you have applied changes—only the user can do that by clicking Confirm.`;
+"Organize better" / "improve organization" / "organize in a better way":
+- Do NOT dump everything into one existing folder. Propose a new structure.
+- Call find_documents with group_by: "category_year" to get groups per document type and year.
+- Create separate top-level collections per document type: Bank Statements, Stock Statements, Invoices (not one "Financial Documents" with subfolders). Each collection has folders named by year (2024, 2023, etc.) or "Misc" for undated.
+- Each operation: target_folder_new_parent_name = collection (e.g. "Bank Statements"), target_folder_name = year or "Misc" (e.g. "2024", "1998", "Misc"). Never use slashes in target_folder_name.
+- For photos: collection by location or "Photos", folders by year. Use find_documents with category:photo and date:YYYY or location text.
+- Use get_category_overview labels for collection names (e.g. bank_statement -> "Bank Statements").
+
+Evaluate existing folders:
+- Use get_folder_overview. If a folder's date_range and category_distribution match the documents well, use it. Otherwise create a new structure.
+- Prefer creating new collections/folders when the proposed structure is clearly better than existing ones.
+
+How documents are indexed:
+- Photos: location (city, country) and taken date from EXIF. Use "category:photo spain date:2025" for Spain photos from 2025.
+- Other documents: category:, tag:, plain text. Examples: "category:receipt uploaded:2024", "category:photo barcelona"`;
+
 
 export async function runOrganizeChat(options: OrganizeChatOptions): Promise<void> {
     const { message, responseId, userId, res } = options;
@@ -379,15 +352,18 @@ export async function runOrganizeChat(options: OrganizeChatOptions): Promise<voi
 
                 stopAfterNextTextResponse = true;
                 result = 'Proposal emitted to the user for review. Briefly confirm what you proposed in one sentence.';
-            } else if (tc.name === 'search_documents') {
-                const args = JSON.parse(tc.argumentsJson) as SearchDocumentsArgs;
+            } else if (tc.name === 'find_documents') {
+                const args = JSON.parse(tc.argumentsJson) as FindDocumentsArgs;
                 writeSse(res, 'status', {
                     action: 'Searching documents that match the criteria...',
                 });
-                result = await execSearchDocuments(args, userId);
-            } else if (tc.name === 'list_folders') {
+                result = await execFindDocuments(args, userId);
+            } else if (tc.name === 'get_folder_overview') {
                 writeSse(res, 'status', { action: 'Analyzing your folder structure...' });
-                result = await execListFolders({}, userId);
+                result = await execGetFolderOverview(userId);
+            } else if (tc.name === 'get_category_overview') {
+                writeSse(res, 'status', { action: 'Checking document categories...' });
+                result = await execGetCategoryOverview(userId);
             } else {
                 result = JSON.stringify({ error: `Unknown tool: ${tc.name}` });
             }

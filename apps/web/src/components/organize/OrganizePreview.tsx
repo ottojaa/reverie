@@ -200,10 +200,10 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                     </span>
                                 </div>
 
-                                {/* Thumbnail grid */}
+                                {/* Thumbnail grid - show first 10, then "and N more" */}
                                 <div className="grid grid-cols-3 gap-1.5 p-2">
                                     <AnimatePresence initial={false}>
-                                        {op.document_previews.map((doc) => {
+                                        {op.document_previews.slice(0, 10).map((doc) => {
                                             const thumbUrl = getThumbnailUrl(doc, 'sm');
 
                                             return (
@@ -243,6 +243,11 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                             );
                                         })}
                                     </AnimatePresence>
+                                    {op.document_ids.length > 10 && (
+                                        <p className="col-span-full px-1 pt-1 text-xs text-muted-foreground">
+                                            and {op.document_ids.length - 10} more
+                                        </p>
+                                    )}
                                 </div>
                             </motion.div>
                         ),

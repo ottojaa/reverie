@@ -1,6 +1,7 @@
 import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQuery } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
+import { getCategoryDescription } from '../ocr/category-classifier';
 import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
@@ -221,6 +222,293 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         query: parsed,
         timing_ms: Math.round(endTime - startTime),
     };
+}
+
+/**
+ * Find documents for organize flow (Layer 2 retrieval).
+ * Returns document IDs + compact summary only. No full document rows to LLM.
+ */
+export interface FindDocumentsForOrganizeResult {
+    total: number;
+    document_ids: string[];
+    summary: {
+        categories: Record<string, number>;
+        date_range: { min: string | null; max: string | null };
+    };
+    /** When group_by is set, groups replace flat document_ids. */
+    groups?: Array<{
+        category: string;
+        year?: string | null;
+        document_ids: string[];
+        count: number;
+        date_range: { min: string | null; max: string | null };
+    }>;
+}
+
+export interface CategoryOverviewItem {
+    id: string;
+    label: string;
+    count: number;
+}
+
+export async function getCategoryOverview(userId: string): Promise<{ categories: CategoryOverviewItem[] }> {
+    const rows = await db
+        .selectFrom('documents')
+        .select(['document_category', sql<number>`count(*)::int`.as('count')])
+        .where('user_id', '=', userId)
+        .where('document_category', 'is not', null)
+        .groupBy('document_category')
+        .orderBy(sql`count(*)`, 'desc')
+        .execute();
+
+    const categories: CategoryOverviewItem[] = rows
+        .filter((r) => r.document_category)
+        .map((r) => ({
+            id: r.document_category!,
+            label: getCategoryDescription(r.document_category!),
+            count: r.count,
+        }));
+
+    return { categories };
+}
+
+export type FindDocumentsGroupBy = 'category' | 'category_year';
+
+export async function findDocumentsForOrganize(
+    query: string,
+    options: { userId: string; limit?: number; group_by?: FindDocumentsGroupBy },
+): Promise<FindDocumentsForOrganizeResult> {
+    const limit = Math.min(options.limit ?? 200, 200);
+    const parsed = parseQuery(query);
+
+    const errors = validateQuery(parsed);
+
+    if (errors.length > 0) {
+        throw new Error(`Invalid query: ${errors.join(', ')}`);
+    }
+
+    const queryOptions: SearchQueryOptions = {
+        limit,
+        offset: 0,
+        sortBy: parsed.fullText ? 'relevance' : 'uploaded',
+        sortOrder: 'desc',
+    };
+
+    const baseQuery = db
+        .selectFrom('documents as d')
+        .leftJoin('folders as f', 'f.id', 'd.folder_id')
+        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
+        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
+        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
+
+    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
+
+    const rows = await searchQuery
+        .select(['d.id', 'd.document_category', 'd.extracted_date'])
+        .execute();
+
+    if (rows.length === 0) {
+        return {
+            total: 0,
+            document_ids: [],
+            summary: { categories: {}, date_range: { min: null, max: null } },
+        };
+    }
+
+    const groupBy = options.group_by;
+
+    if (groupBy === 'category' || groupBy === 'category_year') {
+        const byKey = new Map<
+            string,
+            { ids: string[]; dates: Date[] }
+        >();
+
+        for (const r of rows) {
+            const cat = r.document_category ?? 'other';
+            const year = r.extracted_date ? String(new Date(r.extracted_date).getFullYear()) : null;
+            const key = groupBy === 'category_year' ? `${cat}\0${year ?? 'unknown'}` : cat;
+
+            if (!byKey.has(key)) {
+                byKey.set(key, { ids: [], dates: [] });
+            }
+
+            const entry = byKey.get(key)!;
+
+            entry.ids.push(r.id);
+
+            if (r.extracted_date) entry.dates.push(r.extracted_date);
+        }
+
+        const groups: FindDocumentsForOrganizeResult['groups'] = [];
+
+        for (const [key, entry] of byKey.entries()) {
+            const [category, year] = groupBy === 'category_year' ? key.split('\0') : [key, null];
+            const dates = entry.dates;
+            const dateMin = dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+            const dateMax = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null;
+
+            groups.push({
+                category,
+                year: groupBy === 'category_year' ? (year === 'unknown' ? null : year) : undefined,
+                document_ids: entry.ids,
+                count: entry.ids.length,
+                date_range: {
+                    min: dateMin ? dateMin.toISOString().slice(0, 10) : null,
+                    max: dateMax ? dateMax.toISOString().slice(0, 10) : null,
+                },
+            });
+        }
+
+        const document_ids = rows.map((r) => r.id);
+        const categoryCounts: Record<string, number> = {};
+        let dateMin: Date | null = null;
+        let dateMax: Date | null = null;
+
+        for (const r of rows) {
+            const cat = r.document_category ?? 'other';
+
+            categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+
+            const d = r.extracted_date;
+
+            if (d) {
+                if (!dateMin || d < dateMin) dateMin = d;
+
+                if (!dateMax || d > dateMax) dateMax = d;
+            }
+        }
+
+        return {
+            total: document_ids.length,
+            document_ids,
+            summary: {
+                categories: categoryCounts,
+                date_range: {
+                    min: dateMin ? dateMin.toISOString().slice(0, 10) : null,
+                    max: dateMax ? dateMax.toISOString().slice(0, 10) : null,
+                },
+            },
+            groups,
+        };
+    }
+
+    const document_ids = rows.map((r) => r.id);
+
+    const categoryCounts: Record<string, number> = {};
+    let dateMin: Date | null = null;
+    let dateMax: Date | null = null;
+
+    for (const r of rows) {
+        const cat = r.document_category ?? 'other';
+
+        categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+
+        const d = r.extracted_date;
+
+        if (d) {
+            if (!dateMin || d < dateMin) dateMin = d;
+
+            if (!dateMax || d > dateMax) dateMax = d;
+        }
+    }
+
+    return {
+        total: document_ids.length,
+        document_ids,
+        summary: {
+            categories: categoryCounts,
+            date_range: {
+                min: dateMin ? dateMin.toISOString().slice(0, 10) : null,
+                max: dateMax ? dateMax.toISOString().slice(0, 10) : null,
+            },
+        },
+    };
+}
+
+/**
+ * Get folder overview for organize flow (Layer 1 retrieval).
+ * Returns aggregated folder stats—no document rows.
+ */
+export interface FolderOverviewItem {
+    id: string;
+    path: string;
+    parent_id: string | null;
+    type: string;
+    document_count: number;
+    category_distribution: Record<string, number>;
+    date_range: { min: string | null; max: string | null };
+}
+
+export async function getFolderOverview(userId: string): Promise<{ folders: FolderOverviewItem[] }> {
+    const rows = await db
+        .selectFrom('folders as f')
+        .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id'))
+        .select([
+            'f.id',
+            'f.path',
+            'f.parent_id',
+            'f.type',
+            'f.sort_order',
+            'd.id as doc_id',
+            'd.document_category',
+            'd.extracted_date',
+        ])
+        .where('f.user_id', '=', userId)
+        .orderBy('f.path', 'asc')
+        .execute();
+
+    const byFolder = new Map<
+        string,
+        { path: string; parent_id: string | null; type: string; sort_order: number; categories: Record<string, number>; dates: Date[] }
+    >();
+
+    for (const r of rows) {
+        const key = r.id;
+
+        if (!byFolder.has(key)) {
+            byFolder.set(key, {
+                path: r.path,
+                parent_id: r.parent_id,
+                type: r.type,
+                sort_order: r.sort_order,
+                categories: {},
+                dates: [],
+            });
+        }
+
+        const entry = byFolder.get(key)!;
+
+        if (r.doc_id) {
+            const cat = r.document_category ?? 'other';
+
+            entry.categories[cat] = (entry.categories[cat] ?? 0) + 1;
+
+            if (r.extracted_date) entry.dates.push(r.extracted_date);
+        }
+    }
+
+    const folders: FolderOverviewItem[] = [];
+
+    for (const [id, entry] of byFolder.entries()) {
+        const dates = entry.dates;
+        const dateMin = dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+        const dateMax = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null;
+
+        folders.push({
+            id,
+            path: entry.path,
+            parent_id: entry.parent_id,
+            type: entry.type,
+            document_count: Object.values(entry.categories).reduce((a, b) => a + b, 0),
+            category_distribution: entry.categories,
+            date_range: {
+                min: dateMin ? dateMin.toISOString().slice(0, 10) : null,
+                max: dateMax ? dateMax.toISOString().slice(0, 10) : null,
+            },
+        });
+    }
+
+    return { folders };
 }
 
 /**
