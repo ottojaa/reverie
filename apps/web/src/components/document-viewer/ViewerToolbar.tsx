@@ -14,8 +14,12 @@ interface ViewerToolbarProps {
     fileUrl: string | null;
     isDetailsOpen: boolean;
     onToggleDetails: () => void;
-    /** Whether this file type supports editing (future) */
+    /** Whether this file type supports editing */
     canEdit?: boolean;
+    /** Whether edit mode is active (e.g. image editor) */
+    isEditMode?: boolean;
+    /** Toggle edit mode */
+    onToggleEdit?: () => void;
 }
 
 function isDocumentProcessing(document: Document) {
@@ -51,7 +55,7 @@ function ProcessingIndicator({ document }: { document: Document }) {
     );
 }
 
-export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false }: ViewerToolbarProps) {
+export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
     const router = useRouter();
     const [isDownloading, setIsDownloading] = useState(false);
     const fileConfig = getFileTypeConfig(document.mime_type);
@@ -107,14 +111,15 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
             {/* Right: actions */}
             <div className="relative z-10 flex items-center gap-3">
                 <ProcessingIndicator document={document} />
-                {/* Edit button (text files only for now — others show "coming soon") */}
+                {/* Edit button (text files use inline edit; images use image editor) */}
                 {!isTextLike && (
                     <Button
                         variant="ghost"
                         size="icon-sm"
                         disabled={!canEdit}
-                        title={canEdit ? 'Edit' : 'Editing coming soon'}
-                        className="text-muted-foreground"
+                        onClick={canEdit ? onToggleEdit : undefined}
+                        title={canEdit ? (isEditMode ? 'Exit edit' : 'Edit') : 'Editing coming soon'}
+                        className={cn('text-muted-foreground', canEdit && isEditMode && 'bg-primary/10 text-primary')}
                     >
                         {canEdit ? <Edit3 className="size-4" /> : <Pencil className="size-4" />}
                     </Button>

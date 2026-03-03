@@ -31,6 +31,7 @@ export default async function (fastify: FastifyInstance) {
             let folderId: string | undefined;
             let sessionId: string | undefined;
             let conflictStrategy: ConflictStrategy | undefined;
+            let copyMetadataFromDocumentId: string | undefined;
 
             for await (const part of parts) {
                 if (part.type === 'file') {
@@ -48,6 +49,8 @@ export default async function (fastify: FastifyInstance) {
                     const v = String(part.value);
 
                     if (v === 'replace' || v === 'keep_both') conflictStrategy = v;
+                } else if (part.fieldname === 'copy_metadata_from_document_id' && part.value) {
+                    copyMetadataFromDocumentId = String(part.value);
                 }
             }
 
@@ -69,7 +72,7 @@ export default async function (fastify: FastifyInstance) {
             const resolvedFolderId = folder.id;
 
 
-            const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy);
+            const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy, copyMetadataFromDocumentId);
 
             return {
                 session_id: result.sessionId,

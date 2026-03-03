@@ -5,6 +5,7 @@ export type UploadOptions = {
     folderId?: string;
     sessionId: string;
     conflictStrategy?: 'replace' | 'keep_both';
+    copyMetadataFromDocumentId?: string;
     onProgress?: (loaded: number, total: number) => void;
 };
 
@@ -14,7 +15,7 @@ export type UploadOptions = {
  * @param conflictStrategy - When duplicates exist: 'replace' or 'keep_both' (from duplicate options dialog)
  */
 export async function uploadFile(file: File, options: UploadOptions): Promise<UploadResponse> {
-    const { folderId, sessionId, conflictStrategy, onProgress } = options;
+    const { folderId, sessionId, conflictStrategy, copyMetadataFromDocumentId, onProgress } = options;
     const formData = new FormData();
 
     formData.append('files', file);
@@ -27,6 +28,10 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
 
     if (conflictStrategy) {
         formData.append('conflict_strategy', conflictStrategy);
+    }
+
+    if (copyMetadataFromDocumentId) {
+        formData.append('copy_metadata_from_document_id', copyMetadataFromDocumentId);
     }
 
     return new Promise((resolve, reject) => {
@@ -84,7 +89,7 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
  * @deprecated Use sequential upload via uploadFile in a loop for per-file progress and batch-size resilience
  */
 export async function uploadFiles(files: File[], options: UploadOptions): Promise<UploadResponse> {
-    const { folderId, sessionId, conflictStrategy, onProgress } = options;
+    const { folderId, sessionId, conflictStrategy, copyMetadataFromDocumentId, onProgress } = options;
     const formData = new FormData();
 
     for (const file of files) {
@@ -99,6 +104,10 @@ export async function uploadFiles(files: File[], options: UploadOptions): Promis
 
     if (conflictStrategy) {
         formData.append('conflict_strategy', conflictStrategy);
+    }
+
+    if (copyMetadataFromDocumentId) {
+        formData.append('copy_metadata_from_document_id', copyMetadataFromDocumentId);
     }
 
     return new Promise((resolve, reject) => {

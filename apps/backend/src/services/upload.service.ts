@@ -74,6 +74,7 @@ export class UploadService {
      * Upload multiple files (with user context for storage quotas)
      * @param clientSessionId - Optional client-provided session ID for WebSocket correlation (avoids race with job events)
      * @param conflictStrategy - When 'replace', delete existing docs in folder with same filename first. When 'keep_both', auto-rename with (n) suffix.
+     * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to each newly created document (for save-as-copy from image editor).
      */
     async uploadFiles(
         files: UploadedFile[],
@@ -81,6 +82,7 @@ export class UploadService {
         folderId?: string,
         clientSessionId?: string,
         conflictStrategy?: ConflictStrategy,
+        copyMetadataFromDocumentId?: string,
     ): Promise<UploadResult> {
         const sessionId = clientSessionId ?? randomUUID();
         const resolvedFolderId = folderId ?? null;
@@ -118,6 +120,7 @@ export class UploadService {
                 sessionId,
                 effectiveFilename,
                 skipHashDuplicate,
+                copyMetadataFromDocumentId,
             );
             documents.push(result.document);
             jobs.push(...result.jobs);
@@ -189,6 +192,7 @@ export class UploadService {
      * Upload a single file
      * @param effectiveFilename - Used for original_filename when doing keep_both (renamed with (n) suffix)
      * @param skipHashDuplicate - When true, do not short-circuit on hash match (used when user chose replace/keep_both)
+     * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to the new document
      */
     private async uploadSingleFile(
         file: UploadedFile,
@@ -198,6 +202,7 @@ export class UploadService {
         sessionId: string,
         effectiveFilename?: string,
         skipHashDuplicate?: boolean,
+        copyMetadataFromDocumentId?: string,
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
         const displayName = effectiveFilename ?? file.filename;
 
@@ -248,6 +253,42 @@ export class UploadService {
         };
 
         const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();
+
+        // Copy photo_metadata from source document (for save-as-copy from image editor)
+        if (copyMetadataFromDocumentId) {
+            const sourceDoc = await db
+                .selectFrom('documents')
+                .select('id')
+                .where('id', '=', copyMetadataFromDocumentId)
+                .where('user_id', '=', userId)
+                .executeTakeFirst();
+
+            if (sourceDoc) {
+                const sourceMetadata = await db
+                    .selectFrom('photo_metadata')
+                    .select(['latitude', 'longitude', 'country', 'city', 'taken_at'])
+                    .where('document_id', '=', copyMetadataFromDocumentId)
+                    .executeTakeFirst();
+
+                if (sourceMetadata && (sourceMetadata.latitude != null || sourceMetadata.longitude != null || sourceMetadata.city != null || sourceMetadata.country != null || sourceMetadata.taken_at != null)) {
+                    const exifValues = {
+                        ...(sourceMetadata.latitude != null && { latitude: sourceMetadata.latitude }),
+                        ...(sourceMetadata.longitude != null && { longitude: sourceMetadata.longitude }),
+                        ...(sourceMetadata.city != null && { city: sourceMetadata.city }),
+                        ...(sourceMetadata.country != null && { country: sourceMetadata.country }),
+                        ...(sourceMetadata.taken_at != null && { taken_at: sourceMetadata.taken_at }),
+                    };
+
+                    await db
+                        .insertInto('photo_metadata')
+                        .values({
+                            document_id: document.id,
+                            ...exifValues,
+                        })
+                        .execute();
+                }
+            }
+        }
 
         // Create processing jobs and enqueue to BullMQ
         const createdJobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
@@ -312,6 +353,116 @@ export class UploadService {
             document,
             jobs: createdJobs,
         };
+    }
+
+    /**
+     * Replace a document's file (for image editor save-overwrite).
+     * Deletes old file and thumbnails, stores new file, updates document record, queues OCR + thumbnail jobs.
+     * Photo metadata is preserved (OCR worker won't overwrite when edited file has no EXIF).
+     */
+    async replaceDocumentFile(documentId: string, userId: string, file: UploadedFile): Promise<Document> {
+        const document = await this.getDocument(documentId, userId);
+
+        if (!document) {
+            throw new Error('Document not found');
+        }
+
+        const userContext = await this.storageService.getUserStorageContext(userId);
+        const mimeType = correctMimeType(file.filename, file.mimetype);
+        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
+        const canThumbnail = canGenerateThumbnail(mimeType);
+
+        // Delete old file and thumbnails from storage
+        try {
+            await this.storageService.deleteFile(document.file_path, userId);
+
+            if (document.thumbnail_paths) {
+                for (const path of Object.values(document.thumbnail_paths)) {
+                    await this.storageService.deleteFile(path, userId);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to delete old files from storage:', err);
+        }
+
+        // Delete existing processing jobs
+        await db
+            .deleteFrom('processing_jobs')
+            .where('target_type', '=', 'document')
+            .where('target_id', '=', documentId)
+            .execute();
+
+        // Update document record
+        const updated = await db
+            .updateTable('documents')
+            .set({
+                file_path: processed.storagePath,
+                file_hash: processed.hash,
+                size_bytes: file.buffer.length,
+                width: processed.width,
+                height: processed.height,
+                thumbnail_blurhash: processed.blurhash,
+                thumbnail_paths: null,
+                ocr_status: 'pending',
+                thumbnail_status: canThumbnail ? 'pending' : 'complete',
+                updated_at: new Date(),
+            })
+            .where('id', '=', documentId)
+            .where('user_id', '=', userId)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        const sessionId = randomUUID();
+
+        // Create and enqueue OCR job
+        const ocrJob = await db
+            .insertInto('processing_jobs')
+            .values({
+                user_id: userId,
+                job_type: 'ocr',
+                target_type: 'document',
+                target_id: documentId,
+                status: 'pending',
+                priority: 0,
+            })
+            .returning(['id', 'job_type', 'status', 'target_id'])
+            .executeTakeFirstOrThrow();
+
+        await addOcrJob(
+            {
+                documentId,
+                sessionId,
+                filePath: updated.file_path,
+            },
+            ocrJob.id,
+        );
+
+        // Create and enqueue thumbnail job
+        if (canThumbnail) {
+            const thumbnailJob = await db
+                .insertInto('processing_jobs')
+                .values({
+                    user_id: userId,
+                    job_type: 'thumbnail',
+                    target_type: 'document',
+                    target_id: documentId,
+                    status: 'pending',
+                    priority: 10,
+                })
+                .returning(['id', 'job_type', 'status', 'target_id'])
+                .executeTakeFirstOrThrow();
+
+            await addThumbnailJob(
+                {
+                    documentId,
+                    sessionId,
+                    filePath: updated.file_path,
+                },
+                thumbnailJob.id,
+            );
+        }
+
+        return updated;
     }
 
     /**

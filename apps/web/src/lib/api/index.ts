@@ -8,8 +8,10 @@ export {
     useInfiniteDocuments,
     useOcrResult,
     usePrefetchDocuments,
+    useReplaceDocumentFile,
     useReprocessLlm,
     useRetryOcr,
+    useUpdateDocument,
 } from './documents';
 export type { CheckDuplicatesResponse, DocumentOcrResult, DocumentsResponse } from './documents';
 export { foldersApi } from './folders';
