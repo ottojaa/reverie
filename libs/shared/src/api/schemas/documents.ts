@@ -6,10 +6,11 @@ import { JobStatusEnum } from './jobs.js';
  * Document categories - distinguishes between content types
  */
 export const DocumentCategoryEnum = z.enum([
-    // Non-text content (photos, graphics)
+    // Non-text content (photos, graphics, video)
     'photo', // Personal photos, images without text
     'screenshot', // Screen captures (may have some text but treated differently)
     'graphic', // Artwork, diagrams, illustrations
+    'video', // Video files (mp4, mov, webm, etc.)
 
     // Common document types
     'receipt', // Purchase receipts, invoices

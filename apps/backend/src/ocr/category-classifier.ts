@@ -60,6 +60,7 @@ export function getCategoryDescription(category: string): string {
         photo: 'Photo or personal image',
         screenshot: 'Screenshot or screen capture',
         graphic: 'Graphic, diagram, or illustration',
+        video: 'Video',
         receipt: 'Receipt or purchase record',
         invoice: 'Invoice or bill',
         letter: 'Letter or correspondence',

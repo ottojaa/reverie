@@ -79,7 +79,7 @@ export function useInfiniteSearch(params: Omit<SearchParams, 'offset'>) {
 
             return nextOffset < lastPage.total ? nextOffset : undefined;
         },
-        enabled: isAuthenticated && params.q.length > 0,
+        enabled: isAuthenticated,
         staleTime: 30_000,
     });
 }

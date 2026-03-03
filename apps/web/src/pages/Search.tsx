@@ -381,13 +381,7 @@ function NoQueryState({ onFilter }: { onFilter: (query: string) => void }) {
             <p className="mb-3 text-xs font-medium text-muted-foreground">Try one of these quick filters:</p>
             <div className="flex flex-wrap justify-center gap-2">
                 {QUICK_FILTERS.map((filter) => (
-                    <Button
-                        key={filter.query}
-                        type="button"
-                        variant="outline"
-                        onClick={() => onFilter(filter.query)}
-                        className="gap-2"
-                    >
+                    <Button key={filter.query} type="button" variant="outline" onClick={() => onFilter(filter.query)} className="gap-2">
                         <filter.icon className="size-4 text-muted-foreground" />
                         {filter.label}
                     </Button>

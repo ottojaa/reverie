@@ -5,7 +5,7 @@ import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { getDeduplicatedFilename } from '../utils/filename';
-import { canGenerateThumbnail, getStorageService, type UserStorageContext } from './storage.service';
+import { canGenerateThumbnail, getFileCategory, getStorageService, type UserStorageContext } from './storage.service';
 
 export type ConflictStrategy = 'replace' | 'keep_both';
 
@@ -246,6 +246,7 @@ export class UploadService {
             width: processed.width,
             height: processed.height,
             thumbnail_blurhash: processed.blurhash,
+            document_category: getFileCategory(mimeType) === 'video' ? 'video' : null,
             ocr_status: 'pending',
             llm_status: 'skipped',
             // For files that can't have thumbnails, mark as complete immediately

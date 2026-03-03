@@ -167,12 +167,13 @@ export async function processDocument(documentId: string, options: ProcessDocume
  * Handle non-image files: PDF (via PaddleOCR) or TXT/MD/CSV (direct extraction)
  */
 async function handleNonImageFile(documentId: string, document: Document): Promise<OcrProcessingResult> {
+    const category = document.mime_type.startsWith('video/') ? 'video' : 'other';
     const baseResult: OcrProcessingResult = {
         rawText: '',
         confidenceScore: 0,
         textDensity: 0,
         hasMeaningfulText: false,
-        category: 'other',
+        category,
         needsReview: false,
         ocrEngine: 'none',
     };

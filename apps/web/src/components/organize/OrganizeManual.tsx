@@ -351,6 +351,7 @@ export function OrganizeManual() {
 
     const results = useMemo(() => searchData?.pages.flatMap((p) => p.results) ?? [], [searchData]);
     const facets = searchData?.pages[0]?.facets;
+
     const selectedResults = useMemo(() => results.filter((r) => selectedIds.has(r.document_id)), [results, selectedIds]);
 
     useEffect(() => {
