@@ -123,7 +123,7 @@ export const SearchResultItem = memo(function SearchResultItem({
 
                 {result.snippet && (
                     <p
-                        className="mt-0.5 line-clamp-1 text-xs leading-relaxed text-muted-foreground [&_mark]:bg-primary/20 [&_mark]:text-primary [&_mark]:rounded-sm [&_mark]:px-0.5"
+                        className="mt-0.5 truncate text-xs text-muted-foreground [&_mark]:bg-primary/20 [&_mark]:text-primary [&_mark]:rounded-sm [&_mark]:px-0.5"
                         dangerouslySetInnerHTML={{ __html: result.snippet }}
                     />
                 )}

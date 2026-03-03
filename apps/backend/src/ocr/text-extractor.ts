@@ -16,6 +16,7 @@ const TEXT_MIME_TYPES = new Set([
  */
 export function isTextExtractable(mimeType: string): boolean {
     if (mimeType === 'application/pdf') return true;
+
     return TEXT_MIME_TYPES.has(mimeType);
 }
 

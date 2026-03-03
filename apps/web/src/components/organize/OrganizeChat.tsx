@@ -7,12 +7,7 @@ import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 
-const SUGGESTED_PROMPTS = [
-    'Help me organize my documents',
-    'Create a folder for all my receipts and invoices from last year',
-    'Find unorganized documents and suggest a structure',
-    'Group my photos by country and year',
-];
+const SUGGESTED_PROMPTS = ['Organize my financial documents', 'Organize my photos by country and year', 'Suggest improvements to my folder structure'];
 
 interface OrganizeChatProps {
     chatState: ReturnType<typeof useOrganizeChatContext>;

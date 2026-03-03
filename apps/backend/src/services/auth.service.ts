@@ -140,11 +140,13 @@ export class AuthService {
     private getRefreshTokenExpiry(): Date {
         const duration = env.JWT_REFRESH_EXPIRES;
         const match = duration.match(/^(\d+)([smhd])$/);
+
         if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         const value = parseInt(match[1] ?? '7', 10);
         const unit = match[2];
         let ms = value * 1000;
+
         if (unit === 'm') ms *= 60;
         else if (unit === 'h') ms *= 60 * 60;
         else if (unit === 'd') ms *= 24 * 60 * 60;

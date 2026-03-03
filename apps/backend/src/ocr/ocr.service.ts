@@ -179,6 +179,7 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
 
     if (!isTextExtractable(document.mime_type)) {
         await saveOcrResult(documentId, baseResult);
+
         return baseResult;
     }
 
@@ -189,6 +190,7 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
     if (document.mime_type === 'application/pdf') {
         if (env.OCR_ENGINE !== 'paddleocr') {
             await saveOcrResult(documentId, baseResult);
+
             return baseResult;
         }
 
@@ -206,6 +208,7 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
                 ocrEngine: ocrOutput.engine ?? 'paddleocr',
             };
             await saveOcrResult(documentId, result);
+
             return result;
         } finally {
             await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -222,6 +225,7 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
         ocrEngine: 'text_extract',
     };
     await saveOcrResult(documentId, result);
+
     return result;
 }
 

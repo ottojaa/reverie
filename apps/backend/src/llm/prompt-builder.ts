@@ -102,7 +102,7 @@ Return JSON with these fields when present:
     }
   ],
   "topics": ["high-level themes"],
-  "extracted_date": "YYYY-MM-DD",
+  "extracted_date": "YYYY-MM-DD (ISO). Prefer: document date, date of issue, or primary date on the document. For partial dates: '4/2000' -> '2000-04-01', 'January 2000' -> '2000-01-01', '2000' alone -> '2000-01-01'. If multiple dates exist, pick the one that best identifies when the document was created/issued. Omit if no usable date found.",
 }
 
 Extraction rules:

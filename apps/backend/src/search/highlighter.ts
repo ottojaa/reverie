@@ -1,10 +1,13 @@
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
+import { buildPrefixTsQuery } from './query-builder';
 
 /**
  * Snippet/Highlight Generator for Search Results
  *
  * Uses PostgreSQL ts_headline for context-aware highlighting of search terms.
+ * Uses 'simple' config for ts_headline - better word boundaries for OCR/dense text
+ * (numbers, concatenations) where 'english' can miscount and produce huge fragments.
  */
 
 export interface SnippetOptions {
@@ -13,15 +16,50 @@ export interface SnippetOptions {
     startTag?: string;
     stopTag?: string;
     maxFragments?: number;
+    maxChars?: number;
 }
 
-const DEFAULT_OPTIONS: Required<SnippetOptions> = {
-    maxWords: 50,
-    minWords: 25,
+const DEFAULT_OPTIONS = {
+    maxWords: 35,
+    minWords: 15,
     startTag: '<mark>',
     stopTag: '</mark>',
-    maxFragments: 3,
+    maxFragments: 2,
+    maxChars: 120,
 };
+
+/**
+ * Normalize snippet for single-line display: collapse newlines to spaces.
+ * OCR output often has line breaks that aren't word boundaries, causing overflow.
+ */
+function normalizeForSingleLine(snippet: string): string {
+    return snippet.replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ');
+}
+
+/**
+ * Truncate snippet to maxChars. Puts the first <mark> near the start so it stays
+ * visible when UI truncates from the right (single-line overflow).
+ */
+function truncateSnippet(snippet: string, maxChars: number): string {
+    if (snippet.length <= maxChars) {
+        return snippet;
+    }
+
+    const markStart = snippet.indexOf('<mark>');
+
+    if (markStart === -1) {
+        return snippet.slice(0, maxChars - 3) + '...';
+    }
+
+    // Keep match in first ~40% so it's visible when UI truncates
+    const contextBefore = Math.min(30, Math.floor(maxChars * 0.35));
+    const start = Math.max(0, markStart - contextBefore);
+    const end = Math.min(snippet.length, start + maxChars);
+
+    const result = (start > 0 ? '...' : '') + snippet.slice(start, end) + (end < snippet.length ? '...' : '');
+
+    return result;
+}
 
 /**
  * Generate a highlighted snippet for a single document
@@ -29,17 +67,24 @@ const DEFAULT_OPTIONS: Required<SnippetOptions> = {
 export async function generateSnippet(documentId: string, searchTerms: string, options: SnippetOptions = {}): Promise<string | null> {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    const tsQuery = sql`plainto_tsquery('english', ${searchTerms})`;
+    const tsQuery = buildPrefixTsQuery(searchTerms);
     const headlineOptions = `StartSel=${opts.startTag}, StopSel=${opts.stopTag}, MaxWords=${opts.maxWords}, MinWords=${opts.minWords}, MaxFragments=${opts.maxFragments}`;
 
     const result = await db
         .selectFrom('ocr_results')
-        .select(sql<string>`ts_headline('english', raw_text, ${tsQuery}, ${sql.lit(headlineOptions)})`.as('snippet'))
+        .select(sql<string>`ts_headline('simple', raw_text, ${tsQuery}, ${sql.lit(headlineOptions)})`.as('snippet'))
         .where('document_id', '=', documentId)
         .where(sql<SqlBool>`text_vector @@ ${tsQuery}`)
         .executeTakeFirst();
 
-    return result?.snippet ?? null;
+    const raw = result?.snippet ?? null;
+
+    if (!raw) return null;
+
+    const snippet = normalizeForSingleLine(raw);
+    const maxChars = opts.maxChars ?? DEFAULT_OPTIONS.maxChars;
+
+    return maxChars ? truncateSnippet(snippet, maxChars) : snippet;
 }
 
 /**
@@ -52,21 +97,23 @@ export async function generateSnippets(documentIds: string[], searchTerms: strin
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    const tsQuery = sql`plainto_tsquery('english', ${searchTerms})`;
+    const tsQuery = buildPrefixTsQuery(searchTerms);
     const headlineOptions = `StartSel=${opts.startTag}, StopSel=${opts.stopTag}, MaxWords=${opts.maxWords}, MinWords=${opts.minWords}, MaxFragments=${opts.maxFragments}`;
 
     const results = await db
         .selectFrom('ocr_results')
-        .select(['document_id', sql<string>`ts_headline('english', raw_text, ${tsQuery}, ${sql.lit(headlineOptions)})`.as('snippet')])
+        .select(['document_id', sql<string>`ts_headline('simple', raw_text, ${tsQuery}, ${sql.lit(headlineOptions)})`.as('snippet')])
         .where('document_id', 'in', documentIds)
         .where(sql<SqlBool>`text_vector @@ ${tsQuery}`)
         .execute();
 
     const snippetMap = new Map<string, string>();
+    const maxChars = opts.maxChars ?? DEFAULT_OPTIONS.maxChars;
 
     for (const row of results) {
-        console.log(row.snippet);
-        snippetMap.set(row.document_id, row.snippet);
+        const normalized = normalizeForSingleLine(row.snippet);
+        const snippet = maxChars ? truncateSnippet(normalized, maxChars) : normalized;
+        snippetMap.set(row.document_id, snippet);
     }
 
     return snippetMap;
