@@ -5,6 +5,7 @@ export const QUEUE_NAMES = {
     OCR: 'ocr-queue',
     THUMBNAIL: 'thumbnail-queue',
     LLM: 'llm-queue',
+    TRIM: 'trim-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -30,4 +31,5 @@ export const QUEUE_CONCURRENCY = {
     [QUEUE_NAMES.OCR]: env.JOB_CONCURRENCY_OCR,
     [QUEUE_NAMES.THUMBNAIL]: env.JOB_CONCURRENCY_THUMBNAIL,
     [QUEUE_NAMES.LLM]: env.JOB_CONCURRENCY_LLM,
+    [QUEUE_NAMES.TRIM]: env.JOB_CONCURRENCY_TRIM,
 };

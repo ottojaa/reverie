@@ -9,6 +9,8 @@ import {
     JobStatusEnum,
     MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
+    TrimVideoRequestSchema,
+    TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
     UuidSchema,
     type Document,
@@ -22,9 +24,12 @@ import { type Document as DbDocument, type LlmResult } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
+import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
 import { getStorageService } from '../../services/storage.service';
+import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
+import { getJobService } from '../../jobs/job.service';
 import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
@@ -427,6 +432,69 @@ export default async function (fastify: FastifyInstance) {
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             return await serializeDocument(updated, llmResult);
+        },
+    );
+
+    // Trim video (requires authentication)
+    fastify.post<{
+        Params: { id: string };
+        Body: z.infer<typeof TrimVideoRequestSchema>;
+        Reply: z.infer<typeof TrimVideoResponseSchema>;
+    }>(
+        '/documents/:id/trim',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Trim video - creates background job',
+                params: z.object({ id: UuidSchema }),
+                body: TrimVideoRequestSchema,
+                response: {
+                    200: TrimVideoResponseSchema,
+                },
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const document = await uploadService.getDocument(request.params.id, userId);
+
+            if (!document) {
+                return reply.notFound('Document not found');
+            }
+
+            const isVideo =
+                getFileCategory(document.mime_type) === 'video' ||
+                ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v'].includes(
+                    document.original_filename.toLowerCase().slice(document.original_filename.lastIndexOf('.')),
+                );
+
+            if (!isVideo) {
+                return reply.badRequest('Document is not a video');
+            }
+
+            const body = TrimVideoRequestSchema.parse(request.body);
+
+            const jobService = getJobService();
+            const job = await jobService.createJob({
+                userId,
+                jobType: 'video_trim',
+                targetType: 'document',
+                targetId: document.id,
+                priority: 5,
+            });
+
+            await addTrimJob(
+                {
+                    documentId: document.id,
+                    userId,
+                    start: body.start,
+                    end: body.end,
+                    saveAsCopy: body.saveAsCopy,
+                    sessionId: body.sessionId,
+                },
+                job.id,
+            );
+
+            return { jobId: job.id };
         },
     );
 

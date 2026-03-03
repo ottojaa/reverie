@@ -3,7 +3,7 @@ import type { LlmMetadata } from '../llm/types';
 
 // Enums
 export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
-export type JobType = 'ocr' | 'thumbnail' | 'llm_summary';
+export type JobType = 'ocr' | 'thumbnail' | 'llm_summary' | 'video_trim';
 export type TargetType = 'document' | 'folder';
 export type TagSource = 'user' | 'auto';
 

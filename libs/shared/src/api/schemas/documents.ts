@@ -162,3 +162,20 @@ export const DocumentOcrResultSchema = z.object({
 });
 
 export type DocumentOcrResult = z.infer<typeof DocumentOcrResultSchema>;
+
+export const TrimVideoRequestSchema = z
+    .object({
+        start: z.number().min(0),
+        end: z.number().min(0),
+        saveAsCopy: z.boolean(),
+        sessionId: z.string().uuid().optional(),
+    })
+    .refine((data) => data.start < data.end, { message: 'start must be less than end', path: ['end'] });
+
+export type TrimVideoRequest = z.infer<typeof TrimVideoRequestSchema>;
+
+export const TrimVideoResponseSchema = z.object({
+    jobId: UuidSchema,
+});
+
+export type TrimVideoResponse = z.infer<typeof TrimVideoResponseSchema>;

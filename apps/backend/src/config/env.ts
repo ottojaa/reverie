@@ -63,6 +63,7 @@ const envSchema = z.object({
     JOB_CONCURRENCY_OCR: z.coerce.number().default(2),
     JOB_CONCURRENCY_THUMBNAIL: z.coerce.number().default(4),
     JOB_CONCURRENCY_LLM: z.coerce.number().default(1),
+    JOB_CONCURRENCY_TRIM: z.coerce.number().default(2),
     JOB_RETRY_ATTEMPTS: z.coerce.number().default(3),
     JOB_RETRY_BACKOFF_MS: z.coerce.number().default(5000),
 

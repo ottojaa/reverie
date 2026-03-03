@@ -4,6 +4,7 @@ import {
     DocumentOcrResultSchema,
     DocumentSchema,
     JobIdResponseSchema,
+    TrimVideoResponseSchema,
     type CheckDuplicatesResponse,
     type Document,
     type DocumentOcrResult,
@@ -113,6 +114,15 @@ export const documentsApi = {
         const { data } = await apiClient.patch(`/documents/${documentId}/file`, formData);
 
         return DocumentSchema.parse(data);
+    },
+
+    async trimVideo(
+        documentId: string,
+        params: { start: number; end: number; saveAsCopy: boolean; sessionId?: string },
+    ): Promise<{ jobId: string }> {
+        const { data } = await apiClient.post(`/documents/${documentId}/trim`, params);
+
+        return TrimVideoResponseSchema.parse(data);
     },
 };
 

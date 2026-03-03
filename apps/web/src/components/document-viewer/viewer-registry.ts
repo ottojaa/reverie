@@ -33,7 +33,7 @@ const viewers: ViewerEntry[] = [
     },
     {
         match: (m) => m.startsWith('video/'),
-        load: () => import('./VideoViewer'),
+        load: () => import('./video-viewer'),
         label: 'Video',
     },
     {
@@ -54,12 +54,12 @@ const viewers: ViewerEntry[] = [
  */
 const extensionFallbacks: Record<string, () => Promise<{ default: ViewerComponent }>> = {
     // Video
-    mov: () => import('./VideoViewer'),
-    mp4: () => import('./VideoViewer'),
-    webm: () => import('./VideoViewer'),
-    avi: () => import('./VideoViewer'),
-    mkv: () => import('./VideoViewer'),
-    m4v: () => import('./VideoViewer'),
+    mov: () => import('./video-viewer'),
+    mp4: () => import('./video-viewer'),
+    webm: () => import('./video-viewer'),
+    avi: () => import('./video-viewer'),
+    mkv: () => import('./video-viewer'),
+    m4v: () => import('./video-viewer'),
     // Image
     heic: () => import('./image-viewer'),
     heif: () => import('./image-viewer'),

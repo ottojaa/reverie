@@ -61,7 +61,12 @@ export function DocumentPage() {
     const toggleDetails = useCallback(() => setIsDetailsOpen((v) => !v), []);
     const toggleEdit = useCallback(() => setIsEditMode((v) => !v), []);
 
-    const canEdit = (document?.mime_type?.startsWith('image/') ?? false) as boolean;
+    const videoExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
+    const ext = document?.original_filename?.split('.').pop()?.toLowerCase() ?? '';
+    const canEdit =
+        (document?.mime_type?.startsWith('image/') ?? false) ||
+        (document?.mime_type?.startsWith('video/') ?? false) ||
+        videoExtensions.includes(ext);
 
     // Resolve the viewer component via dynamic import (no Suspense needed)
     const ViewerComponent = useDynamicViewer(document?.mime_type, document?.original_filename);
