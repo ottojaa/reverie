@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const DEFAULT_FRAME_COUNT = 16;
+const DEFAULT_FRAME_COUNT = 10;
 
 /**
  * Extracts video frames at evenly spaced timestamps for timeline thumbnails.
  * Uses canvas + video.currentTime + seeked event. No external libraries.
  */
-export function useVideoFrameStrip(
-    videoUrl: string,
-    duration: number,
-    frameCount = DEFAULT_FRAME_COUNT,
-): { frames: string[]; isLoading: boolean } {
+export function useVideoFrameStrip(videoUrl: string, duration: number, frameCount = DEFAULT_FRAME_COUNT): { frames: string[]; isLoading: boolean } {
     const [frames, setFrames] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const abortRef = useRef(false);
@@ -55,6 +51,8 @@ export function useVideoFrameStrip(
             if (abortRef.current) return;
 
             const count = Math.min(frameCount, Math.max(1, Math.floor(duration)));
+
+            console.log({ frameCount, duration, count });
             const times: number[] = [];
 
             for (let i = 0; i < count; i++) {
@@ -66,7 +64,7 @@ export function useVideoFrameStrip(
 
                 const t = times[i];
 
-                await new Promise<void>((resolve, reject) => {
+                await new Promise<void>((resolve) => {
                     const onSeeked = () => {
                         video.removeEventListener('seeked', onSeeked);
                         video.removeEventListener('error', onError);
@@ -96,7 +94,7 @@ export function useVideoFrameStrip(
 
                     video.addEventListener('seeked', onSeeked);
                     video.addEventListener('error', onError);
-                    video.currentTime = t;
+                    video.currentTime = t ?? 0;
                 });
             }
 

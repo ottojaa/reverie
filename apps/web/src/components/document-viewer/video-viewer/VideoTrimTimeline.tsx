@@ -23,6 +23,8 @@ interface VideoTrimTimelineProps {
     onSeekToHandle?: (time: number) => void;
     /** Video URL for frame strip extraction (optional) */
     videoUrl?: string;
+    /** Called when drag starts/ends - parent can ignore timeupdate during drag */
+    onDraggingChange?: (dragging: boolean) => void;
     isPlaying?: boolean;
     className?: string;
 }
@@ -36,6 +38,7 @@ export function VideoTrimTimeline({
     onSeek,
     onSeekToHandle,
     videoUrl,
+    onDraggingChange,
     isPlaying = false,
     className,
 }: VideoTrimTimelineProps) {
@@ -43,7 +46,7 @@ export function VideoTrimTimeline({
     const [dragging, setDragging] = useState<'in' | 'out' | null>(null);
     const dragPreviewRef = useRef<{ start: number; end: number } | null>(null);
     const lastFlushedRef = useRef<{ start: number; end: number } | null>(null);
-    const { frames, isLoading } = useVideoFrameStrip(videoUrl ?? '', duration, 14);
+    const { frames, isLoading } = useVideoFrameStrip(videoUrl ?? '', duration);
 
     const clamp = useCallback((value: number) => Math.max(0, Math.min(duration, value)), [duration]);
 
@@ -51,13 +54,14 @@ export function VideoTrimTimeline({
         (e: React.PointerEvent, handle: 'in' | 'out') => {
             e.preventDefault();
             setDragging(handle);
+            onDraggingChange?.(true);
             e.currentTarget.setPointerCapture(e.pointerId);
             const sp = (start / duration) * 100;
             const ep = (end / duration) * 100;
             trackRef.current?.style.setProperty('--start-pct', String(sp));
             trackRef.current?.style.setProperty('--end-pct', String(ep));
         },
-        [duration, start, end],
+        [duration, start, end, onDraggingChange],
     );
 
     const handlePointerMove = useCallback(
@@ -159,6 +163,13 @@ export function VideoTrimTimeline({
         return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
     }, [dragging, onRangeChange]);
 
+    // Notify parent when dragging ends - after commit so range state has flushed
+    useEffect(() => {
+        if (!dragging) {
+            onDraggingChange?.(false);
+        }
+    }, [dragging, onDraggingChange]);
+
     // Sync CSS vars from props only when NOT dragging - prevents React re-renders (e.g. timeupdate)
     // from overwriting our direct DOM updates during drag. Use lastFlushedRef when we just released
     // so we don't overwrite with stale props before parent has re-rendered.
@@ -193,14 +204,14 @@ export function VideoTrimTimeline({
                     aria-valuemax={duration}
                     aria-valuenow={currentTime}
                     tabIndex={0}
-                    className="relative h-10 cursor-pointer overflow-visible rounded-lg bg-muted"
+                    className="relative h-18 cursor-pointer overflow-visible rounded-lg bg-muted"
                     onClick={handleTrackClick}
                 >
                     {/* Inner clip: frames, overlays, playhead only - use CSS vars for instant drag updates */}
                     <div className={cn('absolute inset-0 overflow-hidden rounded-lg', dragging && 'transition-none')}>
                         {/* Frame strip or solid fallback */}
                         {frames.length > 0 ? (
-                            <div className="absolute inset-0 flex rounded-lg">
+                            <div className="absolute inset-0 flex gap-0.5 rounded-lg">
                                 {frames.map((src, i) => (
                                     <div key={i} className="h-full flex-1 shrink-0 bg-cover bg-center" style={{ backgroundImage: `url(${src})` }} />
                                 ))}
@@ -239,7 +250,7 @@ export function VideoTrimTimeline({
                         {/* Trim area border - both handles overlay it via -translate-x-1/2 */}
                         <div
                             className={cn(
-                                'pointer-events-none absolute inset-y-0 rounded-md border-2 border-primary',
+                                'pointer-events-none absolute inset-y-0 rounded-md border-4 border-primary z-1',
                                 !dragging && 'transition-[left,width] duration-75',
                             )}
                             style={{
@@ -249,10 +260,7 @@ export function VideoTrimTimeline({
                         />
 
                         {/* Playhead - pointer-events none so it does not block handles */}
-                        <div
-                            className="pointer-events-none absolute top-0 bottom-0 w-0.5 -translate-x-1/2 bg-foreground/80"
-                            style={{ left: `${currentPercent}%` }}
-                        />
+                        <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 -translate-x-1/2 bg-warning" style={{ left: `${currentPercent}%` }} />
                     </div>
 
                     {/* In handle - outside inner clip so it can overflow */}
@@ -262,7 +270,6 @@ export function VideoTrimTimeline({
                         onPointerDown={(e) => handlePointerDown(e, 'in')}
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
-                        onPointerLeave={handlePointerUp}
                     >
                         <GripVertical className="size-3.5 shrink-0" />
                     </div>
@@ -274,7 +281,6 @@ export function VideoTrimTimeline({
                         onPointerDown={(e) => handlePointerDown(e, 'out')}
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
-                        onPointerLeave={handlePointerUp}
                     >
                         <GripVertical className="size-3.5 shrink-0" />
                     </div>

@@ -8,6 +8,8 @@ import { useVideoSave } from './useVideoSave';
 
 export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const isDraggingRef = useRef(false);
+    const hasInitializedRef = useRef(false);
     const [duration, setDuration] = useState(0);
     const [start, setStart] = useState(0);
     const [end, setEnd] = useState(0);
@@ -30,6 +32,14 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
         }
     }, []);
 
+    const handleDraggingChange = useCallback((dragging: boolean) => {
+        isDraggingRef.current = dragging;
+    }, []);
+
+    useEffect(() => {
+        hasInitializedRef.current = false;
+    }, [fileUrl]);
+
     useEffect(() => {
         const video = videoRef.current;
 
@@ -41,10 +51,13 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
             if (Number.isFinite(d) && d > 0) {
                 setDuration(d);
                 setEnd(d);
+                hasInitializedRef.current = true;
             }
         };
 
         const onTimeUpdate = () => {
+            if (isDraggingRef.current) return;
+
             const t = video.currentTime;
 
             setCurrentTime(t);
@@ -57,7 +70,8 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
         video.addEventListener('loadedmetadata', onLoadedMetadata);
         video.addEventListener('timeupdate', onTimeUpdate);
 
-        if (video.readyState >= 1) {
+        if (video.readyState >= 1 && !hasInitializedRef.current) {
+            hasInitializedRef.current = true;
             onLoadedMetadata();
         }
 
@@ -65,7 +79,7 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
             video.removeEventListener('loadedmetadata', onLoadedMetadata);
             video.removeEventListener('timeupdate', onTimeUpdate);
         };
-    }, [end]);
+    }, [end, fileUrl]);
 
     const { handleSave, isSaving } = useVideoSave({
         document,
@@ -101,6 +115,7 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                             onRangeChange={handleRangeChange}
                             onSeek={handleSeek}
                             onSeekToHandle={handleSeek}
+                            onDraggingChange={handleDraggingChange}
                             videoUrl={fileUrl}
                         />
                     </div>
