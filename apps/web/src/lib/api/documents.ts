@@ -98,6 +98,22 @@ export const documentsApi = {
     }): Promise<void> {
         await apiClient.patch('/documents/move', params);
     },
+
+    async update(documentId: string, params: { original_filename: string }): Promise<Document> {
+        const { data } = await apiClient.patch(`/documents/${documentId}`, params);
+
+        return DocumentSchema.parse(data);
+    },
+
+    async replaceFile(documentId: string, file: File): Promise<Document> {
+        const formData = new FormData();
+
+        formData.append('file', file);
+
+        const { data } = await apiClient.patch(`/documents/${documentId}/file`, formData);
+
+        return DocumentSchema.parse(data);
+    },
 };
 
 export type { CheckDuplicatesResponse, DocumentOcrResult };
@@ -227,6 +243,44 @@ export function useRetryOcr() {
         },
         onError: () => {
             toast.error('Failed to run OCR');
+        },
+    });
+}
+
+/**
+ * Hook to update document (rename)
+ */
+export function useUpdateDocument() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ documentId, original_filename }: { documentId: string; original_filename: string }) =>
+            documentsApi.update(documentId, { original_filename }),
+        onSuccess: (_, { documentId }) => {
+            queryClient.invalidateQueries({ queryKey: ['document', documentId] });
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+        onError: () => {
+            toast.error('Failed to rename document');
+        },
+    });
+}
+
+/**
+ * Hook to replace document file (for image editor save-overwrite)
+ */
+export function useReplaceDocumentFile() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ documentId, file }: { documentId: string; file: File }) =>
+            documentsApi.replaceFile(documentId, file),
+        onSuccess: (data) => {
+            queryClient.setQueryData(['document', data.id], data);
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+        onError: () => {
+            toast.error('Failed to save image');
         },
     });
 }

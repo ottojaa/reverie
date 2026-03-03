@@ -53,11 +53,15 @@ export function DocumentPage() {
     const { id } = useParams({ from: '/document/$id' });
     const { data: document, isLoading, error } = useDocument(id);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Subscribe to real-time job status updates via websocket
     useDocumentStatus(document?.id);
 
     const toggleDetails = useCallback(() => setIsDetailsOpen((v) => !v), []);
+    const toggleEdit = useCallback(() => setIsEditMode((v) => !v), []);
+
+    const canEdit = (document?.mime_type?.startsWith('image/') ?? false) as boolean;
 
     // Resolve the viewer component via dynamic import (no Suspense needed)
     const ViewerComponent = useDynamicViewer(document?.mime_type, document?.original_filename);
@@ -96,7 +100,15 @@ export function DocumentPage() {
     return (
         <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
             {/* Toolbar overlay */}
-            <ViewerToolbar document={document} fileUrl={fileUrl} isDetailsOpen={isDetailsOpen} onToggleDetails={toggleDetails} />
+            <ViewerToolbar
+                document={document}
+                fileUrl={fileUrl}
+                isDetailsOpen={isDetailsOpen}
+                onToggleDetails={toggleDetails}
+                canEdit={canEdit}
+                isEditMode={isEditMode}
+                onToggleEdit={toggleEdit}
+            />
 
             {/* Viewer area */}
             <motion.div
@@ -106,7 +118,12 @@ export function DocumentPage() {
                 className="flex flex-1 overflow-hidden"
             >
                 {ViewerComponent && fileUrl ? (
-                    <ViewerComponent document={document} fileUrl={fileUrl} />
+                    <ViewerComponent
+                        document={document}
+                        fileUrl={fileUrl}
+                        isEditMode={canEdit ? isEditMode : undefined}
+                        onToggleEdit={canEdit ? toggleEdit : undefined}
+                    />
                 ) : fileUrl && !ViewerComponent /* Viewer chunk still loading — show nothing; entrance animation covers this brief gap */ ? null : (
                     <div className="flex flex-1 items-center justify-center">
                         <p className="text-sm text-muted-foreground">No preview available</p>

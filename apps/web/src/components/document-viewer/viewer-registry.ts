@@ -7,6 +7,10 @@ import type { ComponentType } from 'react';
 export interface ViewerProps {
     document: Document;
     fileUrl: string;
+    /** Image editor: whether edit mode is active */
+    isEditMode?: boolean;
+    /** Image editor: toggle edit mode */
+    onToggleEdit?: () => void;
 }
 
 type ViewerComponent = ComponentType<ViewerProps>;
@@ -24,7 +28,7 @@ interface ViewerEntry {
 const viewers: ViewerEntry[] = [
     {
         match: (m) => m.startsWith('image/'),
-        load: () => import('./ImageViewer'),
+        load: () => import('./image-viewer'),
         label: 'Image',
     },
     {
@@ -57,8 +61,8 @@ const extensionFallbacks: Record<string, () => Promise<{ default: ViewerComponen
     mkv: () => import('./VideoViewer'),
     m4v: () => import('./VideoViewer'),
     // Image
-    heic: () => import('./ImageViewer'),
-    heif: () => import('./ImageViewer'),
+    heic: () => import('./image-viewer'),
+    heif: () => import('./image-viewer'),
 };
 
 /**

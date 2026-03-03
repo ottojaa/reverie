@@ -9,6 +9,7 @@ import {
     JobStatusEnum,
     MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
+    UpdateDocumentRequestSchema,
     UuidSchema,
     type Document,
     type DocumentListQuery,
@@ -23,7 +24,7 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { getFolderService } from '../../services/folder.service';
 import { getStorageService } from '../../services/storage.service';
-import { getUploadService } from '../../services/upload.service';
+import { getUploadService, type UploadedFile } from '../../services/upload.service';
 import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
@@ -318,6 +319,114 @@ export default async function (fastify: FastifyInstance) {
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
             return await serializeDocument(document, llmResult);
+        },
+    );
+
+    // Update document (rename) (requires authentication)
+    fastify.patch<{
+        Params: { id: string };
+        Body: { original_filename: string };
+        Reply: Document;
+    }>(
+        '/documents/:id',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Update document metadata (rename)',
+                params: z.object({ id: UuidSchema }),
+                body: UpdateDocumentRequestSchema,
+                response: {
+                    200: DocumentSchema,
+                },
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const document = await uploadService.getDocument(request.params.id, userId);
+
+            if (!document) {
+                return reply.notFound('Document not found');
+            }
+
+            const { original_filename } = request.body;
+
+            if (document.folder_id) {
+                const existing = await db
+                    .selectFrom('documents')
+                    .select('id')
+                    .where('folder_id', '=', document.folder_id)
+                    .where('user_id', '=', userId)
+                    .where('original_filename', '=', original_filename)
+                    .where('id', '!=', request.params.id)
+                    .executeTakeFirst();
+
+                if (existing) {
+                    return reply.conflict('A document with this filename already exists in this folder');
+                }
+            }
+
+            await db
+                .updateTable('documents')
+                .set({ original_filename, updated_at: new Date() })
+                .where('id', '=', request.params.id)
+                .where('user_id', '=', userId)
+                .execute();
+
+            const updated = await uploadService.getDocument(request.params.id, userId);
+            const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
+
+            return await serializeDocument(updated!, llmResult);
+        },
+    );
+
+    // Replace document file (requires authentication)
+    fastify.patch<{
+        Params: { id: string };
+        Reply: Document;
+    }>(
+        '/documents/:id/file',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Replace document file content',
+                consumes: ['multipart/form-data'],
+                params: z.object({ id: UuidSchema }),
+                response: {
+                    200: DocumentSchema,
+                },
+            },
+        },
+        async function (request, reply) {
+            const userId = request.user.id;
+            const document = await uploadService.getDocument(request.params.id, userId);
+
+            if (!document) {
+                return reply.notFound('Document not found');
+            }
+
+            const parts = request.parts();
+            let file: UploadedFile | null = null;
+
+            for await (const part of parts) {
+                if (part.type === 'file' && part.fieldname === 'file') {
+                    const buffer = await part.toBuffer();
+                    file = {
+                        buffer,
+                        filename: part.filename,
+                        mimetype: part.mimetype,
+                    };
+                    break;
+                }
+            }
+
+            if (!file) {
+                return reply.badRequest('No file provided. Send multipart form with field "file".');
+            }
+
+            const updated = await uploadService.replaceDocumentFile(request.params.id, userId, file);
+            const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
+
+            return await serializeDocument(updated, llmResult);
         },
     );
 

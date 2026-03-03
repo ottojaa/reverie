@@ -146,6 +146,11 @@ export const MoveDocumentsRequestSchema = z.object({
 });
 export type MoveDocumentsRequest = z.infer<typeof MoveDocumentsRequestSchema>;
 
+export const UpdateDocumentRequestSchema = z.object({
+    original_filename: z.string().min(1).max(255),
+});
+export type UpdateDocumentRequest = z.infer<typeof UpdateDocumentRequestSchema>;
+
 export const DocumentOcrResultSchema = z.object({
     document_id: UuidSchema,
     raw_text: z.string(),
