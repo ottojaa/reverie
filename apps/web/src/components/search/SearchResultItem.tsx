@@ -33,11 +33,6 @@ function getCategoryIcon(category: string | null, mimeType: string) {
     return FileText;
 }
 
-const IMAGE_CATEGORIES = new Set(['photo', 'screenshot', 'graphic']);
-
-function isImageResult(result: SearchResult): boolean {
-    return (result.category !== null && IMAGE_CATEGORIES.has(result.category)) || result.mime_type.startsWith('image/');
-}
 
 export const SearchResultItem = memo(function SearchResultItem({
     result,
@@ -49,7 +44,6 @@ export const SearchResultItem = memo(function SearchResultItem({
 }: SearchResultItemProps) {
     const Icon = getCategoryIcon(result.category, result.mime_type);
     const thumbnailUrl = getThumbnailUrl(result, compact ? 'sm' : 'md');
-    const isPhoto = isImageResult(result);
     const displayName = result.display_name;
     const date = result.extracted_date ?? result.uploaded_at;
     const datePrefix = result.extracted_date ? '' : 'Uploaded ';
@@ -105,7 +99,7 @@ export const SearchResultItem = memo(function SearchResultItem({
             )}
             {/* Thumbnail / Icon */}
             {thumbnailUrl ? (
-                <img src={thumbnailUrl} alt="" className={cn('shrink-0 rounded-md object-cover bg-muted', isPhoto ? 'h-12 w-16' : 'size-10')} />
+                <img src={thumbnailUrl} alt="" className="size-10 shrink-0 rounded-md object-cover bg-muted" />
             ) : (
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
                     <Icon className="size-5 text-muted-foreground" />

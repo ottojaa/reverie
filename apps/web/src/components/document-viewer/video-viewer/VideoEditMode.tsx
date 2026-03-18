@@ -91,7 +91,7 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
 
     return (
         <div className="flex h-full w-full flex-col overflow-hidden px-4 pb-4 pt-14 md:px-6 md:pb-6 md:pt-14">
-            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[1fr_380px] gap-4">
+            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[1fr_380px]">
                 <div className="flex min-h-0 min-w-0 flex-col gap-3">
                     <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-lg">
                         <video
@@ -121,8 +121,9 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                     </div>
                 </div>
 
-                <AnimatePresence>
-                    <VideoEditorPanel
+                <div className="min-h-0 overflow-y-auto md:overflow-visible">
+                    <AnimatePresence>
+                        <VideoEditorPanel
                         document={document}
                         state={editorState}
                         onStateChange={(updates) => setEditorState((s) => ({ ...s, ...updates }))}
@@ -130,7 +131,8 @@ export function VideoEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                         onSave={handleSave}
                         isSaving={isSaving}
                     />
-                </AnimatePresence>
+                    </AnimatePresence>
+                </div>
             </div>
         </div>
     );

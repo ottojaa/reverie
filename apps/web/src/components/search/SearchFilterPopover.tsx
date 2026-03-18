@@ -1,8 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSearchSuggestions } from '@/lib/api/search';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
 import type { FacetItem, SearchFacets, SuggestionType } from '@reverie/shared';
 import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
@@ -65,6 +67,173 @@ function countActiveFilters(query: string): number {
     return matches?.length ?? 0;
 }
 
+const filterTriggerButton = (activeCount: number) => (
+    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+        <SlidersHorizontal className="size-3.5" />
+        <span className="hidden sm:inline">Filter</span>
+        {activeCount > 0 && (
+            <span className="flex size-4.5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                {activeCount}
+            </span>
+        )}
+    </Button>
+);
+
+interface FilterContentProps {
+    activePanel: FilterType | null;
+    setActivePanel: (v: FilterType | null) => void;
+    activeDef: FilterDefinition | undefined;
+    activeFilters: Map<string, Set<string>>;
+    activeCount: number;
+    facets: SearchFacets | undefined;
+    onAddFilter: (filter: string) => void;
+    onRemoveFilter: (filter: string) => void;
+    onReplaceFilter: (prefix: string, newValue: string) => void;
+    onClearAll: () => void;
+    onClose: () => void;
+}
+
+function FilterContent({
+    activePanel,
+    setActivePanel,
+    activeDef,
+    activeFilters,
+    activeCount,
+    facets,
+    onAddFilter,
+    onRemoveFilter,
+    onReplaceFilter,
+    onClearAll,
+    onClose,
+}: FilterContentProps) {
+    const handleBack = useCallback(() => setActivePanel(null), [setActivePanel]);
+
+    return (
+        <>
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                    {activePanel && (
+                        <Button type="button" variant="ghost" size="icon-sm" onClick={handleBack} className="text-muted-foreground">
+                            <ArrowLeft className="size-4" />
+                        </Button>
+                    )}
+                    <span className="text-sm font-medium">{activeDef?.label ?? 'Filters'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    {activeCount > 0 && !activePanel && (
+                        <Button type="button" variant="ghost" size="sm" onClick={onClearAll} className="text-xs text-muted-foreground">
+                            Clear
+                        </Button>
+                    )}
+                    <Button type="button" variant="ghost" size="sm" onClick={onClose} className="text-xs font-medium text-primary">
+                        Done
+                    </Button>
+                </div>
+            </div>
+
+            {/* Body */}
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+                <AnimatePresence mode="popLayout" initial={false}>
+                    {!activePanel ? (
+                        <motion.div
+                            key="list"
+                            initial={{ x: -20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: -20, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                            className="py-1"
+                        >
+                            {FILTER_DEFS.map((def) => {
+                                const filterValues = activeFilters.get(def.prefix);
+                                const count = filterValues?.size ?? 0;
+
+                                return (
+                                    <Button
+                                        key={def.key}
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => setActivePanel(def.key)}
+                                        className="w-full justify-start gap-3 px-3 py-2 text-sm"
+                                    >
+                                        <def.icon className="size-4 shrink-0 text-muted-foreground" />
+                                        <span className="flex-1 text-left">{def.label}</span>
+                                        {count > 0 && (
+                                            <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                                                {count}
+                                            </span>
+                                        )}
+                                        <ChevronRight className="size-3.5 text-muted-foreground" />
+                                    </Button>
+                                );
+                            })}
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key={activePanel}
+                            initial={{ x: 20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: 20, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                        >
+                            {activeDef?.mode === 'list' && (
+                                <ListFilterPanel
+                                    prefix={activeDef.prefix}
+                                    items={getFacetItems(facets, activeDef.key)}
+                                    activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
+                                    onToggle={(value) => {
+                                        const encoded = value.includes(' ') ? `"${value}"` : value;
+                                        const filter = `${activeDef.prefix}:${encoded}`;
+
+                                        if (activeFilters.get(activeDef.prefix)?.has(value)) {
+                                            onRemoveFilter(filter);
+                                        } else {
+                                            onAddFilter(filter);
+                                        }
+                                    }}
+                                />
+                            )}
+                            {activeDef?.mode === 'searchable' && activeDef.suggestionType && (
+                                <SearchableFilterPanel
+                                    prefix={activeDef.prefix}
+                                    suggestionType={activeDef.suggestionType}
+                                    activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
+                                    onToggle={(value) => {
+                                        const encoded = value.includes(' ') ? `"${value}"` : value;
+                                        const filter = `${activeDef.prefix}:${encoded}`;
+
+                                        if (activeFilters.get(activeDef.prefix)?.has(value)) {
+                                            onRemoveFilter(filter);
+                                        } else {
+                                            onAddFilter(filter);
+                                        }
+                                    }}
+                                />
+                            )}
+                            {activeDef?.mode === 'date' && (
+                                <DateFilterPanel
+                                    prefix={activeDef.prefix}
+                                    activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
+                                    onSetFilter={(value) => onReplaceFilter(activeDef.prefix, value)}
+                                    onClear={() => {
+                                        const existing = activeFilters.get(activeDef.prefix);
+
+                                        if (existing) {
+                                            for (const v of existing) {
+                                                onRemoveFilter(`${activeDef.prefix}:${v}`);
+                                            }
+                                        }
+                                    }}
+                                />
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </>
+    );
+}
+
 export const SearchFilterPopover = memo(function SearchFilterPopover({
     currentQuery,
     facets,
@@ -74,11 +243,10 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
 }: SearchFilterPopoverProps) {
     const [open, setOpen] = useState(false);
     const [activePanel, setActivePanel] = useState<FilterType | null>(null);
+    const isDesktop = useMediaQuery('(min-width: 768px)');
 
     const activeFilters = useMemo(() => extractActiveFilters(currentQuery), [currentQuery]);
     const activeCount = useMemo(() => countActiveFilters(currentQuery), [currentQuery]);
-
-    const handleBack = useCallback(() => setActivePanel(null), []);
 
     const handleClearAll = useCallback(() => {
         const allFilters = currentQuery.match(/(?:^|\s)-?\w+:(?:"[^"]+"|\S+)/g);
@@ -92,149 +260,46 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
 
     const activeDef = activePanel ? FILTER_DEFS.find((d) => d.key === activePanel) : null;
 
+    const handleOpenChange = useCallback((v: boolean) => {
+        setOpen(v);
+
+        if (!v) setActivePanel(null);
+    }, []);
+
+    const filterContent = (
+        <FilterContent
+            activePanel={activePanel}
+            setActivePanel={setActivePanel}
+            activeDef={activeDef ?? undefined}
+            activeFilters={activeFilters}
+            activeCount={activeCount}
+            facets={facets}
+            onAddFilter={onAddFilter}
+            onRemoveFilter={onRemoveFilter}
+            onReplaceFilter={onReplaceFilter}
+            onClearAll={handleClearAll}
+            onClose={() => setOpen(false)}
+        />
+    );
+
+    const trigger = filterTriggerButton(activeCount);
+
+    if (isDesktop) {
+        return (
+            <Popover open={open} onOpenChange={handleOpenChange}>
+                <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+                <PopoverContent align="end" sideOffset={8} className="flex w-80 flex-col overflow-hidden p-0">
+                    {filterContent}
+                </PopoverContent>
+            </Popover>
+        );
+    }
+
     return (
-        <Popover
-            open={open}
-            onOpenChange={(v) => {
-                setOpen(v);
-
-                if (!v) setActivePanel(null);
-            }}
-        >
-            <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                    <SlidersHorizontal className="size-3.5" />
-                    <span className="hidden sm:inline">Filter</span>
-                    {activeCount > 0 && (
-                        <span className="flex size-4.5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                            {activeCount}
-                        </span>
-                    )}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" sideOffset={8} className="w-80 overflow-hidden p-0">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                        {activePanel && (
-                            <Button type="button" variant="ghost" size="icon-sm" onClick={handleBack} className="text-muted-foreground">
-                                <ArrowLeft className="size-4" />
-                            </Button>
-                        )}
-                        <span className="text-sm font-medium">{activeDef?.label ?? 'Filters'}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        {activeCount > 0 && !activePanel && (
-                            <Button type="button" variant="ghost" size="sm" onClick={handleClearAll} className="text-xs text-muted-foreground">
-                                Clear
-                            </Button>
-                        )}
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} className="text-xs font-medium text-primary">
-                            Done
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Body */}
-                <div className="relative overflow-hidden">
-                    <AnimatePresence mode="popLayout" initial={false}>
-                        {!activePanel ? (
-                            <motion.div
-                                key="list"
-                                initial={{ x: -20, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{ x: -20, opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-                                className="py-1"
-                            >
-                                {FILTER_DEFS.map((def) => {
-                                    const filterValues = activeFilters.get(def.prefix);
-                                    const count = filterValues?.size ?? 0;
-
-                                    return (
-                                        <Button
-                                            key={def.key}
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => setActivePanel(def.key)}
-                                            className="w-full justify-start gap-3 px-3 py-2 text-sm"
-                                        >
-                                            <def.icon className="size-4 shrink-0 text-muted-foreground" />
-                                            <span className="flex-1 text-left">{def.label}</span>
-                                            {count > 0 && (
-                                                <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-                                                    {count}
-                                                </span>
-                                            )}
-                                            <ChevronRight className="size-3.5 text-muted-foreground" />
-                                        </Button>
-                                    );
-                                })}
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key={activePanel}
-                                initial={{ x: 20, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{ x: 20, opacity: 0 }}
-                                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-                            >
-                                {activeDef?.mode === 'list' && (
-                                    <ListFilterPanel
-                                        prefix={activeDef.prefix}
-                                        items={getFacetItems(facets, activeDef.key)}
-                                        activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
-                                        onToggle={(value) => {
-                                            const encoded = value.includes(' ') ? `"${value}"` : value;
-                                            const filter = `${activeDef.prefix}:${encoded}`;
-
-                                            if (activeFilters.get(activeDef.prefix)?.has(value)) {
-                                                onRemoveFilter(filter);
-                                            } else {
-                                                onAddFilter(filter);
-                                            }
-                                        }}
-                                    />
-                                )}
-                                {activeDef?.mode === 'searchable' && activeDef.suggestionType && (
-                                    <SearchableFilterPanel
-                                        prefix={activeDef.prefix}
-                                        suggestionType={activeDef.suggestionType}
-                                        activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
-                                        onToggle={(value) => {
-                                            const encoded = value.includes(' ') ? `"${value}"` : value;
-                                            const filter = `${activeDef.prefix}:${encoded}`;
-
-                                            if (activeFilters.get(activeDef.prefix)?.has(value)) {
-                                                onRemoveFilter(filter);
-                                            } else {
-                                                onAddFilter(filter);
-                                            }
-                                        }}
-                                    />
-                                )}
-                                {activeDef?.mode === 'date' && (
-                                    <DateFilterPanel
-                                        prefix={activeDef.prefix}
-                                        activeValues={activeFilters.get(activeDef.prefix) ?? new Set()}
-                                        onSetFilter={(value) => onReplaceFilter(activeDef.prefix, value)}
-                                        onClear={() => {
-                                            const existing = activeFilters.get(activeDef.prefix);
-
-                                            if (existing) {
-                                                for (const v of existing) {
-                                                    onRemoveFilter(`${activeDef.prefix}:${v}`);
-                                                }
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            </PopoverContent>
-        </Popover>
+        <Drawer open={open} onOpenChange={handleOpenChange} direction="bottom">
+            <DrawerTrigger asChild>{trigger}</DrawerTrigger>
+            <DrawerContent className="flex max-h-[85vh] flex-col overflow-hidden border-t p-0">{filterContent}</DrawerContent>
+        </Drawer>
     );
 });
 
@@ -514,14 +579,7 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                 {/* Custom range - nested Popover so calendar floats independently */}
                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className={cn(
-                                'w-full justify-start gap-3 px-3 py-2 text-sm',
-                                calendarOpen && 'bg-primary/5',
-                            )}
-                        >
+                        <Button type="button" variant="ghost" className={cn('w-full justify-start gap-3 px-3 py-2 text-sm', calendarOpen && 'bg-primary/5')}>
                             <CalendarIcon className="size-4 text-muted-foreground" />
                             <span className="flex-1 text-left">Custom range</span>
                             {activeValue?.includes('..') && <span className="text-xs text-primary">{formatDateRangeDisplay(activeValue)}</span>}

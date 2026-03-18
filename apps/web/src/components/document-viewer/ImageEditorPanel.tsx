@@ -42,7 +42,7 @@ export function ImageEditorPanel({ document, state, onStateChange, onCancel, onS
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 15 }}
             transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-            className="flex w-[380px] shrink-0 flex-col gap-6 rounded-md border-l border-border bg-card/95 p-6 backdrop-blur-sm"
+            className="flex w-full shrink-0 flex-col gap-6 rounded-md border-l border-border bg-card/95 p-6 backdrop-blur-sm md:w-[380px]"
         >
             {/* Modify */}
             <section className="space-y-4">

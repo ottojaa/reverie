@@ -124,7 +124,7 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
                             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                                 {/* Header */}
                                 <div className="flex items-center gap-3 border-b border-border px-4 py-3 shrink-0">
-                                    <span className="text-base font-semibold text-foreground">Organize</span>
+                                    <DialogPrimitive.Title className="text-base font-semibold text-foreground">Organize</DialogPrimitive.Title>
 
                                     {/* Mode toggle */}
                                     <div className="ml-auto flex items-center rounded-lg border border-border bg-secondary p-0.5">
