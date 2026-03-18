@@ -3,8 +3,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { useSearchSuggestions } from '@/lib/api/search';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
 import type { FacetItem, SearchFacets, SuggestionType } from '@reverie/shared';
 import { ArrowLeft, Calendar as CalendarIcon, Check, ChevronRight, FileText, Folder, Hash, MapPin, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
@@ -67,9 +67,7 @@ function countActiveFilters(query: string): number {
     return matches?.length ?? 0;
 }
 
-const filterTriggerButton = (
-    activeCount: number,
-) => (
+const filterTriggerButton = (activeCount: number) => (
     <Button variant="outline" size="sm" className="gap-1.5 text-xs">
         <SlidersHorizontal className="size-3.5" />
         <span className="hidden sm:inline">Filter</span>
@@ -262,14 +260,11 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
 
     const activeDef = activePanel ? FILTER_DEFS.find((d) => d.key === activePanel) : null;
 
-    const handleOpenChange = useCallback(
-        (v: boolean) => {
-            setOpen(v);
+    const handleOpenChange = useCallback((v: boolean) => {
+        setOpen(v);
 
-            if (!v) setActivePanel(null);
-        },
-        [],
-    );
+        if (!v) setActivePanel(null);
+    }, []);
 
     const filterContent = (
         <FilterContent
@@ -303,9 +298,7 @@ export const SearchFilterPopover = memo(function SearchFilterPopover({
     return (
         <Drawer open={open} onOpenChange={handleOpenChange} direction="bottom">
             <DrawerTrigger asChild>{trigger}</DrawerTrigger>
-            <DrawerContent className="flex max-h-[85vh] flex-col overflow-hidden border-t p-0">
-                {filterContent}
-            </DrawerContent>
+            <DrawerContent className="flex max-h-[85vh] flex-col overflow-hidden border-t p-0">{filterContent}</DrawerContent>
         </Drawer>
     );
 });
@@ -586,14 +579,7 @@ function DateFilterPanel({ activeValues, onSetFilter, onClear }: DateFilterPanel
                 {/* Custom range - nested Popover so calendar floats independently */}
                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className={cn(
-                                'w-full justify-start gap-3 px-3 py-2 text-sm',
-                                calendarOpen && 'bg-primary/5',
-                            )}
-                        >
+                        <Button type="button" variant="ghost" className={cn('w-full justify-start gap-3 px-3 py-2 text-sm', calendarOpen && 'bg-primary/5')}>
                             <CalendarIcon className="size-4 text-muted-foreground" />
                             <span className="flex-1 text-left">Custom range</span>
                             {activeValue?.includes('..') && <span className="text-xs text-primary">{formatDateRangeDisplay(activeValue)}</span>}

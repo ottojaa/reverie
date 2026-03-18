@@ -150,14 +150,14 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
             <DialogPrimitive.Portal>
                 <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
                 <DialogPrimitive.Content
-                    className="fixed top-[min(20vh,140px)] left-1/2 z-50 w-full max-w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 duration-200"
+                    className="fixed z-50 outline-none top-0 left-0 w-full h-dvh data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 max-sm:data-[state=open]:slide-in-from-bottom-full max-sm:data-[state=closed]:slide-out-to-bottom-full sm:top-[min(20vh,140px)] sm:left-1/2 sm:h-auto sm:-translate-x-1/2 sm:max-w-[min(640px,calc(100vw-2rem))] sm:data-[state=closed]:zoom-out-98 sm:data-[state=open]:zoom-in-98 sm:data-[state=closed]:slide-out-to-top-2 sm:data-[state=open]:slide-in-from-top-2 duration-200"
                     aria-label="Search documents"
                     onOpenAutoFocus={(e) => {
                         e.preventDefault();
                         inputRef.current?.focus();
                     }}
                 >
-                    <Command className="overflow-hidden rounded-xl border border-border bg-popover shadow-2xl" shouldFilter={false} loop>
+                    <Command className="flex flex-col h-full overflow-hidden bg-popover shadow-2xl sm:h-auto sm:rounded-xl sm:border sm:border-border" shouldFilter={false} loop>
                         {/* Search Input */}
                         <div className="flex items-center gap-2 border-b border-border px-4">
                             <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -183,10 +183,19 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                     <X className="size-3.5" />
                                 </Button>
                             )}
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleClose}
+                                className="sm:hidden shrink-0 text-muted-foreground px-1"
+                            >
+                                Cancel
+                            </Button>
                         </div>
 
                         {/* Content */}
-                        <Command.List className="max-h-[min(50vh,400px)] overflow-y-auto overscroll-contain p-2">
+                        <Command.List className="flex-1 overflow-y-auto overscroll-contain p-2 sm:flex-none sm:max-h-[min(50vh,400px)]">
                             <AnimatePresence mode="wait">
                                 {!hasQuery ? (
                                     <EmptyState
