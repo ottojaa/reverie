@@ -25,11 +25,11 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
             ref={containerRef}
             className={cn(
                 'relative flex h-full w-full items-center justify-center overflow-hidden p-4 md:p-6',
-                isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
+                !isLoaded ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
-            onClick={handlers.onClick}
-            onWheel={handlers.onWheel}
-            onPointerDown={handlers.onPointerDown}
+            onClick={isLoaded ? handlers.onClick : undefined}
+            onWheel={isLoaded ? handlers.onWheel : undefined}
+            onPointerDown={isLoaded ? handlers.onPointerDown : undefined}
             onPointerMove={handlers.onPointerMove}
             onPointerUp={handlers.onPointerUp}
         >

@@ -120,7 +120,7 @@ export function DocumentPage() {
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-1 overflow-hidden"
+                className="flex min-w-0 flex-1 overflow-hidden"
             >
                 {ViewerComponent && fileUrl ? (
                     <ViewerComponent

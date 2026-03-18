@@ -61,7 +61,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <Button variant="ghost" className="gap-2 px-2 md:px-3" onClick={openOrganize} aria-label="Organize with AI">
                         <Sparkles className="size-4 shrink-0 text-primary" />
                         <span className="hidden sm:inline">Organize</span>
-                        <kbd className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] opacity-60">⌘⇧O</kbd>
+                        <kbd className="ml-auto hidden shrink-0 rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] opacity-60 md:inline-block">⌘⇧O</kbd>
                     </Button>
                     <Button variant="ghost" size="icon" aria-label="Notifications">
                         <Bell className="size-4" />
