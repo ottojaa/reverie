@@ -3,6 +3,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from './api/client';
 import type { DocumentsResponse } from './api/documents';
 import { documentsApi } from './api/documents';
 import { foldersApi } from './api/folders';
@@ -237,7 +238,7 @@ export function useCreateFolder() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },
-        onError: () => toast.error('Failed to create section'),
+        onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create section')),
     });
 }
 
@@ -277,12 +278,12 @@ export function useUpdateFolder() {
 
             return { previous };
         },
-        onError: (_, __, context) => {
+        onError: (error, __, context) => {
             if (context?.previous) {
                 queryClient.setQueryData(['sections', 'tree'], context.previous);
             }
 
-            toast.error('Failed to update section');
+            toast.error(getApiErrorMessage(error, 'Failed to update section'));
         },
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });

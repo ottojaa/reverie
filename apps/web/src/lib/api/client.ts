@@ -2,6 +2,23 @@ import axios from 'axios';
 
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+/** Prefer server `message` from AppError JSON; otherwise `fallback`. */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (axios.isAxiosError(error)) {
+        const data = error.response?.data;
+
+        if (data && typeof data === 'object' && 'message' in data) {
+            const msg = (data as { message?: unknown }).message;
+
+            if (typeof msg === 'string' && msg.trim().length > 0) {
+                return msg;
+            }
+        }
+    }
+
+    return fallback;
+}
+
 export interface AuthCallbacks {
     getToken: () => string | null;
     refresh: () => Promise<boolean>;

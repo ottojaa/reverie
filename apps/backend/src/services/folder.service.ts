@@ -58,7 +58,9 @@ export class FolderService {
         const existing = await dbToUse.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
 
         if (existing) {
-            throw new ConflictError(`Folder already exists at path: ${path}`);
+            throw new ConflictError(
+                parentId ? 'A folder with this name already exists in this collection.' : 'A collection with this name already exists.',
+            );
         }
 
         // Next sort_order among siblings
@@ -292,7 +294,7 @@ export class FolderService {
                 .executeTakeFirst();
 
             if (existing) {
-                throw new ConflictError(`Folder already exists at path: ${newPath}`);
+                throw new ConflictError('A folder with this name already exists in this collection.');
             }
 
             const maxOrder = await db
@@ -319,7 +321,11 @@ export class FolderService {
                 .executeTakeFirst();
 
             if (existing) {
-                throw new ConflictError(`Folder already exists at path: ${newPath}`);
+                throw new ConflictError(
+                    folder.type === 'collection'
+                        ? 'A collection with this name already exists.'
+                        : 'A folder with this name already exists in this collection.',
+                );
             }
 
             updateData.name = update.name;
