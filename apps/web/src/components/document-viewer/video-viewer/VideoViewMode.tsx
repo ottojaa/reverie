@@ -9,7 +9,7 @@ export function VideoViewMode({ document, fileUrl }: ViewerProps) {
     const posterUrl = document.thumbnail_urls?.lg ? `${API_BASE}${document.thumbnail_urls.lg}` : undefined;
 
     return (
-        <div className="flex h-full w-full items-center justify-center p-4">
+        <div className="flex h-full min-h-0 w-full items-center justify-center p-4">
             <motion.div
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{
@@ -29,7 +29,7 @@ export function VideoViewMode({ document, fileUrl }: ViewerProps) {
                     preload="metadata"
                     onLoadedMetadata={() => setIsReady(true)}
                     onCanPlay={() => setIsReady(true)}
-                    className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg shadow-2xl"
+                    className="max-h-full max-w-full rounded-lg shadow-2xl"
                 />
             </motion.div>
         </div>

@@ -73,14 +73,12 @@ export function useImageEditState(document: Document, fileUrl: string, isEditMod
         [editorState.maintainAspect],
     );
 
-    const onCropChange = useCallback(
-        (pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
-            setCrop(editorState.maintainAspect ? percentCrop : pixelCrop);
-            completedCropRef.current = pixelCrop;
-            completedPercentCropRef.current = percentCrop;
-        },
-        [editorState.maintainAspect],
-    );
+    /** Always use percent crop in state so the selection matches the image at any display size (react-image-crop). */
+    const onCropChange = useCallback((pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
+        setCrop(percentCrop);
+        completedCropRef.current = pixelCrop;
+        completedPercentCropRef.current = percentCrop;
+    }, []);
 
     const onCropComplete = useCallback((pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
         completedCropRef.current = pixelCrop;

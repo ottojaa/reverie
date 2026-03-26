@@ -42,13 +42,13 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
         transition: hasDragged.current ? 'none' : ('transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)' as const),
     };
 
-    const imgClass = 'max-h-[calc(100vh-8rem)] max-w-full select-none rounded-lg object-contain';
+    const imgClass = 'max-h-full max-w-full select-none rounded-lg object-contain';
 
     return (
         <div
             ref={containerRef}
             className={cn(
-                'relative flex h-full w-full items-center justify-center overflow-hidden p-4 md:p-6',
+                'relative flex h-full min-h-0 w-full items-center justify-center overflow-hidden p-4 md:p-6',
                 !hasFirstPaint ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
             onClick={hasFirstPaint ? handlers.onClick : undefined}
@@ -66,10 +66,10 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     duration: hasFirstPaint ? 0.22 : 0.15,
                     ease: [0.22, 1, 0.36, 1],
                 }}
-                className="relative flex items-center justify-center"
+                className="relative flex min-h-0 max-h-full w-full items-center justify-center"
             >
                 <div
-                    className="relative inline-block max-h-[calc(100vh-8rem)] max-w-full"
+                    className="relative inline-block max-h-full max-w-full"
                     style={{
                         ...transformStyle,
                         ...(document.width && document.height
@@ -91,7 +91,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                                         resolutionX={32}
                                         resolutionY={32}
                                         punch={1}
-                                        className="max-h-[calc(100vh-8rem)] max-w-full object-contain"
+                                        className="max-h-full max-w-full object-contain"
                                     />
                                 </div>
                             )}
@@ -143,7 +143,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
+                    className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
                 >
                     {Math.round(scale * 100)}%
                 </motion.div>

@@ -62,7 +62,7 @@ export function CategoryItem({
             ref={triggerRef}
             className={cn(
                 'group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors',
-                !disableDrag && 'touch-none cursor-grab select-none active:cursor-grabbing',
+                !disableDrag && 'touch-pan-y cursor-grab select-none active:cursor-grabbing',
                 disableDrag && 'cursor-default',
                 'hover:bg-sidebar-accent/50',
             )}

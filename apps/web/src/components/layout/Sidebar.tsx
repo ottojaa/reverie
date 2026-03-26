@@ -11,7 +11,7 @@ import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { LayoutGrid, Settings, Users } from 'lucide-react';
+import { LayoutGrid, Settings, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -121,17 +121,25 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const navContent = (
         <>
             {/* Logo */}
-            <div className="flex h-14 items-center border-b border-sidebar-border px-4">
-                <Link to="/browse" className="flex items-center gap-2" onClick={onClose}>
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
+                <Link to="/browse" className="flex min-w-0 items-center gap-2" onClick={onClose}>
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                         <span className="text-sm font-bold">R</span>
                     </div>
                     <span className="text-lg font-semibold tracking-tight">Reverie</span>
                 </Link>
+                {onClose && (
+                    <Button type="button" variant="ghost" size="icon-sm" className="shrink-0 md:hidden" onClick={onClose} aria-label="Close menu">
+                        <X className="size-5" />
+                    </Button>
+                )}
             </div>
 
             {/* Sections */}
-            <nav ref={navRef} className="relative flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+            <nav
+                ref={navRef}
+                className="relative flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            >
                 <div className="flex flex-col gap-1.5">
                     <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Library</p>
                     <Link
@@ -193,7 +201,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             </nav>
 
             {/* Storage & Settings */}
-            <div className="border-t border-sidebar-border p-2">
+            <div className="shrink-0 border-t border-sidebar-border p-2">
                 {user ? (
                     <Link to="/settings" className="block px-3 py-2.5 transition-colors hover:bg-sidebar-accent" onClick={onClose}>
                         <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -259,7 +267,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             {/* Sidebar: drawer on mobile, static on desktop */}
             <aside
                 className={cn(
-                    'flex flex-col border-r border-sidebar-border bg-sidebar',
+                    'flex min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar',
                     'fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out md:relative md:transform-none',
                     isMobile ? 'w-80' : 'w-64',
                     !isOpen && '-translate-x-full md:translate-x-0',

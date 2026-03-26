@@ -60,7 +60,7 @@ export function SectionItem({
             style={style}
             className={cn(
                 'group relative flex items-center gap-2 rounded-md px-2 py-1.5 pl-6 text-sm transition-colors',
-                !disableDrag && 'touch-none cursor-grab active:cursor-grabbing',
+                !disableDrag && 'touch-pan-y cursor-grab select-none active:cursor-grabbing',
                 disableDrag && 'cursor-default',
                 isDragging && 'z-10 opacity-50',
                 isActive && !isHighlighted && 'bg-sidebar-accent text-sidebar-primary',

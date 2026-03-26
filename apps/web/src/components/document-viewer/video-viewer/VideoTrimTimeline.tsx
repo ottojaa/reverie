@@ -6,10 +6,25 @@ import { useVideoFrameStrip } from './useVideoFrameStrip';
 const MIN_TRIM_DURATION = 0.5;
 
 function formatTime(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+        return '0:00';
+    }
+
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
 
     return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Map client X to [0,1] along track; returns null if layout is invalid. */
+function pointerXToNormalized(clientX: number, rect: DOMRect): number | null {
+    const w = rect.width;
+
+    if (!Number.isFinite(w) || w <= 0) return null;
+
+    const x = (clientX - rect.left) / w;
+
+    return Math.max(0, Math.min(1, x));
 }
 
 function computeTrimFromPointer(x: number, duration: number, handle: 'in' | 'out', currentStart: number, currentEnd: number): { start: number; end: number } {
@@ -19,20 +34,51 @@ function computeTrimFromPointer(x: number, duration: number, handle: 'in' | 'out
         const newStart = time;
         const newEnd = Math.max(newStart + MIN_TRIM_DURATION, currentEnd);
 
-        return { start: newStart, end: newEnd };
+        return { start: newStart, end: Math.min(newEnd, duration) };
     }
 
     const newEnd = time;
-    const newStart = Math.min(newEnd - MIN_TRIM_DURATION, currentStart);
+    const newStart = Math.max(0, Math.min(newEnd - MIN_TRIM_DURATION, currentStart));
 
     return { start: newStart, end: newEnd };
+}
+
+/** Enforce 0 <= start <= end <= duration and minimum trim width. */
+function clampTrimRange(start: number, end: number, duration: number): { start: number; end: number } {
+    if (!Number.isFinite(duration) || duration <= 0) {
+        return { start: 0, end: 0 };
+    }
+
+    let s = Math.max(0, Math.min(start, duration));
+    let e = Math.max(0, Math.min(end, duration));
+
+    if (e < s) {
+        [s, e] = [e, s];
+    }
+
+    if (e - s < MIN_TRIM_DURATION) {
+        e = Math.min(duration, s + MIN_TRIM_DURATION);
+
+        if (e - s < MIN_TRIM_DURATION) {
+            s = Math.max(0, e - MIN_TRIM_DURATION);
+        }
+    }
+
+    return { start: s, end: e };
 }
 
 function updateTrackCSS(track: HTMLDivElement | null, start: number, end: number, duration: number): void {
     if (!track) return;
 
-    track.style.setProperty('--start-pct', String((start / duration) * 100));
-    track.style.setProperty('--end-pct', String((end / duration) * 100));
+    if (!Number.isFinite(duration) || duration <= 0) return;
+
+    const sp = (start / duration) * 100;
+    const ep = (end / duration) * 100;
+
+    if (!Number.isFinite(sp) || !Number.isFinite(ep)) return;
+
+    track.style.setProperty('--start-pct', String(sp));
+    track.style.setProperty('--end-pct', String(ep));
 }
 
 interface VideoTrimTimelineProps {
@@ -42,11 +88,8 @@ interface VideoTrimTimelineProps {
     currentTime: number;
     onRangeChange: (start: number, end: number) => void;
     onSeek?: (time: number) => void;
-    /** Called when dragging a handle - seek video to align playhead with handle */
     onSeekToHandle?: (time: number) => void;
-    /** Video URL for frame strip extraction (optional) */
     videoUrl?: string;
-    /** Called when drag starts/ends - parent can ignore timeupdate during drag */
     onDraggingChange?: (dragging: boolean) => void;
     isPlaying?: boolean;
     className?: string;
@@ -67,6 +110,7 @@ export function VideoTrimTimeline({
     const trackRef = useRef<HTMLDivElement>(null);
     const [dragging, setDragging] = useState<'in' | 'out' | null>(null);
     const dragPreviewRef = useRef<{ start: number; end: number } | null>(null);
+
     const { frames, isLoading } = useVideoFrameStrip(videoUrl ?? '', duration);
 
     const clamp = useCallback((value: number) => Math.max(0, Math.min(duration, value)), [duration]);
@@ -75,7 +119,8 @@ export function VideoTrimTimeline({
         (x: number, seekToHandle: boolean) => {
             if (!trackRef.current || dragging === null) return;
 
-            const { start: newStart, end: newEnd } = computeTrimFromPointer(x, duration, dragging, start, end);
+            const raw = computeTrimFromPointer(x, duration, dragging, start, end);
+            const { start: newStart, end: newEnd } = clampTrimRange(raw.start, raw.end, duration);
 
             dragPreviewRef.current = { start: newStart, end: newEnd };
             onRangeChange(newStart, newEnd);
@@ -106,9 +151,11 @@ export function VideoTrimTimeline({
             if (!trackRef.current || dragging === null) return;
 
             const rect = trackRef.current.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
+            const xNorm = pointerXToNormalized(e.clientX, rect);
 
-            applyTrim(x, true);
+            if (xNorm === null) return;
+
+            applyTrim(xNorm, true);
         },
         [dragging, applyTrim],
     );
@@ -117,9 +164,11 @@ export function VideoTrimTimeline({
         (e: React.PointerEvent) => {
             if (trackRef.current && dragging !== null) {
                 const rect = trackRef.current.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / rect.width;
+                const xNorm = pointerXToNormalized(e.clientX, rect);
 
-                applyTrim(x, false);
+                if (xNorm !== null) {
+                    applyTrim(xNorm, false);
+                }
             }
 
             e.currentTarget.releasePointerCapture(e.pointerId);
@@ -130,13 +179,29 @@ export function VideoTrimTimeline({
         [dragging, applyTrim],
     );
 
+    const handlePointerCancel = useCallback((e: React.PointerEvent) => {
+        try {
+            if (e.currentTarget instanceof HTMLElement && e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+            }
+        } catch {
+            // ignore
+        }
+
+        dragPreviewRef.current = null;
+        setDragging(null);
+    }, []);
+
     const handleTrackClick = useCallback(
         (e: React.MouseEvent) => {
             if (!trackRef.current || !onSeek) return;
 
             const rect = trackRef.current.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
-            const time = clamp(x * duration);
+            const xNorm = pointerXToNormalized(e.clientX, rect);
+
+            if (xNorm === null) return;
+
+            const time = clamp(xNorm * duration);
 
             onSeek(time);
         },
@@ -162,15 +227,12 @@ export function VideoTrimTimeline({
         return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
     }, [dragging, onRangeChange]);
 
-    // Notify parent when dragging ends - after commit so range state has flushed
     useEffect(() => {
         if (!dragging) {
             onDraggingChange?.(false);
         }
     }, [dragging, onDraggingChange]);
 
-    // Sync CSS vars from props only when NOT dragging - prevents React re-renders (e.g. timeupdate)
-    // from overwriting our direct DOM updates during drag.
     useEffect(() => {
         if (!dragging) {
             updateTrackCSS(trackRef.current, start, end, duration);
@@ -180,6 +242,9 @@ export function VideoTrimTimeline({
     if (duration <= 0 || !Number.isFinite(duration)) return null;
 
     const currentPercent = (currentTime / duration) * 100;
+
+    const handleClassName =
+        'absolute top-0 bottom-0 z-10 flex w-4 -translate-x-1/2 touch-none cursor-ew-resize items-center justify-center border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90';
 
     return (
         <div className={cn('space-y-2', className)}>
@@ -201,9 +266,7 @@ export function VideoTrimTimeline({
                     className="relative h-18 cursor-pointer overflow-visible rounded-lg bg-muted"
                     onClick={handleTrackClick}
                 >
-                    {/* Inner clip: frames, overlays, playhead only - use CSS vars for instant drag updates */}
                     <div className={cn('absolute inset-0 overflow-hidden rounded-lg', dragging && 'transition-none')}>
-                        {/* Frame strip or solid fallback */}
                         {frames.length > 0 ? (
                             <div className="absolute inset-0 flex gap-0.5 rounded-lg">
                                 {frames.map((src, i) => (
@@ -220,7 +283,6 @@ export function VideoTrimTimeline({
                             </div>
                         )}
 
-                        {/* Non-trim overlay: dark mask on left (0 to start) - full opacity */}
                         <div
                             className={cn(
                                 'pointer-events-none absolute inset-y-0 left-0 rounded-l-lg bg-black/40',
@@ -229,7 +291,6 @@ export function VideoTrimTimeline({
                             style={{ width: 'calc(var(--start-pct) * 1%)' }}
                         />
 
-                        {/* Non-trim overlay: dark mask on right (end to 100%) - full opacity */}
                         <div
                             className={cn(
                                 'pointer-events-none absolute inset-y-0 right-0 rounded-r-lg bg-black/40',
@@ -241,7 +302,6 @@ export function VideoTrimTimeline({
                             }}
                         />
 
-                        {/* Trim area border - both handles overlay it via -translate-x-1/2 */}
                         <div
                             className={cn(
                                 'pointer-events-none absolute inset-y-0 rounded-md border-4 border-primary z-1',
@@ -253,28 +313,27 @@ export function VideoTrimTimeline({
                             }}
                         />
 
-                        {/* Playhead - pointer-events none so it does not block handles */}
                         <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 -translate-x-1/2 bg-warning" style={{ left: `${currentPercent}%` }} />
                     </div>
 
-                    {/* In handle - outside inner clip so it can overflow */}
                     <div
-                        className="absolute top-0 bottom-0 z-10 flex w-4 -translate-x-1/2 cursor-ew-resize items-center justify-center rounded-l-md border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                        className={cn(handleClassName, 'rounded-l-md')}
                         style={{ left: 'calc(var(--start-pct) * 1%)' }}
                         onPointerDown={(e) => handlePointerDown(e, 'in')}
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
+                        onPointerCancel={handlePointerCancel}
                     >
                         <GripVertical className="size-3.5 shrink-0" />
                     </div>
 
-                    {/* Out handle - -translate-x-1/2 overlays trim like left handle */}
                     <div
-                        className="absolute top-0 bottom-0 z-10 flex w-4 -translate-x-1/2 cursor-ew-resize items-center justify-center rounded-r-md border-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                        className={cn(handleClassName, 'rounded-r-md')}
                         style={{ left: 'calc(var(--end-pct) * 1%)' }}
                         onPointerDown={(e) => handlePointerDown(e, 'out')}
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
+                        onPointerCancel={handlePointerCancel}
                     >
                         <GripVertical className="size-3.5 shrink-0" />
                     </div>
