@@ -2,6 +2,7 @@ export { adminApi } from './admin';
 export { authApi } from './auth-api';
 export {
     documentsApi,
+    findCachedDocument,
     useDeleteDocuments,
     useDocument,
     useDocuments,

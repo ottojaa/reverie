@@ -117,9 +117,9 @@ export function DocumentPage() {
 
             {/* Viewer area */}
             <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
+                initial={{ opacity: 0, scale: 0.99 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="flex min-w-0 flex-1 overflow-hidden"
             >
                 {ViewerComponent && fileUrl ? (

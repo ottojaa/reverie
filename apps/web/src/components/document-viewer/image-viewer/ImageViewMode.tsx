@@ -1,6 +1,8 @@
+import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Blurhash } from 'react-blurhash';
 import type { ViewerProps } from '../viewer-registry';
 import { ImageLoadingSpinner } from './ImageLoadingSpinner';
 import { useImageZoomPan } from './useImageZoomPan';
@@ -8,54 +10,132 @@ import { useImageZoomPan } from './useImageZoomPan';
 const SPINNER_DELAY_MS = 150;
 
 export function ImageViewMode({ document, fileUrl }: ViewerProps) {
-    const [isLoaded, setIsLoaded] = useState(false);
+    const thumbUrl = useMemo(() => {
+        if (document.thumbnail_status !== 'complete') return null;
+
+        return getThumbnailUrl(document, 'lg');
+    }, [document]);
+
+    const [previewReady, setPreviewReady] = useState(false);
+    const [fullReady, setFullReady] = useState(false);
+    const [previewFailed, setPreviewFailed] = useState(false);
+
+    const useProgressive = thumbUrl !== null && thumbUrl !== fileUrl && !previewFailed;
     const [showSpinner, setShowSpinner] = useState(false);
+
     const { scale, translate, isZoomed, hasDragged, containerRef, handlers } = useImageZoomPan();
 
+    const hasFirstPaint = useProgressive ? previewReady || fullReady : fullReady;
+
     useEffect(() => {
-        setIsLoaded(false);
+        setPreviewReady(false);
+        setFullReady(false);
+        setPreviewFailed(false);
         setShowSpinner(false);
         const t = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
 
         return () => clearTimeout(t);
-    }, [fileUrl]);
+    }, [fileUrl, thumbUrl, useProgressive]);
+
+    const transformStyle = {
+        transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
+        transition: hasDragged.current ? 'none' : ('transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)' as const),
+    };
+
+    const imgClass = 'max-h-[calc(100vh-8rem)] max-w-full select-none rounded-lg object-contain';
 
     return (
         <div
             ref={containerRef}
             className={cn(
                 'relative flex h-full w-full items-center justify-center overflow-hidden p-4 md:p-6',
-                !isLoaded ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
+                !hasFirstPaint ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
-            onClick={isLoaded ? handlers.onClick : undefined}
-            onWheel={isLoaded ? handlers.onWheel : undefined}
-            onPointerDown={isLoaded ? handlers.onPointerDown : undefined}
+            onClick={hasFirstPaint ? handlers.onClick : undefined}
+            onWheel={hasFirstPaint ? handlers.onWheel : undefined}
+            onPointerDown={hasFirstPaint ? handlers.onPointerDown : undefined}
             onPointerMove={handlers.onPointerMove}
             onPointerUp={handlers.onPointerUp}
         >
-            <AnimatePresence>{!isLoaded && showSpinner && <ImageLoadingSpinner key="image-loading" />}</AnimatePresence>
+            <AnimatePresence>{!hasFirstPaint && showSpinner && <ImageLoadingSpinner key="image-loading" />}</AnimatePresence>
 
             <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: isLoaded ? 1 : 0 }}
+                animate={{ opacity: hasFirstPaint ? 1 : 0 }}
                 transition={{
-                    duration: isLoaded ? 0.55 : 0.2,
-                    delay: isLoaded ? 0.08 : 0,
+                    duration: hasFirstPaint ? 0.22 : 0.15,
                     ease: [0.22, 1, 0.36, 1],
                 }}
-                className="flex items-center justify-center"
+                className="relative flex items-center justify-center"
             >
-                <img
-                    src={fileUrl}
-                    alt={document.original_filename}
-                    onLoad={() => setIsLoaded(true)}
+                <div
+                    className="relative inline-block max-h-[calc(100vh-8rem)] max-w-full"
                     style={{
-                        transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
-                        transition: hasDragged.current ? 'none' : 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+                        ...transformStyle,
+                        ...(document.width && document.height
+                            ? { aspectRatio: `${document.width} / ${document.height}` }
+                            : { minHeight: 'min(40vh, 240px)', minWidth: 'min(90vw, 320px)' }),
                     }}
-                    className="max-h-[calc(100vh-8rem)] max-w-full select-none rounded-lg object-contain"
-                    draggable={false}
-                />
+                >
+                    {useProgressive && thumbUrl && (
+                        <>
+                            {document.thumbnail_blurhash && !previewReady && (
+                                <div
+                                    className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-lg"
+                                    aria-hidden
+                                >
+                                    <Blurhash
+                                        hash={document.thumbnail_blurhash}
+                                        width={Math.min(document.width ?? 800, 800)}
+                                        height={Math.min(document.height ?? 600, 600)}
+                                        resolutionX={32}
+                                        resolutionY={32}
+                                        punch={1}
+                                        className="max-h-[calc(100vh-8rem)] max-w-full object-contain"
+                                    />
+                                </div>
+                            )}
+                            <img
+                                src={thumbUrl}
+                                alt=""
+                                fetchPriority="high"
+                                decoding="async"
+                                onLoad={() => setPreviewReady(true)}
+                                onError={() => setPreviewFailed(true)}
+                                style={{
+                                    opacity: fullReady ? 0 : 1,
+                                    transition: hasDragged.current ? 'none' : 'opacity 0.35s ease-out',
+                                }}
+                                className={imgClass}
+                                draggable={false}
+                            />
+                        </>
+                    )}
+
+                    <img
+                        src={fileUrl}
+                        alt={document.original_filename}
+                        fetchPriority={useProgressive ? 'auto' : 'high'}
+                        decoding="async"
+                        onLoad={() => setFullReady(true)}
+                        style={{
+                            opacity: useProgressive ? (fullReady ? 1 : 0) : fullReady ? 1 : 0,
+                            transition: hasDragged.current ? 'none' : 'opacity 0.4s ease-out',
+                            ...(useProgressive
+                                ? {
+                                      position: 'absolute',
+                                      left: 0,
+                                      top: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'contain',
+                                  }
+                                : {}),
+                        }}
+                        className={cn(imgClass, useProgressive && 'h-full w-full')}
+                        draggable={false}
+                    />
+                </div>
             </motion.div>
 
             {isZoomed && (

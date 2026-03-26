@@ -1,6 +1,8 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { documentsApi } from '@/lib/api/documents';
 import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
 import type { Document } from '@reverie/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Trash2 } from 'lucide-react';
 
@@ -15,6 +17,7 @@ interface DocumentCardProps {
 }
 
 export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplete, className }: DocumentCardProps) {
+    const queryClient = useQueryClient();
     const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, handleDelete, dragRef, dragAttributes, dragListeners, longPressHandlers } =
         useDocumentInteraction({ document, orderedIds });
 
@@ -30,7 +33,20 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                     {...longPressHandlers}
                     onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
                 >
-                    <Link to="/document/$id" params={{ id: document.id }} onClick={handleClick} onDoubleClick={handleDoubleClick} draggable={false}>
+                    <Link
+                        to="/document/$id"
+                        params={{ id: document.id }}
+                        preload="intent"
+                        onClick={handleClick}
+                        onDoubleClick={handleDoubleClick}
+                        onMouseEnter={() => {
+                            queryClient.prefetchQuery({
+                                queryKey: ['document', document.id],
+                                queryFn: () => documentsApi.get(document.id),
+                            });
+                        }}
+                        draggable={false}
+                    >
                         <DocumentCardVisual
                             document={document}
                             isSelected={isSelected}

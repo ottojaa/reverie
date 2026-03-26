@@ -3,14 +3,22 @@
  *
  * In production, nginx handles /files/* requests with secure_link verification.
  * This route provides the same functionality for local development without nginx.
+ *
+ * Local storage streams files with sendfile-friendly streams; S3 falls back to
+ * buffering (production typically uses nginx or CDN in front of object storage).
  */
 import { createHash } from 'crypto';
+import { createReadStream } from 'fs';
+import { stat } from 'fs/promises';
 import { FastifyInstance } from 'fastify';
 import { extname } from 'path';
 import { env } from '../../config/env';
+import { getStorage } from '../../storage';
+import { LocalStorageProvider } from '../../storage/local-storage';
 import { getStorageService } from '../../services/storage.service';
 
 const storageService = getStorageService();
+const storage = getStorage();
 
 // Simple extension to MIME type mapping for common file types
 const MIME_TYPES: Record<string, string> = {
@@ -80,16 +88,23 @@ export default async function (fastify: FastifyInstance) {
                 return reply.status(403).send({ error: 'Invalid signature' });
             }
 
-            // Serve the file
+            const contentType = getMimeType(filePath);
+
+            reply.header('Content-Type', contentType);
+            reply.header('Cache-Control', 'private, max-age=86400, immutable');
+            reply.header('X-Content-Type-Options', 'nosniff');
+
             try {
+                if (storage instanceof LocalStorageProvider) {
+                    const absolutePath = storage.getAbsolutePath(filePath);
+                    const stats = await stat(absolutePath);
+
+                    reply.header('Content-Length', String(stats.size));
+
+                    return reply.send(createReadStream(absolutePath));
+                }
+
                 const buffer = await storageService.readFile(filePath);
-
-                // Determine content type from file extension
-                const contentType = getMimeType(filePath);
-
-                reply.header('Content-Type', contentType);
-                reply.header('Cache-Control', 'private, max-age=86400, immutable');
-                reply.header('X-Content-Type-Options', 'nosniff');
 
                 return reply.send(buffer);
             } catch (_error) {

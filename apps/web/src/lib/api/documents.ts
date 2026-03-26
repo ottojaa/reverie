@@ -10,7 +10,7 @@ import {
     type DocumentOcrResult,
     type FolderWithChildren,
 } from '@reverie/shared';
-import type { InfiniteData } from '@tanstack/react-query';
+import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -211,15 +211,52 @@ export function useReprocessLlm() {
 }
 
 /**
+ * Find a document in list/infinite query caches (e.g. after navigating from Browse).
+ */
+export function findCachedDocument(queryClient: QueryClient, documentId: string): Document | undefined {
+    const entries = queryClient.getQueriesData<unknown>({ queryKey: ['documents'] });
+
+    for (const [key, data] of entries) {
+        if (!data) continue;
+
+        if (key[1] === 'infinite') {
+            const infinite = data as InfiniteData<DocumentsResponse>;
+
+            if (!infinite.pages) continue;
+
+            for (const page of infinite.pages) {
+                const found = page.items.find((d) => d.id === documentId);
+
+                if (found) return found;
+            }
+
+            continue;
+        }
+
+        const list = data as DocumentsResponse;
+
+        if (!Array.isArray(list.items)) continue;
+
+        const found = list.items.find((d) => d.id === documentId);
+
+        if (found) return found;
+    }
+
+    return undefined;
+}
+
+/**
  * Hook to fetch a single document (uses auth fetch for 401 refresh + retry)
  */
 export function useDocument(documentId: string) {
     const { isAuthenticated } = useAuth();
+    const queryClient = useQueryClient();
 
     return useQuery({
         queryKey: ['document', documentId],
         queryFn: () => documentsApi.get(documentId),
         enabled: isAuthenticated && !!documentId,
+        placeholderData: () => findCachedDocument(queryClient, documentId),
     });
 }
 
