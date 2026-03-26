@@ -14,12 +14,12 @@ import { resolveRelativeDate } from './query-parser';
  * "instru" → to_tsquery('english', 'instru:*')
  * "spain 2024" → to_tsquery('english', 'spain:* & 2024:*')
  */
-export function buildPrefixTsQuery(text: string): RawBuilder<unknown> {
+export function buildPrefixTsQuery(text: string): RawBuilder<unknown> | null {
     const words = text.trim().split(/\s+/).filter(Boolean);
     const sanitized = words.map((w) => w.replace(/[&|!():*<>'"\\]/g, '').trim()).filter((w) => w.length > 0);
 
     if (sanitized.length === 0) {
-        return sql`plainto_tsquery('english', ${text})`;
+        return null;
     }
 
     const prefixExpr = sanitized.map((w) => `${w}:*`).join(' & ');
@@ -180,10 +180,10 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
         if (parsed.searchScope === 'filename') {
             query = query.where(sql<SqlBool>`d.original_filename ILIKE ${'%' + parsed.fullText + '%'}`);
         } else if (parsed.searchScope === 'content') {
-            query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
+            if (tsQuery) query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
         } else if (parsed.searchScope === 'summary') {
             query = query.where(sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`);
-        } else {
+        } else if (tsQuery) {
             // Unified search vector includes filename, OCR text, LLM data, photo metadata, tags
             query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
         }
@@ -324,7 +324,12 @@ export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery
     // Sorting
     if (options.sortBy === 'relevance' && parsed.fullText) {
         const tsQuery = buildPrefixTsQuery(parsed.fullText);
-        query = query.orderBy(sql`ts_rank(d.search_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc').orderBy('d.created_at', 'desc');
+
+        if (tsQuery) {
+            query = query.orderBy(sql`ts_rank(d.search_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc').orderBy('d.created_at', 'desc');
+        } else {
+            query = query.orderBy('d.created_at', 'desc');
+        }
     } else if (options.sortBy === 'uploaded') {
         query = query.orderBy('d.created_at', options.sortOrder);
     } else if (options.sortBy === 'date') {

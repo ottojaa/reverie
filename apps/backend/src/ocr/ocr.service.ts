@@ -75,11 +75,11 @@ export async function processDocument(documentId: string, options: ProcessDocume
             return {
                 rawText: existing.raw_text,
                 confidenceScore: existing.confidence_score ?? 0,
-                textDensity: (existing as { text_density?: number }).text_density ?? 0,
-                hasMeaningfulText: (existing as { has_meaningful_text?: boolean }).has_meaningful_text ?? true,
+                textDensity: existing.text_density ?? 0,
+                hasMeaningfulText: existing.has_meaningful_text ?? true,
                 category: (document.document_category as DocumentCategory) ?? 'other',
                 needsReview: false,
-                ocrEngine: (existing as { ocr_engine?: string }).ocr_engine ?? 'unknown',
+                ocrEngine: existing.ocr_engine ?? 'unknown',
             };
         }
     }

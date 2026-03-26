@@ -5,7 +5,7 @@ export const TOOLS: FunctionTool[] = [
         type: 'function',
         name: 'find_documents',
         description:
-            'Find documents matching criteria. Returns document IDs and summary. Use group_by for "organize better" requests to get groups per category or category+year. Call before propose_organization.',
+            'Find documents matching criteria. Returns document IDs, summary, and optional groups. Each group includes source_query (copy verbatim into propose_organization) and folder_distribution (top paths where those documents currently live—use to skip groups already in the right place). Use group_by for "organize better" requests.',
         parameters: {
             type: 'object',
             properties: {
@@ -20,9 +20,9 @@ export const TOOLS: FunctionTool[] = [
                 },
                 group_by: {
                     type: ['string', 'null'],
-                    enum: ['category', 'category_year', null],
+                    enum: ['category', 'category_year', 'category_location_year', null],
                     description:
-                        'Use "category" to group by document type (e.g. bank_statement, stock_statement). Use "category_year" to group by type and year. Use for "organize better" requests to create separate folders per type or per type+year. Null for flat results.',
+                        'Use "category" to group by document type (e.g. bank_statement, stock_statement). Use "category_year" to group by type and year. Use "category_location_year" for photos by location+year. Use for "organize better" requests to create structured folders. Null for flat results.',
                 },
             },
             required: ['query', 'limit', 'group_by'],
@@ -60,7 +60,7 @@ export const TOOLS: FunctionTool[] = [
         type: 'function',
         name: 'propose_organization',
         description:
-            'Propose organization operations for user review. Call after find_documents when you have document_ids and a target. Operations: move/create_and_move for moves, delete_folder for empty folders.',
+            'Propose organization operations for user review. For each group from find_documents, copy its source_query verbatim into the operation. Server resolves IDs from source_query. Create one operation per group.',
         parameters: {
             type: 'object',
             properties: {
@@ -85,6 +85,11 @@ export const TOOLS: FunctionTool[] = [
                                 type: 'array',
                                 items: { type: 'string' },
                                 description: 'Array of document UUIDs to move. Required for move/create_and_move, omit for delete_folder.',
+                            },
+                            source_query: {
+                                type: ['string', 'null'],
+                                description:
+                                    'Copy the source_query from the matching find_documents group VERBATIM. Server resolves document_ids from this. Always prefer this over document_ids.',
                             },
                             target_folder_name: {
                                 type: 'string',

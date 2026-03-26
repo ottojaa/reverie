@@ -106,7 +106,10 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     if (parsed.fullText) {
         const tsQuery = buildPrefixTsQuery(parsed.fullText);
-        finalQuery = resultsQuery.select(sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance'));
+
+        if (tsQuery) {
+            finalQuery = resultsQuery.select(sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance'));
+        }
     }
 
     // For counting, we'll run a simpler query
@@ -239,9 +242,14 @@ export interface FindDocumentsForOrganizeResult {
     groups?: Array<{
         category: string;
         year?: string | null;
+        location?: { country: string | null; city: string | null } | null;
+        /** Deterministic query that reproduces this group's document set. Null when ambiguous (e.g. "no location" can't be expressed). */
+        source_query: string | null;
         document_ids: string[];
         count: number;
         date_range: { min: string | null; max: string | null };
+        /** Top folder paths where these documents currently live (hint for no-op avoidance). */
+        folder_distribution: Array<{ path: string; count: number }>;
     }>;
 }
 
@@ -272,13 +280,38 @@ export async function getCategoryOverview(userId: string): Promise<{ categories:
     return { categories };
 }
 
-export type FindDocumentsGroupBy = 'category' | 'category_year';
+export type FindDocumentsGroupBy = 'category' | 'category_year' | 'category_location_year';
+
+/**
+ * Build a deterministic search query for a group.
+ * Returns null when the query would be ambiguous — e.g. a photo group with
+ * no country can't be distinguished from "all photos" via query syntax.
+ */
+export function buildGroupSourceQuery(
+    category: string,
+    year: string | null,
+    location: { country: string | null; city: string | null } | null,
+    groupBy: FindDocumentsGroupBy,
+): string | null {
+    if (groupBy === 'category_location_year' && category === 'photo' && !location?.country) return null;
+
+    if ((groupBy === 'category_year' || groupBy === 'category_location_year') && !year) return null;
+
+    const parts: string[] = [`category:${category}`];
+
+    if (location?.country) parts.push(`location:${location.country.toLowerCase()}`);
+
+    if (year) parts.push(`date:${year}`);
+
+    return parts.join(' ');
+}
 
 export async function findDocumentsForOrganize(
     query: string,
     options: { userId: string; limit?: number; group_by?: FindDocumentsGroupBy },
 ): Promise<FindDocumentsForOrganizeResult> {
-    const limit = Math.min(options.limit ?? 200, 200);
+    const maxLimit = options.group_by ? 2000 : 200;
+    const limit = Math.min(options.limit ?? maxLimit, maxLimit);
     const parsed = parseQuery(query);
 
     const errors = validateQuery(parsed);
@@ -304,7 +337,15 @@ export async function findDocumentsForOrganize(
     const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
 
     const rows = await searchQuery
-        .select(['d.id', 'd.document_category', 'd.extracted_date'])
+        .select([
+            'd.id',
+            'd.document_category',
+            'd.extracted_date',
+            'd.folder_id',
+            'f.path as folder_path',
+            'pm.country as photo_country',
+            'pm.city as photo_city',
+        ])
         .execute();
 
     if (rows.length === 0) {
@@ -317,19 +358,41 @@ export async function findDocumentsForOrganize(
 
     const groupBy = options.group_by;
 
-    if (groupBy === 'category' || groupBy === 'category_year') {
+    if (groupBy === 'category' || groupBy === 'category_year' || groupBy === 'category_location_year') {
         const byKey = new Map<
             string,
-            { ids: string[]; dates: Date[] }
+            {
+                ids: string[];
+                dates: Date[];
+                category: string;
+                year: string | null;
+                location: { country: string | null; city: string | null } | null;
+                pathCounts: Map<string, number>;
+            }
         >();
 
         for (const r of rows) {
             const cat = r.document_category ?? 'other';
             const year = r.extracted_date ? String(new Date(r.extracted_date).getFullYear()) : null;
-            const key = groupBy === 'category_year' ? `${cat}\0${year ?? 'unknown'}` : cat;
+            const location =
+                groupBy === 'category_location_year' && cat === 'photo'
+                    ? {
+                          country: r.photo_country ?? null,
+                          city: r.photo_city ?? null,
+                      }
+                    : null;
+
+            const locationKey = location ? (location.country ?? 'unknown') : 'n/a';
+
+            const key =
+                groupBy === 'category_year'
+                    ? `${cat}\0${year ?? 'unknown'}`
+                    : groupBy === 'category_location_year'
+                      ? `${cat}\0${year ?? 'unknown'}\0${locationKey}`
+                      : cat;
 
             if (!byKey.has(key)) {
-                byKey.set(key, { ids: [], dates: [] });
+                byKey.set(key, { ids: [], dates: [], category: cat, year, location, pathCounts: new Map() });
             }
 
             const entry = byKey.get(key)!;
@@ -337,25 +400,40 @@ export async function findDocumentsForOrganize(
             entry.ids.push(r.id);
 
             if (r.extracted_date) entry.dates.push(r.extracted_date);
+
+            const fp = r.folder_path ?? '(unfiled)';
+            entry.pathCounts.set(fp, (entry.pathCounts.get(fp) ?? 0) + 1);
         }
 
         const groups: FindDocumentsForOrganizeResult['groups'] = [];
 
-        for (const [key, entry] of byKey.entries()) {
-            const [category, year] = groupBy === 'category_year' ? key.split('\0') : [key, null];
+        for (const entry of byKey.values()) {
             const dates = entry.dates;
             const dateMin = dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
             const dateMax = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null;
 
+            const folder_distribution = [...entry.pathCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([path, count]) => ({ path, count }));
+
             groups.push({
-                category,
-                year: groupBy === 'category_year' ? (year === 'unknown' ? null : year) : undefined,
+                category: entry.category,
+                year: groupBy === 'category' ? undefined : entry.year,
+                location: groupBy === 'category_location_year' ? entry.location : undefined,
+                source_query: buildGroupSourceQuery(
+                    entry.category,
+                    groupBy === 'category' ? null : entry.year,
+                    groupBy === 'category_location_year' ? entry.location : null,
+                    groupBy,
+                ),
                 document_ids: entry.ids,
                 count: entry.ids.length,
                 date_range: {
                     min: dateMin ? dateMin.toISOString().slice(0, 10) : null,
                     max: dateMax ? dateMax.toISOString().slice(0, 10) : null,
                 },
+                folder_distribution,
             });
         }
 
@@ -443,16 +521,7 @@ export async function getFolderOverview(userId: string): Promise<{ folders: Fold
     const rows = await db
         .selectFrom('folders as f')
         .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id'))
-        .select([
-            'f.id',
-            'f.path',
-            'f.parent_id',
-            'f.type',
-            'f.sort_order',
-            'd.id as doc_id',
-            'd.document_category',
-            'd.extracted_date',
-        ])
+        .select(['f.id', 'f.path', 'f.parent_id', 'f.type', 'f.sort_order', 'd.id as doc_id', 'd.document_category', 'd.extracted_date'])
         .where('f.user_id', '=', userId)
         .orderBy('f.path', 'asc')
         .execute();

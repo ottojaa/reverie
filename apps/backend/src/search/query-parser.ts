@@ -416,9 +416,13 @@ export function parseQuery(query: string): ParsedQuery {
         }
     }
 
-    // Combine text parts
+    // Combine text parts; "*" alone is match-all (no full-text clause), not a tsquery token
     if (textParts.length > 0) {
-        parsed.fullText = textParts.join(' ');
+        const meaningfulText = textParts.filter((t) => t !== '*');
+
+        if (meaningfulText.length > 0) {
+            parsed.fullText = meaningfulText.join(' ');
+        }
     }
 
     // Add negations if any

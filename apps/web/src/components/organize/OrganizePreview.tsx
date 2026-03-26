@@ -3,7 +3,7 @@ import { useExecuteOrganize } from '@/lib/api/organize';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import type { OrganizeOperation, OrganizeProposalEvent } from '@reverie/shared';
 import { produce } from 'immer';
-import { CheckCircle2, FolderOpen, FolderPlus, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FolderOpen, FolderPlus, Loader2, Sparkles, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 
@@ -131,13 +131,51 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                 </span>
             </div>
 
-            {/* Summary */}
-            <div className="border-b border-border bg-card px-4 py-3">
-                <p className="text-sm text-muted-foreground leading-relaxed">{proposal.summary}</p>
+            {/* Move map overview */}
+            <div className="border-b border-border bg-muted/25 px-3 py-2">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Overview</p>
+                <ul className="space-y-0">
+                    {proposal.operations.map((op, ovIdx) =>
+                        op.type === 'delete_folder' ? (
+                            <li
+                                key={`overview-delete-${op.folder_id}-${ovIdx}`}
+                                className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 py-1.5 pl-2 pr-1.5 text-xs text-foreground"
+                            >
+                                <Trash2 className="size-3.5 shrink-0 text-destructive" />
+                                <span className="min-w-0 flex-1 truncate">
+                                    Remove empty folder: <span className="font-medium">{op.folder_name}</span>
+                                </span>
+                            </li>
+                        ) : (
+                            <li
+                                key={`overview-move-${op.target_folder.name}-${ovIdx}`}
+                                className="flex items-center gap-1.5 py-1.5 text-xs"
+                            >
+                                <span className="shrink-0 rounded-md bg-secondary px-1.5 py-0.5 font-medium tabular-nums text-secondary-foreground">
+                                    {op.document_ids.length} {op.document_ids.length === 1 ? 'doc' : 'docs'}
+                                </span>
+                                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                                <div className="min-w-0 flex-1">
+                                    {op.target_folder.new_parent_name && (
+                                        <p className="truncate text-[10px] leading-tight text-muted-foreground">
+                                            Under {op.target_folder.new_parent_name}
+                                        </p>
+                                    )}
+                                    <span className="truncate font-medium text-foreground">{op.target_folder.name}</span>
+                                </div>
+                                {op.target_folder.is_new && (
+                                    <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                        New
+                                    </span>
+                                )}
+                            </li>
+                        ),
+                    )}
+                </ul>
             </div>
 
             {/* Operations list */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 space-y-2 overflow-y-auto p-2">
                 <AnimatePresence initial={false}>
                     {proposal.operations.map((op, opIdx) =>
                         op.type === 'delete_folder' ? (
@@ -147,11 +185,11 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                className="rounded-lg border border-border bg-card overflow-hidden"
+                                className="overflow-hidden rounded-lg border border-border bg-card"
                             >
-                                <div className="flex items-center gap-2 px-3 py-2.5 bg-card">
+                                <div className="flex items-center gap-2 bg-card px-2.5 py-2">
                                     <Trash2 className="size-4 shrink-0 text-muted-foreground" />
-                                    <span className="text-sm font-medium text-foreground truncate flex-1">
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                                         Remove empty folder: {op.folder_name}
                                     </span>
                                     <Button
@@ -173,14 +211,14 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                className="rounded-lg border border-border bg-card overflow-hidden"
+                                className="overflow-hidden rounded-lg border border-border bg-card"
                             >
                                 {/* Folder header */}
-                                <div className="flex items-start gap-2 px-3 py-2.5 bg-card">
+                                <div className="flex items-start gap-2 bg-card px-2.5 py-2">
                                     {op.target_folder.is_new ? (
-                                        <FolderPlus className="size-4 mt-0.5 shrink-0 text-primary" />
+                                        <FolderPlus className="mt-0.5 size-4 shrink-0 text-primary" />
                                     ) : (
-                                        <FolderOpen className="size-4 mt-0.5 shrink-0 text-muted-foreground" />
+                                        <FolderOpen className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                                     )}
                                     <div className="min-w-0 flex-1">
                                         {op.target_folder.new_parent_name && (
@@ -188,7 +226,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                                 New collection: {op.target_folder.new_parent_name}
                                             </p>
                                         )}
-                                        <span className="text-sm font-medium text-foreground truncate block">{op.target_folder.name}</span>
+                                        <span className="block truncate text-sm font-medium text-foreground">{op.target_folder.name}</span>
                                     </div>
                                     {op.target_folder.is_new && (
                                         <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
@@ -200,11 +238,13 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                     </span>
                                 </div>
 
-                                {/* Thumbnail grid - show first 10, then "and N more" */}
-                                <div className="grid grid-cols-3 gap-1.5 p-2">
+                                {/* Thumbnails: max 3; +N overlay on third when more than 3 docs */}
+                                <div className="grid grid-cols-3 gap-1 p-1.5">
                                     <AnimatePresence initial={false}>
-                                        {op.document_previews.slice(0, 10).map((doc) => {
-                                            const thumbUrl = getThumbnailUrl(doc, 'sm');
+                                        {op.document_previews.slice(0, 3).map((doc, thumbIdx) => {
+                                            const thumbUrl = getThumbnailUrl(doc, 'md');
+                                            const extraCount = op.document_ids.length > 3 ? op.document_ids.length - 3 : 0;
+                                            const showMoreOverlay = thumbIdx === 2 && extraCount > 0;
 
                                             return (
                                                 <motion.div
@@ -213,15 +253,25 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                                     initial={{ opacity: 0, scale: 0.8 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.7 }}
-                                                    className="group relative aspect-square rounded overflow-hidden bg-secondary"
+                                                    className="group relative size-16 shrink-0 overflow-hidden rounded-md bg-secondary"
                                                 >
                                                     {thumbUrl ? (
-                                                        <img src={thumbUrl} alt={doc.display_name} className="h-full w-full object-cover" />
+                                                        <img
+                                                            src={thumbUrl}
+                                                            alt={doc.display_name}
+                                                            className="size-full object-cover"
+                                                            draggable={false}
+                                                        />
                                                     ) : (
-                                                        <div className="flex h-full w-full items-center justify-center">
-                                                            <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                                                        <div className="flex size-full items-center justify-center">
+                                                            <span className="text-[10px] font-medium uppercase text-muted-foreground">
                                                                 {doc.mime_type.split('/')[1]?.slice(0, 3) ?? 'file'}
                                                             </span>
+                                                        </div>
+                                                    )}
+                                                    {showMoreOverlay && (
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                                                            <span className="text-xs font-semibold tabular-nums text-white">+{extraCount}</span>
                                                         </div>
                                                     )}
                                                     <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/40">
@@ -236,18 +286,13 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                                             <X className="size-2.5" />
                                                         </Button>
                                                     </div>
-                                                    <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pb-0.5 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <p className="truncate text-[9px] text-white leading-tight">{doc.display_name}</p>
+                                                    <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-1 pb-0.5 pt-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                                        <p className="truncate text-[9px] leading-tight text-white">{doc.display_name}</p>
                                                     </div>
                                                 </motion.div>
                                             );
                                         })}
                                     </AnimatePresence>
-                                    {op.document_ids.length > 10 && (
-                                        <p className="col-span-full px-1 pt-1 text-xs text-muted-foreground">
-                                            and {op.document_ids.length - 10} more
-                                        </p>
-                                    )}
                                 </div>
                             </motion.div>
                         ),
@@ -256,7 +301,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
             </div>
 
             {/* Footer actions */}
-            <div className="border-t border-border p-3 flex items-center gap-2">
+            <div className="flex items-center gap-2 border-t border-border p-3">
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => onProposalChange(null)} disabled={execute.isPending}>
                     Discard
                 </Button>

@@ -3,6 +3,7 @@ import { MinimizedPill } from '@/components/ui/MinimizedPill';
 import { ProcessingIndicator } from '@/components/ui/ProcessingIndicator';
 import { useDocuments } from '@/lib/api';
 import { useOrganizeChatContext } from '@/lib/api/OrganizeChatContext';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
 import type { OrganizeProposalEvent } from '@reverie/shared';
 import { Minimize2, Sparkles, X } from 'lucide-react';
@@ -30,6 +31,7 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
 
     const { data: documentsData } = useDocuments({ limit: 100 });
     const documents = documentsData?.items ?? [];
+    const isDesktop = useMediaQuery('(min-width: 768px)');
 
     // Single source of truth: chatState.currentProposal
     const proposal = chatState.currentProposal;
@@ -210,10 +212,18 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
                                             // Desktop: right side panel
                                             'md:relative md:inset-auto md:max-h-none md:w-96 md:shrink-0 md:rounded-none md:border-l md:shadow-none',
                                         )}
-                                        initial={{ opacity: 0, x: 20, y: 0 }}
+                                        initial={
+                                            isDesktop
+                                                ? { opacity: 0, x: '100%', y: 0 }
+                                                : { opacity: 0, x: 0, y: '100%' }
+                                        }
                                         animate={{ opacity: 1, x: 0, y: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        transition={{ type: 'spring', duration: 0.3, bounce: 0.1 }}
+                                        exit={
+                                            isDesktop
+                                                ? { opacity: 0, x: '100%', y: 0 }
+                                                : { opacity: 0, x: 0, y: '100%' }
+                                        }
+                                        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                                     >
                                         <OrganizePreview proposal={proposal} onProposalChange={handleProposalChange} onClose={handleClose} />
                                     </motion.div>
