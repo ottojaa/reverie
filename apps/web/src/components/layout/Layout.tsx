@@ -97,7 +97,7 @@ export function Layout({ children }: LayoutProps) {
                     onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
                     onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
                 >
-                    <div className="flex h-screen overflow-hidden bg-background">
+                    <div className="flex h-dvh overflow-hidden bg-background">
                         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
                         <div className="flex flex-1 flex-col overflow-hidden">
                             <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />

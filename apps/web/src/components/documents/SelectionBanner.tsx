@@ -39,13 +39,13 @@ export function SelectionBanner() {
         <AnimatePresence>
             {count > 0 && (
                 <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 180, damping: 21 }}
-                    className="overflow-hidden sticky bottom-0 flex justify-center w-full bg-card z-20"
+                    initial={{ y: '100%', opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: '100%', opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                    className="fixed inset-x-0 bottom-0 z-20 flex justify-center border-t border-border bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.35)]"
                 >
-                    <div className="flex items-center justify-between gap-4 border-b border-border py-3">
+                    <div className="flex w-full max-w-7xl items-center justify-between gap-4 px-4 pt-3">
                         <span className="text-sm font-medium text-primary">{count} selected</span>
                         <div className="flex items-center gap-2">
                             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteDocuments.isPending}>

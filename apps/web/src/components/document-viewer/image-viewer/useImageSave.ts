@@ -1,5 +1,15 @@
 import { useReplaceDocumentFile, useUpdateDocument } from '@/lib/api';
-import { applyTransforms, blobToFile, getBasename, getCopyFilename, getExtension, getOutputFormat, percentCropToPixelCrop } from '@/lib/image-editor';
+import {
+    applyTransforms,
+    blobToFile,
+    computeRotatedDimensions,
+    getBasename,
+    getCopyFilename,
+    getExtension,
+    getOutputFormat,
+    loadImage,
+    percentCropToPixelCrop,
+} from '@/lib/image-editor';
 import { uploadFile } from '@/lib/upload/uploadApi';
 import type { Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,12 +32,14 @@ function validateCrop(percentCrop: PercentCrop | null, displayImageSize: { width
 async function buildSaveFile(
     fileUrl: string,
     percentCrop: PercentCrop,
-    displayImageSize: { width: number; height: number },
     editorState: ImageEditorState,
     document: Document,
     mimeType: string,
 ): Promise<File> {
-    const cropArea = percentCropToPixelCrop(percentCrop, displayImageSize.width, displayImageSize.height);
+    // Percent crop is resolution-independent; map to full-res rotated output (preview may be downscaled).
+    const img = await loadImage(fileUrl);
+    const { width: rw, height: rh } = computeRotatedDimensions(img.naturalWidth, img.naturalHeight, editorState.rotation);
+    const cropArea = percentCropToPixelCrop(percentCrop, rw, rh);
 
     const blob = await applyTransforms(fileUrl, cropArea, editorState.rotation, editorState.flipH, editorState.flipV, mimeType, editorState.quality);
 
@@ -77,7 +89,7 @@ export function useImageSave(
         setIsSaving(true);
 
         try {
-            const file = await buildSaveFile(fileUrl, percentCrop, displayImageSize, editorState, document, mimeType);
+            const file = await buildSaveFile(fileUrl, percentCrop, editorState, document, mimeType);
 
             if (editorState.saveAsCopy) {
                 if (!document.folder_id) {

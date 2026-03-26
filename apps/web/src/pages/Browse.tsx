@@ -68,9 +68,11 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
           ? `${total} ${total === 1 ? 'file' : 'files'} in your collection`
           : null;
 
+    const hasSelection = (selection?.selectedIds.size ?? 0) > 0;
+
     return (
         <div className="relative flex min-h-full flex-col">
-            <div className="flex-1 p-6">
+            <div className={`flex-1 p-6 transition-[padding-bottom] duration-200 ${hasSelection ? 'pb-24' : ''}`}>
                 <div className="mb-6">
                     {sectionId && (
                         <nav className="mb-1 flex justify-between items-center text-sm gap-2">

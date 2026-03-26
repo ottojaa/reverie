@@ -36,7 +36,7 @@ export interface TransformState {
     flipV: boolean;
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -45,6 +45,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         img.src = src;
     });
 }
+
+/** Pixel size of the image after rotation (before flip), used for crop math. */
+export function computeRotatedDimensions(
+    naturalWidth: number,
+    naturalHeight: number,
+    rotation: number,
+): { width: number; height: number } {
+    const swapDims = rotation === 90 || rotation === 270;
+
+    return {
+        width: swapDims ? naturalHeight : naturalWidth,
+        height: swapDims ? naturalWidth : naturalHeight,
+    };
+}
+
+/** Preview is downscaled so rotate/flip stays responsive on mobile (full-res canvas + JPEG encode is very slow). */
+export const IMAGE_EDITOR_PREVIEW_MAX_DIMENSION = 2048;
 
 /**
  * Create a File from a Blob with the given filename.
@@ -86,8 +103,9 @@ export function getOutputFormat(originalFilename: string): { ext: string; mimeTy
 }
 
 /**
- * Render the image with rotation and flip applied (no crop). Returns a data URL.
+ * Render the image with rotation and flip applied (no crop). Returns an object URL.
  * Used to display the transformed image in the cropper so the crop area matches the visible orientation.
+ * Caps output size for preview so rotate/flip does not run full-resolution encode on every tap (slow on mobile).
  */
 export async function renderTransformedImage(
     imageSrc: string,
@@ -95,12 +113,15 @@ export async function renderTransformedImage(
     flipH: boolean,
     flipV: boolean,
     mimeType: string = 'image/jpeg',
-    quality: number = 0.92,
+    quality: number = 0.85,
+    maxOutputDimension: number = IMAGE_EDITOR_PREVIEW_MAX_DIMENSION,
 ): Promise<string> {
     const img = await loadImage(imageSrc);
-    const swapDims = rotation === 90 || rotation === 270;
-    const w = swapDims ? img.naturalHeight : img.naturalWidth;
-    const h = swapDims ? img.naturalWidth : img.naturalHeight;
+    const { width: fullW, height: fullH } = computeRotatedDimensions(img.naturalWidth, img.naturalHeight, rotation);
+
+    const scale = Math.min(1, maxOutputDimension / Math.max(fullW, fullH, 1));
+    const w = Math.max(1, Math.round(fullW * scale));
+    const h = Math.max(1, Math.round(fullH * scale));
 
     const canvas = document.createElement('canvas');
     canvas.width = w;
@@ -109,11 +130,10 @@ export async function renderTransformedImage(
 
     if (!ctx) throw new Error('Could not get canvas context');
 
-    const cx = w / 2;
-    const cy = h / 2;
-    ctx.translate(cx, cy);
+    ctx.translate(w / 2, h / 2);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    ctx.scale(scale, scale);
     ctx.translate(-img.naturalWidth / 2, -img.naturalHeight / 2);
     ctx.drawImage(img, 0, 0);
 

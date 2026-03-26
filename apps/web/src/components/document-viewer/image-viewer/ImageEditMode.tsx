@@ -9,7 +9,7 @@ import { getExtension } from '@/lib/image-editor';
 import { cn } from '@/lib/utils';
 import { FlipHorizontal, FlipVertical, Lock, LockOpen, RotateCcw, RotateCw, SlidersHorizontal } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactCrop from 'react-image-crop';
 import { ImageEditorPanel } from '../ImageEditorPanel';
 import type { ViewerProps } from '../viewer-registry';
@@ -21,6 +21,24 @@ import 'react-image-crop/dist/ReactCrop.css';
 export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) {
     const isDesktop = useMediaQuery('(min-width: 768px)');
     const [optionsOpen, setOptionsOpen] = useState(false);
+
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    const [contentHeight, setContentHeight] = useState(0);
+
+    useEffect(() => {
+        const el = contentRef.current;
+
+        if (!el) return;
+
+        const ro = new ResizeObserver(([entry]) => {
+            if (entry) setContentHeight(entry.contentRect.height);
+        });
+
+        ro.observe(el);
+
+        return () => ro.disconnect();
+    }, []);
 
     const editState = useImageEditState(document, fileUrl, true);
     const { handleSave, isSaving, replaceDocumentFile } = useImageSave(
@@ -37,30 +55,32 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
     const ext = getExtension(document.original_filename);
     const isSavingAll = isSaving || replaceDocumentFile.isPending;
 
-    const cropArea = (
-        <>
-            {editState.displayImageSrc ? (
-                <ReactCrop
-                    crop={editState.crop}
-                    onChange={editState.onCropChange}
-                    onComplete={editState.onCropComplete}
-                    aspect={aspect}
-                    ruleOfThirds
-                    className="max-h-full max-w-full [&_img]:block [&_img]:h-auto [&_img]:max-h-full [&_img]:w-full [&_img]:max-w-full [&_img]:object-contain"
-                >
-                    <img src={editState.displayImageSrc} alt={document.original_filename} onLoad={editState.onImageLoad} draggable={false} />
-                </ReactCrop>
-            ) : (
-                <div className="flex h-full min-h-48 w-full items-center justify-center">
-                    <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                </div>
-            )}
-        </>
-    );
-
     if (isDesktop) {
+        const cropArea = editState.displayImageSrc ? (
+            <ReactCrop
+                crop={editState.crop}
+                onChange={editState.onCropChange}
+                onComplete={editState.onCropComplete}
+                aspect={aspect}
+                ruleOfThirds
+                className="max-h-full max-w-full overflow-visible"
+            >
+                <img
+                    src={editState.displayImageSrc}
+                    alt={document.original_filename}
+                    onLoad={editState.onImageLoad}
+                    draggable={false}
+                    className="block max-h-full max-w-full object-contain"
+                />
+            </ReactCrop>
+        ) : (
+            <div className="flex min-h-48 w-full items-center justify-center">
+                <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+        );
+
         return (
-            <div className="flex h-full min-h-0 w-full flex-col overflow-hidden px-4 pb-4 md:px-6 md:pb-6">
+            <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pb-4 md:px-6 md:pb-6">
                 <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[1fr_380px]">
                     <div className="relative flex min-h-0 min-w-0 items-center justify-center overflow-visible p-6">{cropArea}</div>
                     <div className="min-h-0 overflow-y-auto md:overflow-visible">
@@ -80,11 +100,28 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
         );
     }
 
-    // Mobile: crop fills space above a single-row toolbar; percent crop keeps alignment with image edges
+    const cropArea = editState.displayImageSrc ? (
+        <ReactCrop
+            crop={editState.crop}
+            onChange={editState.onCropChange}
+            onComplete={editState.onCropComplete}
+            aspect={aspect}
+            ruleOfThirds
+            className="block max-w-full overflow-visible"
+            style={contentHeight > 0 ? { maxHeight: contentHeight } : undefined}
+        >
+            <img src={editState.displayImageSrc} alt={document.original_filename} onLoad={editState.onImageLoad} draggable={false} />
+        </ReactCrop>
+    ) : (
+        <div className="flex min-h-48 w-full items-center justify-center">
+            <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+    );
+
     return (
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
-            <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-visible px-3 pb-2 pt-1">
-                <div className="flex h-full min-h-0 w-full max-w-full flex-1 items-center justify-center">{cropArea}</div>
+        <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
+            <div ref={contentRef} className="flex min-h-0 flex-1 items-center justify-center overflow-visible p-7">
+                {cropArea}
             </div>
 
             <motion.div
@@ -93,7 +130,7 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 className="z-10 shrink-0 border-t border-border bg-background/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:shadow-[0_-8px_24px_-4px_rgba(0,0,0,0.35)]"
             >
-                <div className="flex h-12 min-h-12 w-full min-w-0 items-stretch gap-1 px-1.5 py-1">
+                <div className="flex h-12 min-h-12 w-full min-w-0 items-stretch gap-1 px-3 py-1">
                     <div className="scrollbar-none flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto overscroll-x-contain pr-1">
                         <Button
                             type="button"
@@ -178,13 +215,12 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                 </div>
             </motion.div>
 
-            {/* Output options drawer */}
+            {/* Output options drawer — renders in a portal, outside the layout flow */}
             <Drawer open={optionsOpen} onOpenChange={setOptionsOpen} direction="bottom">
                 <DrawerContent className="max-h-[60vh] p-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <div className="flex flex-col gap-5 p-5 pb-6">
                         <p className="text-xs font-semibold uppercase tracking-wider text-foreground">Output options</p>
 
-                        {/* Quality */}
                         <div className="flex items-center gap-4">
                             <span className="min-w-16 text-sm text-muted-foreground">Quality</span>
                             <Slider
@@ -202,7 +238,6 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
 
                         <Separator />
 
-                        {/* Filename */}
                         <div className="flex items-center gap-3">
                             <span className="min-w-16 shrink-0 text-sm text-muted-foreground">File name</span>
                             <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -216,7 +251,6 @@ export function ImageEditMode({ document, fileUrl, onToggleEdit }: ViewerProps) 
                             </div>
                         </div>
 
-                        {/* Save as copy */}
                         <div className="flex items-center justify-between gap-4">
                             <label htmlFor="mobile-save-as-copy" className="flex-1 text-sm text-muted-foreground">
                                 Save as a copy
