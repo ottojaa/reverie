@@ -69,20 +69,19 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
         backfaceVisibility: 'hidden' as const,
     };
 
-    const imgClass = 'max-h-full max-w-full select-none rounded-lg object-contain';
+    const imgClass = 'max-h-full max-w-full select-none object-contain';
 
     return (
         <div
             ref={containerRef}
             className={cn(
-                'relative flex h-full min-h-0 w-full items-stretch justify-center overflow-hidden px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-6 md:pb-[max(2rem,env(safe-area-inset-bottom))]',
+                'relative flex h-full min-h-0 w-full items-stretch justify-center overflow-hidden pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-6 md:pb-[max(2rem,env(safe-area-inset-bottom))]',
+                isZoomed && 'touch-none overscroll-contain',
                 !hasFirstPaint ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
             onClick={hasFirstPaint ? handlers.onClick : undefined}
             onWheel={hasFirstPaint ? handlers.onWheel : undefined}
             onPointerDown={hasFirstPaint ? handlers.onPointerDown : undefined}
-            onPointerMove={handlers.onPointerMove}
-            onPointerUp={handlers.onPointerUp}
         >
             <AnimatePresence>
                 {!hasFirstPaint && showSpinner && !useProgressive && !document.thumbnail_blurhash && <ImageLoadingSpinner key="image-loading" />}
@@ -99,7 +98,8 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
             >
                 <div
                     className={cn(
-                        'relative m-1 box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden',
+                        'relative box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden',
+                        isZoomed && 'touch-none',
                         document.width && document.height && 'h-auto w-auto max-w-full',
                     )}
                     style={{
@@ -112,7 +112,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     {useProgressive && thumbUrl && (
                         <>
                             {document.thumbnail_blurhash && !previewReady && (
-                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-lg" aria-hidden>
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden" aria-hidden>
                                     <Blurhash
                                         hash={document.thumbnail_blurhash}
                                         width={Math.min(document.width ?? 800, 800)}
@@ -132,7 +132,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                                 onLoad={() => setPreviewReady(true)}
                                 onError={() => setPreviewFailed(true)}
                                 style={{ opacity: 1 }}
-                                className={imgClass}
+                                className={cn(imgClass, isZoomed && 'touch-none')}
                                 draggable={false}
                             />
                         </>
@@ -158,7 +158,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                                   }
                                 : {}),
                         }}
-                        className={cn(imgClass, useProgressive && 'h-full w-full')}
+                        className={cn(imgClass, useProgressive && 'h-full w-full', isZoomed && 'touch-none')}
                         draggable={false}
                     />
                 </div>
@@ -169,7 +169,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
+                    className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
                 >
                     {Math.round(scale * 100)}%
                 </motion.div>
