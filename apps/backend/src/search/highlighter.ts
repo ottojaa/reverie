@@ -68,6 +68,9 @@ export async function generateSnippet(documentId: string, searchTerms: string, o
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     const tsQuery = buildPrefixTsQuery(searchTerms);
+
+    if (!tsQuery) return null;
+
     const headlineOptions = `StartSel=${opts.startTag}, StopSel=${opts.stopTag}, MaxWords=${opts.maxWords}, MinWords=${opts.minWords}, MaxFragments=${opts.maxFragments}`;
 
     const result = await db
@@ -98,6 +101,9 @@ export async function generateSnippets(documentIds: string[], searchTerms: strin
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
     const tsQuery = buildPrefixTsQuery(searchTerms);
+
+    if (!tsQuery) return new Map();
+
     const headlineOptions = `StartSel=${opts.startTag}, StopSel=${opts.stopTag}, MaxWords=${opts.maxWords}, MinWords=${opts.minWords}, MaxFragments=${opts.maxFragments}`;
 
     const results = await db

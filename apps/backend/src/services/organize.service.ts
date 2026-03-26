@@ -11,7 +11,12 @@ import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { streamResponsesAPI, type ResponseInputItem } from '../llm/openai.client';
 import { TOOLS } from '../llm/tools';
-import { findDocumentsForOrganize, getCategoryOverview, getFolderOverview } from '../search/search.service';
+import {
+    findDocumentsForOrganize,
+    getCategoryOverview,
+    getFolderOverview,
+    type FindDocumentsGroupBy,
+} from '../search/search.service';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { getFolderService } from './folder.service';
 import { getStorageService } from './storage.service';
@@ -31,12 +36,13 @@ function writeSse(res: ServerResponse, event: string, data: unknown): void {
 interface FindDocumentsArgs {
     query: string;
     limit?: number;
-    group_by?: 'category' | 'category_year' | null;
+    group_by?: FindDocumentsGroupBy | null;
 }
 
 interface ProposeMoveOperationRaw {
     type: 'move' | 'create_and_move';
-    document_ids: string[];
+    document_ids?: string[];
+    source_query?: string | null;
     target_folder_name: string;
     target_folder_id?: string | null;
     target_folder_parent_id?: string | null;
@@ -63,6 +69,15 @@ async function execFindDocuments(args: FindDocumentsArgs, userId: string): Promi
         limit: args.limit ?? 200,
         group_by: args.group_by ?? undefined,
     });
+
+    if (result.total === 0) {
+        return JSON.stringify({
+            total: 0,
+            document_ids: [],
+            message:
+                'No documents found matching this query. Respond to the user briefly: you did not find any documents to organize. Do NOT suggest folder structures, do NOT say "Review the panel", do NOT offer to scan again.',
+        });
+    }
 
     const payload: Record<string, unknown> = {
         total: result.total,
@@ -151,6 +166,104 @@ async function buildDocumentPreviews(documentIds: string[], userId: string): Pro
     );
 }
 
+async function resolveSourceQueryDocumentIds(sourceQuery: string | null | undefined, userId: string): Promise<string[]> {
+    if (!sourceQuery) return [];
+
+    const result = await findDocumentsForOrganize(sourceQuery, {
+        userId,
+        limit: 5000,
+    });
+
+    return result.document_ids;
+}
+
+/**
+ * Canonicalize a move operation's target folder against existing folders.
+ * If the resolved path already exists, set the real folder id and mark is_new=false.
+ */
+async function canonicalizeTargetFolder(
+    op: ProposeMoveOperationRaw,
+    userId: string,
+): Promise<ProposeMoveOperationRaw> {
+    let path: string | null = null;
+
+    if (op.target_folder_new_parent_name) {
+        path = `/${op.target_folder_new_parent_name}/${op.target_folder_name}`;
+    } else if (op.target_folder_id) {
+        return op;
+    }
+
+    if (!path) return op;
+
+    const existing = await folderService.getFolderByPath(path, userId);
+
+    if (!existing) return op;
+
+    return {
+        ...op,
+        target_folder_id: existing.id,
+        target_folder_parent_id: existing.parent_id,
+        target_folder_new_parent_name: null,
+        is_new: false,
+    };
+}
+
+/**
+ * Resolve an existing folder id for the proposed target without creating folders.
+ * Mirrors path rules in executeOrganize.resolveFolderId, but only returns ids for folders that already exist.
+ */
+async function resolveExistingTargetFolderId(canonOp: ProposeMoveOperationRaw, userId: string): Promise<string | null> {
+    if (canonOp.target_folder_id) return canonOp.target_folder_id;
+
+    if (canonOp.target_folder_new_parent_name) {
+        const path = `/${canonOp.target_folder_new_parent_name}/${canonOp.target_folder_name}`;
+        const existing = await folderService.getFolderByPath(path, userId);
+
+        return existing?.id ?? null;
+    }
+
+    if (canonOp.target_folder_parent_id) {
+        const parent = await folderService.getFolder(canonOp.target_folder_parent_id, userId);
+
+        if (!parent) return null;
+
+        const path = `${parent.path}/${canonOp.target_folder_name}`.replace(/\/+/g, '/');
+        const existing = await folderService.getFolderByPath(path, userId);
+
+        return existing?.id ?? null;
+    }
+
+    return null;
+}
+
+async function loadDocumentFolderIds(documentIds: string[], userId: string): Promise<Map<string, string | null>> {
+    if (documentIds.length === 0) return new Map();
+
+    const rows = await db
+        .selectFrom('documents')
+        .select(['id', 'folder_id'])
+        .where('id', 'in', documentIds)
+        .where('user_id', '=', userId)
+        .execute();
+
+    const m = new Map<string, string | null>();
+
+    for (const r of rows) {
+        m.set(r.id, r.folder_id);
+    }
+
+    return m;
+}
+
+/** Exported for tests: keep only documents not already in targetFolderId. */
+export function filterDocumentIdsNeedingMove(
+    documentIds: string[],
+    folderIdByDocumentId: Map<string, string | null>,
+    targetFolderId: string,
+): string[] {
+    return documentIds.filter((id) => folderIdByDocumentId.get(id) !== targetFolderId);
+}
+
 // ── Main streaming loop ───────────────────────────────────────────────────────
 
 export interface OrganizeChatOptions {
@@ -160,50 +273,59 @@ export interface OrganizeChatOptions {
     res: ServerResponse;
 }
 
-const SYSTEM_PROMPT = `You are Reverie's document organization assistant. You propose ONE concrete plan per request. You do not list options. You do not ask clarifying questions unless the answer materially changes the result.
+const SYSTEM_PROMPT = `You are Reverie's document organization assistant. Propose ONE concrete plan per request.
 
 Tools:
-- get_category_overview: Returns document categories this user has (id, label, count). Call when user intent is vague (e.g. "financial documents", "medical docs") to pick which categories match. Then use category:X in find_documents.
-- get_folder_overview: Returns aggregated folder stats (path, document_count, category_distribution, date_range). Call when you need destination context.
-- find_documents: Returns document IDs and summary. Use group_by: "category" or "category_year" for "organize better" requests to get groups per type or type+year.
-- propose_organization: Present your plan. Call after find_documents when you have IDs and a target.
+- get_category_overview: Returns categories with labels/counts. Use when intent is vague.
+- get_folder_overview: Returns folder stats (path, document_count, category_distribution, date_range).
+- find_documents: Returns groups with source_query, document_ids, folder_distribution (where docs live now), location, year, count. group_by supports "category", "category_year", "category_location_year".
+- propose_organization: Emit final plan. Create one operation per find_documents group that still needs changes.
 
 Rules:
-1. When user intent is vague (e.g. "financial documents", "medical docs", "receipts"): Call get_category_overview first. Use the labels to decide which categories match, then call find_documents with category:X filters.
-2. On clear intent (e.g. "move bank docs to Finance"): Call find_documents with category/query, then propose_organization. One round.
-3. Never enumerate folders. Use get_folder_overview for structural context. If no suitable folder exists, use create_and_move with a new folder name.
-4. Never ask "which folder?"—pick the best match. If unsure, state your assumption: "I'm putting these in Finance—change the target in the panel if needed."
-5. One plan per message. No "Option 1, Option 2, Option 3."
-6. Keep responses under 2 sentences unless the user asks for explanation.
-7. After proposing: "Review the panel and Confirm or Discard." Do not ask "ready to apply?"
-8. Hierarchy: exactly 2 levels—collection (root) contains folder. Paths are /CollectionName/FolderName only. No nesting folders under folders.
-9. find_documents returns: { total, document_ids, summary, groups? }. When group_by is used, groups has { category, year?, document_ids, count, date_range }. Use document_ids from each group for separate operations.
+1. One plan per message. No multiple options.
+2. Hierarchy: exactly 2 levels — CollectionName / FolderName.
+3. Never use slashes in target_folder_name.
+4. Never ask "which folder?". Pick the best target.
 
-Path structure (critical—must follow or execution fails):
-- target_folder_new_parent_name = collection name (e.g. "Bank Statements", "Stock Statements", "Invoices", "Photos"). Use document type as collection.
-- target_folder_name = folder name only (e.g. "2024", "1998", "Misc"). Do NOT use slashes like "Bank Statements/1998"—that creates invalid 3-level paths.
-- For "organize better": create separate top-level collections per type (Bank Statements, Stock Statements, Invoices). Each collection has folders named by year (2024, 2023, etc.) or "Misc" for undated.
+Writing style:
+- Write for non-technical users. Be friendly and clear.
+- Never mention file paths or slash notation (no "/Photos/Spain - 2025"). Say "Spain - 2025 in Photos" instead.
+- Use markdown: **bold** for folder/collection names, bullet lists when summarizing multiple groups.
+- When find_documents returns 0 results, tell the user briefly and stop. Do not invent folder structures. Do not say "Review the panel and Confirm or Discard" unless you actually called propose_organization. Only say "Review the panel" after a proposal has been emitted.
+- After propose_organization: keep it concise (1-3 sentences plus an optional bullet list). End with "Review the panel and **Confirm** or **Discard**."
 
-Date matching (critical):
-- Only use an existing folder if its date_range matches the documents. get_folder_overview includes date_range per folder.
-- Folder names like "1998-2000" imply a date range. If documents span 1998-2026, do NOT put them in a folder named "1998-2000". Create new folders or use a folder whose date_range covers the documents.
-- When reusing a folder, check that folder.date_range.min/max overlap with the documents' summary.date_range.
+source_query:
+- Groups from find_documents include a source_query field. When non-null, copy it VERBATIM into propose_organization. Do NOT invent your own query.
+- When source_query is null, use the group's document_ids array instead.
+- Each group includes folder_distribution: if documents are already mostly under the folder path you would target, skip that group or say it is already organized.
 
-"Organize better" / "improve organization" / "organize in a better way":
-- Do NOT dump everything into one existing folder. Propose a new structure.
-- Call find_documents with group_by: "category_year" to get groups per document type and year.
-- Create separate top-level collections per document type: Bank Statements, Stock Statements, Invoices (not one "Financial Documents" with subfolders). Each collection has folders named by year (2024, 2023, etc.) or "Misc" for undated.
-- Each operation: target_folder_new_parent_name = collection (e.g. "Bank Statements"), target_folder_name = year or "Misc" (e.g. "2024", "1998", "Misc"). Never use slashes in target_folder_name.
-- For photos: collection by location or "Photos", folders by year. Use find_documents with category:photo and date:YYYY or location text.
-- Use get_category_overview labels for collection names (e.g. bank_statement -> "Bank Statements").
+Operation rules:
+- Use create_and_move when creating a new destination folder.
+- Use move when target_folder_id is known.
+- target_folder_new_parent_name = collection name (top-level).
+- target_folder_name = leaf folder name only.
+- The server canonicalizes folders: if the path already exists, it reuses the existing folder automatically.
 
-Evaluate existing folders:
-- Use get_folder_overview. If a folder's date_range and category_distribution match the documents well, use it. Otherwise create a new structure.
-- Prefer creating new collections/folders when the proposed structure is clearly better than existing ones.
+Photo folder naming (strict):
+- ALWAYS use "<Country> - <Year>" when country exists (e.g. "Spain - 2025").
+- NEVER use plain year for photos when country is available in the group.
+- If country missing but year exists: "Misc - <Year>".
+- If both missing: "Misc".
+- Collection name: "Photos".
 
-How documents are indexed:
-- Photos: location (city, country) and taken date from EXIF. Use "category:photo spain date:2025" for Spain photos from 2025.
-- Other documents: category:, tag:, plain text. Examples: "category:receipt uploaded:2024", "category:photo barcelona"`;
+Financial doc naming:
+- bank_statement, stock_statement, invoice, receipt: year folders (e.g. "2024"), "Misc" if undated.
+
+Other categories:
+- Use concise descriptive names from category label.
+
+When user asks to improve/restructure organization:
+- Call find_documents ONCE with query "" (empty string = match all) and group_by: "category_location_year". This returns all categories: photos grouped by country+year, other docs grouped by category+year.
+- Build separate collections per category type (e.g. **Bank Statements**, **Photos**, **Invoices**).
+- Create one propose_organization operation per group that still needs moves (omit groups that folder_distribution shows are already in the right place).
+- If the user repeats the same broad request and folder hints show everything is already in place, say briefly that nothing needs changing and stop.
+
+Search query syntax examples: "category:photo location:spain date:2025", "category:receipt uploaded:2024".`;
 
 
 export async function runOrganizeChat(options: OrganizeChatOptions): Promise<void> {
@@ -302,78 +424,117 @@ export async function runOrganizeChat(options: OrganizeChatOptions): Promise<voi
             break;
         }
 
-        // Execute all tool calls from this turn
-        const toolOutputs: ResponseInputItem[] = [];
+        // Execute all tool calls from this turn in parallel
+        const toolOutputs = await Promise.all(
+            pendingToolCalls.map(async (tc) => {
+                let result: string;
 
-        for (const tc of pendingToolCalls) {
-            let result: string;
+                if (tc.name === 'propose_organization') {
+                    const args = JSON.parse(tc.argumentsJson) as ProposeOrganizationArgs;
+                    let moveAttempts = 0;
+                    let droppedNoMatchingDocs = 0;
+                    let droppedAllAlreadyInTarget = 0;
 
-            if (tc.name === 'propose_organization') {
-                // Parse and emit the proposal as a structured SSE event
-                const args = JSON.parse(tc.argumentsJson) as ProposeOrganizationArgs;
-                const rawOps = await Promise.all(
-                    args.operations.map(async (op) => {
-                        if (op.type === 'delete_folder') {
+                    const rawOps = await Promise.all(
+                        args.operations.map(async (op) => {
+                            if (op.type === 'delete_folder') {
+                                return {
+                                    type: 'delete_folder' as const,
+                                    folder_id: op.folder_id,
+                                    folder_name: op.folder_name,
+                                };
+                            }
+
+                            moveAttempts++;
+
+                            const canonOp = await canonicalizeTargetFolder(op, userId);
+
+                            const idsFromQuery = await resolveSourceQueryDocumentIds(canonOp.source_query, userId);
+                            const rawIds = idsFromQuery.length > 0 ? idsFromQuery : (canonOp.document_ids ?? []);
+                            let documentIds = await resolveDocumentIds(rawIds, userId);
+
+                            if (documentIds.length === 0) {
+                                droppedNoMatchingDocs++;
+
+                                return null;
+                            }
+
+                            const targetFolderId = await resolveExistingTargetFolderId(canonOp, userId);
+
+                            if (targetFolderId) {
+                                const folderMap = await loadDocumentFolderIds(documentIds, userId);
+                                const beforeNoop = documentIds.length;
+
+                                documentIds = filterDocumentIdsNeedingMove(documentIds, folderMap, targetFolderId);
+
+                                if (documentIds.length === 0 && beforeNoop > 0) droppedAllAlreadyInTarget++;
+
+                                if (documentIds.length === 0) return null;
+                            }
+
+                            const previews = await buildDocumentPreviews(documentIds, userId);
+
                             return {
-                                type: 'delete_folder' as const,
-                                folder_id: op.folder_id,
-                                folder_name: op.folder_name,
+                                type: canonOp.type,
+                                document_ids: documentIds,
+                                document_previews: previews,
+                                target_folder: {
+                                    ...(canonOp.target_folder_id != null && { id: canonOp.target_folder_id }),
+                                    name: canonOp.target_folder_name,
+                                    ...(canonOp.target_folder_parent_id != null && { parent_id: canonOp.target_folder_parent_id }),
+                                    ...(canonOp.target_folder_new_parent_name != null && { new_parent_name: canonOp.target_folder_new_parent_name }),
+                                    is_new: canonOp.is_new,
+                                },
                             };
-                        }
+                        }),
+                    );
 
-                        // Move or create_and_move
-                        const documentIds = await resolveDocumentIds(op.document_ids ?? [], userId);
+                    const operations = rawOps.filter((o) => o !== null) as OrganizeOperation[];
 
-                        if (documentIds.length === 0) return null;
+                    if (operations.length === 0) {
+                        const allMovesWereNoop =
+                            moveAttempts > 0 &&
+                            droppedAllAlreadyInTarget === moveAttempts &&
+                            droppedNoMatchingDocs === 0;
 
-                        const previews = await buildDocumentPreviews(documentIds, userId);
+                        result = allMovesWereNoop
+                            ? JSON.stringify({
+                                  message:
+                                      'Every proposed move would leave documents where they already are. Tell the user briefly that their library already matches this layout. Do NOT suggest new folder structures, do NOT say "Review the panel", do NOT call propose_organization again for the same targets.',
+                              })
+                            : 'Proposal resolved to zero effective operations (no matching documents found). Retry with broader queries covering all relevant categories.';
+                    } else {
+                        writeSse(res, 'proposal', {
+                            summary: args.summary,
+                            operations,
+                        });
 
-                        return {
-                            type: op.type,
-                            document_ids: documentIds,
-                            document_previews: previews,
-                            target_folder: {
-                                ...(op.target_folder_id != null && { id: op.target_folder_id }),
-                                name: op.target_folder_name,
-                                ...(op.target_folder_parent_id != null && { parent_id: op.target_folder_parent_id }),
-                                ...(op.target_folder_new_parent_name != null && { new_parent_name: op.target_folder_new_parent_name }),
-                                is_new: op.is_new,
-                            },
-                        };
-                    }),
-                );
+                        stopAfterNextTextResponse = true;
+                        result = 'Proposal emitted to the user for review. Briefly confirm what you proposed in one sentence.';
+                    }
+                } else if (tc.name === 'find_documents') {
+                    const args = JSON.parse(tc.argumentsJson) as FindDocumentsArgs;
+                    writeSse(res, 'status', {
+                        action: 'Searching documents that match the criteria...',
+                    });
+                    result = await execFindDocuments(args, userId);
+                } else if (tc.name === 'get_folder_overview') {
+                    writeSse(res, 'status', { action: 'Analyzing your folder structure...' });
+                    result = await execGetFolderOverview(userId);
+                } else if (tc.name === 'get_category_overview') {
+                    writeSse(res, 'status', { action: 'Checking document categories...' });
+                    result = await execGetCategoryOverview(userId);
+                } else {
+                    result = JSON.stringify({ error: `Unknown tool: ${tc.name}` });
+                }
 
-                const operations = rawOps.filter((o) => o !== null) as OrganizeOperation[];
-
-                writeSse(res, 'proposal', {
-                    summary: args.summary,
-                    operations,
-                });
-
-                stopAfterNextTextResponse = true;
-                result = 'Proposal emitted to the user for review. Briefly confirm what you proposed in one sentence.';
-            } else if (tc.name === 'find_documents') {
-                const args = JSON.parse(tc.argumentsJson) as FindDocumentsArgs;
-                writeSse(res, 'status', {
-                    action: 'Searching documents that match the criteria...',
-                });
-                result = await execFindDocuments(args, userId);
-            } else if (tc.name === 'get_folder_overview') {
-                writeSse(res, 'status', { action: 'Analyzing your folder structure...' });
-                result = await execGetFolderOverview(userId);
-            } else if (tc.name === 'get_category_overview') {
-                writeSse(res, 'status', { action: 'Checking document categories...' });
-                result = await execGetCategoryOverview(userId);
-            } else {
-                result = JSON.stringify({ error: `Unknown tool: ${tc.name}` });
-            }
-
-            toolOutputs.push({
-                type: 'function_call_output',
-                call_id: tc.callId,
-                output: result,
-            } as ResponseInputItem);
-        }
+                return {
+                    type: 'function_call_output',
+                    call_id: tc.callId,
+                    output: result,
+                } as ResponseInputItem;
+            }),
+        );
 
         // Always feed tool outputs back to OpenAI so the conversation history is complete.
         // This is critical: skipping this leaves a dangling tool call in the history,

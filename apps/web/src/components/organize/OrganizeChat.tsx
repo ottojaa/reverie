@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
+import Markdown from 'react-markdown';
 
 const SUGGESTED_PROMPTS = ['Organize my financial documents', 'Organize my photos by country and year', 'Suggest improvements to my folder structure'];
 
@@ -62,8 +63,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                     <StatusBubble action={message.statusAction} />
                 ) : message.isStreaming && !message.content ? (
                     <TypingDots />
-                ) : (
+                ) : isUser ? (
                     <span className="whitespace-pre-wrap">{message.content}</span>
+                ) : (
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_p]:my-1">
+                        <Markdown
+                            components={{
+                                p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+                                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                                ul: ({ children }) => <ul className="list-disc pl-4">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal pl-4">{children}</ol>,
+                            }}
+                        >
+                            {message.content}
+                        </Markdown>
+                    </div>
                 )}
                 {message.isStreaming && message.content && (
                     <motion.span

@@ -15,11 +15,11 @@ import { createWorkerLogger, processJobWithTracking, publishJobProgress } from '
 
 const logger = createWorkerLogger('Thumbnail');
 
-// Thumbnail sizes
+// Thumbnail sizes (pixels on long edge; WebP output for retina-friendly UI)
 const THUMBNAIL_SIZES = {
-    sm: 256,
-    md: 512,
-    lg: 1024,
+    sm: 384,
+    md: 768,
+    lg: 1440,
 } as const;
 
 /**
