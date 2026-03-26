@@ -3,20 +3,12 @@ import type { ViewerProps } from '@/components/document-viewer/viewer-registry';
 import { getViewerLoader } from '@/components/document-viewer/viewer-registry';
 import { ViewerToolbar } from '@/components/document-viewer/ViewerToolbar';
 import { useDocument } from '@/lib/api';
+import { buildFileUrl } from '@/lib/commonhelpers';
 import { useDocumentStatus } from '@/lib/useDocumentStatus';
 import { useParams } from '@tanstack/react-router';
 import { FileWarning } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ComponentType, useCallback, useEffect, useState } from 'react';
-
-import { API_BASE } from '../lib/api/client';
-
-function buildFileUrl(fileUrl: string | null): string | null {
-    if (!fileUrl) return null;
-
-    // Signed URLs from the API are relative paths
-    return fileUrl.startsWith('http') ? fileUrl : `${API_BASE}${fileUrl}`;
-}
 
 /**
  * Dynamically imports the viewer component based on MIME type.
@@ -117,9 +109,9 @@ export function DocumentPage() {
 
             {/* Viewer area */}
             <motion.div
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                initial={{ scale: 0.995 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 className="flex min-h-0 min-w-0 flex-1 overflow-hidden pt-14"
             >
                 {ViewerComponent && fileUrl ? (

@@ -42,6 +42,16 @@ export function formatDateTime(dateString: string): string {
 import { API_BASE } from './api/client';
 
 /**
+ * Build the full URL for a file from the API's file_url field.
+ * Signed URLs from the API are relative paths; absolute URLs (e.g. S3) are used as-is.
+ */
+export function buildFileUrl(fileUrl: string | null): string | null {
+    if (!fileUrl) return null;
+
+    return fileUrl.startsWith('http') ? fileUrl : `${API_BASE}${fileUrl}`;
+}
+
+/**
  * Get pre-signed thumbnail URL for a document.
  */
 export function getThumbnailUrl<T extends { thumbnail_urls?: { sm: string; md: string; lg: string } | null }>(

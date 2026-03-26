@@ -1,5 +1,6 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { documentsApi } from '@/lib/api/documents';
+import { buildFileUrl } from '@/lib/commonhelpers';
 import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
 import type { Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,6 +45,11 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                                 queryKey: ['document', document.id],
                                 queryFn: () => documentsApi.get(document.id),
                             });
+
+                            if (document.mime_type?.startsWith('image/') && document.file_url) {
+                                const url = buildFileUrl(document.file_url);
+                                if (url) new Image().src = url;
+                            }
                         }}
                         draggable={false}
                     >

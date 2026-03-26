@@ -9,6 +9,15 @@ import { useImageZoomPan } from './useImageZoomPan';
 
 const SPINNER_DELAY_MS = 150;
 
+function isCached(src: string | null): boolean {
+    if (!src) return false;
+
+    const img = new Image();
+    img.src = src;
+
+    return img.complete;
+}
+
 export function ImageViewMode({ document, fileUrl }: ViewerProps) {
     const thumbUrl = useMemo(() => {
         if (document.thumbnail_status !== 'complete') return null;
@@ -16,9 +25,15 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
         return getThumbnailUrl(document, 'lg');
     }, [document]);
 
-    const [previewReady, setPreviewReady] = useState(false);
-    const [fullReady, setFullReady] = useState(false);
+    const [previewReady, setPreviewReady] = useState(() => isCached(thumbUrl));
+    const [fullReady, setFullReady] = useState(() => isCached(fileUrl));
     const [previewFailed, setPreviewFailed] = useState(false);
+
+    // Locked URLs: only update when navigating to a different document.
+    // Signed-URL refreshes (same document.id, new HMAC token) must not update img src,
+    // because changing src blanks the element while the browser re-fetches — causing the flash.
+    const [lockedThumbUrl, setLockedThumbUrl] = useState(thumbUrl);
+    const [lockedFileUrl, setLockedFileUrl] = useState(fileUrl);
 
     const useProgressive = thumbUrl !== null && thumbUrl !== fileUrl && !previewFailed;
     const [showSpinner, setShowSpinner] = useState(false);
@@ -28,18 +43,30 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
     const hasFirstPaint = useProgressive ? previewReady || fullReady : fullReady;
 
     useEffect(() => {
-        setPreviewReady(false);
-        setFullReady(false);
+        const thumbHit = isCached(thumbUrl);
+        const fullHit = isCached(fileUrl);
+        setPreviewReady(thumbHit);
+        setFullReady(fullHit);
         setPreviewFailed(false);
         setShowSpinner(false);
+        setLockedThumbUrl(thumbUrl);
+        setLockedFileUrl(fileUrl);
+
+        if (fullHit || thumbHit) return;
+
         const t = setTimeout(() => setShowSpinner(true), SPINNER_DELAY_MS);
 
         return () => clearTimeout(t);
-    }, [fileUrl, thumbUrl, useProgressive]);
+        // Only reset when navigating to a different document, not on signed-URL refresh
+    }, [document.id]); // intentional: fileUrl/thumbUrl excluded — signed-URL refreshes must not reset state
 
+    // translate3d + contain/backface: Chromium/Electron often leaves "ghost" streaks when panning
+    // zoomed images under nested overflow:hidden; these props constrain compositor invalidation.
     const transformStyle = {
-        transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
+        transform: `scale(${scale}) translate3d(${translate.x / scale}px, ${translate.y / scale}px, 0)`,
         transition: hasDragged.current ? 'none' : ('transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)' as const),
+        contain: 'paint' as const,
+        backfaceVisibility: 'hidden' as const,
     };
 
     const imgClass = 'max-h-full max-w-full select-none rounded-lg object-contain';
@@ -48,7 +75,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
         <div
             ref={containerRef}
             className={cn(
-                'relative flex h-full min-h-0 w-full items-center justify-center overflow-hidden p-4 md:p-6',
+                'relative flex h-full min-h-0 w-full items-stretch justify-center overflow-hidden px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:px-6 md:pt-6 md:pb-[max(2rem,env(safe-area-inset-bottom))]',
                 !hasFirstPaint ? 'cursor-default' : isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in',
             )}
             onClick={hasFirstPaint ? handlers.onClick : undefined}
@@ -57,19 +84,24 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
             onPointerMove={handlers.onPointerMove}
             onPointerUp={handlers.onPointerUp}
         >
-            <AnimatePresence>{!hasFirstPaint && showSpinner && <ImageLoadingSpinner key="image-loading" />}</AnimatePresence>
+            <AnimatePresence>
+                {!hasFirstPaint && showSpinner && !useProgressive && !document.thumbnail_blurhash && <ImageLoadingSpinner key="image-loading" />}
+            </AnimatePresence>
 
             <motion.div
-                initial={{ opacity: 0 }}
+                initial={{ opacity: hasFirstPaint ? 1 : 0 }}
                 animate={{ opacity: hasFirstPaint ? 1 : 0 }}
                 transition={{
-                    duration: hasFirstPaint ? 0.22 : 0.15,
+                    duration: 0.22,
                     ease: [0.22, 1, 0.36, 1],
                 }}
-                className="relative flex min-h-0 max-h-full w-full items-center justify-center"
+                className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden contain-[paint]"
             >
                 <div
-                    className="relative inline-block max-h-full max-w-full"
+                    className={cn(
+                        'relative m-1 box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden',
+                        document.width && document.height && 'h-auto w-auto max-w-full',
+                    )}
                     style={{
                         ...transformStyle,
                         ...(document.width && document.height
@@ -93,16 +125,13 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                                 </div>
                             )}
                             <img
-                                src={thumbUrl}
+                                src={lockedThumbUrl ?? undefined}
                                 alt=""
                                 fetchPriority="high"
                                 decoding="async"
                                 onLoad={() => setPreviewReady(true)}
                                 onError={() => setPreviewFailed(true)}
-                                style={{
-                                    opacity: fullReady ? 0 : 1,
-                                    transition: hasDragged.current ? 'none' : 'opacity 0.35s ease-out',
-                                }}
+                                style={{ opacity: 1 }}
                                 className={imgClass}
                                 draggable={false}
                             />
@@ -110,14 +139,14 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     )}
 
                     <img
-                        src={fileUrl}
+                        src={lockedFileUrl ?? undefined}
                         alt={document.original_filename}
                         fetchPriority={useProgressive ? 'auto' : 'high'}
                         decoding="async"
                         onLoad={() => setFullReady(true)}
                         style={{
-                            opacity: useProgressive ? (fullReady ? 1 : 0) : fullReady ? 1 : 0,
-                            transition: hasDragged.current ? 'none' : 'opacity 0.4s ease-out',
+                            opacity: fullReady ? 1 : 0,
+                            transition: hasDragged.current ? 'none' : 'opacity 0.15s ease-out',
                             ...(useProgressive
                                 ? {
                                       position: 'absolute',
