@@ -11,7 +11,7 @@ import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { Settings, Users } from 'lucide-react';
+import { LayoutGrid, Settings, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -131,21 +131,28 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             </div>
 
             {/* Sections */}
-            <nav ref={navRef} className="relative flex-1 space-y-0.5 overflow-y-auto p-3">
-                <Link
-                    to="/browse"
-                    onClick={onClose}
-                    className={cn(
-                        'flex items-center gap-2 ml-1 mb-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
-                        !currentSectionId
-                            ? 'bg-sidebar-accent text-sidebar-primary'
-                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                    )}
-                >
-                    All Documents
-                </Link>
+            <nav ref={navRef} className="relative flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+                <div className="flex flex-col gap-1.5">
+                    <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Library</p>
+                    <Link
+                        to="/browse"
+                        onClick={onClose}
+                        className={cn(
+                            'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                            !currentSectionId
+                                ? 'bg-sidebar-accent text-sidebar-primary shadow-sm'
+                                : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
+                        )}
+                    >
+                        <LayoutGrid
+                            className={cn('size-4 shrink-0', !currentSectionId ? 'text-sidebar-primary' : 'text-muted-foreground')}
+                            aria-hidden
+                        />
+                        <span>All Documents</span>
+                    </Link>
+                </div>
 
-                <Separator />
+                <Separator className="bg-sidebar-border" />
 
                 {isLoading ? (
                     <div className="space-y-0.5">
@@ -165,21 +172,24 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                         onEditSection={handleEditSection}
                         onEditCategory={handleEditCategory}
                         onAddSection={(category) => openCreateFolder(category.id)}
+                        onAddCollection={openCreateCollection}
                         onDeleteSection={handleDeleteSection}
                         onDeleteCategory={handleDeleteCategory}
                         onClose={onClose}
                         {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
                 )}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    className="mt-2 w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    onClick={openCreateCollection}
-                >
-                    <span className="text-base">+</span>
-                    New collection
-                </Button>
+                {isLoading && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        onClick={openCreateCollection}
+                    >
+                        <span className="text-base">+</span>
+                        New collection
+                    </Button>
+                )}
             </nav>
 
             {/* Storage & Settings */}

@@ -19,11 +19,21 @@ interface SectionItemProps {
     onEditSection?: ((section: FolderWithChildren) => void) | undefined;
     onDeleteSection?: ((section: FolderWithChildren) => void) | undefined;
     onClose?: () => void;
+    /** When true, folder row is not draggable (e.g. sidebar tree filter active). */
+    disableDrag?: boolean;
 }
 
 const animateLayoutChanges: AnimateLayoutChanges = ({ isSorting, wasDragging }) => !(isSorting || wasDragging);
 
-export function SectionItem({ section, currentSectionId, isHighlighted, onEditSection, onDeleteSection, onClose }: SectionItemProps) {
+export function SectionItem({
+    section,
+    currentSectionId,
+    isHighlighted,
+    onEditSection,
+    onDeleteSection,
+    onClose,
+    disableDrag = false,
+}: SectionItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
 
@@ -31,6 +41,7 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
         id: section.id,
         data: { type: 'folder' as const, section },
         animateLayoutChanges,
+        disabled: disableDrag,
     });
 
     const style = {
@@ -48,8 +59,9 @@ export function SectionItem({ section, currentSectionId, isHighlighted, onEditSe
             }}
             style={style}
             className={cn(
-                'group relative flex items-center gap-2 rounded-md px-2 py-1.5 pl-6 text-sm transition-colors touch-none',
-                'cursor-grab active:cursor-grabbing',
+                'group relative flex items-center gap-2 rounded-md px-2 py-1.5 pl-6 text-sm transition-colors',
+                !disableDrag && 'touch-none cursor-grab active:cursor-grabbing',
+                disableDrag && 'cursor-default',
                 isDragging && 'z-10 opacity-50',
                 isActive && !isHighlighted && 'bg-sidebar-accent text-sidebar-primary',
                 !isActive && !isHighlighted && 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',

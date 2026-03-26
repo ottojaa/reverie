@@ -27,10 +27,21 @@ interface CategoryItemProps {
     onRename?: ((category: FolderWithChildren) => void) | undefined;
     onDelete?: ((category: FolderWithChildren) => void) | undefined;
     onAddSection?: ((category: FolderWithChildren) => void) | undefined;
+    /** When true, collection row is not draggable (e.g. sidebar tree filter active). */
+    disableDrag?: boolean;
     children: ReactNode;
 }
 
-export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, onDelete, onAddSection, children }: CategoryItemProps) {
+export function CategoryItem({
+    category,
+    collapsed,
+    onToggleCollapse,
+    onRename,
+    onDelete,
+    onAddSection,
+    disableDrag = false,
+    children,
+}: CategoryItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
     const sortableId = categoryIdToSortableId(category.id);
@@ -38,6 +49,7 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: sortableId,
         data: { type: 'collection' as const, category },
+        disabled: disableDrag,
     });
 
     const style = {
@@ -49,8 +61,9 @@ export function CategoryItem({ category, collapsed, onToggleCollapse, onRename, 
         <div
             ref={triggerRef}
             className={cn(
-                'group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors touch-none',
-                'cursor-grab select-none active:cursor-grabbing',
+                'group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors',
+                !disableDrag && 'touch-none cursor-grab select-none active:cursor-grabbing',
+                disableDrag && 'cursor-default',
                 'hover:bg-sidebar-accent/50',
             )}
             {...attributes}

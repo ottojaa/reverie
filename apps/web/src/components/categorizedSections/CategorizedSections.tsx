@@ -1,9 +1,11 @@
 import type { SortableTreeHandlers } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { documentsApi } from '@/lib/api/documents';
 import { FOLDER_DROP_PREFIX, useMoveDocuments } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
+import { cn } from '@/lib/utils';
 import type { DragEndEvent, DragOverEvent, DragStartEvent, DropAnimation } from '@dnd-kit/core';
 import { defaultDropAnimation, DragOverlay } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
@@ -13,7 +15,8 @@ import type { Document, FolderWithChildren } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { produce } from 'immer';
-import { Plus } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,6 +32,7 @@ interface CategorizedSectionsProps {
     onEditSection?: (section: FolderWithChildren) => void;
     onEditCategory?: (category: FolderWithChildren) => void;
     onAddSection?: (category: FolderWithChildren) => void;
+    onAddCollection?: () => void;
     onDeleteSection?: (section: FolderWithChildren) => void;
     onDeleteCategory?: (category: FolderWithChildren) => void;
     onClose?: () => void;
@@ -74,6 +78,7 @@ export function CategorizedSections({
     onEditSection,
     onEditCategory,
     onAddSection,
+    onAddCollection,
     onDeleteSection,
     onDeleteCategory,
     onClose,
@@ -84,6 +89,7 @@ export function CategorizedSections({
     const categoriesRef = useRef(categories);
     categoriesRef.current = categories;
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const [treeFilter, setTreeFilter] = useState('');
     const [activeDragData, setActiveDragData] = useState<ActiveDragData>(null);
 
     // Sync when parent data changes: always when not dragging; when dragging, only if structure changed
@@ -110,8 +116,13 @@ export function CategorizedSections({
     const selection = useSelectionOptional();
     const queryClient = useQueryClient();
 
-    // Sortable IDs for categories (prefixed) and sections
-    const categoryIds = useMemo(() => categories.map((c) => categoryIdToSortableId(c.id)), [categories]);
+    const filterTrimmed = treeFilter.trim();
+    const filterActive = filterTrimmed.length > 0;
+
+    const filteredCategories = useMemo(() => filterFolderTree(categories, filterTrimmed), [categories, filterTrimmed]);
+
+    // Sortable IDs for categories (prefixed) and sections — must match rendered list
+    const categoryIds = useMemo(() => filteredCategories.map((c) => categoryIdToSortableId(c.id)), [filteredCategories]);
 
     const toggleCollapse = useCallback((categoryId: string) => {
         setCollapsed((prev) => ({ ...prev, [categoryId]: !prev[categoryId] }));
@@ -368,43 +379,131 @@ export function CategorizedSections({
     return (
         <>
             <SortableContext items={categoryIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                    {categories.map((category) => (
-                        <CategoryItem
-                            key={category.id}
-                            category={category}
-                            collapsed={collapsed[category.id] ?? false}
-                            onToggleCollapse={() => toggleCollapse(category.id)}
-                            onRename={onEditCategory}
-                            onDelete={onDeleteCategory}
-                            onAddSection={onAddSection}
-                        >
-                            <SortableContext items={category.children.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-                                {category.children.map((section) => (
-                                    <SectionItem
-                                        key={section.id}
-                                        section={section}
-                                        {...(currentSectionId !== undefined && { currentSectionId })}
-                                        isHighlighted={highlightedSectionId === section.id}
-                                        onEditSection={onEditSection}
-                                        onDeleteSection={onDeleteSection}
-                                        onClose={onClose}
-                                    />
-                                ))}
-                                {category.children.length === 0 && !collapsed[category.id] && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="h-auto w-full opacity-50 justify-start gap-2 px-6 py-1.5 ml-3 text-left text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                                        onClick={() => onAddSection?.(category)}
-                                    >
-                                        <Plus className="size-4 shrink-0" />
-                                        Add folder
-                                    </Button>
+                <div className="flex shrink-0 flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                        <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Collections</p>
+                        <div role="search" className="relative">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" aria-hidden />
+                            <Input
+                                type="text"
+                                inputMode="search"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                value={treeFilter}
+                                onChange={(e) => setTreeFilter(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setTreeFilter('');
+                                    }
+                                }}
+                                placeholder="Filter your collections"
+                                aria-label="Filter collections and folders"
+                                className={cn(
+                                    'h-8 rounded-lg border-sidebar-border/80 bg-sidebar-accent/30 pl-9 text-sm shadow-none transition-colors',
+                                    'placeholder:text-muted-foreground/70',
+                                    'focus-visible:bg-sidebar-accent/50 focus-visible:border-sidebar-border',
+                                    filterTrimmed.length > 0 && 'pr-9',
                                 )}
-                            </SortableContext>
-                        </CategoryItem>
-                    ))}
+                            />
+                            <AnimatePresence>
+                                {filterTrimmed.length > 0 && (
+                                    <motion.div
+                                        key="clear"
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                                    >
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            className="size-7 text-muted-foreground hover:text-foreground"
+                                            aria-label="Clear filter"
+                                            onClick={() => setTreeFilter('')}
+                                        >
+                                            <X className="size-3.5" />
+                                        </Button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                        {filterActive && filteredCategories.length === 0 && (
+                            <motion.p
+                                key="empty"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                                className="overflow-hidden px-0.5 text-xs text-muted-foreground"
+                            >
+                                No matching collections or folders
+                            </motion.p>
+                        )}
+                    </AnimatePresence>
+
+                    <div className="space-y-1">
+                        {filteredCategories.map((category) => {
+                            const isCollapsed = filterActive ? false : (collapsed[category.id] ?? false);
+
+                            return (
+                                <CategoryItem
+                                    key={category.id}
+                                    category={category}
+                                    collapsed={isCollapsed}
+                                    disableDrag={filterActive}
+                                    onToggleCollapse={() => toggleCollapse(category.id)}
+                                    onRename={onEditCategory}
+                                    onDelete={onDeleteCategory}
+                                    onAddSection={onAddSection}
+                                >
+                                    <SortableContext items={category.children.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                                        {category.children.map((section) => (
+                                            <SectionItem
+                                                key={section.id}
+                                                section={section}
+                                                {...(currentSectionId !== undefined && { currentSectionId })}
+                                                isHighlighted={highlightedSectionId === section.id}
+                                                disableDrag={filterActive}
+                                                onEditSection={onEditSection}
+                                                onDeleteSection={onDeleteSection}
+                                                onClose={onClose}
+                                            />
+                                        ))}
+                                        {category.children.length === 0 && !isCollapsed && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-auto w-full opacity-50 justify-start gap-2 px-6 py-1.5 ml-3 text-left text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                                onClick={() => onAddSection?.(category)}
+                                            >
+                                                <Plus className="size-4 shrink-0" />
+                                                Add folder
+                                            </Button>
+                                        )}
+                                    </SortableContext>
+                                </CategoryItem>
+                            );
+                        })}
+                    </div>
+
+                    {onAddCollection && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                            onClick={onAddCollection}
+                        >
+                            <span className="text-base">+</span>
+                            New collection
+                        </Button>
+                    )}
                 </div>
             </SortableContext>
 
@@ -453,6 +552,31 @@ export function CategorizedSections({
 }
 
 // ---- Helpers ----
+
+function filterFolderTree(categories: FolderWithChildren[], filterTrimmed: string): FolderWithChildren[] {
+    if (!filterTrimmed) return categories;
+
+    const needle = filterTrimmed.toLowerCase();
+    const result: FolderWithChildren[] = [];
+
+    for (const cat of categories) {
+        const catMatch = cat.name.toLowerCase().includes(needle);
+
+        if (catMatch) {
+            result.push(cat);
+
+            continue;
+        }
+
+        const filteredChildren = cat.children.filter((sec) => sec.name.toLowerCase().includes(needle));
+
+        if (filteredChildren.length > 0) {
+            result.push({ ...cat, children: filteredChildren });
+        }
+    }
+
+    return result;
+}
 
 function getDocumentFilenamesFromCache(queryClient: ReturnType<typeof useQueryClient>, documentIds: string[]): string[] {
     const idToFilename = new Map<string, string>();
