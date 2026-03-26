@@ -56,6 +56,8 @@ const TYPE_ALIASES: Record<string, string[]> = {
     receipts: ['transaction_receipt'],
     screenshot: ['screenshot'],
     screenshots: ['screenshot'],
+    video: ['video'],
+    videos: ['video'],
 };
 
 /**

@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteSearch } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowDownAZ, ArrowUpAZ, Calendar, Check, ChevronDown, Clock, FileText, FolderSearch2, Image, Loader2, Search, Star, X } from 'lucide-react';
+import { ArrowDownAZ, ArrowUpAZ, Calendar, Check, ChevronDown, Clock, FileText, FolderSearch2, Image, Loader2, Search, Sparkles, Star, Video, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -42,6 +42,10 @@ export function SearchPage() {
     const inputRef = useRef<HTMLInputElement>(null);
     const observerRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const inputFocusedRef = useRef(false);
+    // Captures the filter part of the query at the moment the input is focused,
+    // so debounced navigations don't accumulate partial filter tokens as the URL updates.
+    const filterPartAtFocusRef = useRef('');
 
     const sortBy = (sort_by as SortBy) || 'relevance';
     const sortOrder = (sort_order as 'asc' | 'desc') || 'desc';
@@ -57,8 +61,10 @@ export function SearchPage() {
     const total = data?.pages[0]?.total ?? 0;
     const facets = data?.pages[0]?.facets;
 
-    // Sync local query when URL changes (e.g., navigating back)
+    // Sync local query when URL changes (e.g., navigating back), but not while the user is typing
     useEffect(() => {
+        if (inputFocusedRef.current) return;
+
         setLocalQuery(getFreeText(q));
     }, [q]);
 
@@ -97,7 +103,9 @@ export function SearchPage() {
             setLocalQuery(value);
             clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
-                const filterPart = getFilterPart(q);
+                // Use the filter part captured at focus time — never re-read from the URL
+                // mid-typing, which would cause partial filter tokens to accumulate.
+                const filterPart = filterPartAtFocusRef.current;
                 const newQuery = filterPart ? `${filterPart} ${value}`.trim() : value;
                 navigate({
                     to: '/search',
@@ -106,7 +114,7 @@ export function SearchPage() {
                 });
             }, 300);
         },
-        [navigate, q, sort_by, sort_order],
+        [navigate, sort_by, sort_order],
     );
 
     const handleClearQuery = useCallback(() => {
@@ -217,6 +225,14 @@ export function SearchPage() {
                             type="text"
                             value={localQuery}
                             onChange={(e) => handleQueryChange(e.target.value)}
+                            onFocus={() => {
+                                inputFocusedRef.current = true;
+                                filterPartAtFocusRef.current = getFilterPart(q);
+                            }}
+                            onBlur={() => {
+                                inputFocusedRef.current = false;
+                                setLocalQuery(getFreeText(q));
+                            }}
                             placeholder="Search documents..."
                             className="h-11 rounded-lg pl-10 pr-9"
                         />
@@ -329,9 +345,9 @@ export function SearchPage() {
                     </div>
                 )}
 
-                {isEmpty && <EmptySearchState query={q} />}
+                {isEmpty && <EmptySearchState query={q} onSearch={(filterQuery) => updateSearch({ q: filterQuery })} />}
 
-                {!q && !isLoading && <NoQueryState onFilter={(filter) => handleQueryChange(filter)} />}
+                {!q && !isLoading && <NoQueryState onSearch={(filterQuery) => updateSearch({ q: filterQuery })} />}
             </div>
         </div>
     );
@@ -353,40 +369,67 @@ function SearchResultSkeleton() {
     );
 }
 
-function EmptySearchState({ query }: { query: string }) {
+const QUICK_FILTERS = [
+    { query: 'type:photo', label: 'All photos', icon: Image },
+    { query: 'format:pdf', label: 'PDF files', icon: FileText },
+    { query: 'type:video', label: 'Videos', icon: Video },
+    { query: 'uploaded:last-week', label: 'Recent uploads', icon: Clock },
+    { query: 'has:summary', label: 'With AI summary', icon: Sparkles },
+];
+
+function QuickFilterGrid({ onSearch }: { onSearch: (query: string) => void }) {
     return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Search className="mb-4 size-12 text-muted-foreground/30" />
-            <h3 className="text-lg font-medium">No results for &ldquo;{query}&rdquo;</h3>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                Try different keywords, check for typos, or use filters like <code className="rounded bg-muted px-1 py-0.5 text-xs">type:photo</code> or{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">folder:receipts</code>
-            </p>
+        <div className="flex flex-wrap justify-center gap-2">
+            {QUICK_FILTERS.map((filter, i) => (
+                <motion.div
+                    key={filter.query}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 + 0.1, duration: 0.2 }}
+                >
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onSearch(filter.query)}
+                        className="gap-2 text-sm hover:border-primary/50 hover:text-primary transition-colors"
+                    >
+                        <filter.icon className="size-3.5 text-muted-foreground" />
+                        {filter.label}
+                    </Button>
+                </motion.div>
+            ))}
         </div>
     );
 }
 
-const QUICK_FILTERS = [
-    { query: 'category:photo', label: 'All photos', icon: Image },
-    { query: 'format:pdf', label: 'PDF files', icon: FileText },
-    { query: 'uploaded:last-week', label: 'Recent uploads', icon: Clock },
-    { query: 'has:summary', label: 'With AI summary', icon: Star },
-];
-
-function NoQueryState({ onFilter }: { onFilter: (query: string) => void }) {
+function EmptySearchState({ query, onSearch }: { query: string; onSearch: (query: string) => void }) {
     return (
-        <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <FolderSearch2 className="size-20 text-muted-foreground/30" />
-            <h3 className="text-lg font-medium">Find your documents</h3>
-            <p className="mb-3 text-xs font-medium text-muted-foreground">Try one of these quick filters:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-                {QUICK_FILTERS.map((filter) => (
-                    <Button key={filter.query} type="button" variant="outline" onClick={() => onFilter(filter.query)} className="gap-2">
-                        <filter.icon className="size-4 text-muted-foreground" />
-                        {filter.label}
-                    </Button>
-                ))}
-            </div>
-        </div>
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
+            className="flex flex-col items-center justify-center py-16 text-center"
+        >
+            <Search className="mb-4 size-10 text-muted-foreground/25" />
+            <h3 className="text-base font-medium">No results for &ldquo;{query}&rdquo;</h3>
+            <p className="mt-1.5 mb-6 text-sm text-muted-foreground">Try different keywords, or browse with a filter:</p>
+            <QuickFilterGrid onSearch={onSearch} />
+        </motion.div>
+    );
+}
+
+function NoQueryState({ onSearch }: { onSearch: (query: string) => void }) {
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25 }}
+            className="flex flex-col items-center justify-center py-14 gap-2"
+        >
+            <FolderSearch2 className="size-16 text-muted-foreground/25 mb-1" />
+            <h3 className="text-base font-medium">Find your documents</h3>
+            <p className="mb-4 text-sm text-muted-foreground">Search by keyword, or jump straight to a filter:</p>
+            <QuickFilterGrid onSearch={onSearch} />
+        </motion.div>
     );
 }

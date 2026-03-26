@@ -80,10 +80,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     {useProgressive && thumbUrl && (
                         <>
                             {document.thumbnail_blurhash && !previewReady && (
-                                <div
-                                    className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-lg"
-                                    aria-hidden
-                                >
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-lg" aria-hidden>
                                     <Blurhash
                                         hash={document.thumbnail_blurhash}
                                         width={Math.min(document.width ?? 800, 800)}

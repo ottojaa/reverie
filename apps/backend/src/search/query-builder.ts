@@ -41,6 +41,11 @@ const FORMAT_TO_MIME: Record<string, string[]> = {
     tif: ['image/tiff'],
     bmp: ['image/bmp'],
     svg: ['image/svg+xml'],
+    mp4: ['video/mp4'],
+    mov: ['video/quicktime'],
+    webm: ['video/webm'],
+    avi: ['video/x-msvideo'],
+    mkv: ['video/x-matroska'],
 };
 
 // Type to document category mappings
@@ -49,6 +54,7 @@ const TYPE_TO_CATEGORIES: Record<string, string[]> = {
     document: ['stock_overview', 'stock_split', 'dividend_statement', 'transaction_receipt', 'other'],
     receipt: ['transaction_receipt'],
     screenshot: ['screenshot'],
+    video: ['video'],
 };
 
 export interface SearchQueryOptions {
