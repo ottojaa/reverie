@@ -1,5 +1,6 @@
 import { FileTypeIcon } from '@/components/ui/FileTypeIcon';
 import { Button } from '@/components/ui/button';
+import { buildDownloadUrl } from '@/lib/commonhelpers';
 import { Download } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ViewerProps } from './viewer-registry';
@@ -23,7 +24,7 @@ export default function FallbackViewer({ document, fileUrl }: ViewerProps) {
                 </div>
 
                 <Button variant="secondary" asChild>
-                    <a href={fileUrl} download={document.original_filename} target="_blank" rel="noopener noreferrer">
+                    <a href={buildDownloadUrl(fileUrl, document.original_filename)} download={document.original_filename} rel="noopener noreferrer">
                         <Download className="size-4" />
                         Download file
                     </a>

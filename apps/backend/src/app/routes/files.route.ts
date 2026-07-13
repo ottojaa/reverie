@@ -53,7 +53,7 @@ export default async function (fastify: FastifyInstance) {
     // URL format: /files/{path}?e={expires}&s={signature}
     fastify.get<{
         Params: { '*': string };
-        Querystring: { e?: string; s?: string };
+        Querystring: { e?: string; s?: string; download?: string; dl?: string };
     }>(
         '/files/*',
         {
@@ -64,7 +64,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const filePath = request.params['*'];
-            const { e: expires, s: signature } = request.query;
+            const { e: expires, s: signature, download, dl } = request.query;
 
             // Validate required parameters
             if (!expires || !signature) {
@@ -93,6 +93,14 @@ export default async function (fastify: FastifyInstance) {
             reply.header('Content-Type', contentType);
             reply.header('Cache-Control', 'private, max-age=86400, immutable');
             reply.header('X-Content-Type-Options', 'nosniff');
+
+            // Force a download (attachment) only when ?download=1 is present; otherwise serve
+            // inline so the viewer can render images/video/PDF. Mirrors the prod nginx behavior.
+            if (download) {
+                const name = dl ? decodeURIComponent(dl) : filePath.split('/').pop()!;
+
+                reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+            }
 
             try {
                 if (storage instanceof LocalStorageProvider) {

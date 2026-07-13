@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { Spinner } from '@/components/ui/spinner';
-import { authenticatedFetch } from '@/lib/api/client';
+import { buildDownloadUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { useRouter } from '@tanstack/react-router';
 import { ArrowLeft, Download, Edit3, Info, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 
 interface ViewerToolbarProps {
     document: Document;
@@ -57,33 +57,20 @@ function ProcessingIndicator({ document }: { document: Document }) {
 
 export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
     const router = useRouter();
-    const [isDownloading, setIsDownloading] = useState(false);
     const fileConfig = getFileTypeConfig(document.mime_type);
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
 
-    const handleDownload = useCallback(async () => {
+    const handleDownload = useCallback(() => {
         if (!fileUrl) return;
 
-        setIsDownloading(true);
+        // Navigate to the signed URL with ?download=1 so the server sets
+        // Content-Disposition: attachment. This downloads on every browser
+        // (incl. iOS Safari) and streams directly — no fetch/CORS/blob dance.
+        const a = window.document.createElement('a');
 
-        try {
-            const res = await authenticatedFetch(fileUrl);
-
-            if (!res.ok) throw new Error('Download failed');
-
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = window.document.createElement('a');
-            a.href = url;
-            a.download = document.original_filename;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch {
-            // Fallback: open in new tab (original behavior)
-            window.open(fileUrl, '_blank', 'noopener,noreferrer');
-        } finally {
-            setIsDownloading(false);
-        }
+        a.href = buildDownloadUrl(fileUrl, document.original_filename);
+        a.rel = 'noopener';
+        a.click();
     }, [fileUrl, document.original_filename]);
 
     return (
@@ -127,8 +114,8 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
 
                 {/* Download */}
                 {fileUrl && (
-                    <Button variant="ghost" size="icon-sm" onClick={handleDownload} disabled={isDownloading} title="Download" className="text-muted-foreground">
-                        {isDownloading ? <Spinner className="size-4" /> : <Download className="size-4" />}
+                    <Button variant="ghost" size="icon-sm" onClick={handleDownload} title="Download" className="text-muted-foreground">
+                        <Download className="size-4" />
                     </Button>
                 )}
 
