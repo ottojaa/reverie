@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { UuidSchema, DateOnlySchema, PaginationQuerySchema } from './common.js';
 import { DocumentCategoryEnum, ThumbnailUrlsSchema } from './documents.js';
+import { FolderTypeSchema } from './folders.js';
 
 // ============================================================================
 // Parsed Query Types (internal representation of search query)
@@ -81,7 +82,10 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 // Search Results
 // ============================================================================
 
-export const SearchResultSchema = z.object({
+// A single document hit. `result_type` is the discriminator for the unified SearchHit.
+export const DocumentSearchResultSchema = z.object({
+    result_type: z.literal('document'),
+
     document_id: UuidSchema,
     display_name: z.string(),
     filename: z.string(),
@@ -113,7 +117,37 @@ export const SearchResultSchema = z.object({
     relevance: z.number().nullable(),
 });
 
-export type SearchResult = z.infer<typeof SearchResultSchema>;
+export type DocumentSearchResult = z.infer<typeof DocumentSearchResultSchema>;
+
+// Back-compat alias: existing document-centric consumers refer to a document hit as `SearchResult`.
+export const SearchResultSchema = DocumentSearchResultSchema;
+export type SearchResult = DocumentSearchResult;
+
+// A single collection/folder hit (from the `folders` table, discriminated by `folder_type`).
+export const CollectionSearchResultSchema = z.object({
+    result_type: z.literal('collection'),
+
+    id: UuidSchema,
+    name: z.string(),
+    path: z.string(),
+    description: z.string().nullable(),
+    emoji: z.string().nullable(),
+    folder_type: FolderTypeSchema, // 'collection' | 'folder'
+    document_count: z.number(),
+
+    // Highlighted excerpt of the matched name/description
+    snippet: z.string().nullable(),
+
+    // Relevance (for text searches) — used to interleave with documents
+    relevance: z.number().nullable(),
+});
+
+export type CollectionSearchResult = z.infer<typeof CollectionSearchResultSchema>;
+
+// Unified search hit: documents and collections/folders interleaved by relevance.
+export const SearchHitSchema = z.discriminatedUnion('result_type', [DocumentSearchResultSchema, CollectionSearchResultSchema]);
+
+export type SearchHit = z.infer<typeof SearchHitSchema>;
 
 // ============================================================================
 // Facets
@@ -154,7 +188,7 @@ export type SearchFacets = z.infer<typeof SearchFacetsSchema>;
 
 export const SearchResponseSchema = z.object({
     total: z.number(),
-    results: z.array(SearchResultSchema),
+    results: z.array(SearchHitSchema),
     facets: SearchFacetsSchema.optional(),
     query: ParsedQuerySchema.optional(), // Parsed query for debugging
     timing_ms: z.number(),

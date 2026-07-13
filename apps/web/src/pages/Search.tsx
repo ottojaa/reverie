@@ -1,3 +1,4 @@
+import { CollectionResultItem } from '@/components/search/CollectionResultItem';
 import { SearchFilterPopover } from '@/components/search/SearchFilterPopover';
 import { ActiveFilters } from '@/components/search/SearchFilters';
 import { SearchResultItem } from '@/components/search/SearchResultItem';
@@ -8,7 +9,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteSearch } from '@/lib/api/search';
 import { cn } from '@/lib/utils';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowDownAZ, ArrowUpAZ, Calendar, Check, ChevronDown, Clock, FileText, FolderSearch2, Image, Loader2, Search, Sparkles, Star, Video, X } from 'lucide-react';
+import {
+    ArrowDownAZ,
+    ArrowUpAZ,
+    Calendar,
+    Check,
+    ChevronDown,
+    Clock,
+    FileText,
+    FolderSearch2,
+    Image,
+    Loader2,
+    Search,
+    Sparkles,
+    Star,
+    Video,
+    X,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -320,20 +337,27 @@ export function SearchPage() {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-1">
                         {results.map((result, index) => (
                             <motion.div
-                                key={result.document_id}
+                                key={result.result_type === 'collection' ? `col-${result.id}` : `doc-${result.document_id}`}
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: Math.min(index * 0.03, 0.3) }}
                             >
-                                <SearchResultItem
-                                    result={result}
-                                    onClick={() =>
-                                        navigate({
-                                            to: '/document/$id',
-                                            params: { id: result.document_id },
-                                        })
-                                    }
-                                />
+                                {result.result_type === 'collection' ? (
+                                    <CollectionResultItem
+                                        result={result}
+                                        onClick={() => navigate({ to: '/browse/$sectionId', params: { sectionId: result.id } })}
+                                    />
+                                ) : (
+                                    <SearchResultItem
+                                        result={result}
+                                        onClick={() =>
+                                            navigate({
+                                                to: '/document/$id',
+                                                params: { id: result.document_id },
+                                            })
+                                        }
+                                    />
+                                )}
                             </motion.div>
                         ))}
                     </motion.div>
