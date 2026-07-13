@@ -72,7 +72,7 @@ When you discover a non-obvious gotcha or make a mistake worth not repeating, in
 - Add a **code comment** for knowledge specific to a single line/function.
 - Add an entry to **`.claude/memories/index.md`** for project-level, architectural, or cross-file knowledge.
 
-This committed memories file is the portable, project-shared layer; it complements Claude Code's built-in per-user memory.
+This memories file is git-ignored, per-machine state; it complements Claude Code's built-in per-user memory.
 
 ## Skills (area conventions, loaded on demand)
 
