@@ -83,6 +83,16 @@ RUN if [ "$SKIP_OCR" = "true" ] || [ "$TARGETARCH" = "arm64" ]; then \
         /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt; \
     fi
 
+# Pre-download the PP-OCRv5 pipeline models into the image so a container recreate
+# never re-downloads them at runtime (a stalled runtime download once took OCR
+# offline). Mirrors _build_ocr() in apps/backend/ocr_service/ocr_runner.py — keep
+# the model names/flags in sync.
+RUN if [ "$SKIP_OCR" = "true" ] || [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping PaddleOCR model pre-download (SKIP_OCR=$SKIP_OCR, TARGETARCH=$TARGETARCH)"; \
+    else \
+        PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True /opt/paddleocr-env/bin/python3 -c "from paddleocr import PaddleOCR; PaddleOCR(ocr_version='PP-OCRv5', text_detection_model_name='PP-OCRv5_server_det', text_recognition_model_name='PP-OCRv5_server_rec', use_textline_orientation=True, enable_mkldnn=False, device='cpu')"; \
+    fi
+
 # Fallback for the GPU build: if paddle fails to dlopen its bundled CUDA/cuDNN
 # at runtime (e.g. "libcudnn.so.* cannot open shared object file"), uncomment and
 # point at the venv's bundled nvidia libs (adjust the python3.X version to match):
