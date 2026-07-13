@@ -5,17 +5,34 @@ services:
             dockerfile: Dockerfile
             args:
                 VITE_API_URL: https://api.reverieapp.dev
+                # GPU image (CUDA 12.6 paddlepaddle-gpu). Set to false for CPU-only.
+                OCR_GPU: 'true'
         container_name: reverie-backend
         # env_file is an absolute path so it works regardless of where
         # docker compose is invoked from (CI runner checkout dir vs /opt/reverie)
         env_file:
             - /opt/reverie/.env.production
+        environment:
+            # Expose the host GPU to PaddleOCR. 'compute' is required for CUDA/cuDNN;
+            # without it CUDA init silently fails on this non-NVIDIA base image.
+            # Set OCR_DEVICE=gpu:0 in /opt/reverie/.env.production to actually use it.
+            - NVIDIA_VISIBLE_DEVICES=all
+            - NVIDIA_DRIVER_CAPABILITIES=compute,utility
         ports:
             # Bind to loopback only — nginx on the host proxies to this port
             - '127.0.0.1:3000:3000'
         volumes:
             # Mount NAS storage so backend can read/write user files
             - /mnt/nas/reverie:/mnt/nas/reverie
+        # Reserve the NVIDIA GPU (requires NVIDIA Container Toolkit on the host).
+        # `gpus: all` is a cleaner alternative on Compose >= v2.30.
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: 1
+                          capabilities: [gpu]
         depends_on:
             postgres:
                 condition: service_healthy

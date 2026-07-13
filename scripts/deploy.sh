@@ -8,7 +8,10 @@ ENV_FILE="${DEPLOY_DIR}/.env.production"
 cd "$DEPLOY_DIR"
 git pull origin main
 
-# Build backend image (runtime stage with PaddleOCR)
+# Build backend image (runtime stage with PaddleOCR).
+# GPU-enabled by default (OCR_GPU=true -> CUDA 12.6 paddlepaddle-gpu wheel). Requires the
+# NVIDIA driver + NVIDIA Container Toolkit on this host; see README "GPU / OCR".
+# For a CPU-only build, append: --build-arg OCR_GPU=false
 docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend
 
 # Extract web dist from builder stage

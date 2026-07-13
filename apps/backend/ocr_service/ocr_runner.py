@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-PaddleOCR Runner  (PaddleOCR >= 3.x / PP-OCRv3)
+PaddleOCR Runner  (PaddleOCR >= 3.x / PP-OCRv5)
 
 Persistent worker: loads models once, then reads newline-delimited
 image paths from stdin and writes JSON results to stdout.
 
+Runs on CPU by default; set OCR_DEVICE=gpu:0 (passed by the Node client)
+to run inference on the GPU. Falls back to CPU if GPU init fails.
+
 Protocol (one request per line):
     → {"image_path": "/tmp/input.png"}    (JSON on stdin)
-    ← {"text": "...", "confidence": 85.2, "blocks": [...], "engine": "paddleocr/PP-OCRv3"}
+    ← {"text": "...", "confidence": 85.2, "blocks": [...], "engine": "paddleocr/PP-OCRv5"}
     ← {"error": "File not found: ..."}    (on failure)
 
 A special "ping" command can be used to check health:
@@ -30,6 +33,14 @@ from pathlib import Path
 
 # Suppress the slow connectivity check
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+
+# Inference device: "cpu", "gpu", or "gpu:0". Set by the Node client via the
+# OCR_DEVICE env var (see paddleocr.client.ts). Defaults to CPU so dev machines
+# and non-GPU deploys keep working unchanged.
+OCR_DEVICE = os.environ.get("OCR_DEVICE", "cpu")
+
+# Engine identifier stored alongside results (ocr_results.ocr_engine).
+ENGINE_NAME = "paddleocr/PP-OCRv5"
 
 # Blocks with per-line confidence below this threshold are discarded.
 # Handwritten text / noise typically scores well below 0.50 while
@@ -68,7 +79,7 @@ def _build_empty_result():
         "text": "",
         "confidence": 0.0,
         "blocks": [],
-        "engine": "paddleocr/PP-OCRv3",
+        "engine": ENGINE_NAME,
     }
 
 
@@ -285,7 +296,7 @@ def process_image(ocr, image_path):
         "confidence": round(avg_confidence, 2),
         "blocks": kept_blocks,
         "filtered_count": filtered_count,
-        "engine": "paddleocr/PP-OCRv3",
+        "engine": ENGINE_NAME,
     }
 
 
@@ -388,28 +399,83 @@ def process_pdf(ocr, pdf_path):
         "text": combined_text,
         "confidence": round(avg_confidence, 2),
         "blocks": [],
-        "engine": "paddleocr/PP-OCRv3",
+        "engine": ENGINE_NAME,
     }
+
+
+def _build_ocr(device):
+    """Construct a PaddleOCR instance (PP-OCRv5 server models) on the given device."""
+    from paddleocr import PaddleOCR
+
+    return PaddleOCR(
+        ocr_version="PP-OCRv5",
+        text_detection_model_name="PP-OCRv5_server_det",
+        text_recognition_model_name="PP-OCRv5_server_rec",
+        use_textline_orientation=True,
+        enable_mkldnn=False,  # CPU-only oneDNN accelerator; irrelevant on GPU
+        device=device,
+    )
+
+
+def _load_ocr(device):
+    """
+    Load PaddleOCR on the requested device, falling back to CPU if GPU init fails
+    (e.g. driver/CUDA hiccup) so OCR degrades to CPU rather than going offline.
+    Warnings go to stderr — stdout is reserved for the JSON protocol.
+    """
+    try:
+        return _build_ocr(device)
+    except Exception as e:
+        if not device.startswith("gpu"):
+            raise
+        print(
+            f"[ocr_runner] GPU init failed on '{device}', falling back to CPU: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return _build_ocr("cpu")
+
+
+def _warmup(ocr):
+    """
+    Run one throwaway prediction so the GPU one-time cost (CUDA context +
+    cuDNN autotune for the current arch) is paid here, inside the client's
+    STARTUP_TIMEOUT_MS, instead of on the first real request.
+
+    MUST NOT write to stdout — the client expects {"ready": true} as the first
+    stdout line, so any stray output would desync the request/response FIFO.
+    """
+    try:
+        from PIL import Image
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        try:
+            Image.new("RGB", (64, 64), color="white").save(tmp_path)
+            ocr.predict(tmp_path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    except Exception as e:
+        # Warmup is best-effort; a failure here must not block readiness.
+        print(f"[ocr_runner] Warmup skipped: {e}", file=sys.stderr, flush=True)
 
 
 def main():
     # ── Load models once ─────────────────────────────────────────
     try:
-        from paddleocr import PaddleOCR
-
+        ocr = _load_ocr(OCR_DEVICE)
     except ImportError as e:
         _print_json({"error": f"PaddleOCR not installed: {e}"})
         sys.exit(1)
-
-    try:
-        ocr = PaddleOCR(
-            ocr_version="PP-OCRv4",
-            use_textline_orientation=True,
-            enable_mkldnn=False,
-        )
     except Exception as e:
         _print_json({"error": f"Failed to initialize PaddleOCR: {e}"})
         sys.exit(1)
+
+    # Pay the GPU cold-start cost before signalling ready (stdout-silent).
+    _warmup(ocr)
 
     # Signal that models are loaded and we're ready
     _print_json({"ready": True})

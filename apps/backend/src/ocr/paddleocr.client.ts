@@ -84,6 +84,9 @@ function spawnProcess(): void {
         env: {
             ...process.env,
             PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: 'True',
+            // Device must be set before the PaddleOCR constructor runs, so pass it
+            // via the child env (not the post-load JSON handshake).
+            OCR_DEVICE: env.OCR_DEVICE,
         },
     });
 

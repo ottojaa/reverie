@@ -51,9 +51,29 @@ RUN apt-get update && apt-get install -y \
 
 # Install PaddleOCR in an isolated venv.
 # Copied early so this expensive layer is cached independently of app code.
-COPY apps/backend/ocr_service/requirements.txt /tmp/requirements.txt
+# OCR_GPU=true (default) installs the CUDA 12.6 paddlepaddle-gpu wheel (bundles
+# CUDA/cuDNN via pip — the host only needs an NVIDIA driver + Container Toolkit).
+# Build with --build-arg OCR_GPU=false for a CPU-only image.
+# The framework wheel is installed BEFORE requirements.txt so paddleocr does not
+# pull in the CPU paddlepaddle wheel (the two must not coexist).
+ARG OCR_GPU=true
+COPY apps/backend/ocr_service/requirements.txt \
+     apps/backend/ocr_service/requirements-gpu.txt \
+     apps/backend/ocr_service/requirements-cpu.txt \
+     /tmp/
 RUN python3 -m venv /opt/paddleocr-env && \
+    if [ "$OCR_GPU" = "true" ]; then \
+        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-gpu.txt; \
+    else \
+        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-cpu.txt; \
+    fi && \
     /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Fallback for the GPU build: if paddle fails to dlopen its bundled CUDA/cuDNN
+# at runtime (e.g. "libcudnn.so.* cannot open shared object file"), uncomment and
+# point at the venv's bundled nvidia libs (adjust the python3.X version to match):
+# ENV LD_LIBRARY_PATH=/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cudnn/lib:/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cublas/lib:$LD_LIBRARY_PATH
+# If that still fails, switch this runtime stage to an nvidia/cuda cudnn-runtime base.
 
 # Copy pruned backend dist (JS, package.json, lockfile, workspace_modules)
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist

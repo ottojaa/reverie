@@ -1,4 +1,10 @@
-paddlepaddle>=3.0.0
-paddleocr>=2.9.0
+# Shared, cross-platform OCR deps — NO paddle framework here.
+# The paddle framework is installed separately per-platform so the Linux-only
+# GPU wheel stays isolated (see Dockerfile OCR_GPU arg):
+#   - requirements-gpu.txt  → paddlepaddle-gpu (prod image, CUDA host)
+#   - requirements-cpu.txt  → paddlepaddle     (local dev / non-GPU deploys)
+# Install the framework FIRST, then this file, so paddleocr does not pull in
+# the CPU paddlepaddle wheel (the two must never coexist in one venv).
+paddleocr>=3.1.0
 Pillow>=10.0.0
 pymupdf>=1.24.0
