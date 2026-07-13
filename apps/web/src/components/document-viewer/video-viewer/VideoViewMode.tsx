@@ -17,7 +17,7 @@ export function VideoViewMode({ document, fileUrl }: ViewerProps) {
                     scale: isReady ? 1 : 0.97,
                 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="max-h-full max-w-full"
+                className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden"
             >
                 <video
                     ref={videoRef}
@@ -29,7 +29,7 @@ export function VideoViewMode({ document, fileUrl }: ViewerProps) {
                     preload="metadata"
                     onLoadedMetadata={() => setIsReady(true)}
                     onCanPlay={() => setIsReady(true)}
-                    className="max-h-full max-w-full rounded-lg shadow-2xl"
+                    className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
                 />
             </motion.div>
         </div>
