@@ -70,3 +70,5 @@ apps/android/local.properties
 .claude/worktrees/
 
 deploy.log
+# Yarn (Berry local state)
+.yarn/install-state.gz
