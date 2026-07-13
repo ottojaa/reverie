@@ -1,38 +1,42 @@
 # ─── Stage 1: Builder ───────────────────────────────────────────────────────
 # Compiles TypeScript, builds shared lib, backend dist, and web SPA.
-FROM node:22-alpine AS builder
+# Debian (glibc) base so native modules (bcrypt, sharp) built here are ABI-compatible
+# with the node:22-slim runtime, letting us copy node_modules across stages.
+FROM node:22 AS builder
 WORKDIR /app
 
-# yarn (classic) ships with the node base image — no global install needed.
+# Yarn Berry is pinned in .yarn/releases and invoked directly via node, so the build
+# never depends on corepack (its bundled signing keys are unreliable in some envs).
 
-# Copy manifests first for dependency layer caching.
+# Copy Yarn config + manifests first for dependency-layer caching.
 # Workspaces are declared in the root package.json (yarn workspaces).
-COPY package.json yarn.lock .yarnrc ./
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/ ./.yarn/
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/web/package.json ./apps/web/
 COPY libs/shared/package.json ./libs/shared/
 
-RUN yarn install --frozen-lockfile
+RUN node .yarn/releases/yarn-4.17.1.cjs install --immutable
 
 # Copy all source
 COPY . .
 
-# 1. Build shared, backend, and web in parallel (nx respects dependency graph)
+# 1. Build shared, backend, and web (nx respects the dependency graph)
 ARG VITE_API_URL=https://api.reverieapp.dev
 ENV VITE_API_URL=$VITE_API_URL
 ENV CI=true
-RUN yarn nx run-many -t build --configuration=production
+RUN node_modules/.bin/nx run-many -t build --configuration=production
 
-# 2. Prune backend to standalone dist (package.json + lockfile + workspace_modules)
-RUN yarn nx run @reverie/backend:prune
+# 2. Prune node_modules to the backend workspace's PRODUCTION deps (+ the
+#    @reverie/shared workspace dep, symlinked into node_modules). Berry-native
+#    replacement for the old nx lockfile-prune; the result is copied to the runtime.
+RUN node .yarn/releases/yarn-4.17.1.cjs workspaces focus @reverie/backend --production
 
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
 # Minimal Node.js image with Python + PaddleOCR for the OCR subprocess.
 FROM node:22-slim AS runtime
 WORKDIR /app
-
-# yarn (classic) ships with the node base image — no global install needed.
 
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -57,17 +61,27 @@ RUN apt-get update && apt-get install -y \
 # The framework wheel is installed BEFORE requirements.txt so paddleocr does not
 # pull in the CPU paddlepaddle wheel (the two must not coexist).
 ARG OCR_GPU=true
+# PaddleOCR (paddlepaddle) wheels are published for x86_64 only. Auto-skip the OCR
+# install on arm64 (e.g. local Apple-Silicon builds) so the image still builds — it
+# just runs without OCR. Force-skip on any arch with --build-arg SKIP_OCR=true.
+# Production is x86_64, so OCR installs there as normal.
+ARG SKIP_OCR=false
+ARG TARGETARCH
 COPY apps/backend/ocr_service/requirements.txt \
      apps/backend/ocr_service/requirements-gpu.txt \
      apps/backend/ocr_service/requirements-cpu.txt \
      /tmp/
-RUN python3 -m venv /opt/paddleocr-env && \
-    if [ "$OCR_GPU" = "true" ]; then \
-        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-gpu.txt; \
+RUN if [ "$SKIP_OCR" = "true" ] || [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping PaddleOCR install (SKIP_OCR=$SKIP_OCR, TARGETARCH=$TARGETARCH)"; \
     else \
-        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-cpu.txt; \
-    fi && \
-    /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+        python3 -m venv /opt/paddleocr-env && \
+        if [ "$OCR_GPU" = "true" ]; then \
+            /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-gpu.txt; \
+        else \
+            /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-cpu.txt; \
+        fi && \
+        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt; \
+    fi
 
 # Fallback for the GPU build: if paddle fails to dlopen its bundled CUDA/cuDNN
 # at runtime (e.g. "libcudnn.so.* cannot open shared object file"), uncomment and
@@ -75,9 +89,13 @@ RUN python3 -m venv /opt/paddleocr-env && \
 # ENV LD_LIBRARY_PATH=/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cudnn/lib:/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cublas/lib:$LD_LIBRARY_PATH
 # If that still fails, switch this runtime stage to an nvidia/cuda cudnn-runtime base.
 
-# Copy pruned backend dist (JS, package.json, lockfile, workspace_modules)
+# Copy the focused production node_modules, the built backend, and the workspace lib.
+# node_modules/@reverie/shared is a symlink → ../../libs/shared, so libs/shared (with
+# its built dist) must be present at the same relative path. No install runs here.
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
-RUN cd apps/backend/dist && yarn install --frozen-lockfile --production
+COPY --from=builder /app/libs/shared ./libs/shared
+COPY --from=builder /app/package.json ./package.json
 
 # Copy OCR runner script.
 # Must be at apps/backend/ocr_service/ relative to WORKDIR (/app) because
@@ -89,5 +107,6 @@ ENV PYTHON_PATH=/opt/paddleocr-env/bin/python3
 
 EXPOSE 3000
 
-# Create user (in container): docker exec -it reverie-backend sh -c 'cd apps/backend/dist && yarn run create-user'
+# Create user (in container):
+#   docker exec -it reverie-backend node apps/backend/dist/apps/backend/src/scripts/create-user.js
 CMD ["node", "apps/backend/dist/main.js"]

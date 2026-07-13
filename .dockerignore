@@ -1,6 +1,11 @@
 # Dependencies
 node_modules
 
+# Yarn Berry: keep releases/plugins (copied in Dockerfile); skip cache/state
+.yarn/cache
+.yarn/install-state.gz
+.yarn/unplugged
+
 # Git
 .git
 .gitignore

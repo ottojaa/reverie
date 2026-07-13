@@ -12,6 +12,7 @@ concurrency:
 jobs:
     deploy:
         runs-on: ubuntu-latest
+        timeout-minutes: 45
 
         steps:
             - name: Deploy via SSH
@@ -21,5 +22,8 @@ jobs:
                   username: ${{ secrets.SSH_USER }}
                   key: ${{ secrets.SSH_PRIVATE_KEY }}
                   port: ${{ secrets.SSH_PORT }}
+                  # GPU PaddleOCR image build downloads large CUDA wheels; the default
+                  # command_timeout is 10m, which is why prior deploys timed out.
+                  command_timeout: 30m
                   script: |
                       cd /opt/reverie && git pull origin main && bash scripts/deploy.sh
