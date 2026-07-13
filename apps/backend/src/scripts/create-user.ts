@@ -5,7 +5,7 @@
  * Usage:
  *   npx tsx apps/backend/src/scripts/create-user.ts          # interactive (dev)
  *   npx tsx apps/backend/src/scripts/create-user.ts --prod   # interactive, use .env.prod
- *   In Docker: docker exec -it reverie-backend sh -c 'cd apps/backend/dist && pnpm run create-user'
+ *   In Docker: docker exec -it reverie-backend sh -c 'cd apps/backend/dist && yarn run create-user'
  */
 
 // Parse --prod before imports so env.ts loads .env.prod

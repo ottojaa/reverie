@@ -46,7 +46,7 @@ function useDocuments(folderId: string) {
 
 ## Component Patterns
 
-- Use shadcn components from `components/ui/`. If a component is not yet installed, install it first: `pnpm dlx shadcn@latest add <component>`
+- Use shadcn components from `components/ui/`. If a component is not yet installed, install it first: `npx shadcn@latest add <component>`
 - **Never use native `<button>`, `<input>`, or `<textarea>`** – always use `Button`, `Input`, and `Textarea` from `components/ui/`. Exception: `motion.button` is fine. For file inputs (e.g. react-dropzone), use `Input {...getInputProps()}` with `className="hidden"` when the input is hidden.
 - Functional components only
 - Extract reusable logic into custom hooks
@@ -64,4 +64,4 @@ import { DocumentSchema, type Document } from '@reverie/shared';
 
 - Main process: `electron/main.ts`
 - Preload: `electron/preload.ts`
-- Dev: `pnpm dev:electron` (runs both Vite and Electron)
+- Dev: `yarn dev:electron` (runs both Vite and Electron)

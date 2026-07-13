@@ -16,14 +16,14 @@ Work through these steps in order. Stop and ask the user if anything is ambiguou
 
 ## 3. Format
 
-- Run `pnpm format` (`nx format:write`).
+- Run `yarn format` (`nx format:write`).
 - If it changed files, `git add` + amend or add a `chore: format` commit.
 
 ## 4. Lint + typecheck (loop until green)
 
-- Run `pnpm lint` — this runs **both** lint and typecheck (`nx run-many -t lint typecheck`).
-- For autofixable lint issues, run `pnpm lint:fix`.
-- Fix remaining issues manually, commit the fixes, and re-run `pnpm lint` until it passes cleanly.
+- Run `yarn lint` — this runs **both** lint and typecheck (`nx run-many -t lint typecheck`).
+- For autofixable lint issues, run `yarn lint:fix`.
+- Fix remaining issues manually, commit the fixes, and re-run `yarn lint` until it passes cleanly.
 - Do not proceed to push while lint/typecheck is red.
 
 ## 5. Rebase on main

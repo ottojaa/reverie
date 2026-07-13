@@ -2,6 +2,23 @@
     "name": "@reverie/source",
     "version": "0.0.0",
     "license": "MIT",
+    "packageManager": "yarn@1.22.22",
+    "workspaces": [
+        "packages/*",
+        "apps/*",
+        "libs/*"
+    ],
+    "resolutions": {
+        "vite": "^7.0.0",
+        "nx": "22.4.0",
+        "@nx/js": "22.4.0",
+        "@nx/esbuild": "22.4.0",
+        "@nx/eslint": "22.4.0",
+        "@nx/node": "22.4.0",
+        "@nx/react": "22.4.0",
+        "@nx/vite": "22.4.0",
+        "@nx/web": "22.4.0"
+    },
     "scripts": {
         "format": "nx format:write",
         "format:check": "nx format:check",

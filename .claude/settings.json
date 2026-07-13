@@ -3,7 +3,7 @@
     "permissions": {
         "allow": [
             "Bash(nx:*)",
-            "Bash(pnpm:*)",
+            "Bash(yarn:*)",
             "Bash(git status)",
             "Bash(git diff:*)",
             "Bash(git log:*)",

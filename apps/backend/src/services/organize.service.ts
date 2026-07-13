@@ -1,28 +1,43 @@
 /**
  * Organize Service
  *
- * Orchestrates AI-driven document organization via the OpenAI Responses API.
+ * Orchestrates AI-driven document organization via the Anthropic Messages API.
  * Runs a streaming tool-call loop and writes SSE events to the response stream.
+ *
+ * Conversation state (message history + group_id → document-id stash) is kept in
+ * Redis, keyed by an opaque `response_id` the client round-trips — the Messages
+ * API is stateless, so we resend history each turn (see organize-conversation.store).
+ *
+ * Performance: find_documents hands the model short group_ids instead of raw
+ * document UUIDs; the server resolves group_id → ids from the stash. This keeps
+ * the model's context (and every stateless resend) small. The system prompt and
+ * tool definitions are cached (cache_control) so they're re-read cheaply.
  */
 
+import Anthropic from '@anthropic-ai/sdk';
 import type { OrganizeDocumentPreview, OrganizeOperation } from '@reverie/shared';
 import type { ServerResponse } from 'http';
-import { sql, type SqlBool } from 'kysely';
+import { env } from '../config/env';
 import { db } from '../db/kysely';
-import { streamResponsesAPI, type ResponseInputItem } from '../llm/openai.client';
+import { getAnthropicClient } from '../llm/anthropic.client';
 import { TOOLS } from '../llm/tools';
-import {
-    findDocumentsForOrganize,
-    getCategoryOverview,
-    getFolderOverview,
-    type FindDocumentsGroupBy,
-} from '../search/search.service';
+import { findDocumentsForOrganize, getCategoryOverview, getFolderOverview, type FindDocumentsGroupBy } from '../search/search.service';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { getFolderService } from './folder.service';
+import { createConversationId, loadConversation, newConversationState, saveConversation, type OrganizeConversationState } from './organize-conversation.store';
 import { getStorageService } from './storage.service';
 
 const folderService = getFolderService();
 const storageService = getStorageService();
+
+const ORGANIZE_MAX_TOKENS = 16000;
+
+/** Human-readable status strings emitted when the model starts a read tool. */
+const STATUS_BY_TOOL: Record<string, string> = {
+    find_documents: 'Searching documents that match the criteria...',
+    get_folder_overview: 'Analyzing your folder structure...',
+    get_category_overview: 'Checking document categories...',
+};
 
 // ── SSE helpers ──────────────────────────────────────────────────────────────
 
@@ -35,13 +50,14 @@ function writeSse(res: ServerResponse, event: string, data: unknown): void {
 
 interface FindDocumentsArgs {
     query: string;
-    limit?: number;
+    limit?: number | null;
     group_by?: FindDocumentsGroupBy | null;
 }
 
 interface ProposeMoveOperationRaw {
     type: 'move' | 'create_and_move';
-    document_ids?: string[];
+    group_id?: string | null;
+    document_ids?: string[] | null;
     source_query?: string | null;
     target_folder_name: string;
     target_folder_id?: string | null;
@@ -63,7 +79,12 @@ interface ProposeOrganizationArgs {
     operations: ProposeOperationRaw[];
 }
 
-async function execFindDocuments(args: FindDocumentsArgs, userId: string): Promise<string> {
+/**
+ * Execute find_documents: allocate a short group_id per group, stash the resolved
+ * document ids in conversation state, and return a payload WITHOUT raw ids so the
+ * model never has to read or echo thousands of UUIDs.
+ */
+async function execFindDocuments(args: FindDocumentsArgs, userId: string, state: OrganizeConversationState): Promise<string> {
     const result = await findDocumentsForOrganize(args.query, {
         userId,
         limit: args.limit ?? 200,
@@ -73,21 +94,43 @@ async function execFindDocuments(args: FindDocumentsArgs, userId: string): Promi
     if (result.total === 0) {
         return JSON.stringify({
             total: 0,
-            document_ids: [],
+            groups: [],
             message:
                 'No documents found matching this query. Respond to the user briefly: you did not find any documents to organize. Do NOT suggest folder structures, do NOT say "Review the panel", do NOT offer to scan again.',
         });
     }
 
-    const payload: Record<string, unknown> = {
+    if (result.groups) {
+        const groups = result.groups.map((g) => {
+            const groupId = `g${++state.groupCounter}`;
+
+            state.groups[groupId] = g.document_ids;
+
+            return {
+                group_id: groupId,
+                category: g.category,
+                year: g.year,
+                location: g.location,
+                count: g.count,
+                source_query: g.source_query,
+                date_range: g.date_range,
+                folder_distribution: g.folder_distribution,
+            };
+        });
+
+        return JSON.stringify({ total: result.total, summary: result.summary, groups });
+    }
+
+    // Flat result: expose the whole match set as a single referenceable group.
+    const groupId = `g${++state.groupCounter}`;
+
+    state.groups[groupId] = result.document_ids;
+
+    return JSON.stringify({
         total: result.total,
-        document_ids: result.document_ids,
         summary: result.summary,
-    };
-
-    if (result.groups) payload.groups = result.groups;
-
-    return JSON.stringify(payload);
+        groups: [{ group_id: groupId, count: result.total }],
+    });
 }
 
 async function execGetFolderOverview(userId: string): Promise<string> {
@@ -104,42 +147,31 @@ async function execGetCategoryOverview(userId: string): Promise<string> {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Keep only well-formed UUIDs (dedup). Used for the rare explicit document_ids fallback. */
+function toValidDocumentIds(rawIds: string[]): string[] {
+    return [...new Set(rawIds.map((id) => id.trim()).filter((id) => UUID_REGEX.test(id)))];
+}
+
 /**
- * LLMs sometimes truncate UUIDs (e.g. drop last char). Resolve invalid IDs by
- * prefix-matching against user's documents. Returns deduplicated valid UUIDs.
+ * Resolve an operation's target documents. Prefer the stashed group_id (the model's
+ * normal path); fall back to a re-run source_query, then to explicit document_ids.
  */
-async function resolveDocumentIds(rawIds: string[], userId: string): Promise<string[]> {
-    const valid: string[] = [];
-    const toResolve: string[] = [];
+async function resolveOperationDocumentIds(op: ProposeMoveOperationRaw, userId: string, state: OrganizeConversationState): Promise<string[]> {
+    if (op.group_id) {
+        const stashed = state.groups[op.group_id];
 
-    for (const id of rawIds) {
-        const trimmed = id.trim();
-
-        if (UUID_REGEX.test(trimmed)) {
-            valid.push(trimmed);
-        } else if (trimmed.length >= 32 && /^[0-9a-f-]+$/i.test(trimmed)) {
-            toResolve.push(trimmed);
-        }
+        if (stashed) return stashed;
     }
 
-    if (toResolve.length === 0) return [...new Set(valid)];
-
-    const resolved: string[] = [];
-
-    for (const prefix of toResolve) {
-        const rows = await db
-            .selectFrom('documents')
-            .select('id')
-            .where('user_id', '=', userId)
-            .where(sql<SqlBool>`id::text like concat(${prefix}, '%')`)
-            .execute();
-
-        const first = rows[0];
-
-        if (rows.length === 1 && first) resolved.push(first.id);
+    if (op.source_query) {
+        return resolveSourceQueryDocumentIds(op.source_query, userId);
     }
 
-    return [...new Set([...valid, ...resolved])];
+    if (op.document_ids && op.document_ids.length > 0) {
+        return toValidDocumentIds(op.document_ids);
+    }
+
+    return [];
 }
 
 async function buildDocumentPreviews(documentIds: string[], userId: string): Promise<OrganizeDocumentPreview[]> {
@@ -181,10 +213,7 @@ async function resolveSourceQueryDocumentIds(sourceQuery: string | null | undefi
  * Canonicalize a move operation's target folder against existing folders.
  * If the resolved path already exists, set the real folder id and mark is_new=false.
  */
-async function canonicalizeTargetFolder(
-    op: ProposeMoveOperationRaw,
-    userId: string,
-): Promise<ProposeMoveOperationRaw> {
+async function canonicalizeTargetFolder(op: ProposeMoveOperationRaw, userId: string): Promise<ProposeMoveOperationRaw> {
     let path: string | null = null;
 
     if (op.target_folder_new_parent_name) {
@@ -239,12 +268,7 @@ async function resolveExistingTargetFolderId(canonOp: ProposeMoveOperationRaw, u
 async function loadDocumentFolderIds(documentIds: string[], userId: string): Promise<Map<string, string | null>> {
     if (documentIds.length === 0) return new Map();
 
-    const rows = await db
-        .selectFrom('documents')
-        .select(['id', 'folder_id'])
-        .where('id', 'in', documentIds)
-        .where('user_id', '=', userId)
-        .execute();
+    const rows = await db.selectFrom('documents').select(['id', 'folder_id']).where('id', 'in', documentIds).where('user_id', '=', userId).execute();
 
     const m = new Map<string, string | null>();
 
@@ -256,12 +280,106 @@ async function loadDocumentFolderIds(documentIds: string[], userId: string): Pro
 }
 
 /** Exported for tests: keep only documents not already in targetFolderId. */
-export function filterDocumentIdsNeedingMove(
-    documentIds: string[],
-    folderIdByDocumentId: Map<string, string | null>,
-    targetFolderId: string,
-): string[] {
+export function filterDocumentIdsNeedingMove(documentIds: string[], folderIdByDocumentId: Map<string, string | null>, targetFolderId: string): string[] {
     return documentIds.filter((id) => folderIdByDocumentId.get(id) !== targetFolderId);
+}
+
+/**
+ * Execute propose_organization: resolve each operation to concrete documents/folders,
+ * drop no-ops, build previews, and emit the SSE `proposal` event. Returns the tool
+ * output string fed back to the model.
+ */
+async function execProposeOrganization(args: ProposeOrganizationArgs, userId: string, state: OrganizeConversationState, res: ServerResponse): Promise<string> {
+    let moveAttempts = 0;
+    let droppedNoMatchingDocs = 0;
+    let droppedAllAlreadyInTarget = 0;
+
+    const rawOps = await Promise.all(
+        args.operations.map(async (op) => {
+            if (op.type === 'delete_folder') {
+                return {
+                    type: 'delete_folder' as const,
+                    folder_id: op.folder_id,
+                    folder_name: op.folder_name,
+                };
+            }
+
+            moveAttempts++;
+
+            const canonOp = await canonicalizeTargetFolder(op, userId);
+            let documentIds = await resolveOperationDocumentIds(canonOp, userId, state);
+
+            if (documentIds.length === 0) {
+                droppedNoMatchingDocs++;
+
+                return null;
+            }
+
+            const targetFolderId = await resolveExistingTargetFolderId(canonOp, userId);
+
+            if (targetFolderId) {
+                const folderMap = await loadDocumentFolderIds(documentIds, userId);
+                const beforeNoop = documentIds.length;
+
+                documentIds = filterDocumentIdsNeedingMove(documentIds, folderMap, targetFolderId);
+
+                if (documentIds.length === 0 && beforeNoop > 0) droppedAllAlreadyInTarget++;
+
+                if (documentIds.length === 0) return null;
+            }
+
+            const previews = await buildDocumentPreviews(documentIds, userId);
+
+            return {
+                type: canonOp.type,
+                document_ids: documentIds,
+                document_previews: previews,
+                target_folder: {
+                    ...(canonOp.target_folder_id != null && { id: canonOp.target_folder_id }),
+                    name: canonOp.target_folder_name,
+                    ...(canonOp.target_folder_parent_id != null && { parent_id: canonOp.target_folder_parent_id }),
+                    ...(canonOp.target_folder_new_parent_name != null && { new_parent_name: canonOp.target_folder_new_parent_name }),
+                    is_new: canonOp.is_new,
+                },
+            };
+        }),
+    );
+
+    const operations = rawOps.filter((o) => o !== null) as OrganizeOperation[];
+
+    if (operations.length === 0) {
+        const allMovesWereNoop = moveAttempts > 0 && droppedAllAlreadyInTarget === moveAttempts && droppedNoMatchingDocs === 0;
+
+        return allMovesWereNoop
+            ? JSON.stringify({
+                  message:
+                      'Every proposed move would leave documents where they already are. Tell the user briefly that their library already matches this layout. Do NOT suggest new folder structures, do NOT say "Review the panel", do NOT call propose_organization again for the same targets.',
+              })
+            : 'Proposal resolved to zero effective operations (no matching documents found). Retry with broader queries covering all relevant categories.';
+    }
+
+    writeSse(res, 'proposal', {
+        summary: args.summary,
+        operations,
+    });
+
+    return 'Proposal emitted to the user for review. Briefly confirm what you proposed in one sentence.';
+}
+
+/** Dispatch a single tool call and return its output string (with SSE side effects). */
+async function executeToolCall(toolUse: Anthropic.ToolUseBlock, userId: string, state: OrganizeConversationState, res: ServerResponse): Promise<string> {
+    switch (toolUse.name) {
+        case 'find_documents':
+            return execFindDocuments(toolUse.input as FindDocumentsArgs, userId, state);
+        case 'get_folder_overview':
+            return execGetFolderOverview(userId);
+        case 'get_category_overview':
+            return execGetCategoryOverview(userId);
+        case 'propose_organization':
+            return execProposeOrganization(toolUse.input as ProposeOrganizationArgs, userId, state, res);
+        default:
+            return JSON.stringify({ error: `Unknown tool: ${toolUse.name}` });
+    }
 }
 
 // ── Main streaming loop ───────────────────────────────────────────────────────
@@ -278,7 +396,7 @@ const SYSTEM_PROMPT = `You are Reverie's document organization assistant. Propos
 Tools:
 - get_category_overview: Returns categories with labels/counts. Use when intent is vague.
 - get_folder_overview: Returns folder stats (path, document_count, category_distribution, date_range).
-- find_documents: Returns groups with source_query, document_ids, folder_distribution (where docs live now), location, year, count. group_by supports "category", "category_year", "category_location_year".
+- find_documents: Returns groups, each with a group_id, folder_distribution (where docs live now), location, year, count. group_by supports "category", "category_year", "category_location_year".
 - propose_organization: Emit final plan. Create one operation per find_documents group that still needs changes.
 
 Rules:
@@ -294,9 +412,8 @@ Writing style:
 - When find_documents returns 0 results, tell the user briefly and stop. Do not invent folder structures. Do not say "Review the panel and Confirm or Discard" unless you actually called propose_organization. Only say "Review the panel" after a proposal has been emitted.
 - After propose_organization: keep it concise (1-3 sentences plus an optional bullet list). End with "Review the panel and **Confirm** or **Discard**."
 
-source_query:
-- Groups from find_documents include a source_query field. When non-null, copy it VERBATIM into propose_organization. Do NOT invent your own query.
-- When source_query is null, use the group's document_ids array instead.
+Referencing groups:
+- find_documents returns groups, each with a short group_id (e.g. "g1"). In propose_organization, set each operation's group_id to the matching group's group_id. The server resolves the documents from it — do NOT list document ids.
 - Each group includes folder_distribution: if documents are already mostly under the folder path you would target, skip that group or say it is already organized.
 
 Operation rules:
@@ -327,221 +444,79 @@ When user asks to improve/restructure organization:
 
 Search query syntax examples: "category:photo location:spain date:2025", "category:receipt uploaded:2024".`;
 
+/** System prompt as a cacheable content block (stable across turns and requests). */
+const SYSTEM_BLOCKS: Anthropic.TextBlockParam[] = [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }];
+
+/** Tool list with a cache breakpoint on the last tool (caches tools + system prefix). */
+const CACHED_TOOLS: Anthropic.Tool[] = TOOLS.map((tool, i) => (i === TOOLS.length - 1 ? { ...tool, cache_control: { type: 'ephemeral' } } : tool));
 
 export async function runOrganizeChat(options: OrganizeChatOptions): Promise<void> {
     const { message, responseId, userId, res } = options;
+    const client = getAnthropicClient();
 
-    // First-turn input includes the system prompt when starting a new conversation
-    const firstTurnInput: ResponseInputItem[] = !responseId
-        ? [{ role: 'system', content: SYSTEM_PROMPT } as ResponseInputItem, { role: 'user', content: message } as ResponseInputItem]
-        : [{ role: 'user', content: message } as ResponseInputItem];
+    // Load prior conversation (Redis-backed) or start a new one.
+    let conversationId = responseId;
+    let state: OrganizeConversationState | null = responseId ? await loadConversation(responseId) : null;
 
-    let currentInput: string | ResponseInputItem[] = firstTurnInput;
-    let currentResponseId = responseId;
-    let stopAfterNextTextResponse = false;
+    if (!state || !conversationId) {
+        conversationId = createConversationId();
+        state = newConversationState();
+    }
 
-    // Tool-call loop: each iteration is one Responses API call
+    state.messages.push({ role: 'user', content: message });
+
+    // Tool-call loop: each iteration is one streamed Messages API call.
     for (let iteration = 0; iteration < 10; iteration++) {
-        const stream = await streamResponsesAPI({
-            input: currentInput,
-            tools: TOOLS,
-            previousResponseId: currentResponseId,
+        const stream = client.messages.stream({
+            model: env.ANTHROPIC_ORGANIZE_MODEL,
+            max_tokens: ORGANIZE_MAX_TOKENS,
+            system: SYSTEM_BLOCKS,
+            thinking: { type: 'adaptive' },
+            output_config: { effort: env.ANTHROPIC_EFFORT },
+            tools: CACHED_TOOLS,
+            messages: state.messages,
         });
 
-        // Accumulate tool call data for this turn
-        let completedResponseId: string | undefined;
-        const pendingToolCalls: Array<{ callId: string; name: string; argumentsJson: string }> = [];
-        let currentToolCallIndex = -1;
-
         for await (const event of stream) {
-            switch (event.type) {
-                case 'response.created':
-                    completedResponseId = event.response.id;
-                    break;
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                writeSse(res, 'delta', { content: event.delta.text });
+            } else if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+                const status = STATUS_BY_TOOL[event.content_block.name];
 
-                case 'response.output_text.delta':
-                    writeSse(res, 'delta', { content: event.delta });
-                    break;
-
-                case 'response.output_item.added': {
-                    const item = event.item;
-
-                    if (item.type === 'function_call') {
-                        currentToolCallIndex++;
-                        pendingToolCalls[currentToolCallIndex] = {
-                            callId: item.call_id,
-                            name: item.name,
-                            argumentsJson: '',
-                        };
-                    }
-
-                    break;
-                }
-
-                case 'response.function_call_arguments.delta': {
-                    const tc = currentToolCallIndex >= 0 ? pendingToolCalls[currentToolCallIndex] : undefined;
-
-                    if (tc) tc.argumentsJson += event.delta;
-
-                    break;
-                }
-
-                case 'response.output_item.done': {
-                    const item = event.item;
-                    const tc = currentToolCallIndex >= 0 ? pendingToolCalls[currentToolCallIndex] : undefined;
-
-                    if (item.type === 'function_call' && tc) {
-                        // Finalize the arguments for this tool call
-                        tc.argumentsJson = item.arguments;
-                    }
-
-                    break;
-                }
-
-                case 'response.completed':
-                    completedResponseId = event.response.id;
-                    break;
+                if (status) writeSse(res, 'status', { action: status });
             }
         }
 
-        // If no tool calls, the model produced a text response - we're done
-        if (pendingToolCalls.length === 0) {
-            if (completedResponseId) {
-                writeSse(res, 'done', { response_id: completedResponseId });
-            }
+        const finalMessage = await stream.finalMessage();
 
-            break;
+        // Preserve the full assistant turn (incl. thinking + tool_use blocks) in history.
+        state.messages.push({ role: 'assistant', content: finalMessage.content });
+
+        if (finalMessage.stop_reason !== 'tool_use') {
+            // Model produced its final text response — we're done.
+            await saveConversation(conversationId, state);
+            writeSse(res, 'done', { response_id: conversationId });
+
+            return;
         }
 
-        // If the previous iteration emitted a proposal, the model just produced its
-        // confirmation text in this iteration — stop now (pendingToolCalls was 0 above,
-        // so this path handles the loop-termination after feeding back proposal output).
-        if (stopAfterNextTextResponse) {
-            if (completedResponseId) {
-                writeSse(res, 'done', { response_id: completedResponseId });
-            }
+        // Execute all tool calls from this turn in parallel, then feed results back.
+        const toolUseBlocks = finalMessage.content.filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use');
 
-            break;
-        }
+        const toolResults = await Promise.all(
+            toolUseBlocks.map(async (toolUse): Promise<Anthropic.ToolResultBlockParam> => {
+                const output = await executeToolCall(toolUse, userId, state, res);
 
-        // Execute all tool calls from this turn in parallel
-        const toolOutputs = await Promise.all(
-            pendingToolCalls.map(async (tc) => {
-                let result: string;
-
-                if (tc.name === 'propose_organization') {
-                    const args = JSON.parse(tc.argumentsJson) as ProposeOrganizationArgs;
-                    let moveAttempts = 0;
-                    let droppedNoMatchingDocs = 0;
-                    let droppedAllAlreadyInTarget = 0;
-
-                    const rawOps = await Promise.all(
-                        args.operations.map(async (op) => {
-                            if (op.type === 'delete_folder') {
-                                return {
-                                    type: 'delete_folder' as const,
-                                    folder_id: op.folder_id,
-                                    folder_name: op.folder_name,
-                                };
-                            }
-
-                            moveAttempts++;
-
-                            const canonOp = await canonicalizeTargetFolder(op, userId);
-
-                            const idsFromQuery = await resolveSourceQueryDocumentIds(canonOp.source_query, userId);
-                            const rawIds = idsFromQuery.length > 0 ? idsFromQuery : (canonOp.document_ids ?? []);
-                            let documentIds = await resolveDocumentIds(rawIds, userId);
-
-                            if (documentIds.length === 0) {
-                                droppedNoMatchingDocs++;
-
-                                return null;
-                            }
-
-                            const targetFolderId = await resolveExistingTargetFolderId(canonOp, userId);
-
-                            if (targetFolderId) {
-                                const folderMap = await loadDocumentFolderIds(documentIds, userId);
-                                const beforeNoop = documentIds.length;
-
-                                documentIds = filterDocumentIdsNeedingMove(documentIds, folderMap, targetFolderId);
-
-                                if (documentIds.length === 0 && beforeNoop > 0) droppedAllAlreadyInTarget++;
-
-                                if (documentIds.length === 0) return null;
-                            }
-
-                            const previews = await buildDocumentPreviews(documentIds, userId);
-
-                            return {
-                                type: canonOp.type,
-                                document_ids: documentIds,
-                                document_previews: previews,
-                                target_folder: {
-                                    ...(canonOp.target_folder_id != null && { id: canonOp.target_folder_id }),
-                                    name: canonOp.target_folder_name,
-                                    ...(canonOp.target_folder_parent_id != null && { parent_id: canonOp.target_folder_parent_id }),
-                                    ...(canonOp.target_folder_new_parent_name != null && { new_parent_name: canonOp.target_folder_new_parent_name }),
-                                    is_new: canonOp.is_new,
-                                },
-                            };
-                        }),
-                    );
-
-                    const operations = rawOps.filter((o) => o !== null) as OrganizeOperation[];
-
-                    if (operations.length === 0) {
-                        const allMovesWereNoop =
-                            moveAttempts > 0 &&
-                            droppedAllAlreadyInTarget === moveAttempts &&
-                            droppedNoMatchingDocs === 0;
-
-                        result = allMovesWereNoop
-                            ? JSON.stringify({
-                                  message:
-                                      'Every proposed move would leave documents where they already are. Tell the user briefly that their library already matches this layout. Do NOT suggest new folder structures, do NOT say "Review the panel", do NOT call propose_organization again for the same targets.',
-                              })
-                            : 'Proposal resolved to zero effective operations (no matching documents found). Retry with broader queries covering all relevant categories.';
-                    } else {
-                        writeSse(res, 'proposal', {
-                            summary: args.summary,
-                            operations,
-                        });
-
-                        stopAfterNextTextResponse = true;
-                        result = 'Proposal emitted to the user for review. Briefly confirm what you proposed in one sentence.';
-                    }
-                } else if (tc.name === 'find_documents') {
-                    const args = JSON.parse(tc.argumentsJson) as FindDocumentsArgs;
-                    writeSse(res, 'status', {
-                        action: 'Searching documents that match the criteria...',
-                    });
-                    result = await execFindDocuments(args, userId);
-                } else if (tc.name === 'get_folder_overview') {
-                    writeSse(res, 'status', { action: 'Analyzing your folder structure...' });
-                    result = await execGetFolderOverview(userId);
-                } else if (tc.name === 'get_category_overview') {
-                    writeSse(res, 'status', { action: 'Checking document categories...' });
-                    result = await execGetCategoryOverview(userId);
-                } else {
-                    result = JSON.stringify({ error: `Unknown tool: ${tc.name}` });
-                }
-
-                return {
-                    type: 'function_call_output',
-                    call_id: tc.callId,
-                    output: result,
-                } as ResponseInputItem;
+                return { type: 'tool_result', tool_use_id: toolUse.id, content: output };
             }),
         );
 
-        // Always feed tool outputs back to OpenAI so the conversation history is complete.
-        // This is critical: skipping this leaves a dangling tool call in the history,
-        // which causes "No tool output found" errors on subsequent messages.
-        currentInput = toolOutputs;
-        currentResponseId = completedResponseId;
+        state.messages.push({ role: 'user', content: toolResults });
     }
+
+    // Iteration cap reached — persist and close the stream cleanly.
+    await saveConversation(conversationId, state);
+    writeSse(res, 'done', { response_id: conversationId });
 }
 
 // ── Execute Organization ──────────────────────────────────────────────────────
@@ -572,7 +547,7 @@ export async function executeOrganize(options: ExecuteOrganizeOptions): Promise<
         let foldersDeleted = 0;
 
         const resolveFolderId = async (op: Extract<OrganizeOperation, { type: 'move' | 'create_and_move' }>): Promise<string | null> => {
-            let folderId = op.target_folder.id;
+            const folderId = op.target_folder.id;
 
             if (folderId) return folderId;
 

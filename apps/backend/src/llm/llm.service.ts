@@ -15,7 +15,7 @@ import type { Document, OcrResult } from '../db/schema';
 import { rebuildSearchVector } from '../search/search-indexer';
 import { getStorageService } from '../services/storage.service';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
-import { describeImage, isOpenAIAvailable, summarizeDocument } from './openai.client';
+import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
 import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
 import { prepareTextForLlm } from './text-preparer';
 import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
@@ -112,8 +112,8 @@ async function processTextSummary(
     ocrResult: OcrResult,
     baseTimings: { fetchMs: number; eligibilityMs: number; totalStart: number },
 ): Promise<DocumentLlmResult> {
-    // Check if OpenAI is available
-    if (!isOpenAIAvailable()) {
+    // Check if the LLM is available
+    if (!isLlmAvailable()) {
         const saveStart = Date.now();
         const fallbackSummary = buildFallbackSummary(document, ocrResult);
 
@@ -124,7 +124,7 @@ async function processTextSummary(
                 entities: [],
                 topics: [],
                 fallback: true,
-                reason: 'openai_unavailable',
+                reason: 'llm_unavailable',
             },
             token_count: 0,
             processing_type: 'text_summary',
@@ -157,7 +157,7 @@ async function processTextSummary(
     });
     const preparePromptMs = Date.now() - prepareStart;
 
-    // Call OpenAI
+    // Call the LLM
     const llmStart = Date.now();
     const { result, tokenCount } = await summarizeDocument(prompt);
     const llmMs = Date.now() - llmStart;

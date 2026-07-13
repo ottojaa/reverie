@@ -48,6 +48,7 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
 
                             if (document.mime_type?.startsWith('image/') && document.file_url) {
                                 const url = buildFileUrl(document.file_url);
+
                                 if (url) new Image().src = url;
                             }
                         }}

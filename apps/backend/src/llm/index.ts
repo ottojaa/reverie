@@ -16,8 +16,8 @@ export { buildSkipMetadata, checkLlmEligibility, getFileCategory } from './eligi
 // Text preparation
 export { buildPromptWithSamplingContext, estimateTokenCount, prepareTextForLlm } from './text-preparer';
 
-// OpenAI client
-export { isOpenAIAvailable, isVisionAvailable } from './openai.client';
+// LLM client (Anthropic)
+export { isLlmAvailable, isVisionAvailable } from './anthropic.client';
 
 // Types
 export type {
@@ -36,6 +36,5 @@ export type {
     SkippedMetadata,
     TableRow,
     VisionResponse,
-    VisionResult
+    VisionResult,
 } from './types';
-
