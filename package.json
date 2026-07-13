@@ -25,6 +25,9 @@
         "lint": "nx run-many -t lint typecheck",
         "lint:fix": "nx run-many -t lint -- --fix"
     },
+    "nx": {
+        "includedScripts": []
+    },
     "private": true,
     "devDependencies": {
         "@eslint/js": "^9.15.0",
