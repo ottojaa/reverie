@@ -4,6 +4,13 @@ set -euo pipefail
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/reverie}"
 WEB_DIR="${DEPLOY_DIR}/web"
 ENV_FILE="${DEPLOY_DIR}/.env.production"
+LOG_FILE="${DEPLOY_DIR}/deploy.log"
+
+# Mirror all output (stdout + stderr) to a log file on the host so an in-progress
+# deploy can be followed live: ssh reverie 'tail -f /opt/reverie/deploy.log'.
+# Fresh log per run so `tail -f` shows just the current deploy.
+exec > >(tee "$LOG_FILE") 2>&1
+echo "=== Deploy started: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 
 cd "$DEPLOY_DIR"
 git pull origin main
