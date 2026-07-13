@@ -51,7 +51,7 @@ reverie/
 ## Prerequisites
 
 - Node.js 22+
-- Yarn (Classic v1)
+- Yarn 4 (Berry) — pinned in-repo (`.yarn/releases`), no corepack needed
 - PostgreSQL
 - Redis
 - (Optional) Anthropic (Claude) API key for LLM features
@@ -108,13 +108,13 @@ PaddleOCR runs on CPU by default. To run OCR on an NVIDIA GPU (e.g. an RTX 3080)
    (the driver's max supported runtime — not an installed toolkit). A 12.0–12.5 driver usually still
    works via CUDA minor-version compatibility, but a bump is recommended; below 12.0, upgrade the driver.
 2. Install the **NVIDIA Container Toolkit** and wire it into Docker:
-   ```sh
-   sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
-   ```
+    ```sh
+    sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+    ```
 3. Smoke-test GPU access from a container (must list your GPU):
-   ```sh
-   docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
-   ```
+    ```sh
+    docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
+    ```
 
 **Enable it:**
 

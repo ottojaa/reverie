@@ -62,7 +62,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-slot": "^1.2.4",
-        "@reverie/shared": "*",
+        "@reverie/shared": "workspace:*",
         "@tanstack/react-virtual": "^3.13.18",
         "axios": "^1.13.5",
         "class-variance-authority": "^0.7.1",

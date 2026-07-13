@@ -1,6 +1,6 @@
 # Reverie
 
-Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing and searching document collections. Nx + Yarn (Classic v1) monorepo, TypeScript/ESM throughout, Node 22+.
+Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing and searching document collections. Nx + Yarn 4 (Berry) monorepo, TypeScript/ESM throughout, Node 22+.
 
 ## Monorepo Structure
 
@@ -44,14 +44,14 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 - **Avoid nested conditionals.** Flatten with early returns or named helpers; inner functions are fine when they don't warrant extraction.
 - **Prefer Immer over deep object spreads** for nested updates:
 
-  ```typescript
-  const next = produce(state, (draft) => {
-      draft.user.profile.name = 'Jane';
-      draft.items.push(newItem);
-  });
-  ```
+    ```typescript
+    const next = produce(state, (draft) => {
+        draft.user.profile.name = 'Jane';
+        draft.items.push(newItem);
+    });
+    ```
 
-  Use shallow spreads only for simple, one-level updates.
+    Use shallow spreads only for simple, one-level updates.
 
 ## Coding Conventions
 
