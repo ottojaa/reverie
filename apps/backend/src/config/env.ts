@@ -37,12 +37,16 @@ const envSchema = z.object({
     // Set to 'gpu:0' on a CUDA host; falls back to CPU if GPU init fails.
     OCR_DEVICE: z.string().default('cpu'),
 
-    // OpenAI / LLM
-    OPENAI_API_KEY: z.string().optional(),
-    OPENAI_MODEL: z.string().default('gpt-4o-mini'),
-    OPENAI_MAX_TOKENS: z.coerce.number().default(2000),
-    OPENAI_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
-    OPENAI_EMPTY_RESPONSE_RETRIES: z.coerce.number().default(1),
+    // Anthropic / LLM
+    ANTHROPIC_API_KEY: z.string().optional(),
+    // Organize assistant: agentic tool-calling + strict rule-following (Claude Sonnet 5).
+    ANTHROPIC_ORGANIZE_MODEL: z.string().default('claude-sonnet-5'),
+    // Per-document summarization: high-volume JSON extraction (Claude Haiku 4.5).
+    ANTHROPIC_SUMMARY_MODEL: z.string().default('claude-haiku-4-5'),
+    // Image description (Claude Haiku 4.5 — has vision, cheap/fast).
+    ANTHROPIC_VISION_MODEL: z.string().default('claude-haiku-4-5'),
+    // Thinking depth (effort) for the organize assistant.
+    ANTHROPIC_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
 
     // LLM Processing
     LLM_ENABLED: z.coerce.boolean().default(true),
@@ -50,10 +54,11 @@ const envSchema = z.object({
     LLM_SNIPPET_SIZE: z.coerce.number().default(3000),
     LLM_PROCESS_CODE_FILES: z.coerce.boolean().default(false),
     LLM_MIN_OCR_CONFIDENCE: z.coerce.number().default(30),
+    // Max output tokens for the per-document summary/vision calls.
+    LLM_MAX_OUTPUT_TOKENS: z.coerce.number().default(2000),
 
     // LLM Vision (optional)
     LLM_VISION_ENABLED: z.coerce.boolean().default(false),
-    LLM_VISION_MODEL: z.string().default('gpt-4o'),
 
     // CORS (HTTP API)
     CORS_ORIGIN: z.string().url().default('http://localhost:4200'),

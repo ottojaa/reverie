@@ -18,15 +18,15 @@ import type { PreparedText } from './types';
  */
 export function prepareTextForLlm(rawText: string): PreparedText {
     // Fix 0/O between letters
-    rawText = rawText.replace(/(?<=[A-Z])0(?=[A-Z])/g, "O");
+    rawText = rawText.replace(/(?<=[A-Z])0(?=[A-Z])/g, 'O');
 
     // Fix 1/I between letters
-    rawText = rawText.replace(/(?<=[A-Z])1(?=[A-Z])/g, "I");
+    rawText = rawText.replace(/(?<=[A-Z])1(?=[A-Z])/g, 'I');
 
     // Collapse double spaces
-    rawText = rawText.replace(/\s{2,}/g, " ");
+    rawText = rawText.replace(/\s{2,}/g, ' ');
 
-    // Keep context tight to reduce OpenAI latency while preserving representative coverage.
+    // Keep context tight to reduce LLM latency while preserving representative coverage.
     const maxChars = Math.min(env.LLM_MAX_INPUT_CHARS, 25_000);
     const veryLargeThreshold = 500_000;
 

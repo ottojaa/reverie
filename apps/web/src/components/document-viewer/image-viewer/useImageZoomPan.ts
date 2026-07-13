@@ -4,7 +4,7 @@ const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 const ZOOM_STEP = 0.4;
 
-function clampScale(prev: number, next: number): number {
+function clampScale(next: number): number {
     return Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
 }
 
@@ -115,7 +115,7 @@ export function useImageZoomPan() {
         if (e.ctrlKey) {
             const pinchDelta = -e.deltaY * 0.01;
             setScale((prev) => {
-                const next = clampScale(prev, prev * (1 + pinchDelta));
+                const next = clampScale(prev * (1 + pinchDelta));
 
                 if (next <= MIN_SCALE + 0.05) {
                     setTranslate({ x: 0, y: 0 });
@@ -128,7 +128,7 @@ export function useImageZoomPan() {
         } else {
             const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
             setScale((prev) => {
-                const next = clampScale(prev, prev + delta);
+                const next = clampScale(prev + delta);
 
                 if (next === MIN_SCALE) setTranslate({ x: 0, y: 0 });
 

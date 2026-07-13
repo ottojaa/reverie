@@ -157,7 +157,7 @@ Analyze this document and extract all structured information as specified. Pay s
     return {
         system: SYSTEM_MESSAGE,
         user: userMessage,
-        maxTokens: env.OPENAI_MAX_TOKENS,
+        maxTokens: env.LLM_MAX_OUTPUT_TOKENS,
     };
 }
 

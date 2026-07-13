@@ -3,15 +3,16 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-RUN npm install -g pnpm
+# yarn (classic) ships with the node base image — no global install needed.
 
-# Copy manifests first for dependency layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Copy manifests first for dependency layer caching.
+# Workspaces are declared in the root package.json (yarn workspaces).
+COPY package.json yarn.lock .yarnrc ./
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/web/package.json ./apps/web/
 COPY libs/shared/package.json ./libs/shared/
 
-RUN pnpm install --frozen-lockfile
+RUN yarn install --frozen-lockfile
 
 # Copy all source
 COPY . .
@@ -20,10 +21,10 @@ COPY . .
 ARG VITE_API_URL=https://api.reverieapp.dev
 ENV VITE_API_URL=$VITE_API_URL
 ENV CI=true
-RUN pnpm nx run-many -t build --configuration=production
+RUN yarn nx run-many -t build --configuration=production
 
 # 2. Prune backend to standalone dist (package.json + lockfile + workspace_modules)
-RUN pnpm nx run @reverie/backend:prune
+RUN yarn nx run @reverie/backend:prune
 
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
@@ -31,8 +32,7 @@ RUN pnpm nx run @reverie/backend:prune
 FROM node:22-slim AS runtime
 WORKDIR /app
 
-# Install deps in runtime — no pnpm-workspace here, so pnpm creates local node_modules
-RUN npm install -g pnpm
+# yarn (classic) ships with the node base image — no global install needed.
 
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -77,7 +77,7 @@ RUN python3 -m venv /opt/paddleocr-env && \
 
 # Copy pruned backend dist (JS, package.json, lockfile, workspace_modules)
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
-RUN cd apps/backend/dist && pnpm install --frozen-lockfile --prod
+RUN cd apps/backend/dist && yarn install --frozen-lockfile --production
 
 # Copy OCR runner script.
 # Must be at apps/backend/ocr_service/ relative to WORKDIR (/app) because
@@ -89,5 +89,5 @@ ENV PYTHON_PATH=/opt/paddleocr-env/bin/python3
 
 EXPOSE 3000
 
-# Create user (in container): docker exec -it reverie-backend sh -c 'cd apps/backend/dist && pnpm run create-user'
+# Create user (in container): docker exec -it reverie-backend sh -c 'cd apps/backend/dist && yarn run create-user'
 CMD ["node", "apps/backend/dist/main.js"]

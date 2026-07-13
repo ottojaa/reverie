@@ -1,7 +1,7 @@
 /**
  * Generates icons-data.ts from the lucide repo (name, categories, tags).
  * Run from apps/web: node scripts/generate-icons.js
- * Requires: pnpm add -D simple-git (in apps/web)
+ * Requires: yarn add -D simple-git (in apps/web)
  */
 import fs from 'fs';
 import path from 'path';

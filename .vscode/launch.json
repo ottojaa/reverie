@@ -5,7 +5,7 @@
             "type": "node",
             "request": "launch",
             "name": "Debug @reverie/backend with Nx",
-            "runtimeExecutable": "pnpm exec",
+            "runtimeExecutable": "yarn",
             "runtimeArgs": ["nx", "serve", "@reverie/backend"],
             "env": {
                 "NODE_OPTIONS": "--inspect=9229"

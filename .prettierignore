@@ -11,7 +11,7 @@ dist-electron
 
 # Dependencies
 node_modules
-pnpm-lock.yaml
+yarn.lock
 
 # Android
 apps/android

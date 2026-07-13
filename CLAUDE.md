@@ -1,6 +1,6 @@
 # Reverie
 
-Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing and searching document collections. Nx + pnpm monorepo, TypeScript/ESM throughout, Node 22+.
+Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing and searching document collections. Nx + Yarn (Classic v1) monorepo, TypeScript/ESM throughout, Node 22+.
 
 ## Monorepo Structure
 
@@ -22,7 +22,7 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 | Desktop         | Electron                                          |
 | Mobile          | Kotlin + Jetpack Compose                          |
 | OCR             | Tesseract.js / PaddleOCR                          |
-| LLM             | OpenAI API                                        |
+| LLM             | Anthropic (Claude) API                            |
 
 ## Key Conventions
 
@@ -33,9 +33,9 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 
 ## Commands
 
-- `pnpm lint` — runs both **lint and typecheck** (`nx run-many -t lint typecheck`).
-- `pnpm lint:fix` — eslint autofix.
-- `pnpm format` / `pnpm format:check` — Prettier via `nx format:write` / `nx format:check`.
+- `yarn lint` — runs both **lint and typecheck** (`nx run-many -t lint typecheck`).
+- `yarn lint:fix` — eslint autofix.
+- `yarn format` / `yarn format:check` — Prettier via `nx format:write` / `nx format:check`.
 - Only run tests/typecheck/lint when it's relevant to the change or the user asks — don't run them reflexively after every edit.
 
 ## Code Style
