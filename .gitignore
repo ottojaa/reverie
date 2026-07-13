@@ -8,15 +8,6 @@ out-tsc
 # dependencies
 node_modules
 
-# Yarn Berry (node-modules linker): commit releases + config, ignore cache/state
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
-
 # IDEs and editors
 /.idea
 .project
@@ -75,6 +66,7 @@ apps/android/local.properties
 
 # Claude Code (local, per-machine state)
 .claude/settings.local.json
+.claude/memories/
+.claude/worktrees/
 
-# Deploy log written by scripts/deploy.sh into the host checkout
 deploy.log
