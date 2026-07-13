@@ -75,3 +75,6 @@ apps/android/local.properties
 
 # Claude Code (local, per-machine state)
 .claude/settings.local.json
+
+# Deploy log written by scripts/deploy.sh into the host checkout
+deploy.log
