@@ -19,24 +19,18 @@ from pathlib import Path
 
 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
-# Import the shared helpers from ocr_runner
-from ocr_runner import MIN_BLOCK_CONFIDENCE, _build_structured_text
+# Import the shared helpers from ocr_runner so this debug path matches production.
+from ocr_runner import MIN_BLOCK_CONFIDENCE, _build_ocr, _build_structured_text
 
 
-def run_ocr(image_path, min_confidence, show_filtered):
-    from paddleocr import PaddleOCR
-
+def run_ocr(image_path, min_confidence, show_filtered, device):
     path = Path(image_path).expanduser().resolve()
     if not path.is_file():
         print(f"Error: file not found: {path}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Loading PaddleOCR (PP-OCRv4)...", file=sys.stderr)
-    ocr = PaddleOCR(
-        ocr_version="PP-OCRv4",
-        use_textline_orientation=True,
-        enable_mkldnn=True,
-    )
+    print(f"Loading PaddleOCR (PP-OCRv5) on {device}...", file=sys.stderr)
+    ocr = _build_ocr(device)
 
     print(f"Processing: {path}", file=sys.stderr)
     results = ocr.predict(str(path))
@@ -94,6 +88,11 @@ def main():
         help="Also print the blocks that were filtered out",
     )
     parser.add_argument(
+        "--device",
+        default=os.environ.get("OCR_DEVICE", "cpu"),
+        help="Inference device: cpu, gpu, gpu:0 (default: $OCR_DEVICE or cpu)",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -101,7 +100,7 @@ def main():
     )
     args = parser.parse_args()
 
-    result = run_ocr(args.image, args.min_confidence, args.show_filtered)
+    result = run_ocr(args.image, args.min_confidence, args.show_filtered, args.device)
 
     if args.json_output:
         out = {

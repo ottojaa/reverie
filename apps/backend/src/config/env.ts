@@ -33,6 +33,9 @@ const envSchema = z.object({
     // OCR Engine
     OCR_ENGINE: z.enum(['paddleocr', 'tesseract']).default('paddleocr'),
     PYTHON_PATH: z.string().default('python3'),
+    // PaddleOCR inference device: 'cpu' (default), 'gpu', or 'gpu:0'.
+    // Set to 'gpu:0' on a CUDA host; falls back to CPU if GPU init fails.
+    OCR_DEVICE: z.string().default('cpu'),
 
     // OpenAI / LLM
     OPENAI_API_KEY: z.string().optional(),

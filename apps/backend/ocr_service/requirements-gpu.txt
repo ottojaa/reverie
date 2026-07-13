@@ -1,0 +1,7 @@
+# PaddlePaddle GPU framework — CUDA 12.6 build (bundles CUDA/cuDNN via pip).
+# Suitable for Ampere GPUs such as the RTX 3080 (sm_86).
+# --extra-index-url (NOT -i): the paddle index only hosts paddle wheels, so
+# PyPI must stay primary for the shared deps in requirements.txt.
+# Install this BEFORE requirements.txt.
+--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
+paddlepaddle-gpu==3.3.0

@@ -1,0 +1,3 @@
+# PaddlePaddle CPU framework — for local dev and non-GPU deploys.
+# Install this BEFORE requirements.txt.
+paddlepaddle==3.3.0
