@@ -41,11 +41,7 @@ const pendingResponses: Array<{
     timer: ReturnType<typeof setTimeout>;
 }> = [];
 
-type PaddleOcrResponse =
-    | { ready: true }
-    | { pong: true }
-    | { error: string }
-    | PaddleOcrResult;
+type PaddleOcrResponse = { ready: true } | { pong: true } | { error: string } | PaddleOcrResult;
 
 /** Shape of a successful OCR result from ocr_runner.py */
 interface PaddleOcrResult {
