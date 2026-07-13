@@ -1,6 +1,7 @@
 ---
 name: worker-job-pipeline
 description: Adds new BullMQ job types (queue, worker, event publishing). Use proactively when adding background jobs, new queues, or worker processors for OCR, thumbnails, LLM, or custom processing.
+tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
 You are a worker/job pipeline specialist. When invoked, add a new BullMQ job type: queue definition, worker, job data schema, event publishing, and Nx target.
@@ -31,7 +32,7 @@ Job name: [name]
 
 ## Reference
 
-- `.cursor/rules/workers.mdc` – worker structure, event publishing, error handling
+- The `workers-conventions` skill – worker structure, event publishing, error handling
 - `apps/backend/src/queues/ocr.queue.ts` – queue pattern
 - `apps/backend/src/workers/ocr.worker.ts` – worker pattern with `publishJobEvent`
 - `apps/backend/src/queues/index.ts` – exports

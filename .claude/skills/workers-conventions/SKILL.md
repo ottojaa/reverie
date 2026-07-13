@@ -1,7 +1,6 @@
 ---
-description: Worker conventions for BullMQ job processing
-globs: apps/backend/src/workers/**/*.ts,apps/backend/src/queues/**/*.ts
-alwaysApply: false
+name: workers-conventions
+description: BullMQ worker conventions — worker structure, publishing started/progress/complete/failed job events to Redis pub/sub, retry policy, and concurrency config. Load before writing or reviewing code under `apps/backend/src/workers` or `apps/backend/src/queues`, or when adding a background job.
 ---
 
 # Workers (BullMQ)

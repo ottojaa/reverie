@@ -1,7 +1,6 @@
 ---
-description: Android app conventions for Kotlin + Jetpack Compose
-globs: apps/android/**/*.kt
-alwaysApply: false
+name: android-conventions
+description: Android app conventions (Kotlin + Jetpack Compose) — MVVM + Clean Architecture layout, Hilt DI, Ktor networking, Coil, Material 3 / Material You theming, and the screen + ViewModel pattern. Load before writing or reviewing any code under `apps/android`.
 ---
 
 # Android App (Kotlin + Jetpack Compose)

@@ -1,7 +1,6 @@
 ---
-description: Web app conventions for Electron + React
-globs: apps/web/**/*.{ts,tsx}
-alwaysApply: true
+name: web-conventions
+description: Web app conventions for the Electron + React 19 desktop app — TanStack Router (file-based) + Query for server state, shadcn/ui components, Tailwind v4, Motion. Load before writing or reviewing any code under `apps/web`, or when building UI/components.
 ---
 
 # Web App (Electron + React)

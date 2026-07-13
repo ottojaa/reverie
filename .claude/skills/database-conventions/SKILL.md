@@ -1,7 +1,6 @@
 ---
-description: Database conventions for PostgreSQL and Kysely
-globs: apps/backend/src/db/**/*.ts
-alwaysApply: false
+name: database-conventions
+description: PostgreSQL + Kysely conventions — schema types in db/schema.ts, type-safe select/insert/transaction patterns, Kysely migrations, and tsvector full-text search. Load before writing or reviewing any code under `apps/backend/src/db`, or when working on queries or migrations.
 ---
 
 # Database Layer (Kysely + PostgreSQL)

@@ -21,7 +21,7 @@ apps/web/dist-electron
 !.env.example
 
 # Editor/IDE
-.cursor
+.claude
 .vscode
 .idea
 

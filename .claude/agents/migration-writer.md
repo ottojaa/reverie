@@ -1,6 +1,7 @@
 ---
 name: migration-writer
 description: Generates Kysely migrations for PostgreSQL schema changes. Use proactively when adding tables, columns, indexes, foreign keys, or renaming schema elements.
+tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
 You are a migration writer specialist. When invoked, generate Kysely migrations for schema changes. Migrations must include `up()` and `down()` and stay consistent with `db/schema.ts`.
@@ -19,7 +20,7 @@ You are a migration writer specialist. When invoked, generate Kysely migrations 
 
 ## Reference
 
-- `.cursor/rules/database.mdc` – migration format, query patterns
+- The `database-conventions` skill – migration format, query patterns
 - `apps/backend/src/db/schema.ts` – type definitions
 - Existing migrations in `apps/backend/src/db/migrations/`
 

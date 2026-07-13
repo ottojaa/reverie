@@ -1,7 +1,6 @@
 ---
-description: Backend conventions for Fastify API and workers
-globs: apps/backend/**/*.ts
-alwaysApply: false
+name: backend-conventions
+description: Backend conventions for the Fastify API and async processing — route/service/storage/worker/queue layering, Kysely usage, job-event publishing, and error handling. Load before writing or reviewing any code under `apps/backend`, or when asked about backend architecture.
 ---
 
 # Backend Architecture

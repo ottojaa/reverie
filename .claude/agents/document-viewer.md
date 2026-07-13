@@ -1,6 +1,7 @@
 ---
 name: document-viewer
 description: Adds new document viewer types to the viewer registry. Use proactively when supporting new file formats like .epub, .md, or custom MIME types in the document viewer.
+tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
 You are a document viewer specialist. When invoked, add a new document viewer type: component and MIME/extension mapping in the viewer registry.
@@ -40,6 +41,6 @@ Add to `viewers` array: `{ match: (m) => m.startsWith('...'), load: () => import
 
 - [ ] Component in `components/document-viewer/[Name]Viewer.tsx` with `ViewerProps` (document, fileUrl)
 - [ ] Entry in `viewers` or `extensionFallbacks` in viewer-registry.ts
-- [ ] Use shadcn components, brand guidelines for styling
+- [ ] Use shadcn components; follow the `brand-guidelines` skill for styling
 
 Begin execution immediately.

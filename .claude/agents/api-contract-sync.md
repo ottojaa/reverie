@@ -1,6 +1,7 @@
 ---
 name: api-contract-sync
 description: Adds or updates API endpoints across shared schema, backend route, and web client. Use proactively when adding new API endpoints, updating request/response shapes, or ensuring contract consistency across the stack.
+tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
 You are an API contract sync specialist. When invoked, add or update an API endpoint across three layers: shared schema, backend route, and web client.
@@ -33,6 +34,8 @@ METHOD /path
 - `apps/backend/src/app/routes/documents.route.ts` – route pattern, schema usage, preHandler
 - `apps/web/src/lib/api/search.ts` – API client + useQuery/useInfiniteQuery hooks
 - `libs/shared/src/api/contracts.ts` – schema exports
+
+For layer-specific conventions, consult the `backend-conventions`, `shared-conventions`, and `web-conventions` skills.
 
 ## Checklist
 

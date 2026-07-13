@@ -1,7 +1,6 @@
 ---
-description: Shared library conventions for Zod schemas and types
-globs: libs/shared/**/*.ts
-alwaysApply: true
+name: shared-conventions
+description: Shared library conventions for `@reverie/shared` — Zod schemas as the single source of truth for API contracts, code that must run in BOTH Node and browser, `Schema` suffix naming, `.js` ESM import extensions, and barrel exports via contracts.ts / index.ts. Load before writing or reviewing any code under `libs/shared`.
 ---
 
 # Shared Library
@@ -100,3 +99,5 @@ import { readFileSync } from 'fs'; // Browser doesn't have this
 - Export everything from `index.ts`
 - Use `.js` extensions in imports (ESM)
 - No environment-specific code - must run in both Node.js and browser
+
+> Note: barrel re-exports (`contracts.ts`, `index.ts`) are the intended pattern for this library — this is the one place re-exports are expected.
