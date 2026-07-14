@@ -97,6 +97,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                 className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden contain-[paint]"
             >
                 <div
+                    data-doc-hero
                     className={cn(
                         'relative box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden',
                         isZoomed && 'touch-none',

@@ -145,7 +145,7 @@ const DEFAULT_PAGE_SIZE = 24;
 /**
  * Infinite scroll documents (offset-based pagination, use in Browse)
  */
-export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
+export function useInfiniteDocuments(options: UseDocumentsOptions & { enabled?: boolean } = {}) {
     const { isAuthenticated } = useAuth();
 
     const stableOptions = {
@@ -167,8 +167,28 @@ export function useInfiniteDocuments(options: UseDocumentsOptions = {}) {
             return nextOffset < lastPage.total ? nextOffset : undefined;
         },
 
-        enabled: isAuthenticated,
+        enabled: isAuthenticated && (options.enabled ?? true),
     });
+}
+
+/**
+ * Prefetch the first infinite page for a folder with the exact same query
+ * key as useInfiniteDocuments (canvas approach-prefetch, sidebar hover).
+ */
+export function usePrefetchInfiniteDocuments() {
+    const queryClient = useQueryClient();
+
+    return useCallback(
+        (folderId: string) => {
+            const stableOptions = { folderId, limit: DEFAULT_PAGE_SIZE };
+            queryClient.prefetchInfiniteQuery({
+                queryKey: ['documents', 'infinite', stableOptions],
+                queryFn: ({ pageParam }) => documentsApi.list({ ...stableOptions, offset: pageParam as number }),
+                initialPageParam: 0,
+            });
+        },
+        [queryClient],
+    );
 }
 
 /**

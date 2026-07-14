@@ -1,3 +1,4 @@
+// Sandboxed preload scripts can't be ESM — this file must stay .cts so tsc emits CommonJS (.cjs).
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
