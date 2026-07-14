@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { IslandLayout } from '../types.js';
 import { zoomToDist } from './cameraMath.js';
 import { damp, registerDamper, requestFrame } from './dampers.js';
-import { cam, getCanvasSnapshot, isDiving, patchCanvasSnapshot, tuning, unravelAnims, unravelSuppression, unravelTarget } from './store.js';
+import { cam, getCanvasSnapshot, isDiving, patchCanvasSnapshot, tuning, unravelAnims, unravelSuppression, unravelTarget, zoomBand } from './store.js';
 import {
     APPROACH_DIST,
     enterProximity,
@@ -63,13 +63,19 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
         [],
     );
 
-    useFrame(() => {
+    useFrame((_, dt) => {
         if (isDiving()) return;
 
         const s = stateRef.current;
         const dist = zoomToDist(cam.current.zoom);
         const distScale = tuning.unravelDistance;
         const now = performance.now();
+
+        // Shared zoom-band value for the semantic-zoom LOD (glyph ↔ pile).
+        const inBand = dist < UNRAVEL_ENTER_DIST * distScale ? 1 : 0;
+        zoomBand.current = damp(zoomBand.current, inBand, 5, Math.min(dt, 0.1));
+
+        if (Math.abs(inBand - zoomBand.current) > 1e-3) requestFrame();
 
         let nearest: IslandLayout | null = null;
         let nearestD = Infinity;

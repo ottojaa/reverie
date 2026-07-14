@@ -1,14 +1,14 @@
 import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
-import { Group, Vector3 } from 'three';
+import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
 import { requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getEmojiTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
-import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue } from './store.js';
+import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue, zoomBand } from './store.js';
 import type { CanvasTheme } from './theme.js';
 
 const CLICK_THRESHOLD_PX = 7;
@@ -30,6 +30,8 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
     const groupRef = useRef<Group>(null);
     const baseGroupRef = useRef<Group>(null);
     const fadeGroupRef = useRef<Group>(null);
+    const iconRef = useRef<Mesh>(null);
+    const iconMatRef = useRef<MeshBasicMaterial>(null);
     const dragRef = useRef<{ pointerId: number; grabDx: number; grabDz: number } | null>(null);
     const labelSize = Math.min(1.4, Math.max(0.8, radius * 0.3));
 
@@ -46,7 +48,21 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
         if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
 
-        // …and name/count/emoji additionally make way for this island's own fan.
+        // Semantic-zoom LOD: the glyph is the folder's far representation —
+        // it makes way for the preview pile as the camera enters the unravel
+        // band. Empty folders have no pile, so their glyph stays.
+        const iconT = documentCount === 0 ? 1 : 1 - zoomBand.current;
+        const icon = iconRef.current;
+        const iconMat = iconMatRef.current;
+
+        if (icon && iconMat) {
+            const opacity = iconT * dim;
+            icon.visible = opacity > 0.02;
+            iconMat.opacity = opacity;
+            icon.scale.setScalar(0.7 + 0.3 * iconT);
+        }
+
+        // …and name/count additionally make way for this island's own fan.
         const fadeGroup = fadeGroupRef.current;
 
         if (fadeGroup) {
@@ -137,13 +153,11 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
                     <meshBasicMaterial color={theme.border} transparent opacity={0.7} depthWrite={false} />
                 </mesh>
             </group>
+            <mesh ref={iconRef} rotation-x={-Math.PI / 2} position-y={0.1} renderOrder={3}>
+                <planeGeometry args={[radius * 0.85, radius * 0.85]} />
+                <meshBasicMaterial ref={iconMatRef} map={getEmojiTexture(emoji ?? '📁')} transparent depthWrite={false} />
+            </mesh>
             <group ref={fadeGroupRef}>
-                {emoji && (
-                    <mesh rotation-x={-Math.PI / 2} position-y={0.1} renderOrder={3}>
-                        <planeGeometry args={[radius * 0.85, radius * 0.85]} />
-                        <meshBasicMaterial map={getEmojiTexture(emoji)} transparent depthWrite={false} />
-                    </mesh>
-                )}
                 <Text
                     position={[0, 0.1, radius + 0.9]}
                     rotation-x={-Math.PI / 2}

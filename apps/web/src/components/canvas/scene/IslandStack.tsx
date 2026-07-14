@@ -6,13 +6,11 @@ import { Group, Mesh } from 'three';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
-import { zoomToDist } from './cameraMath.js';
 import { damp, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
-import { cam, islandDrag, tuning, unravelValue } from './store.js';
+import { islandDrag, unravelValue, zoomBand } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
-import { UNRAVEL_ENTER_DIST } from './unravel.js';
 
 const STACK_COUNT = 3;
 
@@ -41,7 +39,6 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
     const groupRef = useRef<Group>(null);
     const meshRefs = useRef<(Mesh | null)[]>([]);
     const mixRefs = useRef<number[]>([]);
-    const hintRef = useRef(0);
     const entriesRef = useRef<Map<string, TextureEntry>>(new Map());
 
     const docIds = previews
@@ -98,29 +95,23 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         const dragging = islandDrag.id === island.id;
         group.position.set(dragging ? islandDrag.x : island.position.x, 0, dragging ? islandDrag.z : island.position.z);
 
-        const opacity = (1 - unravelValue(island.id)) * focusDimFor(island.id);
+        // Semantic-zoom LOD: the pile only exists inside the unravel band —
+        // outside it the island shows its folder glyph instead (FolderIsland).
+        const band = zoomBand.current;
+        const opacity = band * (1 - unravelValue(island.id)) * focusDimFor(island.id);
         group.visible = opacity > 0.012;
 
         if (!group.visible) return;
-
-        // Loosen the pile while the camera is inside the unravel zoom band —
-        // a small preview of the fan-out that says "this can open now".
-        const inBand = zoomToDist(cam.current.zoom) < UNRAVEL_ENTER_DIST * tuning.unravelDistance;
-        const hintTarget = inBand ? 1 : 0;
-        hintRef.current = damp(hintRef.current, hintTarget, 5, Math.min(dt, 0.1));
-        const hint = hintRef.current;
-
-        if (Math.abs(hintTarget - hint) > 1e-3) requestFrame();
 
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
 
             if (mesh) {
-                // Amplify each card's own jitter — the pile spreads apart the
-                // way it will when it actually unravels.
-                const spread = 1 + hint * 1.35;
-                mesh.position.set(card.dx * spread, card.y + hint * 0.1, card.dz * spread);
-                mesh.rotation.z = card.yaw * (1 + hint * 1.5);
+                // Entering the band, the cards deal out of the glyph's spot
+                // into their casual pile poses.
+                const emerge = 0.7 + 0.3 * band;
+                mesh.position.set(card.dx * emerge, card.y, card.dz * emerge);
+                mesh.rotation.z = card.yaw * (0.5 + 0.5 * band);
             }
 
             const uniforms = card.material.uniforms as unknown as CardUniforms;

@@ -66,6 +66,7 @@ export function resetCanvasStore(initialCamera: CameraState | null): void {
     unravelAnims.clear();
     hover.docId = null;
     hover.islandId = null;
+    zoomBand.current = 0;
     unravelSuppression.clear();
     patchCanvasSnapshot({ unraveledFolderId: null, divePhase: 'idle' });
 }
@@ -111,6 +112,14 @@ export function unravelValue(folderId: string): number {
 
 /** Transient hover state — read per frame by cards, never through React. */
 export const hover = { docId: null as string | null, islandId: null as string | null, lift: new Map<string, number>() };
+
+/**
+ * Eased 0→1 "inside the unravel zoom band" value, damped once per frame by
+ * UnravelController (mounted before the islands, so consumers read the
+ * current frame's value). Drives the semantic-zoom LOD: folder glyphs
+ * outside the band crossfade into preview piles inside it.
+ */
+export const zoomBand = { current: 0 };
 
 /**
  * Folders whose auto-unravel is suppressed (click-away collapse, back-nav
