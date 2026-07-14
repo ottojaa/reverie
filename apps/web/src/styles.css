@@ -197,6 +197,18 @@
         @apply border-border;
     }
 
+    /* color-scheme drives Chromium's ROOT DEFAULT canvas color — the color
+       the compositor paints when a surface has no frame yet (fresh WebGL
+       canvas on route swaps, overscroll). Without it that fallback is WHITE
+       in dark mode, and no painted background can cover it. */
+    :root {
+        color-scheme: light;
+    }
+
+    .dark {
+        color-scheme: dark;
+    }
+
     /* html too: during heavy paints (e.g. WebGL context creation on route
        swaps) the compositor falls back to the root background — without this
        it flashes white in dark mode. */

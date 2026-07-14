@@ -4,27 +4,16 @@ import type { IslandLayout } from '../types.js';
 import { zoomToDist } from './cameraMath.js';
 import { damp, registerDamper, requestFrame } from './dampers.js';
 import { cam, getCanvasSnapshot, isDiving, patchCanvasSnapshot, tuning, unravelAnims, unravelSuppression, unravelTarget } from './store.js';
-import { APPROACH_DIST, SWITCH_DEBOUNCE_MS, UNRAVEL_ENTER_DIST, UNRAVEL_EXIT_DIST } from './unravel.js';
-
-// The fan extends past the plate, so the centering exit stays generous.
-const EXIT_SLACK = 14;
-// CameraRig's pan damping constant — used to estimate the view's sweep speed.
-const PAN_LAMBDA = 18;
-/**
- * Opening is deferred while the view sweeps faster than this fraction of the
- * camera distance per second — panning across a cluster must not pop fans
- * open; stopping on a folder opens it right as the camera settles.
- */
-const MAX_OPEN_SWEEP = 0.4;
-
-/**
- * Camera must be centered on the island to open it. The tolerance grows with
- * camera distance — when zoomed out, "centered" is coarser in world units,
- * and a fixed radius made distant unravels nearly impossible to aim.
- */
-function enterProximity(radius: number, dist: number): number {
-    return radius * 0.75 + 0.5 + dist * 0.06;
-}
+import {
+    APPROACH_DIST,
+    enterProximity,
+    EXIT_SLACK,
+    MAX_OPEN_SWEEP,
+    SWITCH_DEBOUNCE_MS,
+    UNRAVEL_ENTER_DIST,
+    UNRAVEL_EXIT_DIST,
+    viewSweep,
+} from './unravel.js';
 
 interface UnravelControllerProps {
     islands: IslandLayout[];
@@ -117,13 +106,8 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
             if (dist > UNRAVEL_EXIT_DIST * distScale || d > island.radius + EXIT_SLACK) unravelSuppression.delete(id);
         });
 
-        // Estimated view sweep: damper lag plus inertia, relative to distance.
-        const sweep =
-            (Math.hypot(cam.target.x - cam.current.x, cam.target.z - cam.current.z) * PAN_LAMBDA + Math.hypot(cam.vel.x, cam.vel.z)) /
-            Math.max(dist, 1);
-
         const candidate =
-            sweep < MAX_OPEN_SWEEP &&
+            viewSweep(dist) < MAX_OPEN_SWEEP &&
             nearest !== null &&
             dist < UNRAVEL_ENTER_DIST * distScale &&
             nearestD < enterProximity(nearest.radius, dist) &&

@@ -32,7 +32,7 @@ export const cam: CameraTransient = {
 };
 
 /** User-adjustable canvas feel (persisted DOM-side, written via props). */
-export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1 };
+export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1, debugUnravel: false };
 
 let snapshot: CanvasSnapshot = { unraveledFolderId: null, divePhase: 'idle' };
 const listeners = new Set<() => void>();

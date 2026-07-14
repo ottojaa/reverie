@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, FolderOpen, Maximize, Minus, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './types.js';
@@ -108,6 +109,10 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                             max={2}
                             onChange={(v) => onTuningChange({ ...tuning, unravelDistance: v })}
                         />
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Unravel debug</span>
+                            <Switch checked={tuning.debugUnravel} onCheckedChange={(v) => onTuningChange({ ...tuning, debugUnravel: v })} />
+                        </div>
                         <Button variant="ghost" size="sm" className="w-full" onClick={() => onTuningChange({ ...DEFAULT_CAMERA_TUNING })}>
                             Reset to defaults
                         </Button>

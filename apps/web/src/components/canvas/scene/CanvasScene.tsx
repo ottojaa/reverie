@@ -16,6 +16,7 @@ import { cam, lastPointerDown, resetCanvasStore, tuning, unravelSuppression } fr
 import { disposeAllTextures, setMaxAnisotropy } from './textureCache.js';
 import { useCanvasTheme } from './theme.js';
 import { collapseUnravel, UnravelController } from './UnravelController.js';
+import { UnravelDebug } from './UnravelDebug.js';
 import { UnraveledCards } from './UnraveledCards.js';
 
 /** Wires the damper registry into R3F's demand frameloop. */
@@ -290,6 +291,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
             <InitialFraming islands={islands} focusFolderId={focusFolderId} initialCamera={initialCamera} returnDive={returnDive} />
             <SceneHandleBridge handleRef={handleRef} islands={islands} />
             <UnravelController islands={islands} onUnravelChange={onUnravelChange} onApproachFolder={onApproachFolder} />
+            {tuningProp.debugUnravel && <UnravelDebug islands={islands} />}
             <DiveController theme={theme} onDiveHandoff={onDiveHandoff} />
             <CollectionLabels islands={islands} theme={theme} />
             {islands.map((island) => (
