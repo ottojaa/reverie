@@ -3,10 +3,10 @@ import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/sear
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSearchState } from '@/lib/hooks/useSearchState';
 import { cn } from '@/lib/utils';
-import type { SearchResult, SuggestionType } from '@reverie/shared';
+import type { SearchHit, SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { ArrowRight, Clock, FileText, Folder, HardDrive, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, Clock, FileText, Folder, FolderOpen, HardDrive, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, TrendingUp, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -127,13 +127,18 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     );
 
     const handleResultClick = useCallback(
-        (documentId: string) => {
+        (hit: SearchHit) => {
             if (query.trim()) {
                 addRecentSearch(query.trim());
             }
 
             onOpenChange(false);
-            navigate({ to: '/document/$id', params: { id: documentId } });
+
+            if (hit.result_type === 'collection') {
+                navigate({ to: '/browse/$sectionId', params: { sectionId: hit.id } });
+            } else {
+                navigate({ to: '/document/$id', params: { id: hit.document_id } });
+            }
         },
         [query, addRecentSearch, onOpenChange, navigate],
     );
@@ -157,7 +162,11 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                         inputRef.current?.focus();
                     }}
                 >
-                    <Command className="flex flex-col h-full overflow-hidden bg-popover shadow-2xl sm:h-auto sm:rounded-xl sm:border sm:border-border" shouldFilter={false} loop>
+                    <Command
+                        className="flex flex-col h-full overflow-hidden bg-popover shadow-2xl sm:h-auto sm:rounded-xl sm:border sm:border-border"
+                        shouldFilter={false}
+                        loop
+                    >
                         {/* Search Input */}
                         <div className="flex items-center gap-2 border-b border-border px-4">
                             <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -183,13 +192,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                     <X className="size-3.5" />
                                 </Button>
                             )}
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleClose}
-                                className="sm:hidden shrink-0 text-muted-foreground px-1"
-                            >
+                            <Button type="button" variant="ghost" size="sm" onClick={handleClose} className="sm:hidden shrink-0 text-muted-foreground px-1">
                                 Cancel
                             </Button>
                         </div>
@@ -341,11 +344,11 @@ interface SearchResultsProps {
     activeSuggestionType: SuggestionType;
     onSuggestionTypeChange: (type: SuggestionType) => void;
     onSuggestionClick: (suggestion: string, type: SuggestionType) => void;
-    results: SearchResult[];
+    results: SearchHit[];
     total: number;
     timingMs?: number;
     isLoading: boolean;
-    onResultClick: (documentId: string) => void;
+    onResultClick: (hit: SearchHit) => void;
     onViewAll: () => void;
 }
 
@@ -436,7 +439,11 @@ function SearchResults({
                     className="mt-1"
                 >
                     {results.map((result) => (
-                        <PreviewResultItem key={result.document_id} result={result} onSelect={() => onResultClick(result.document_id)} />
+                        <PreviewResultItem
+                            key={result.result_type === 'collection' ? `col-${result.id}` : `doc-${result.document_id}`}
+                            result={result}
+                            onSelect={() => onResultClick(result)}
+                        />
                     ))}
                 </Command.Group>
             )}
@@ -470,7 +477,31 @@ const resultCategoryIcons: Record<string, typeof FileText> = {
     graphic: Image,
 };
 
-function PreviewResultItem({ result, onSelect }: { result: SearchResult; onSelect: () => void }) {
+function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: () => void }) {
+    if (result.result_type === 'collection') {
+        const FolderIcon = result.folder_type === 'collection' ? FolderOpen : Folder;
+
+        return (
+            <Command.Item
+                value={`collection-${result.id}`}
+                onSelect={onSelect}
+                className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors aria-selected:bg-secondary data-[selected=true]:bg-secondary"
+            >
+                <div className="flex size-7 shrink-0 items-center justify-center rounded bg-primary/10 text-sm">
+                    {result.emoji ? <span aria-hidden>{result.emoji}</span> : <FolderIcon className="size-3.5 text-primary" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <span className="block truncate">{result.name}</span>
+                    <p className="truncate text-xs text-muted-foreground">
+                        {result.folder_type === 'collection' ? 'Collection' : 'Folder'} · {result.document_count}{' '}
+                        {result.document_count === 1 ? 'document' : 'documents'}
+                    </p>
+                </div>
+                <ArrowRight className="size-3 shrink-0 text-muted-foreground opacity-0 [[aria-selected=true]>&]:opacity-100 [[data-selected=true]>&]:opacity-100" />
+            </Command.Item>
+        );
+    }
+
     const categoryIcon = result.category ? resultCategoryIcons[result.category] : undefined;
     const Icon = categoryIcon ?? (result.mime_type.startsWith('image/') ? Image : FileText);
     const thumbnailUrl = getThumbnailUrl(result, 'sm');

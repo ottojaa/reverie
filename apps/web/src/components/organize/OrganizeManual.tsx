@@ -9,7 +9,7 @@ import { useInfiniteSearch } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
-import type { FolderWithChildren, OrganizeOperation, SearchResult } from '@reverie/shared';
+import type { DocumentSearchResult, FolderWithChildren, OrganizeOperation, SearchResult } from '@reverie/shared';
 import { ArrowLeft, Check, ChevronDown, FolderPlus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -204,9 +204,7 @@ function FolderPickerPanel({
 
                         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                    Folder name
-                                </label>
+                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Folder name</label>
                                 <Input
                                     autoFocus
                                     value={newName}
@@ -217,9 +215,7 @@ function FolderPickerPanel({
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                    Category
-                                </label>
+                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</label>
                                 <select
                                     value={newParentId ?? ''}
                                     onChange={(e) => setNewParentId(e.target.value)}
@@ -392,7 +388,11 @@ export function OrganizeManual() {
         sort_order: 'desc',
     });
 
-    const results = useMemo(() => searchData?.pages.flatMap((p) => p.results) ?? [], [searchData]);
+    // Organize only operates on documents; folders never appear here (sort_by is not 'relevance').
+    const results = useMemo(
+        () => (searchData?.pages.flatMap((p) => p.results) ?? []).filter((r): r is DocumentSearchResult => r.result_type === 'document'),
+        [searchData],
+    );
     const facets = searchData?.pages[0]?.facets;
 
     const selectedResults = useMemo(() => results.filter((r) => selectedIds.has(r.document_id)), [results, selectedIds]);
@@ -549,7 +549,6 @@ export function OrganizeManual() {
                         ))}
                     </div>
                 )}
-
             </div>
 
             <AnimatePresence>
