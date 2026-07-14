@@ -16,12 +16,11 @@ import { useEffect } from 'react';
 
 const AUTO_RELEASE_MS = 2500;
 /**
- * Minimum wall-clock hold. The scene's early useFrame ticks run before the
- * fresh compositor surface has actually PRESENTED a frame — releasing on
- * frame count alone reopened the flash window ~200ms later. Holding longer
- * is invisible: the shield is pixel-identical to the canvas background.
+ * Small wall-clock floor under the GPU-fence release (see CanvasScene's
+ * ReturnShieldRelease) — covers the final compositor swap on slow vsyncs.
+ * Invisible: the shield is pixel-identical to the canvas background.
  */
-const MIN_HOLD_MS = 500;
+const MIN_HOLD_MS = 150;
 const FADE_MS = 150;
 
 let shieldEl: HTMLDivElement | null = null;

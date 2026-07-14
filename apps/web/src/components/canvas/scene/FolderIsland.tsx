@@ -1,16 +1,15 @@
 import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
-import { Color, Group, MeshBasicMaterial, Vector3 } from 'three';
+import { useRef } from 'react';
+import { Group, Vector3 } from 'three';
 import type { IslandLayout, PlanePosition } from '../types.js';
-import { groundPlane, zoomToDist } from './cameraMath.js';
-import { damp, requestFrame } from './dampers.js';
+import { groundPlane } from './cameraMath.js';
+import { requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getEmojiTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
-import { cam, hover, isDiving, islandDrag, tuning, unravelSuppression, unravelValue } from './store.js';
+import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue } from './store.js';
 import type { CanvasTheme } from './theme.js';
-import { UNRAVEL_ENTER_DIST } from './unravel.js';
 
 const CLICK_THRESHOLD_PX = 7;
 const dragHit = new Vector3();
@@ -31,14 +30,10 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
     const groupRef = useRef<Group>(null);
     const baseGroupRef = useRef<Group>(null);
     const fadeGroupRef = useRef<Group>(null);
-    const ringMatRef = useRef<MeshBasicMaterial>(null);
-    const bandRef = useRef(0);
     const dragRef = useRef<{ pointerId: number; grabDx: number; grabDz: number } | null>(null);
     const labelSize = Math.min(1.4, Math.max(0.8, radius * 0.3));
 
-    const ringColors = useMemo(() => ({ base: new Color(theme.border), active: new Color(theme.primary) }), [theme.border, theme.primary]);
-
-    useFrame((_, dt) => {
+    useFrame(() => {
         const group = groupRef.current;
 
         if (!group) return;
@@ -50,19 +45,6 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
         const dim = focusDimFor(island.id);
 
         if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
-
-        // The border ring warms to the accent color while the camera is
-        // zoomed inside the unravel band — the cue that folders can now open.
-        const ringMat = ringMatRef.current;
-
-        if (ringMat) {
-            const inBand = zoomToDist(cam.current.zoom) < UNRAVEL_ENTER_DIST * tuning.unravelDistance;
-            bandRef.current = damp(bandRef.current, inBand ? 1 : 0, 6, Math.min(dt, 0.1));
-            ringMat.color.lerpColors(ringColors.base, ringColors.active, bandRef.current);
-            ringMat.opacity = (0.7 + 0.25 * bandRef.current) * dim;
-
-            if (Math.abs((inBand ? 1 : 0) - bandRef.current) > 1e-3) requestFrame();
-        }
 
         // …and name/count/emoji additionally make way for this island's own fan.
         const fadeGroup = fadeGroupRef.current;
@@ -152,7 +134,7 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
                 </mesh>
                 <mesh rotation-x={-Math.PI / 2} position-y={0.07} renderOrder={2}>
                     <ringGeometry args={[radius * 0.97, radius, 48]} />
-                    <meshBasicMaterial ref={ringMatRef} color={theme.border} transparent opacity={0.7} depthWrite={false} />
+                    <meshBasicMaterial color={theme.border} transparent opacity={0.7} depthWrite={false} />
                 </mesh>
             </group>
             <group ref={fadeGroupRef}>

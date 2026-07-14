@@ -2,15 +2,17 @@ import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useFrame } from '@react-three/fiber';
 import type { Document } from '@reverie/shared';
 import { useEffect, useMemo, useRef } from 'react';
-import { Group } from 'three';
+import { Group, Mesh } from 'three';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
+import { zoomToDist } from './cameraMath.js';
 import { damp, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
-import { islandDrag, unravelValue } from './store.js';
+import { cam, islandDrag, tuning, unravelValue } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
+import { UNRAVEL_ENTER_DIST } from './unravel.js';
 
 const STACK_COUNT = 3;
 
@@ -37,7 +39,9 @@ interface IslandStackProps {
  */
 export function IslandStack({ island, previews, theme }: IslandStackProps) {
     const groupRef = useRef<Group>(null);
+    const meshRefs = useRef<(Mesh | null)[]>([]);
     const mixRefs = useRef<number[]>([]);
+    const hintRef = useRef(0);
     const entriesRef = useRef<Map<string, TextureEntry>>(new Map());
 
     const docIds = previews
@@ -99,7 +103,26 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
         if (!group.visible) return;
 
+        // Loosen the pile while the camera is inside the unravel zoom band —
+        // a small preview of the fan-out that says "this can open now".
+        const inBand = zoomToDist(cam.current.zoom) < UNRAVEL_ENTER_DIST * tuning.unravelDistance;
+        const hintTarget = inBand ? 1 : 0;
+        hintRef.current = damp(hintRef.current, hintTarget, 5, Math.min(dt, 0.1));
+        const hint = hintRef.current;
+
+        if (Math.abs(hintTarget - hint) > 1e-3) requestFrame();
+
         cards.forEach((card, i) => {
+            const mesh = meshRefs.current[i];
+
+            if (mesh) {
+                // Amplify each card's own jitter — the pile spreads apart the
+                // way it will when it actually unravels.
+                const spread = 1 + hint * 1.35;
+                mesh.position.set(card.dx * spread, card.y + hint * 0.1, card.dz * spread);
+                mesh.rotation.z = card.yaw * (1 + hint * 1.5);
+            }
+
             const uniforms = card.material.uniforms as unknown as CardUniforms;
             const entry = entriesRef.current.get(card.doc.id);
 
@@ -123,6 +146,9 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
             {cards.map((card, i) => (
                 <mesh
                     key={card.doc.id}
+                    ref={(mesh) => {
+                        meshRefs.current[i] = mesh;
+                    }}
                     geometry={cardGeometry}
                     material={card.material}
                     position={[card.dx, card.y, card.dz]}
