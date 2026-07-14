@@ -20,10 +20,34 @@ cd "$DEPLOY_DIR"
 git fetch origin main
 git reset --hard origin/main
 
-# Build backend image (runtime stage with PaddleOCR).
-# GPU-enabled by default (OCR_GPU=true -> CUDA 12.6 paddlepaddle-gpu wheel). Requires the
-# NVIDIA driver + NVIDIA Container Toolkit on this host; see README "GPU / OCR".
-# For a CPU-only build, append: --build-arg OCR_GPU=false
+# Build the OCR base image (Node + Python + PaddleOCR + the multi-GB CUDA/cuDNN
+# stack) only when it's missing or its inputs changed. Splitting this off means
+# ordinary code deploys reuse the existing base and never re-download CUDA — see
+# Dockerfile.ocr-base. GPU-enabled by default (OCR_GPU=true); requires the NVIDIA
+# driver + Container Toolkit on this host. CPU-only: set OCR_GPU=false.
+OCR_GPU="${OCR_GPU:-true}"
+OCR_BASE_IMAGE="reverie-ocr-base:latest"
+# Anything that changes what lands in the base image invalidates the hash.
+OCR_BASE_INPUTS=(
+    Dockerfile.ocr-base
+    apps/backend/ocr_service/requirements.txt
+    apps/backend/ocr_service/requirements-gpu.txt
+    apps/backend/ocr_service/requirements-cpu.txt
+)
+OCR_HASH_FILE="${DEPLOY_DIR}/.ocr-base-hash"
+OCR_HASH="OCR_GPU=${OCR_GPU} $(cat "${OCR_BASE_INPUTS[@]}" | sha256sum | cut -d' ' -f1)"
+
+if ! docker image inspect "$OCR_BASE_IMAGE" >/dev/null 2>&1 ||
+    [ "$(cat "$OCR_HASH_FILE" 2>/dev/null || true)" != "$OCR_HASH" ]; then
+    echo "Building OCR base image ($OCR_BASE_IMAGE): missing or OCR deps changed..."
+    docker build -f Dockerfile.ocr-base --build-arg "OCR_GPU=${OCR_GPU}" -t "$OCR_BASE_IMAGE" .
+    echo "$OCR_HASH" >"$OCR_HASH_FILE"
+else
+    echo "OCR base image up to date ($OCR_BASE_IMAGE) — skipping CUDA rebuild."
+fi
+
+# Build backend image (runtime stage = FROM reverie-ocr-base + built app).
+# This is the fast, per-deploy build; it does NOT touch Python/CUDA.
 docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend
 
 # Extract web dist from builder stage

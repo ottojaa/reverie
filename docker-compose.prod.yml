@@ -5,8 +5,10 @@ services:
             dockerfile: Dockerfile
             args:
                 VITE_API_URL: https://api.reverieapp.dev
-                # GPU image (CUDA 12.6 paddlepaddle-gpu). Set to false for CPU-only.
-                OCR_GPU: 'true'
+                # PaddleOCR/CUDA now live in the reverie-ocr-base image (built by
+                # scripts/deploy.sh, referenced via the OCR_BASE build arg — default
+                # reverie-ocr-base:latest). GPU vs CPU is chosen when that base is
+                # built (OCR_GPU in deploy.sh), not here.
         container_name: reverie-backend
         # env_file is an absolute path so it works regardless of where
         # docker compose is invoked from (CI runner checkout dir vs /opt/reverie)
