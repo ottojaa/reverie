@@ -14,6 +14,8 @@ import {
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getFolderService } from '../../services/folder.service';
+import { getPrivateFolderIds } from '../../services/privacy';
+import { resolveShowPrivate } from '../../services/vault';
 
 const folderService = getFolderService();
 
@@ -32,7 +34,9 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const folders = await folderService.listChildren(null, userId);
+            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+            const excludeIds = showPrivate ? undefined : await getPrivateFolderIds(userId);
+            const folders = await folderService.listChildren(null, userId, excludeIds);
 
             return folders.map(serializeFolder);
         },
@@ -52,7 +56,8 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const tree = await folderService.getFolderTree(userId);
+            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+            const tree = await folderService.getFolderTree(userId, !showPrivate);
 
             return tree.map((node) => serializeFolderWithChildren(node));
         },
@@ -104,6 +109,17 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Folder not found');
             }
 
+            // Don't reveal a hidden private folder by direct id while the vault is locked.
+            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+
+            if (!showPrivate) {
+                const privateIds = await getPrivateFolderIds(userId);
+
+                if (privateIds.includes(folder.id)) {
+                    return reply.notFound('Folder not found');
+                }
+            }
+
             return serializeFolder(folder);
         },
     );
@@ -126,7 +142,9 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const children = await folderService.listChildren(request.params.id, userId);
+            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+            const excludeIds = showPrivate ? undefined : await getPrivateFolderIds(userId);
+            const children = await folderService.listChildren(request.params.id, userId, excludeIds);
 
             return children.map(serializeFolder);
         },
@@ -217,6 +235,7 @@ function serializeFolder(folder: import('../../db/schema').Folder): Folder {
         emoji: folder.emoji,
         sort_order: folder.sort_order,
         type: folder.type,
+        is_private: folder.is_private,
         created_at: folder.created_at.toISOString(),
         updated_at: folder.updated_at.toISOString(),
     };

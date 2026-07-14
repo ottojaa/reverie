@@ -21,6 +21,7 @@ export interface UsersTable {
     storage_path: string;
     is_active: ColumnType<boolean, boolean | undefined, boolean>;
     role: ColumnType<UserRole, UserRole | undefined, UserRole>;
+    hide_private: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
     last_login_at: Date | null;
@@ -43,6 +44,7 @@ export interface FoldersTable {
     emoji: string | null;
     sort_order: number;
     type: FolderType;
+    is_private: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }
@@ -72,6 +74,7 @@ export interface DocumentsTable {
     llm_status: JobStatus;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     search_vector: unknown | null; // tsvector type — unified search index
+    is_private: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }

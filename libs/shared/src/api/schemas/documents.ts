@@ -81,6 +81,9 @@ export const DocumentSchema = z.object({
     llm_metadata: z.record(z.unknown()).nullable(),
     llm_processed_at: z.string().datetime().nullable(),
     llm_token_count: z.number().nullable(),
+    // Explicitly-set privacy flag on this document. A document is also effectively
+    // private if its folder or that folder's collection is private (query-time cascade).
+    is_private: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     // Signed URLs for secure file access
@@ -151,6 +154,13 @@ export const UpdateDocumentRequestSchema = z.object({
     original_filename: z.string().min(1).max(255),
 });
 export type UpdateDocumentRequest = z.infer<typeof UpdateDocumentRequestSchema>;
+
+// Mark/unmark one or more documents as private (batch, mirrors MoveDocumentsRequest).
+export const SetDocumentPrivacyRequestSchema = z.object({
+    document_ids: z.array(UuidSchema).min(1).max(100),
+    is_private: z.boolean(),
+});
+export type SetDocumentPrivacyRequest = z.infer<typeof SetDocumentPrivacyRequestSchema>;
 
 export const DocumentOcrResultSchema = z.object({
     document_id: UuidSchema,

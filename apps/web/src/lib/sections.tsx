@@ -96,7 +96,7 @@ function applyReorderToTree(tree: FolderWithChildren[], updates: Array<{ id: str
 function patchFolderInTree(
     tree: FolderWithChildren[],
     folderId: string,
-    patch: { name?: string; description?: string | null; emoji?: string | null },
+    patch: { name?: string; description?: string | null; emoji?: string | null; is_private?: boolean },
 ): FolderWithChildren[] {
     return produce(tree, (draft) => {
         function walk(nodes: FolderWithChildren[]) {
@@ -107,6 +107,8 @@ function patchFolderInTree(
                     if (patch.description !== undefined) node.description = patch.description;
 
                     if (patch.emoji !== undefined) node.emoji = patch.emoji;
+
+                    if (patch.is_private !== undefined) node.is_private = patch.is_private;
 
                     return;
                 }
@@ -256,8 +258,13 @@ export function useUpdateFolder() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null } }) =>
-            foldersApi.patch(id, data),
+        mutationFn: ({
+            id,
+            data,
+        }: {
+            id: string;
+            data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null; is_private?: boolean };
+        }) => foldersApi.patch(id, data),
         onMutate: async ({ id, data }) => {
             const { parent_id, ...patch } = data;
 

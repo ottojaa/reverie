@@ -9,7 +9,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Lock, LockOpen, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 
 interface SectionItemProps {
@@ -18,6 +18,9 @@ interface SectionItemProps {
     isHighlighted?: boolean;
     onEditSection?: ((section: FolderWithChildren) => void) | undefined;
     onDeleteSection?: ((section: FolderWithChildren) => void) | undefined;
+    onTogglePrivate?: ((section: FolderWithChildren, makePrivate: boolean) => void) | undefined;
+    /** True when this folder is private only because its collection is (toggle disabled, shown as a badge). */
+    inheritedPrivate?: boolean;
     onClose?: () => void;
     /** When true, folder row is not draggable (e.g. sidebar tree filter active). */
     disableDrag?: boolean;
@@ -31,11 +34,16 @@ export function SectionItem({
     isHighlighted,
     onEditSection,
     onDeleteSection,
+    onTogglePrivate,
+    inheritedPrivate = false,
     onClose,
     disableDrag = false,
 }: SectionItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
+
+    const ownPrivate = section.is_private;
+    const effectivePrivate = ownPrivate || inheritedPrivate;
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: section.id,
@@ -83,6 +91,7 @@ export function SectionItem({
             >
                 {section.name}
             </Link>
+            {effectivePrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />}
             {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
             {isMobile ? (
                 <DropdownMenu>
@@ -104,6 +113,18 @@ export function SectionItem({
                             <Pencil className="size-4" />
                             Edit
                         </DropdownMenuItem>
+                        {onTogglePrivate &&
+                            (inheritedPrivate && !ownPrivate ? (
+                                <DropdownMenuItem disabled>
+                                    <Lock className="size-4" />
+                                    Private (inherited)
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem onSelect={() => onTogglePrivate(section, !ownPrivate)}>
+                                    {ownPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                                    {ownPrivate ? 'Remove from private' : 'Make private'}
+                                </DropdownMenuItem>
+                            ))}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onSelect={() => onDeleteSection?.(section)}>
                             <Trash2 className="size-4" />
@@ -143,6 +164,18 @@ export function SectionItem({
                     <Pencil className="size-4" />
                     Edit
                 </ContextMenuItem>
+                {onTogglePrivate &&
+                    (inheritedPrivate && !ownPrivate ? (
+                        <ContextMenuItem disabled>
+                            <Lock className="size-4" />
+                            Private (inherited)
+                        </ContextMenuItem>
+                    ) : (
+                        <ContextMenuItem onSelect={() => onTogglePrivate(section, !ownPrivate)}>
+                            {ownPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                            {ownPrivate ? 'Remove from private' : 'Make private'}
+                        </ContextMenuItem>
+                    ))}
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onSelect={() => onDeleteSection?.(section)}>
                     <Trash2 className="size-4" />

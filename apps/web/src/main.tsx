@@ -7,6 +7,7 @@ import { AuthProvider } from './lib/auth';
 import { ConfirmProvider } from './lib/confirm';
 import { getQueryClient } from './lib/query-client/queryClient';
 import { ThemeProvider } from './lib/theme';
+import { VaultProvider } from './lib/vault';
 import { router } from './router';
 import './styles.css';
 
@@ -17,10 +18,12 @@ root.render(
         <AuthProvider>
             <ThemeProvider>
                 <QueryClientProvider client={getQueryClient()}>
-                    <ConfirmProvider>
-                        <Toaster />
-                        <RouterProvider router={router} />
-                    </ConfirmProvider>
+                    <VaultProvider>
+                        <ConfirmProvider>
+                            <Toaster />
+                            <RouterProvider router={router} />
+                        </ConfirmProvider>
+                    </VaultProvider>
                 </QueryClientProvider>
             </ThemeProvider>
         </AuthProvider>

@@ -106,6 +106,12 @@ export const documentsApi = {
         return DocumentSchema.parse(data);
     },
 
+    async setPrivacy(params: { document_ids: string[]; is_private: boolean }): Promise<{ updated: number }> {
+        const { data } = await apiClient.patch('/documents/privacy', params);
+
+        return data as { updated: number };
+    },
+
     async replaceFile(documentId: string, file: File): Promise<Document> {
         const formData = new FormData();
 
@@ -309,6 +315,26 @@ export function useUpdateDocument() {
         },
         onError: () => {
             toast.error('Failed to rename document');
+        },
+    });
+}
+
+/**
+ * Hook to mark/unmark documents as private (batch). Invalidates documents + sidebar
+ * so private items disappear/reappear (and folder counts update) after the change.
+ */
+export function useSetDocumentPrivacy() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (params: { document_ids: string[]; is_private: boolean }) => documentsApi.setPrivacy(params),
+        onSuccess: (_, { is_private }) => {
+            toast.success(is_private ? 'Marked as private' : 'Removed from private');
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['sections'] });
+        },
+        onError: () => {
+            toast.error('Failed to update privacy');
         },
     });
 }

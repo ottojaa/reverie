@@ -13,6 +13,10 @@ export const FolderSchema = z.object({
     emoji: z.string().max(48).nullable(),
     sort_order: z.number(),
     type: FolderTypeSchema,
+    // Explicitly-set privacy flag on this folder. Effective privacy also inherits
+    // from an ancestor (a private collection makes its folders private); callers
+    // compute inheritance from the tree — see getPrivateFolderIds on the backend.
+    is_private: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
 });
@@ -34,6 +38,7 @@ export const UpdateFolderRequestSchema = z.object({
     description: z.string().nullable().optional(),
     emoji: z.string().max(48).nullable().optional(),
     parent_id: UuidSchema.nullable().optional(),
+    is_private: z.boolean().optional(),
 });
 
 export type UpdateFolderRequest = z.infer<typeof UpdateFolderRequestSchema>;

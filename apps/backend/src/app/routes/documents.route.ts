@@ -9,6 +9,7 @@ import {
     JobStatusEnum,
     MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
+    SetDocumentPrivacyRequestSchema,
     TrimVideoRequestSchema,
     TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
@@ -16,6 +17,7 @@ import {
     type Document,
     type DocumentListQuery,
     type MoveDocumentsRequest,
+    type SetDocumentPrivacyRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -26,6 +28,8 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
+import { excludePrivateDocuments, getPrivateFolderIds } from '../../services/privacy';
+import { resolveShowPrivate } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
@@ -118,6 +122,15 @@ export default async function (fastify: FastifyInstance) {
 
             if (date_to) {
                 countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
+            }
+
+            // Hide private documents from listings when the vault is locked.
+            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+
+            if (!showPrivate) {
+                const privateFolderIds = await getPrivateFolderIds(userId);
+                query = excludePrivateDocuments(query, privateFolderIds, '');
+                countQuery = excludePrivateDocuments(countQuery, privateFolderIds, '');
             }
 
             const [documents, countResult] = await Promise.all([
@@ -249,6 +262,36 @@ export default async function (fastify: FastifyInstance) {
             }
 
             reply.status(204).send();
+        },
+    );
+
+    // Mark/unmark documents as private (batch) (requires authentication)
+    fastify.patch<{
+        Body: SetDocumentPrivacyRequest;
+    }>(
+        '/documents/privacy',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Mark or unmark documents as private',
+                body: SetDocumentPrivacyRequestSchema,
+                response: {
+                    200: z.object({ updated: z.number() }),
+                },
+            },
+        },
+        async function (request) {
+            const userId = request.user.id;
+            const { document_ids, is_private } = request.body;
+
+            const result = await db
+                .updateTable('documents')
+                .set({ is_private, updated_at: new Date() })
+                .where('user_id', '=', userId)
+                .where('id', 'in', document_ids)
+                .executeTakeFirst();
+
+            return { updated: Number(result.numUpdatedRows ?? 0) };
         },
     );
 
@@ -1183,6 +1226,7 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null):
         llm_metadata: (llmResult?.metadata as Document['llm_metadata']) ?? null,
         llm_processed_at: llmResult?.processed_at?.toISOString() ?? null,
         llm_token_count: llmResult?.token_count ?? null,
+        is_private: doc.is_private,
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
