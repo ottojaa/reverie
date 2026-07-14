@@ -83,6 +83,14 @@ RUN if [ "$SKIP_OCR" = "true" ] || [ "$TARGETARCH" = "arm64" ]; then \
         /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt; \
     fi
 
+# NOTE: PP-OCRv5 models are intentionally NOT pre-downloaded into the image.
+# Importing the GPU paddlepaddle wheel needs libcuda.so.1, which only exists at
+# runtime (injected by the NVIDIA Container Toolkit), not during `docker build` —
+# so a build-time `import paddleocr` fails on the GPU image. Instead the models are
+# downloaded once at runtime and persisted across container recreates via the
+# `ocr_models` volume mounted at ~/.paddlex (see docker-compose.prod.yml). Runtime
+# startup self-heals if a download stalls (see paddleocr.client.ts / ocr_runner.py).
+
 # Fallback for the GPU build: if paddle fails to dlopen its bundled CUDA/cuDNN
 # at runtime (e.g. "libcudnn.so.* cannot open shared object file"), uncomment and
 # point at the venv's bundled nvidia libs (adjust the python3.X version to match):

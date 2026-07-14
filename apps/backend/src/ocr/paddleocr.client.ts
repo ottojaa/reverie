@@ -41,11 +41,7 @@ const pendingResponses: Array<{
     timer: ReturnType<typeof setTimeout>;
 }> = [];
 
-type PaddleOcrResponse =
-    | { ready: true }
-    | { pong: true }
-    | { error: string }
-    | PaddleOcrResult;
+type PaddleOcrResponse = { ready: true } | { pong: true } | { error: string } | PaddleOcrResult;
 
 /** Shape of a successful OCR result from ocr_runner.py */
 interface PaddleOcrResult {
@@ -84,6 +80,9 @@ function spawnProcess(): void {
         env: {
             ...process.env,
             PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: 'True',
+            // A stalled model download must error (paddlex retries/fails fast)
+            // instead of hanging the runner past STARTUP_TIMEOUT_MS.
+            HF_HUB_DOWNLOAD_TIMEOUT: '30',
             // Device must be set before the PaddleOCR constructor runs, so pass it
             // via the child env (not the post-load JSON handshake).
             OCR_DEVICE: env.OCR_DEVICE,
@@ -162,18 +161,26 @@ async function ensureReady(): Promise<void> {
     startingUp = (async () => {
         spawnProcess();
 
-        // Wait for the {"ready": true} message
-        const response = await sendRaw(STARTUP_TIMEOUT_MS);
+        try {
+            // Wait for the {"ready": true} message
+            const response = await sendRaw(STARTUP_TIMEOUT_MS);
 
-        if ('error' in response) {
-            throw new Error(`PaddleOCR startup failed: ${response.error}`);
+            if ('error' in response) {
+                throw new Error(`PaddleOCR startup failed: ${response.error}`);
+            }
+
+            if (!('ready' in response)) {
+                throw new Error(`Unexpected startup response: ${JSON.stringify(response)}`);
+            }
+
+            ready = true;
+        } catch (error) {
+            // A failed startup must not poison future requests: kill the (possibly
+            // hung) child and reset state so the next request respawns fresh.
+            childProcess?.kill('SIGKILL');
+            cleanup();
+            throw error;
         }
-
-        if (!('ready' in response)) {
-            throw new Error(`Unexpected startup response: ${JSON.stringify(response)}`);
-        }
-
-        ready = true;
     })();
 
     return startingUp;

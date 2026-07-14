@@ -37,7 +37,7 @@ export const foldersApi = {
 
     async patch(
         id: string,
-        data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null },
+        data: { name?: string; description?: string | null; emoji?: string | null; parent_id?: string | null; is_private?: boolean },
     ): Promise<Folder> {
         const { data: folder } = await apiClient.patch(`/folders/${id}`, data);
 

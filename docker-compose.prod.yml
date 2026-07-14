@@ -24,6 +24,10 @@ services:
         volumes:
             # Mount NAS storage so backend can read/write user files
             - /mnt/nas/reverie:/mnt/nas/reverie
+            # Persist PaddleOCR PP-OCRv5 models (~210MB, HOME=/root -> ~/.paddlex) so they
+            # download once and survive container recreates. Models are NOT baked into the
+            # image because importing the GPU paddle wheel needs libcuda.so.1 at build time.
+            - ocr_models:/root/.paddlex
         # Reserve the NVIDIA GPU (requires NVIDIA Container Toolkit on the host).
         # `gpus: all` is a cleaner alternative on Compose >= v2.30.
         deploy:
@@ -43,6 +47,8 @@ services:
     postgres:
         image: postgres:16-alpine
         container_name: reverie-postgres
+        ports:
+            - '127.0.0.1:5432:5432'
         environment:
             POSTGRES_USER: ${POSTGRES_USER}
             # POSTGRES_PASSWORD is read from the runner environment,
@@ -73,3 +79,4 @@ services:
 volumes:
     postgres_data:
     redis_data:
+    ocr_models:

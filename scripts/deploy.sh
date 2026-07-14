@@ -13,7 +13,12 @@ exec > >(tee "$LOG_FILE") 2>&1
 echo "=== Deploy started: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 
 cd "$DEPLOY_DIR"
-git pull origin main
+# Hard-reset to origin/main rather than `git pull`: the deploy box is a
+# clean checkout of main, and any drift in tracked files (e.g. a local
+# docker-compose tweak) would otherwise abort a rebase-pull and block deploys.
+# Untracked/ignored files (.env.production, deploy.log, web/) are left intact.
+git fetch origin main
+git reset --hard origin/main
 
 # Build backend image (runtime stage with PaddleOCR).
 # GPU-enabled by default (OCR_GPU=true -> CUDA 12.6 paddlepaddle-gpu wheel). Requires the

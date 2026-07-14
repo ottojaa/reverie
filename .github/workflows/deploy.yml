@@ -26,4 +26,4 @@ jobs:
                   # command_timeout is 10m, which is why prior deploys timed out.
                   command_timeout: 30m
                   script: |
-                      cd /opt/reverie && git pull origin main && bash scripts/deploy.sh
+                      cd /opt/reverie && git fetch origin main && git reset --hard origin/main && bash scripts/deploy.sh

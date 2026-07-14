@@ -1,11 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { Lock, LockKeyhole } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { Switch } from '../components/ui/switch';
+import { getApiErrorMessage } from '../lib/api/client';
 import { authApi } from '../lib/api/auth-api';
 import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
+import { useVault } from '../lib/vault';
 
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -13,6 +17,41 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
     const { user, logout } = useAuth();
+    const { hideEnabled, unlocked, hasPassword, openReveal, lockNow, setHideEnabled } = useVault();
+    const [privacyError, setPrivacyError] = useState<string | null>(null);
+
+    const handleHideToggle = async (next: boolean) => {
+        setPrivacyError(null);
+
+        if (next) {
+            if (!hasPassword) {
+                setPrivacyError('Set an account password first to hide private items.');
+
+                return;
+            }
+
+            try {
+                await setHideEnabled(true);
+            } catch (err) {
+                setPrivacyError(getApiErrorMessage(err, 'Failed to update setting'));
+            }
+
+            return;
+        }
+
+        // Disabling hiding would permanently expose private items — unlock first.
+        if (!unlocked) {
+            openReveal();
+
+            return;
+        }
+
+        try {
+            await setHideEnabled(false);
+        } catch (err) {
+            setPrivacyError(getApiErrorMessage(err, 'Failed to update setting'));
+        }
+    };
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -159,6 +198,54 @@ function SettingsPage() {
                                 {isLoading ? 'Changing...' : 'Change Password'}
                             </Button>
                         </form>
+                    </CardContent>
+                </Card>
+
+                {/* Private items */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Private items</CardTitle>
+                        <CardDescription>
+                            Private folders and files are always excluded from search. You can also hide them from the sidebar behind your account password.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {privacyError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{privacyError}</div>}
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="space-y-0.5">
+                                <p className="text-sm font-medium">Hide private items from the sidebar</p>
+                                <p className="text-sm text-muted-foreground">
+                                    {hasPassword
+                                        ? 'Revealing them requires your account password.'
+                                        : 'Set an account password below to enable this.'}
+                                </p>
+                            </div>
+                            <Switch
+                                checked={hideEnabled}
+                                onCheckedChange={handleHideToggle}
+                                disabled={!hasPassword && !hideEnabled}
+                                className="data-[state=checked]:bg-accent"
+                                aria-label="Hide private items from the sidebar"
+                            />
+                        </div>
+                        {hideEnabled && (
+                            <div className="flex items-center gap-3">
+                                {unlocked ? (
+                                    <Button variant="outline" size="sm" onClick={lockNow}>
+                                        <Lock className="size-4" />
+                                        Lock now
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" size="sm" onClick={openReveal}>
+                                        <LockKeyhole className="size-4" />
+                                        Reveal private
+                                    </Button>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                    {unlocked ? 'Private items are visible.' : 'Private items are hidden.'}
+                                </span>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

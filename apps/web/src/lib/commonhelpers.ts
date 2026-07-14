@@ -52,6 +52,18 @@ export function buildFileUrl(fileUrl: string | null): string | null {
 }
 
 /**
+ * Append the download flag + desired filename to a (signed) file URL so the server
+ * responds with `Content-Disposition: attachment`, forcing a real download instead of
+ * an inline render. The signed URL stays valid — only `e`/`s` and the path are signed,
+ * so extra query params don't affect the signature.
+ */
+export function buildDownloadUrl(fileUrl: string, filename: string): string {
+    const sep = fileUrl.includes('?') ? '&' : '?';
+
+    return `${fileUrl}${sep}download=1&dl=${encodeURIComponent(filename)}`;
+}
+
+/**
  * Get pre-signed thumbnail URL for a document.
  */
 export function getThumbnailUrl<T extends { thumbnail_urls?: { sm: string; md: string; lg: string } | null }>(

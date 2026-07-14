@@ -9,6 +9,7 @@ import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
+import { VaultSidebarControl } from './VaultSidebarControl';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
 import { LayoutGrid, Settings, Users, X } from 'lucide-react';
@@ -109,6 +110,23 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
         if (ok) deleteFolder.mutate(category.id);
     };
 
+    const handleTogglePrivate = async (folder: FolderWithChildren, makePrivate: boolean) => {
+        // Making a whole collection private affects everything inside it — confirm first.
+        if (makePrivate && folder.type === 'collection' && folder.children.length > 0) {
+            const folderCount = folder.children.length;
+            const docCount = folder.children.reduce((sum, child) => sum + child.document_count, 0);
+            const ok = await confirm({
+                title: 'Make collection private?',
+                description: `"${folder.name}" — its ${folderCount} folder${folderCount !== 1 ? 's' : ''} and ${docCount} file${docCount !== 1 ? 's' : ''} will be hidden from search.`,
+                confirmText: 'Make private',
+            });
+
+            if (!ok) return;
+        }
+
+        updateFolder.mutate({ id: folder.id, data: { is_private: makePrivate } });
+    };
+
     const handleSectionsChange = async (orderUpdates: Array<{ id: string; sort_order: number }>, parentChanges?: Array<{ id: string; parent_id: string }>) => {
         // Persist parent changes first so backend has correct parent_id before reorder
         if (parentChanges?.length) {
@@ -183,6 +201,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                         onAddCollection={openCreateCollection}
                         onDeleteSection={handleDeleteSection}
                         onDeleteCategory={handleDeleteCategory}
+                        onTogglePrivate={handleTogglePrivate}
                         onClose={onClose}
                         {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
@@ -202,6 +221,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
             {/* Storage & Settings */}
             <div className="shrink-0 border-t border-sidebar-border p-2">
+                <VaultSidebarControl />
                 {user ? (
                     <Link to="/settings" className="block px-3 py-2.5 transition-colors hover:bg-sidebar-accent" onClick={onClose}>
                         <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
