@@ -215,9 +215,7 @@ function SettingsPage() {
                             <div className="space-y-0.5">
                                 <p className="text-sm font-medium">Hide private items from the sidebar</p>
                                 <p className="text-sm text-muted-foreground">
-                                    {hasPassword
-                                        ? 'Revealing them requires your account password.'
-                                        : 'Set an account password below to enable this.'}
+                                    {hasPassword ? 'Revealing them requires your account password.' : 'Set an account password below to enable this.'}
                                 </p>
                             </div>
                             <Switch
@@ -241,9 +239,7 @@ function SettingsPage() {
                                         Reveal private
                                     </Button>
                                 )}
-                                <span className="text-xs text-muted-foreground">
-                                    {unlocked ? 'Private items are visible.' : 'Private items are hidden.'}
-                                </span>
+                                <span className="text-xs text-muted-foreground">{unlocked ? 'Private items are visible.' : 'Private items are hidden.'}</span>
                             </div>
                         )}
                     </CardContent>

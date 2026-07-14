@@ -59,9 +59,7 @@ export class FolderService {
         const existing = await dbToUse.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
 
         if (existing) {
-            throw new ConflictError(
-                parentId ? 'A folder with this name already exists in this collection.' : 'A collection with this name already exists.',
-            );
+            throw new ConflictError(parentId ? 'A folder with this name already exists in this collection.' : 'A collection with this name already exists.');
         }
 
         // Next sort_order among siblings
@@ -332,9 +330,7 @@ export class FolderService {
 
             if (existing) {
                 throw new ConflictError(
-                    folder.type === 'collection'
-                        ? 'A collection with this name already exists.'
-                        : 'A folder with this name already exists in this collection.',
+                    folder.type === 'collection' ? 'A collection with this name already exists.' : 'A folder with this name already exists in this collection.',
                 );
             }
 

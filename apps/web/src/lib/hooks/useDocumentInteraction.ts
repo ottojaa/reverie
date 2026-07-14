@@ -112,30 +112,30 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
 
             if (e.shiftKey && selection) {
                 const anchor = selection.anchorId;
-    
+
                 if (anchor != null && orderedIds.length > 0) {
                     selection.selectRange(anchor, document.id, orderedIds);
                 } else {
                     selection.selectOnly(document.id);
                 }
-    
+
                 return;
             }
-    
+
             if ((e.metaKey || e.ctrlKey) && selection) {
                 selection.toggle(document.id);
-    
+
                 return;
             }
-    
+
             // Simple click: double-tap detection, then select
             if (isDoubleTap()) {
                 e.stopPropagation();
                 navigateToDocument();
-    
+
                 return;
             }
-    
+
             selection?.selectOnly(document.id);
 
             return;
@@ -146,7 +146,6 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         } else {
             handleDesktopClick();
         }
-
     };
 
     const handleDoubleClick = (e: React.MouseEvent) => {

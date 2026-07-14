@@ -170,10 +170,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                                 : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
                         )}
                     >
-                        <LayoutGrid
-                            className={cn('size-4 shrink-0', !currentSectionId ? 'text-sidebar-primary' : 'text-muted-foreground')}
-                            aria-hidden
-                        />
+                        <LayoutGrid className={cn('size-4 shrink-0', !currentSectionId ? 'text-sidebar-primary' : 'text-muted-foreground')} aria-hidden />
                         <span>All Documents</span>
                     </Link>
                 </div>

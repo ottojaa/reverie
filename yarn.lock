@@ -6175,7 +6175,10 @@ __metadata:
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
     cmdk: "npm:^1.1.1"
+    concurrently: "npm:^9.2.1"
     date-fns: "npm:^4.1.0"
+    electron: "npm:^40.0.0"
+    electron-builder: "npm:^26.4.0"
     fuse.js: "npm:^7.1.0"
     immer: "npm:^11.1.4"
     lucide-react: "npm:^0.562.0"
@@ -6195,8 +6198,11 @@ __metadata:
     tailwind-merge: "npm:^3.4.0"
     tailwindcss: "npm:^4.1.18"
     tw-animate-css: "npm:^1.4.0"
+    typescript: "npm:~5.9.2"
     usehooks-ts: "npm:^3.1.1"
     vaul: "npm:^1.1.2"
+    vite: "npm:^7.0.0"
+    wait-on: "npm:^9.0.3"
   languageName: unknown
   linkType: soft
 

@@ -1,9 +1,4 @@
-import {
-    FolderSchema,
-    FolderTreeResponseSchema,
-    type Folder,
-    type FolderWithChildren,
-} from '@reverie/shared';
+import { FolderSchema, FolderTreeResponseSchema, type Folder, type FolderWithChildren } from '@reverie/shared';
 import { apiClient } from './client';
 
 export const foldersApi = {
@@ -17,13 +12,7 @@ export const foldersApi = {
         await apiClient.put('/folders/reorder', { updates });
     },
 
-    async create(data: {
-        name: string;
-        parent_id?: string;
-        description?: string;
-        emoji?: string;
-        type?: 'collection' | 'folder';
-    }): Promise<Folder> {
+    async create(data: { name: string; parent_id?: string; description?: string; emoji?: string; type?: 'collection' | 'folder' }): Promise<Folder> {
         const { data: folder } = await apiClient.post('/folders', data);
 
         return FolderSchema.parse(folder);

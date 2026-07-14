@@ -92,11 +92,7 @@ export const documentsApi = {
         return JobIdResponseSchema.parse(data);
     },
 
-    async move(params: {
-        document_ids: string[];
-        folder_id: string;
-        conflict_strategy?: 'replace' | 'keep_both';
-    }): Promise<void> {
+    async move(params: { document_ids: string[]; folder_id: string; conflict_strategy?: 'replace' | 'keep_both' }): Promise<void> {
         await apiClient.patch('/documents/move', params);
     },
 
@@ -122,10 +118,7 @@ export const documentsApi = {
         return DocumentSchema.parse(data);
     },
 
-    async trimVideo(
-        documentId: string,
-        params: { start: number; end: number; saveAsCopy: boolean; sessionId?: string },
-    ): Promise<{ jobId: string }> {
+    async trimVideo(documentId: string, params: { start: number; end: number; saveAsCopy: boolean; sessionId?: string }): Promise<{ jobId: string }> {
         const { data } = await apiClient.post(`/documents/${documentId}/trim`, params);
 
         return TrimVideoResponseSchema.parse(data);
@@ -205,9 +198,7 @@ export function useReprocessLlm() {
     return useMutation({
         mutationFn: (documentId: string) => documentsApi.reprocessLlm(documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) =>
-                old ? { ...old, llm_status: 'pending' } : old,
-            );
+            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, llm_status: 'pending' } : old));
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
         onError: () => {
@@ -288,9 +279,7 @@ export function useRetryOcr() {
     return useMutation({
         mutationFn: (documentId: string) => documentsApi.retryOcr(documentId),
         onSuccess: (_, documentId) => {
-            queryClient.setQueryData<Document>(['document', documentId], (old) =>
-                old ? { ...old, ocr_status: 'pending' } : old,
-            );
+            queryClient.setQueryData<Document>(['document', documentId], (old) => (old ? { ...old, ocr_status: 'pending' } : old));
             queryClient.removeQueries({ queryKey: ['document', documentId, 'ocr'] });
             queryClient.invalidateQueries({ queryKey: ['documents'] });
         },
@@ -346,8 +335,7 @@ export function useReplaceDocumentFile() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ documentId, file }: { documentId: string; file: File }) =>
-            documentsApi.replaceFile(documentId, file),
+        mutationFn: ({ documentId, file }: { documentId: string; file: File }) => documentsApi.replaceFile(documentId, file),
         onSuccess: (data) => {
             queryClient.setQueryData(['document', data.id], data);
             queryClient.invalidateQueries({ queryKey: ['documents'] });
