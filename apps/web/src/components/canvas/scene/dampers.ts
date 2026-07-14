@@ -12,6 +12,16 @@ export function ease(p: number): number {
     return t * t * (3 - 2 * t);
 }
 
+const BACK_C1 = 1.70158;
+const BACK_C3 = BACK_C1 + 1;
+
+/** Ease-out with a small (~10%) overshoot past 1 before settling — "pop". */
+export function easeOutBack(p: number): number {
+    const t = Math.min(1, Math.max(0, p)) - 1;
+
+    return 1 + BACK_C3 * t * t * t + BACK_C1 * t * t;
+}
+
 /** Frame-rate-corrected exponential damping toward a target. */
 export function damp(current: number, target: number, lambda: number, dt: number): number {
     return current + (target - current) * (1 - Math.exp(-lambda * dt));

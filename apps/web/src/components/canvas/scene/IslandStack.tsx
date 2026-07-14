@@ -6,7 +6,7 @@ import { Group, Mesh } from 'three';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
-import { damp, requestFrame } from './dampers.js';
+import { clamp, damp, easeOutBack, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
 import { islandDrag, unravelValue, zoomBand } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
@@ -105,13 +105,18 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
+            // Staggered pop: each card bursts out of the glyph a beat after
+            // the one above it, growing with a small overshoot before
+            // settling — and squashes back in the same way on the way out.
+            const t = clamp(band * 1.2 - i * 0.1, 0, 1);
+            const pop = easeOutBack(t);
 
             if (mesh) {
-                // Entering the band, the cards deal out of the glyph's spot
-                // into their casual pile poses.
-                const emerge = 0.7 + 0.3 * band;
+                const emerge = 0.55 + 0.45 * pop;
+                const scale = 0.35 + 0.65 * pop;
                 mesh.position.set(card.dx * emerge, card.y, card.dz * emerge);
-                mesh.rotation.z = card.yaw * (0.5 + 0.5 * band);
+                mesh.rotation.z = card.yaw * (0.4 + 0.6 * pop);
+                mesh.scale.set(card.w * scale, card.h * scale, 1);
             }
 
             const uniforms = card.material.uniforms as unknown as CardUniforms;
@@ -128,7 +133,7 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
             }
 
             uniforms.uMix.value = mixRefs.current[i] ?? 0;
-            uniforms.uOpacity.value = opacity;
+            uniforms.uOpacity.value = (1 - unravelValue(island.id)) * focusDimFor(island.id) * clamp(t * 1.5, 0, 1);
         });
     });
 

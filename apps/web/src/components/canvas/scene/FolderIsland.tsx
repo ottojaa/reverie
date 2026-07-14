@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
-import { requestFrame } from './dampers.js';
+import { easeOutBack, requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
@@ -59,7 +59,9 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
             const opacity = iconT * dim;
             icon.visible = opacity > 0.02;
             iconMat.opacity = opacity;
-            icon.scale.setScalar(0.7 + 0.3 * iconT);
+            // Mirrors the pile's pop: the glyph springs back with a slight
+            // overshoot as the contents tuck themselves away.
+            icon.scale.setScalar(0.55 + 0.45 * easeOutBack(iconT));
         }
 
         // …and name/count additionally make way for this island's own fan.
