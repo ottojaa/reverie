@@ -31,9 +31,10 @@ interface TuningSliderProps {
     min: number;
     max: number;
     onChange: (value: number) => void;
+    hint?: string;
 }
 
-function TuningSlider({ label, value, min, max, onChange }: TuningSliderProps) {
+function TuningSlider({ label, value, min, max, onChange, hint }: TuningSliderProps) {
     return (
         <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
@@ -41,6 +42,7 @@ function TuningSlider({ label, value, min, max, onChange }: TuningSliderProps) {
                 <span className="tabular-nums text-foreground">{value.toFixed(2)}×</span>
             </div>
             <Slider value={[value]} min={min} max={max} step={0.05} onValueChange={([v]) => v !== undefined && onChange(v)} />
+            {hint && <p className="text-[11px] leading-snug text-muted-foreground/80">{hint}</p>}
         </div>
     );
 }
@@ -108,6 +110,15 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                             min={0.5}
                             max={2}
                             onChange={(v) => onTuningChange({ ...tuning, unravelDistance: v })}
+                            hint="How far you can be zoomed out and still open folders."
+                        />
+                        <TuningSlider
+                            label="Unravel radius"
+                            value={tuning.unravelRadius}
+                            min={0.5}
+                            max={2}
+                            onChange={(v) => onTuningChange({ ...tuning, unravelRadius: v })}
+                            hint="Size of the screen-center zone that triggers a folder."
                         />
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Unravel debug</span>

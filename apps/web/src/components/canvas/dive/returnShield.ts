@@ -15,22 +15,46 @@ import { useEffect } from 'react';
  */
 
 const AUTO_RELEASE_MS = 2500;
+/**
+ * Minimum wall-clock hold. The scene's early useFrame ticks run before the
+ * fresh compositor surface has actually PRESENTED a frame — releasing on
+ * frame count alone reopened the flash window ~200ms later. Holding longer
+ * is invisible: the shield is pixel-identical to the canvas background.
+ */
+const MIN_HOLD_MS = 500;
 const FADE_MS = 150;
 
 let shieldEl: HTMLDivElement | null = null;
 let autoRelease: ReturnType<typeof setTimeout> | null = null;
+let holdTimer: ReturnType<typeof setTimeout> | null = null;
+let mountedAt = 0;
 
 export function mountReturnShield(): void {
     if (shieldEl) return;
 
+    mountedAt = performance.now();
     shieldEl = document.createElement('div');
     shieldEl.style.cssText = 'position:fixed;inset:0;z-index:50;background:var(--background);pointer-events:none;';
     document.body.appendChild(shieldEl);
     // Failsafe: never trap the user behind the shield if the scene errors out.
-    autoRelease = setTimeout(releaseReturnShield, AUTO_RELEASE_MS);
+    autoRelease = setTimeout(releaseNow, AUTO_RELEASE_MS);
 }
 
 export function releaseReturnShield(): void {
+    if (!shieldEl) return;
+
+    const remaining = mountedAt + MIN_HOLD_MS - performance.now();
+
+    if (remaining > 0) {
+        holdTimer ??= setTimeout(releaseNow, remaining);
+
+        return;
+    }
+
+    releaseNow();
+}
+
+function releaseNow(): void {
     const el = shieldEl;
 
     if (!el) return;
@@ -40,6 +64,11 @@ export function releaseReturnShield(): void {
     if (autoRelease) {
         clearTimeout(autoRelease);
         autoRelease = null;
+    }
+
+    if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
     }
 
     const fade = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: 'ease-out', fill: 'forwards' });

@@ -7,11 +7,11 @@ import { cam, getCanvasSnapshot, isDiving, patchCanvasSnapshot, tuning, unravelA
 import {
     APPROACH_DIST,
     enterProximity,
-    EXIT_SLACK,
     MAX_OPEN_SWEEP,
     SWITCH_DEBOUNCE_MS,
     UNRAVEL_ENTER_DIST,
     UNRAVEL_EXIT_DIST,
+    unravelExitRadius,
     viewSweep,
 } from './unravel.js';
 
@@ -90,8 +90,10 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
 
         const unraveledId = getCanvasSnapshot().unraveledFolderId;
 
-        // Re-arm suppressed folders (click-away, back-nav) once the camera has
-        // left their zone — never while it is still parked on them.
+        // Re-arm suppressed folders (click-away, back-nav) as soon as the
+        // focus leaves their ENTER zone — the suppression only exists to stop
+        // the instant reopen while still parked on the folder, so any real
+        // pan away restores normal behavior.
         unravelSuppression.forEach((id) => {
             const island = islandsRef.current.find((i) => i.id === id);
 
@@ -103,7 +105,7 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
 
             const d = Math.hypot(island.position.x - cam.current.x, island.position.z - cam.current.z);
 
-            if (dist > UNRAVEL_EXIT_DIST * distScale || d > island.radius + EXIT_SLACK) unravelSuppression.delete(id);
+            if (dist > UNRAVEL_EXIT_DIST * distScale || d > enterProximity(island.radius, dist) * 1.1) unravelSuppression.delete(id);
         });
 
         const candidate =
@@ -122,11 +124,11 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
         } else {
             const current = islandsRef.current.find((i) => i.id === unraveledId);
             const currentD = current ? Math.hypot(current.position.x - cam.current.x, current.position.z - cam.current.z) : Infinity;
-            // The exit slack can exceed sibling spacing inside a cluster, so an
-            // island must also yield when a competitor is clearly nearer —
+            // The exit boundary can exceed sibling spacing inside a cluster, so
+            // an island must also yield when a competitor is clearly nearer —
             // otherwise a neighbour's fan sticks open while approaching this one.
             const competitorNearer = nearest !== null && nearest.id !== unraveledId && nearestD < currentD * 0.6;
-            const lost = dist > UNRAVEL_EXIT_DIST * distScale || currentD > (current?.radius ?? 0) + EXIT_SLACK || competitorNearer;
+            const lost = dist > UNRAVEL_EXIT_DIST * distScale || !current || currentD > unravelExitRadius(current, dist) || competitorNearer;
 
             if (lost) next = candidate;
         }
@@ -147,8 +149,8 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
 
         if (next) {
             unravelTarget(next, 1);
-            // The folder earned its way past the gates — drop any stale entry.
-            unravelSuppression.delete(next);
+            // Opening any folder is fresh intent — all suppressions are stale.
+            unravelSuppression.clear();
         }
 
         patchCanvasSnapshot({ unraveledFolderId: next });

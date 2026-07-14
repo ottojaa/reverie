@@ -4,7 +4,7 @@ import { Group, Mesh, MeshBasicMaterial } from 'three';
 import type { IslandLayout } from '../types.js';
 import { zoomToDist } from './cameraMath.js';
 import { cam, getCanvasSnapshot, tuning, unravelSuppression } from './store.js';
-import { enterProximity, EXIT_SLACK, MAX_OPEN_SWEEP, UNRAVEL_ENTER_DIST, UNRAVEL_EXIT_DIST, viewSweep } from './unravel.js';
+import { enterProximity, MAX_OPEN_SWEEP, UNRAVEL_ENTER_DIST, unravelExitRadius, viewSweep } from './unravel.js';
 
 /**
  * Debug overlay for the semantic-zoom gates. Draws the exact conditions the
@@ -59,7 +59,7 @@ export function UnravelDebug({ islands }: { islands: IslandLayout[] }) {
             const prox = enterProximity(island.radius, dist);
             // The open folder's ring shows what keeps it open (exit boundary);
             // everything else shows what would open it (enter proximity).
-            mesh.scale.setScalar(isOpen ? island.radius + EXIT_SLACK : prox);
+            mesh.scale.setScalar(isOpen ? unravelExitRadius(island, dist) : prox);
             mesh.position.set(island.position.x, 0.18, island.position.z);
 
             const isNearest = nearest?.id === island.id;

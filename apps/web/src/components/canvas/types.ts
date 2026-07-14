@@ -34,6 +34,8 @@ export interface CameraTuning {
     friction: number;
     /** Multiplier on the zoom distance at which folders unravel (higher = from farther away). */
     unravelDistance: number;
+    /** Multiplier on the center-zone radius that triggers a folder. */
+    unravelRadius: number;
     /** Show the unravel gates: focus reticle + per-folder trigger circles. */
     debugUnravel: boolean;
 }
@@ -43,6 +45,7 @@ export const DEFAULT_CAMERA_TUNING: CameraTuning = {
     zoomSpeed: 1,
     friction: 1,
     unravelDistance: 1,
+    unravelRadius: 1,
     debugUnravel: false,
 };
 

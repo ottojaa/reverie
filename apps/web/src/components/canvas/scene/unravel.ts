@@ -1,7 +1,7 @@
 import type { Document } from '@reverie/shared';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
-import { cam } from './store.js';
+import { cam, tuning } from './store.js';
 
 /**
  * Semantic-zoom constants and the fan-out layout. Zoom bands use hysteresis
@@ -14,8 +14,6 @@ export const UNRAVEL_ENTER_DIST = 44;
 export const UNRAVEL_EXIT_DIST = 58;
 export const APPROACH_DIST = 64;
 export const SWITCH_DEBOUNCE_MS = 150;
-/** The fan extends past the plate, so the centering exit stays generous. */
-export const EXIT_SLACK = 14;
 // CameraRig's pan damping constant — used to estimate the view's sweep speed.
 const PAN_LAMBDA = 18;
 /**
@@ -29,9 +27,21 @@ export const MAX_OPEN_SWEEP = 0.4;
  * Camera must be centered on the island to open it. The tolerance grows with
  * camera distance — when zoomed out, "centered" is coarser in world units,
  * and a fixed radius made distant unravels nearly impossible to aim.
+ * User-tunable via the "Unravel radius" slider.
  */
 export function enterProximity(radius: number, dist: number): number {
-    return radius * 0.75 + 0.5 + dist * 0.06;
+    return (radius * 0.75 + 0.5 + dist * 0.06) * tuning.unravelRadius;
+}
+
+/**
+ * How far the camera focus may wander from an OPEN folder before it
+ * re-gathers: just past the fan itself (so browsing the fan's edge cards is
+ * safe), never smaller than the enter zone (or it would collapse on open).
+ */
+export function unravelExitRadius(island: IslandLayout, dist: number): number {
+    const { halfW, halfH } = fanHalfExtents(island.documentCount);
+
+    return Math.max(Math.max(halfW, halfH) + 2, enterProximity(island.radius, dist) * 1.15);
 }
 
 /** Estimated view sweep: pan-damper lag plus inertia, relative to camera distance. */
@@ -40,6 +50,7 @@ export function viewSweep(dist: number): number {
         (Math.hypot(cam.target.x - cam.current.x, cam.target.z - cam.current.z) * PAN_LAMBDA + Math.hypot(cam.vel.x, cam.vel.z)) / Math.max(dist, 1)
     );
 }
+
 export const FAN_PAGE_LIMIT = 24;
 
 /** A flat card pose on the plane (y up, yaw = spin around vertical). */
