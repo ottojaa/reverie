@@ -4,7 +4,7 @@ import type { IslandLayout } from '../types.js';
 import { zoomToDist } from './cameraMath.js';
 import { damp, registerDamper, requestFrame } from './dampers.js';
 import { cam, getCanvasSnapshot, hover, isDiving, patchCanvasSnapshot, tuning, unravelAnims, unravelSuppression, unravelTarget } from './store.js';
-import { APPROACH_DIST, HOVER_LINGER_MS, HOVER_UNRAVEL_MAX_DIST, SWITCH_DEBOUNCE_MS, UNRAVEL_ENTER_DIST, UNRAVEL_EXIT_DIST } from './unravel.js';
+import { APPROACH_DIST, HOVER_LINGER_MS, HOVER_OPEN_DELAY_MS, HOVER_UNRAVEL_MAX_DIST, SWITCH_DEBOUNCE_MS, UNRAVEL_ENTER_DIST, UNRAVEL_EXIT_DIST } from './unravel.js';
 
 // Entering by zoom requires being nearly centered on the island — a generous
 // enter radius made the overview fit of small libraries auto-unravel the
@@ -38,6 +38,9 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
         lastSwitchAt: 0,
         approachedId: null as string | null,
         lastHoverAt: 0,
+        prevHoverIslandId: null as string | null,
+        hoverArmId: null as string | null,
+        hoverArmAt: 0,
     });
 
     // The eased per-folder unravel values chase their targets here.
@@ -100,16 +103,44 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
 
         const hoverLingering = now - s.lastHoverAt < HOVER_LINGER_MS;
 
-        // The pointer left a suppressed island — arm it again.
-        if (unravelSuppression.id && hover.islandId !== unravelSuppression.id && !hoverLingering) {
-            unravelSuppression.id = null;
+        // Suppression re-arms per path: the zoom path once the camera has left
+        // the folder's zone, the hover path once the pointer has actually left
+        // the island (an observed over→out transition, so a cursor merely
+        // sitting there after back-navigation doesn't count as fresh intent).
+        unravelSuppression.forEach((entry, id) => {
+            const island = islandsRef.current.find((i) => i.id === id);
+
+            if (!island) {
+                unravelSuppression.delete(id);
+
+                return;
+            }
+
+            const d = Math.hypot(island.position.x - cam.current.x, island.position.z - cam.current.z);
+
+            if (dist > UNRAVEL_EXIT_DIST * distScale || d > island.radius + EXIT_SLACK) entry.cameraLeft = true;
+
+            if (s.prevHoverIslandId === id && hover.islandId !== id) entry.pointerLeft = true;
+
+            if (entry.cameraLeft && entry.pointerLeft) unravelSuppression.delete(id);
+        });
+        s.prevHoverIslandId = hover.islandId;
+
+        // Hover-open is deliberate: pointer directly over the plate disc (not
+        // the labels around it), held there for the dwell delay.
+        const plateHover = tuning.hoverUnravel && dist < HOVER_UNRAVEL_MAX_DIST * distScale ? hover.plateId : null;
+
+        if (plateHover !== s.hoverArmId) {
+            s.hoverArmId = plateHover;
+            s.hoverArmAt = now;
         }
 
-        const zoomCandidate = nearest && dist < UNRAVEL_ENTER_DIST * distScale && nearestD < enterProximity(nearest.radius) ? nearest.id : null;
-        const hoverCandidate = tuning.hoverUnravel && dist < HOVER_UNRAVEL_MAX_DIST * distScale ? hoverId : null;
-        let candidate = hoverCandidate ?? zoomCandidate;
+        const hoverDwelled = plateHover !== unraveledId && now - s.hoverArmAt >= HOVER_OPEN_DELAY_MS;
 
-        if (candidate && candidate === unravelSuppression.id) candidate = null;
+        const zoomTargetId = nearest && dist < UNRAVEL_ENTER_DIST * distScale && nearestD < enterProximity(nearest.radius) ? nearest.id : null;
+        const zoomCandidate = zoomTargetId && (unravelSuppression.get(zoomTargetId)?.cameraLeft ?? true) ? zoomTargetId : null;
+        const hoverCandidate = plateHover !== null && hoverDwelled && (unravelSuppression.get(plateHover)?.pointerLeft ?? true) ? plateHover : null;
+        const candidate = hoverCandidate ?? zoomCandidate;
 
         let next = unraveledId;
 
@@ -125,7 +156,10 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
             const zoomLost = dist > UNRAVEL_EXIT_DIST * distScale || currentD > (current?.radius ?? 0) + EXIT_SLACK || competitorNearer;
             // A hover-opened folder stays open while hovered (or lingering).
             const hoverHeld = tuning.hoverUnravel && hoverLingering && (hoverId === null || hoverId === unraveledId);
-            const lost = (zoomLost && !hoverHeld) || (hoverId !== null && hoverId !== unraveledId && candidate !== null);
+            // Switching to a sibling requires the full deliberate-hover gesture
+            // (plate + dwell) — passing the cursor over a neighbour on the way
+            // to a fanned card must not steal the fan.
+            const lost = (zoomLost && !hoverHeld) || hoverCandidate !== null;
 
             if (lost) next = candidate;
         }
@@ -144,7 +178,11 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
             if (id !== next) anim.target = 0;
         });
 
-        if (next) unravelTarget(next, 1);
+        if (next) {
+            unravelTarget(next, 1);
+            // The folder earned its way past the gates — drop any stale entry.
+            unravelSuppression.delete(next);
+        }
 
         patchCanvasSnapshot({ unraveledFolderId: next });
         onUnravelChange(next);
@@ -160,7 +198,10 @@ export function collapseUnravel(onUnravelChange: (folderId: string | null) => vo
 
     if (!unraveledId) return;
 
-    unravelSuppression.id = unraveledId;
+    // The click-away happened off the island, so the pointer has already
+    // "left" — a fresh hover may reopen; the zoom path stays blocked until
+    // the camera exits the folder's zone.
+    unravelSuppression.set(unraveledId, { pointerLeft: hover.islandId !== unraveledId, cameraLeft: false });
     unravelAnims.forEach((anim) => {
         anim.target = 0;
     });

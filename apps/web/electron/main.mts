@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeTheme } from 'electron';
 import * as path from 'path';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -15,7 +15,10 @@ function createWindow() {
             preload: path.join(import.meta.dirname, 'preload.cjs'),
         },
         titleBarStyle: 'hiddenInset',
-        backgroundColor: '#ffffff',
+        // The window background shows through whenever the renderer can't
+        // produce a frame in time (heavy navigations, WebGL context creation)
+        // — hardcoded white read as a flash in dark mode. Matches --background.
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#121212' : '#f8f7f4',
     });
 
     if (isDev) {

@@ -87,7 +87,10 @@ function InitialFraming({ islands, focusFolderId, initialCamera, returnDive }: I
         if (returnDive && diveCtx) {
             cam.target = { ...diveCtx.camBefore };
             cam.current = { ...diveCtx.camBefore, zoom: Math.min(1, diveCtx.camBefore.zoom + 0.04) };
-            unravelSuppression.id = diveCtx.folderId;
+            // Neither path is armed: the camera is still inside the folder's
+            // zone and the cursor may be resting where the document was —
+            // reopening requires leaving and coming back (or a direct click).
+            unravelSuppression.set(diveCtx.folderId, { pointerLeft: false, cameraLeft: false });
             clearDiveContext();
             requestFrame();
 

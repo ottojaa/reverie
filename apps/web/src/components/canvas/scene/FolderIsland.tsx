@@ -8,7 +8,7 @@ import { requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getEmojiTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
-import { cam, hover, isDiving, islandDrag, unravelValue } from './store.js';
+import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue } from './store.js';
 import type { CanvasTheme } from './theme.js';
 
 const CLICK_THRESHOLD_PX = 7;
@@ -58,6 +58,19 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
     const isDraggable = () => !isDiving() && unravelValue(island.id) < 0.05;
 
+    // Hover-unravel keys on the plate disc only — the group's hit area also
+    // covers the shadow blob and the name/count labels, which made the hover
+    // trigger feel like a wide halo around the folder. The radial check works
+    // for any child mesh since they all lie on the ground plane.
+    const updatePlateHover = (point: Vector3) => {
+        if (islandDrag.id !== null) return;
+
+        const within = Math.hypot(point.x - position.x, point.z - position.z) <= radius;
+
+        if (within) hover.plateId = island.id;
+        else if (hover.plateId === island.id) hover.plateId = null;
+    };
+
     return (
         <group
             ref={groupRef}
@@ -78,6 +91,8 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
                 requestFrame();
             }}
             onPointerMove={(e) => {
+                updatePlateHover(e.point);
+
                 const drag = dragRef.current;
 
                 if (!drag || drag.pointerId !== e.pointerId) return;
@@ -102,12 +117,15 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
                     return;
                 }
 
-                // A click (no drag): fly the camera onto this folder.
+                // A click (no drag): fly the camera onto this folder. Explicit
+                // intent overrides any click-away/back-nav suppression.
+                unravelSuppression.delete(island.id);
                 cam.target = focusCameraOn(island);
                 requestFrame();
             }}
-            onPointerOver={() => {
+            onPointerOver={(e) => {
                 hover.islandId = island.id;
+                updatePlateHover(e.point);
 
                 if (isDraggable()) document.body.style.cursor = 'grab';
 
@@ -115,6 +133,8 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
             }}
             onPointerOut={() => {
                 if (hover.islandId === island.id) hover.islandId = null;
+
+                if (hover.plateId === island.id) hover.plateId = null;
 
                 if (document.body.style.cursor === 'grab') document.body.style.cursor = '';
 

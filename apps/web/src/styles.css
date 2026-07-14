@@ -197,6 +197,13 @@
         @apply border-border;
     }
 
+    /* html too: during heavy paints (e.g. WebGL context creation on route
+       swaps) the compositor falls back to the root background — without this
+       it flashes white in dark mode. */
+    html {
+        @apply bg-background;
+    }
+
     body {
         @apply bg-background text-foreground antialiased font-sans;
     }
