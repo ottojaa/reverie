@@ -212,12 +212,7 @@ export function buildSearchQuery(
         // (some image files may have category='other' but no meaningful text)
         if (uniqueCategories.length > 0) {
             if (parsed.types.includes('photo')) {
-                query = query.where((eb) =>
-                    eb.or([
-                        eb('d.document_category' as any, 'in', uniqueCategories),
-                        eb('d.has_meaningful_text' as any, '=', false),
-                    ]),
-                );
+                query = query.where((eb) => eb.or([eb('d.document_category' as any, 'in', uniqueCategories), eb('d.has_meaningful_text' as any, '=', false)]));
             } else {
                 query = query.where('d.document_category' as any, 'in', uniqueCategories);
             }

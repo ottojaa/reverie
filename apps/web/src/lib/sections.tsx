@@ -281,7 +281,10 @@ export function useUpdateFolder() {
 
             if (!previous) return { previous };
 
-            queryClient.setQueryData(['sections', 'tree'], transforms.reduce((tree, fn) => fn(tree), previous));
+            queryClient.setQueryData(
+                ['sections', 'tree'],
+                transforms.reduce((tree, fn) => fn(tree), previous),
+            );
 
             return { previous };
         },
