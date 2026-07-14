@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 
 /**
  * Module-level tracking of the pathname for the currently rendered route.
- * Updated after each render by `usePathnameTracker` (which lives in Layout).
+ * Updated after each render by `usePathnameTracker` (which lives in the root
+ * route component so it also covers full-bleed routes like /canvas).
  *
  * Because effects run *after* render, a `useState` initializer during the
  * render phase still sees the value from the *previous* navigation —
@@ -13,7 +14,7 @@ let _currentPathname = '';
 
 /**
  * Keeps `_currentPathname` in sync with route changes.
- * Must be called once in a component that never unmounts (Layout).
+ * Must be called once in a component that never unmounts (the root route).
  */
 export function usePathnameTracker() {
     const { pathname } = useLocation();

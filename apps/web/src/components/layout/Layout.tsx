@@ -1,7 +1,6 @@
 import { OrganizeChatProvider } from '@/lib/api/OrganizeChatContext';
 import { GlobalDropzone, UploadModal } from '@/components/upload';
 import { OrganizeModal } from '@/components/organize';
-import { usePathnameTracker } from '@/lib/hooks/useNavigationDirection';
 import { ScrollContainerProvider } from '@/lib/ScrollContainerContext';
 import { SectionEditProvider } from '@/lib/SectionEditContext';
 import { dndMeasuring, useDefaultSensors } from '@/lib/dnd';
@@ -66,9 +65,6 @@ export function Layout({ children }: LayoutProps) {
         return () => document.removeEventListener('keydown', handler);
     }, []);
 
-    // Global pathname tracker for useIsReturningFromDocument
-    usePathnameTracker();
-
     const defaultAnnouncements: Announcements = {
         onDragStart: () => 'Picked up.',
         onDragMove: () => undefined,
@@ -79,48 +75,53 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <OrganizeContext.Provider value={{ openOrganize }}>
-        <OrganizeChatProvider>
-        <SectionEditProvider>
-            <SelectionProvider>
-                <DndContext
-                    sensors={defaultSensors}
-                    collisionDetection={pointerWithin}
-                    measuring={dndMeasuring}
-                    accessibility={{
-                        get announcements() {
-                            return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
-                        },
-                    }}
-                    onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
-                    onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
-                    onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
-                    onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
-                    onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
-                >
-                    <div className="flex h-dvh overflow-hidden bg-background">
-                        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
-                        <div className="flex flex-1 flex-col overflow-hidden">
-                            <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
-                            <GlobalDropzone>
-                                <ScrollContainerProvider value={mainRef}>
-                                    <main ref={mainRef} id="main-scroll-area" data-scroll-restoration-id="main-scroll-area" className="flex-1 overflow-auto">
-                                        {children}
-                                    </main>
-                                </ScrollContainerProvider>
-                            </GlobalDropzone>
-                        </div>
-                        <UploadModal />
-                        <OrganizeModal
-                            open={organizeOpen}
-                            onOpenChange={setOrganizeOpen}
-                            isMinimized={organizeMinimized}
-                            setIsMinimized={setOrganizeMinimized}
-                        />
-                    </div>
-                </DndContext>
-            </SelectionProvider>
-        </SectionEditProvider>
-        </OrganizeChatProvider>
+            <OrganizeChatProvider>
+                <SectionEditProvider>
+                    <SelectionProvider>
+                        <DndContext
+                            sensors={defaultSensors}
+                            collisionDetection={pointerWithin}
+                            measuring={dndMeasuring}
+                            accessibility={{
+                                get announcements() {
+                                    return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
+                                },
+                            }}
+                            onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
+                            onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
+                            onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
+                            onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
+                            onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
+                        >
+                            <div className="flex h-dvh overflow-hidden bg-background">
+                                <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
+                                <div className="flex flex-1 flex-col overflow-hidden">
+                                    <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
+                                    <GlobalDropzone>
+                                        <ScrollContainerProvider value={mainRef}>
+                                            <main
+                                                ref={mainRef}
+                                                id="main-scroll-area"
+                                                data-scroll-restoration-id="main-scroll-area"
+                                                className="flex-1 overflow-auto"
+                                            >
+                                                {children}
+                                            </main>
+                                        </ScrollContainerProvider>
+                                    </GlobalDropzone>
+                                </div>
+                                <UploadModal />
+                                <OrganizeModal
+                                    open={organizeOpen}
+                                    onOpenChange={setOrganizeOpen}
+                                    isMinimized={organizeMinimized}
+                                    setIsMinimized={setOrganizeMinimized}
+                                />
+                            </div>
+                        </DndContext>
+                    </SelectionProvider>
+                </SectionEditProvider>
+            </OrganizeChatProvider>
         </OrganizeContext.Provider>
     );
 }

@@ -7,7 +7,8 @@ import { useInfiniteDocuments } from '@/lib/api';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
-import { Pencil } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Map, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const SKELETON_DELAY_MS = 200;
@@ -84,6 +85,12 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                             </div>
                             <div className="flex items-center gap-2">
                                 <ProcessingIndicator documents={documents} variant="badge" visible={!isLoading} />
+                                <Button variant="outline" size="sm" className="shrink-0" asChild>
+                                    <Link to="/canvas" search={{ focus: sectionId }} preload="intent">
+                                        <Map className="mr-2 size-4" />
+                                        Canvas
+                                    </Link>
+                                </Button>
                                 {section && (
                                     <Button variant="outline" size="sm" className="shrink-0" onClick={() => openEdit(section)}>
                                         <Pencil className="mr-2 size-4" />

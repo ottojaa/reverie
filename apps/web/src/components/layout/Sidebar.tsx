@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { VaultSidebarControl } from './VaultSidebarControl';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { LayoutGrid, Settings, Users, X } from 'lucide-react';
+import { LayoutGrid, Map, Settings, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -172,6 +172,23 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     >
                         <LayoutGrid className={cn('size-4 shrink-0', !currentSectionId ? 'text-sidebar-primary' : 'text-muted-foreground')} aria-hidden />
                         <span>All Documents</span>
+                    </Link>
+                    <Link
+                        to="/canvas"
+                        preload="intent"
+                        onClick={onClose}
+                        className={cn(
+                            'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                            location.pathname.startsWith('/canvas')
+                                ? 'bg-sidebar-accent text-sidebar-primary shadow-sm'
+                                : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
+                        )}
+                    >
+                        <Map
+                            className={cn('size-4 shrink-0', location.pathname.startsWith('/canvas') ? 'text-sidebar-primary' : 'text-muted-foreground')}
+                            aria-hidden
+                        />
+                        <span>Canvas</span>
                     </Link>
                 </div>
 
