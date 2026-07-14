@@ -105,19 +105,20 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
-            // Staggered burst: each card becomes visible almost immediately,
-            // hops UP out of the (still visible) folder in an arc, and lands
-            // on its pile pose while growing with a small overshoot. The
-            // folder glyph only fades once the cards are out — sequencing,
-            // not a crossfade. Reverse plays the hop back into the folder.
+            // Lootbox pop, staggered per card: each card emerges low in the
+            // folder and RISES up-screen (world −z) into its pile slot,
+            // overshooting a touch before settling back down — the visible
+            // motion is the ascent, never a drop from mid-air. Scale grows
+            // during the rise; the glyph holds until the cards are out.
+            // Reverse: cards sink back down into the folder.
             const t = clamp(band * 1.25 - i * 0.12, 0, 1);
             const pop = easeOutBack(t);
             const travel = ease(t);
 
             if (mesh) {
-                const hop = Math.sin(t * Math.PI) * island.radius * 0.35;
-                const scale = 0.4 + 0.6 * pop;
-                mesh.position.set(card.dx * travel, card.y + hop, card.dz * travel);
+                const rise = (1 - pop) * island.radius * 0.5;
+                const scale = 0.35 + 0.65 * ease(clamp(t * 1.5, 0, 1));
+                mesh.position.set(card.dx * travel, card.y, card.dz * travel + rise);
                 mesh.rotation.z = card.yaw * travel;
                 mesh.scale.set(card.w * scale, card.h * scale, 1);
             }
