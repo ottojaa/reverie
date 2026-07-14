@@ -1,6 +1,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useRef } from 'react';
 import { clearDiveContext, getDiveContext } from '../dive/diveState.js';
+import { releaseReturnShield } from '../dive/returnShield.js';
 import type { CameraState, CanvasSceneHandle, CanvasSceneProps, IslandLayout } from '../types.js';
 import { CameraRig } from './CameraRig.js';
 import { CollectionLabels } from './CollectionLabels.js';
@@ -29,6 +30,21 @@ function FrameDriver() {
 
     useFrame((_, dt) => {
         if (updateDampers(Math.min(dt, 0.1))) requestFrame();
+    });
+
+    return null;
+}
+
+/** Drops the back-navigation shield once the scene is really presenting frames. */
+function ReturnShieldRelease() {
+    const framesRef = useRef(0);
+
+    useFrame(() => {
+        if (framesRef.current >= 3) return;
+
+        framesRef.current += 1;
+
+        if (framesRef.current === 3) releaseReturnShield();
     });
 
     return null;
@@ -230,6 +246,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
         () => () => {
             disposeEmojiTextures();
             disposeAllTextures();
+            releaseReturnShield();
             document.body.style.cursor = '';
         },
         [],
@@ -266,6 +283,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
         >
             <color attach="background" args={[theme.background]} />
             <FrameDriver />
+            <ReturnShieldRelease />
             <ContextLossGuard />
             <CameraRig onCameraSettled={handleCameraSettled} />
             <GroundGrid theme={theme} />

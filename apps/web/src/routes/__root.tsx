@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, useLocation, useMatches, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { useCanvasReturnShield } from '../components/canvas/dive/returnShield';
 import { Layout } from '../components/layout/Layout';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { useAuth } from '../lib/auth';
@@ -21,6 +22,9 @@ function RootComponent() {
     // Global pathname tracker for useIsReturningFromDocument — must run on
     // every route, including full-bleed ones that skip Layout.
     usePathnameTracker();
+    // Covers /document → /canvas swaps with a background-colored shield
+    // before the document route unmounts (white-flash guard).
+    useCanvasReturnShield();
 
     const isPublicRoute = publicRoutes.some((route) => location.pathname === route || location.pathname.startsWith('/login'));
     // Keyed on the RENDERED matches, not location.pathname: during a route
