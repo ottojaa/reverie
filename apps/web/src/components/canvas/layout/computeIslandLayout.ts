@@ -4,17 +4,20 @@ import type { IslandLayout, PlanePosition } from '../types.js';
 /**
  * Deterministic auto-layout: collections become clusters placed on an
  * expanding spiral (greedy, collision-checked), and every folder inside a
- * collection becomes an island arranged in a phyllotaxis pattern within its
- * cluster. Top-level folders without a collection share a synthetic cluster.
- * Same tree in → same layout out, across sessions and machines.
+ * collection becomes a uniform island in a centered, row-major grid — same
+ * size, aligned left to right, reading order. Top-level folders without a
+ * collection share a synthetic cluster. Same tree in → same layout out,
+ * across sessions and machines.
  */
 
 const GOLDEN_ANGLE = 2.399963229728653;
-const ISLAND_SPACING = 1.9; // multiplier on max island radius within a cluster
+/** One size for every island — mixed sizes read as misalignment, not meaning. */
+export const ISLAND_RADIUS = 3.2;
+const ISLAND_SPACING = 1.9; // multiplier on island radius within a cluster
+const GRID_COLS = 5;
 const CLUSTER_MARGIN = 14;
-const JITTER = 0.35;
 
-/** djb2 → [0, 1); seeds deterministic jitter so layouts are stable per id. */
+/** djb2 → [0, 1); seeds deterministic per-id variation (e.g. pile jitter). */
 export function hash01(seed: string): number {
     let h = 5381;
 
@@ -23,10 +26,6 @@ export function hash01(seed: string): number {
     }
 
     return ((h >>> 0) % 100000) / 100000;
-}
-
-export function islandRadius(documentCount: number): number {
-    return Math.min(6, 2.2 + Math.sqrt(documentCount) * 0.28);
 }
 
 interface Cluster {
@@ -64,36 +63,32 @@ function toClusters(tree: FolderWithChildren[]): Cluster[] {
     return clusters.filter((c) => c.folders.length > 0);
 }
 
+const PITCH_X = ISLAND_RADIUS * ISLAND_SPACING * 1.15;
+// Taller pitch so a row's name/count labels never crowd the next row.
+const PITCH_Z = ISLAND_RADIUS * ISLAND_SPACING * 1.7;
+
 /**
- * Island offsets within a cluster. Small clusters get deliberate shapes —
- * a centered row (≤3) or an even ring (≤8) — because phyllotaxis reads as
- * misaligned clutter at low counts; larger clusters use the spiral.
+ * Row-major centered grid (≤GRID_COLS per row), partial last row centered
+ * too — reading order, everything aligned.
  */
-function islandOffsets(n: number, maxRadius: number): PlanePosition[] {
-    if (n === 1) return [{ x: 0, z: 0 }];
-
-    const spacing = maxRadius * ISLAND_SPACING;
-
-    if (n <= 3) {
-        return Array.from({ length: n }, (_, j) => ({ x: (j - (n - 1) / 2) * spacing * 1.15, z: 0 }));
-    }
-
-    if (n <= 8) {
-        const ringRadius = spacing * (0.85 + n * 0.09);
-
-        return Array.from({ length: n }, (_, j) => {
-            const a = -Math.PI / 2 + (j * 2 * Math.PI) / n;
-
-            return { x: Math.cos(a) * ringRadius, z: Math.sin(a) * ringRadius };
-        });
-    }
+function islandOffsets(n: number): PlanePosition[] {
+    const cols = Math.min(n, GRID_COLS);
+    const rows = Math.ceil(n / cols);
 
     return Array.from({ length: n }, (_, j) => {
-        const r = spacing * Math.sqrt(j + 0.6);
-        const a = GOLDEN_ANGLE * j;
+        const row = Math.floor(j / cols);
+        const rowCount = row === rows - 1 ? n - row * cols : cols;
 
-        return { x: Math.cos(a) * r, z: Math.sin(a) * r };
+        return { x: ((j % cols) - (rowCount - 1) / 2) * PITCH_X, z: (row - (rows - 1) / 2) * PITCH_Z };
     });
+}
+
+/** Half-diagonal of the cluster's grid, for cluster-vs-cluster spacing. */
+function clusterRadiusFor(n: number): number {
+    const cols = Math.min(n, GRID_COLS);
+    const rows = Math.ceil(n / cols);
+
+    return Math.hypot(((cols - 1) / 2) * PITCH_X, ((rows - 1) / 2) * PITCH_Z) + ISLAND_RADIUS + 2;
 }
 
 /** Greedy spiral placement of cluster centers with collision checks. */
@@ -131,11 +126,8 @@ export function computeIslandLayout(tree: FolderWithChildren[]): IslandLayout[] 
 
     const perCluster = clusters.map((cluster) => {
         const folders = [...cluster.folders].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-        const maxRadius = Math.max(...folders.map((f) => islandRadius(f.document_count)));
-        const offsets = islandOffsets(folders.length, maxRadius);
-        const clusterRadius = maxRadius * ISLAND_SPACING * Math.sqrt(folders.length + 0.6) + maxRadius;
 
-        return { cluster, folders, offsets, clusterRadius };
+        return { cluster, folders, offsets: islandOffsets(folders.length), clusterRadius: clusterRadiusFor(folders.length) };
     });
 
     const centers = placeClusters(perCluster.map((c) => c.clusterRadius));
@@ -145,17 +137,14 @@ export function computeIslandLayout(tree: FolderWithChildren[]): IslandLayout[] 
 
         return folders.map((folder, j) => {
             const offset = offsets[j] ?? { x: 0, z: 0 };
-            const radius = islandRadius(folder.document_count);
-            const jx = (hash01(folder.id + ':x') - 0.5) * radius * JITTER;
-            const jz = (hash01(folder.id + ':z') - 0.5) * radius * JITTER;
 
             return {
                 id: folder.id,
                 name: folder.name,
                 emoji: folder.emoji ?? null,
                 documentCount: folder.document_count,
-                position: { x: center.x + offset.x + jx, z: center.z + offset.z + jz },
-                radius,
+                position: { x: center.x + offset.x, z: center.z + offset.z },
+                radius: ISLAND_RADIUS,
                 collectionId: cluster.collectionId,
                 collectionName: cluster.collectionName,
             };

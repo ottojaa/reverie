@@ -1,6 +1,6 @@
 import type { FolderWithChildren } from '@reverie/shared';
 import { describe, expect, it } from 'vitest';
-import { computeIslandLayout, islandRadius } from './computeIslandLayout.js';
+import { computeIslandLayout, ISLAND_RADIUS } from './computeIslandLayout.js';
 
 function folder(overrides: Partial<FolderWithChildren> & { id: string }): FolderWithChildren {
     return {
@@ -71,9 +71,37 @@ describe('computeIslandLayout', () => {
         }
     });
 
-    it('scales island radius with document count, capped', () => {
-        expect(islandRadius(0)).toBeLessThan(islandRadius(100));
-        expect(islandRadius(100000)).toBeLessThanOrEqual(6);
+    it('gives every island the same radius regardless of document count', () => {
+        const islands = computeIslandLayout(tree);
+
+        expect(new Set(islands.map((i) => i.radius))).toEqual(new Set([ISLAND_RADIUS]));
+    });
+
+    it('lines cluster folders up left to right on a shared row', () => {
+        const islands = computeIslandLayout(tree);
+        const c1 = islands.filter((i) => i.collectionId === 'c1');
+
+        // ≤5 folders → a single row: identical z, strictly increasing x.
+        expect(new Set(c1.map((i) => i.position.z)).size).toBe(1);
+
+        const xs = c1.map((i) => i.position.x);
+
+        expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    });
+
+    it('wraps rows after five folders, keeping rows aligned', () => {
+        const many = [
+            folder({
+                id: 'big',
+                type: 'collection',
+                name: 'Big',
+                children: Array.from({ length: 7 }, (_, i) => folder({ id: 'm' + i, sort_order: i })),
+            }),
+        ];
+        const islands = computeIslandLayout(many);
+        const zs = new Set(islands.map((i) => i.position.z));
+
+        expect(zs.size).toBe(2);
     });
 
     it('returns an empty layout for an empty tree', () => {
