@@ -36,6 +36,45 @@ export function getEmojiTexture(emoji: string): CanvasTexture {
     return texture;
 }
 
+/**
+ * The island's far-zoom glyph. The `emoji` DB field usually holds a LUCIDE
+ * ICON NAME ("image", "folder-open", …) that only the DOM can render — baking
+ * it with fillText painted the word as giant black text. Only genuinely
+ * pictographic values render as emoji; everything else gets a folder shape
+ * drawn in the theme's muted color.
+ */
+export function getFolderGlyphTexture(value: string | null, color: string): CanvasTexture {
+    if (value && /\p{Extended_Pictographic}/u.test(value)) return getEmojiTexture(value);
+
+    const key = 'folder-glyph:' + color;
+    const cached = emojiCache.get(key);
+
+    if (cached) return cached;
+
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+        ctx.fillStyle = color;
+        // Tab, then body — the classic folder silhouette.
+        ctx.beginPath();
+        ctx.roundRect(44, 66, 84, 40, 12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.roundRect(36, 92, 184, 104, 16);
+        ctx.fill();
+    }
+
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    emojiCache.set(key, texture);
+
+    return texture;
+}
+
 export function disposeEmojiTextures(): void {
     emojiCache.forEach((texture) => texture.dispose());
     emojiCache.clear();

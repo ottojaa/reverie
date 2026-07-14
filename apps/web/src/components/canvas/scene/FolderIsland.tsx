@@ -6,7 +6,7 @@ import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
 import { requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
-import { getEmojiTexture, LABEL_FONT_URL } from './labelAssets.js';
+import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
 import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue, zoomBand } from './store.js';
 import type { CanvasTheme } from './theme.js';
@@ -155,7 +155,7 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
             </group>
             <mesh ref={iconRef} rotation-x={-Math.PI / 2} position-y={0.1} renderOrder={3}>
                 <planeGeometry args={[radius * 0.85, radius * 0.85]} />
-                <meshBasicMaterial ref={iconMatRef} map={getEmojiTexture(emoji ?? '📁')} transparent depthWrite={false} />
+                <meshBasicMaterial ref={iconMatRef} map={getFolderGlyphTexture(emoji, theme.mutedForeground)} transparent depthWrite={false} />
             </mesh>
             <group ref={fadeGroupRef}>
                 <Text
