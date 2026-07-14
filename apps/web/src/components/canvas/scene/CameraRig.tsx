@@ -4,7 +4,7 @@ import { PerspectiveCamera, Vector2, Vector3 } from 'three';
 import type { CameraState } from '../types.js';
 import { applyPose, FOV, raycastGround, worldPerPixel, zoomTowardCursor } from './cameraMath.js';
 import { clamp, damp, requestFrame } from './dampers.js';
-import { cam, isDiving, islandDrag, tuning } from './store.js';
+import { cam, isDiving, islandDrag, lastPointerDown, tuning } from './store.js';
 
 const PAN_LAMBDA = 18;
 const ZOOM_LAMBDA = 14;
@@ -76,6 +76,9 @@ export function CameraRig({ onCameraSettled }: CameraRigProps) {
         };
 
         const onPointerDown = (e: PointerEvent) => {
+            lastPointerDown.x = e.clientX;
+            lastPointerDown.y = e.clientY;
+
             // islandDrag is set by the island's R3F handler, which fires first.
             if (e.button !== 0 || isDiving() || islandDrag.id !== null) return;
 

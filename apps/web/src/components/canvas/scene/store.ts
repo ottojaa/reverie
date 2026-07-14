@@ -31,8 +31,8 @@ export const cam: CameraTransient = {
     vel: { x: 0, z: 0 },
 };
 
-/** User-adjustable camera feel multipliers (persisted DOM-side, written via props). */
-export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1 };
+/** User-adjustable canvas feel (persisted DOM-side, written via props). */
+export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1, hoverUnravel: true };
 
 let snapshot: CanvasSnapshot = { unraveledFolderId: null, divePhase: 'idle' };
 const listeners = new Set<() => void>();
@@ -65,7 +65,20 @@ export function resetCanvasStore(initialCamera: CameraState | null): void {
     cam.vel = { x: 0, z: 0 };
     unravelAnims.clear();
     hover.docId = null;
+    hover.islandId = null;
+    unravelSuppression.id = null;
     patchCanvasSnapshot({ unraveledFolderId: null, divePhase: 'idle' });
+}
+
+/** Highest unravel value across folders — drives the focus-dim of everything else. */
+export function maxUnravelValue(exceptId?: string): number {
+    let max = 0;
+
+    unravelAnims.forEach((anim, id) => {
+        if (id !== exceptId && anim.current > max) max = anim.current;
+    });
+
+    return max;
 }
 
 export function isDiving(): boolean {
@@ -97,7 +110,17 @@ export function unravelValue(folderId: string): number {
 }
 
 /** Transient hover state — read per frame by cards, never through React. */
-export const hover = { docId: null as string | null, lift: new Map<string, number>() };
+export const hover = { docId: null as string | null, islandId: null as string | null, lift: new Map<string, number>() };
+
+/**
+ * Folder id whose unravel is suppressed: set on click-away collapse and on
+ * back-navigation re-entry, so the controller doesn't instantly re-open it.
+ * Cleared when the pointer leaves the island or the camera leaves its zone.
+ */
+export const unravelSuppression = { id: null as string | null };
+
+/** Screen position of the last pointerdown — lets click handlers ignore pan-releases. */
+export const lastPointerDown = { x: 0, y: 0 };
 
 /**
  * Live island-drag state. Set by the plate's pointer handlers (R3F synthetic

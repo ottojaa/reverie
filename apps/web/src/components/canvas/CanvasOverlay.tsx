@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, FolderOpen, Maximize, Minus, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { DEFAULT_CAMERA_TUNING, type CameraTuning } from './types.js';
@@ -79,7 +80,7 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent side="left" align="end" className="w-60 space-y-4">
-                        <p className="text-sm font-medium">Camera feel</p>
+                        <p className="text-sm font-medium">Canvas feel</p>
                         <TuningSlider
                             label="Pan speed"
                             value={tuning.panSpeed}
@@ -101,6 +102,17 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                             max={2.5}
                             onChange={(v) => onTuningChange({ ...tuning, friction: v })}
                         />
+                        <TuningSlider
+                            label="Unravel distance"
+                            value={tuning.unravelDistance}
+                            min={0.5}
+                            max={2}
+                            onChange={(v) => onTuningChange({ ...tuning, unravelDistance: v })}
+                        />
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Unravel on hover</span>
+                            <Switch checked={tuning.hoverUnravel} onCheckedChange={(v) => onTuningChange({ ...tuning, hoverUnravel: v })} />
+                        </div>
                         <Button variant="ghost" size="sm" className="w-full" onClick={() => onTuningChange({ ...DEFAULT_CAMERA_TUNING })}>
                             Reset to defaults
                         </Button>

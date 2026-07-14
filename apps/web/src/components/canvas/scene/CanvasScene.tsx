@@ -11,10 +11,10 @@ import { fitCameraTo, focusCameraOn, visibleIslandIds } from './framing.js';
 import { GroundGrid } from './GroundGrid.js';
 import { IslandStack } from './IslandStack.js';
 import { disposeEmojiTextures } from './labelAssets.js';
-import { cam, patchCanvasSnapshot, resetCanvasStore, tuning, unravelAnims } from './store.js';
+import { cam, lastPointerDown, resetCanvasStore, tuning, unravelSuppression } from './store.js';
 import { disposeAllTextures, setMaxAnisotropy } from './textureCache.js';
 import { useCanvasTheme } from './theme.js';
-import { UnravelController } from './UnravelController.js';
+import { collapseUnravel, UnravelController } from './UnravelController.js';
 import { UnraveledCards } from './UnraveledCards.js';
 
 /** Wires the damper registry into R3F's demand frameloop. */
@@ -77,15 +77,17 @@ function InitialFraming({ islands, focusFolderId, initialCamera, returnDive }: I
         framedRef.current = true;
         const fit = fitCameraTo(islands, size.width / size.height);
 
-        // Back from /document: start at the dive's end pose with the folder
-        // still fanned out, then ease back to where the dive began.
+        // Back from /document: land where the dive began with only a small
+        // settle-in. Deliberately NO re-unravel and no reverse flight — the
+        // pronounced enter animation reads well, replaying it backwards
+        // doesn't. Suppression stops the controller from instantly
+        // re-opening the folder the camera is still centered on.
         const diveCtx = getDiveContext();
 
         if (returnDive && diveCtx) {
-            cam.current = { x: diveCtx.cardX, z: diveCtx.cardZ, zoom: diveCtx.endZoom };
             cam.target = { ...diveCtx.camBefore };
-            unravelAnims.set(diveCtx.folderId, { current: 1, target: 1 });
-            patchCanvasSnapshot({ unraveledFolderId: diveCtx.folderId });
+            cam.current = { ...diveCtx.camBefore, zoom: Math.min(1, diveCtx.camBefore.zoom + 0.04) };
+            unravelSuppression.id = diveCtx.folderId;
             clearDiveContext();
             requestFrame();
 
@@ -240,10 +242,20 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
             frameloop="always"
             dpr={[1, 2]}
             style={{ background: 'var(--background)' }}
-            gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+            // alpha: an opaque WebGL canvas composites white before its first
+            // frame (the ~20ms flash on back-navigation); with alpha the CSS
+            // background shows through until the first render lands.
+            gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
             onCreated={({ gl, scene, camera }) => {
                 setMaxAnisotropy(gl.capabilities.getMaxAnisotropy());
+                gl.domElement.style.background = 'var(--background)';
                 gl.compile(scene, camera);
+            }}
+            onPointerMissed={(e) => {
+                // Click-away (not a pan-release) collapses the open fan.
+                const moved = Math.hypot(e.clientX - lastPointerDown.x, e.clientY - lastPointerDown.y);
+
+                if (moved <= 7) collapseUnravel(onUnravelChange);
             }}
         >
             <color attach="background" args={[theme.background]} />

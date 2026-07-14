@@ -30,7 +30,18 @@ export function computeDestRect(doc: Document): DestRect {
     const boxW = Math.max(1, vw - sidebar - padX * 2);
     const boxH = Math.max(1, vh - padTop - padBottom);
 
-    const aspect = doc.width && doc.height ? doc.width / doc.height : 4 / 3;
+    // Contain-fit WITHOUT upscaling: the viewer's max-w/max-h constraints never
+    // grow an image past its natural size, so predicting the padded box for a
+    // small image made the dive overshoot and visibly shrink back on settle.
+    if (doc.width && doc.height) {
+        const scale = Math.min(boxW / doc.width, boxH / doc.height, 1);
+        const w = doc.width * scale;
+        const h = doc.height * scale;
+
+        return { x: boxX + (boxW - w) / 2, y: boxY + (boxH - h) / 2, w, h };
+    }
+
+    const aspect = 4 / 3;
     let w = boxW;
     let h = w / aspect;
 

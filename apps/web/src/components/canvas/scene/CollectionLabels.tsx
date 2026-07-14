@@ -1,7 +1,10 @@
 import { Text } from '@react-three/drei';
-import { useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
+import { Group } from 'three';
 import type { IslandLayout } from '../types.js';
 import { requestFrame } from './dampers.js';
+import { applyGroupOpacity, focusDimFor } from './focusDim.js';
 import { LABEL_FONT_URL } from './labelAssets.js';
 import type { CanvasTheme } from './theme.js';
 
@@ -19,6 +22,13 @@ interface LabelSpot {
 
 /** One muted, uppercase region label above each collection cluster. */
 export function CollectionLabels({ islands, theme }: CollectionLabelsProps) {
+    const groupRef = useRef<Group>(null);
+
+    // Section titles recede with everything else while a folder is unraveled.
+    useFrame(() => {
+        if (groupRef.current) applyGroupOpacity(groupRef.current, focusDimFor(null));
+    });
+
     const labels = useMemo(() => {
         const groups = new Map<string, { name: string; xs: number[]; minZ: number }>();
 
@@ -39,7 +49,7 @@ export function CollectionLabels({ islands, theme }: CollectionLabelsProps) {
     }, [islands]);
 
     return (
-        <>
+        <group ref={groupRef}>
             {labels.map((label) => (
                 <Text
                     key={label.id}
@@ -57,6 +67,6 @@ export function CollectionLabels({ islands, theme }: CollectionLabelsProps) {
                     {label.name.toUpperCase()}
                 </Text>
             ))}
-        </>
+        </group>
     );
 }

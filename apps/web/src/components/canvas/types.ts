@@ -26,15 +26,25 @@ export interface CameraState {
     zoom: number;
 }
 
-/** User-adjustable camera feel: multipliers around the built-in defaults. */
+/** User-adjustable canvas feel: multipliers around the built-in defaults. */
 export interface CameraTuning {
     panSpeed: number;
     zoomSpeed: number;
     /** Higher = inertia dies faster; lower = longer glide. */
     friction: number;
+    /** Multiplier on the zoom distance at which folders unravel (higher = from farther away). */
+    unravelDistance: number;
+    /** Unravel a folder by hovering it (no zooming needed). */
+    hoverUnravel: boolean;
 }
 
-export const DEFAULT_CAMERA_TUNING: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1 };
+export const DEFAULT_CAMERA_TUNING: CameraTuning = {
+    panSpeed: 1,
+    zoomSpeed: 1,
+    friction: 1,
+    unravelDistance: 1,
+    hoverUnravel: true,
+};
 
 export interface UnraveledFolder {
     folderId: string;

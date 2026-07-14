@@ -7,6 +7,7 @@ import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
 import { damp, requestFrame } from './dampers.js';
+import { focusDimFor } from './focusDim.js';
 import { islandDrag, unravelValue } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
@@ -93,7 +94,7 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         const dragging = islandDrag.id === island.id;
         group.position.set(dragging ? islandDrag.x : island.position.x, 0, dragging ? islandDrag.z : island.position.z);
 
-        const opacity = 1 - unravelValue(island.id);
+        const opacity = (1 - unravelValue(island.id)) * focusDimFor(island.id);
         group.visible = opacity > 0.012;
 
         if (!group.visible) return;

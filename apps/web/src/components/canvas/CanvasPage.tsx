@@ -51,11 +51,13 @@ export function CanvasPage() {
 
     const { data: sections, isLoading: isTreeLoading } = useSections();
     const { islands, moveIsland, resetLayout, hasOverrides } = useCanvasLayout(sections);
-    const [tuning, setTuning] = useLocalStorage<CameraTuning>('reverie:canvas-feel:v1', DEFAULT_CAMERA_TUNING);
+    const [storedTuning, setTuning] = useLocalStorage<CameraTuning>('reverie:canvas-feel:v1', DEFAULT_CAMERA_TUNING);
+    // Merge over defaults so settings added later get values on old stores.
+    const tuning = useMemo(() => ({ ...DEFAULT_CAMERA_TUNING, ...storedTuning }), [storedTuning]);
     const [visibleFolderIds, setVisibleFolderIds] = useState<string[]>([]);
-    const [unraveledFolderId, setUnraveledFolderId] = useState<string | null>(() =>
-        returningFromDocument ? (loadCanvasSession()?.unraveledFolderId ?? null) : null,
-    );
+    // Deliberately NOT restored on back-navigation — the return animation is
+    // kept minimal, without replaying the unravel.
+    const [unraveledFolderId, setUnraveledFolderId] = useState<string | null>(null);
     const { prefetchDocument, openDocument, completeDive } = useOpenDocumentFromCanvas();
 
     // Islands with documents that are visible (or among the first few by tree

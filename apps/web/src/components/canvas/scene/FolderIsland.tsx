@@ -7,7 +7,8 @@ import { groundPlane } from './cameraMath.js';
 import { requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getEmojiTexture, LABEL_FONT_URL } from './labelAssets.js';
-import { cam, isDiving, islandDrag, unravelValue } from './store.js';
+import { applyGroupOpacity, focusDimFor } from './focusDim.js';
+import { cam, hover, isDiving, islandDrag, unravelValue } from './store.js';
 import type { CanvasTheme } from './theme.js';
 
 const CLICK_THRESHOLD_PX = 7;
@@ -27,6 +28,7 @@ interface FolderIslandProps {
 export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
     const { position, radius, name, emoji, documentCount } = island;
     const groupRef = useRef<Group>(null);
+    const baseGroupRef = useRef<Group>(null);
     const fadeGroupRef = useRef<Group>(null);
     const dragRef = useRef<{ pointerId: number; grabDx: number; grabDz: number } | null>(null);
     const labelSize = Math.min(1.4, Math.max(0.8, radius * 0.3));
@@ -39,20 +41,18 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
         const dragging = islandDrag.id === island.id;
         group.position.set(dragging ? islandDrag.x : position.x, 0, dragging ? islandDrag.z : position.z);
 
-        // Name/count/emoji make way for the fanned cards and their labels.
+        // Recede while another folder is unraveled (focus dim)…
+        const dim = focusDimFor(island.id);
+
+        if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
+
+        // …and name/count/emoji additionally make way for this island's own fan.
         const fadeGroup = fadeGroupRef.current;
 
         if (fadeGroup) {
-            const fade = 1 - unravelValue(island.id);
+            const fade = (1 - unravelValue(island.id)) * dim;
             fadeGroup.visible = fade > 0.02;
-            fadeGroup.traverse((child) => {
-                const material = (child as { material?: { opacity: number; transparent: boolean } }).material;
-
-                if (!material) return;
-
-                material.transparent = true;
-                material.opacity = fade;
-            });
+            applyGroupOpacity(fadeGroup, fade);
         }
     });
 
@@ -107,24 +107,34 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
                 requestFrame();
             }}
             onPointerOver={() => {
+                hover.islandId = island.id;
+
                 if (isDraggable()) document.body.style.cursor = 'grab';
+
+                requestFrame();
             }}
             onPointerOut={() => {
+                if (hover.islandId === island.id) hover.islandId = null;
+
                 if (document.body.style.cursor === 'grab') document.body.style.cursor = '';
+
+                requestFrame();
             }}
         >
-            <mesh rotation-x={-Math.PI / 2} position-y={0.02} renderOrder={0}>
-                <circleGeometry args={[radius * 1.14, 48]} />
-                <meshBasicMaterial color="#000000" transparent opacity={0.14} depthWrite={false} />
-            </mesh>
-            <mesh rotation-x={-Math.PI / 2} position-y={0.06} renderOrder={1}>
-                <circleGeometry args={[radius, 48]} />
-                <meshBasicMaterial color={theme.card} />
-            </mesh>
-            <mesh rotation-x={-Math.PI / 2} position-y={0.07} renderOrder={2}>
-                <ringGeometry args={[radius * 0.97, radius, 48]} />
-                <meshBasicMaterial color={theme.border} transparent opacity={0.7} depthWrite={false} />
-            </mesh>
+            <group ref={baseGroupRef}>
+                <mesh rotation-x={-Math.PI / 2} position-y={0.02} renderOrder={0}>
+                    <circleGeometry args={[radius * 1.14, 48]} />
+                    <meshBasicMaterial color="#000000" transparent opacity={0.14} depthWrite={false} />
+                </mesh>
+                <mesh rotation-x={-Math.PI / 2} position-y={0.06} renderOrder={1}>
+                    <circleGeometry args={[radius, 48]} />
+                    <meshBasicMaterial color={theme.card} />
+                </mesh>
+                <mesh rotation-x={-Math.PI / 2} position-y={0.07} renderOrder={2}>
+                    <ringGeometry args={[radius * 0.97, radius, 48]} />
+                    <meshBasicMaterial color={theme.border} transparent opacity={0.7} depthWrite={false} />
+                </mesh>
+            </group>
             <group ref={fadeGroupRef}>
                 {emoji && (
                     <mesh rotation-x={-Math.PI / 2} position-y={0.1} renderOrder={3}>
