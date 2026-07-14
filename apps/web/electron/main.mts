@@ -12,7 +12,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js'),
+            preload: path.join(import.meta.dirname, 'preload.cjs'),
         },
         titleBarStyle: 'hiddenInset',
         backgroundColor: '#ffffff',
@@ -22,7 +22,7 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:4200');
         mainWindow.webContents.openDevTools();
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        mainWindow.loadFile(path.join(import.meta.dirname, '../dist/index.html'));
     }
 }
 

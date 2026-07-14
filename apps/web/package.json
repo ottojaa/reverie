@@ -3,10 +3,10 @@
     "version": "0.0.1",
     "private": true,
     "type": "module",
-    "main": "dist-electron/main.js",
+    "main": "dist-electron/main.mjs",
     "scripts": {
         "dev": "vite",
-        "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:4200 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .\"",
+        "dev:electron": "concurrently -k \"vite --strictPort\" \"wait-on http://localhost:4200 && tsc -p electron/tsconfig.json && NODE_ENV=development electron .\"",
         "build": "vite build",
         "build:electron": "vite build && tsc -p electron/tsconfig.json",
         "electron": "electron .",
