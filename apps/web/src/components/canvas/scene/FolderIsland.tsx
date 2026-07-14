@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
-import { easeOutBack, requestFrame } from './dampers.js';
+import { clamp, easeOutBack, requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
@@ -48,10 +48,12 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
         if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
 
-        // Semantic-zoom LOD: the glyph is the folder's far representation —
-        // it makes way for the preview pile as the camera enters the unravel
-        // band. Empty folders have no pile, so their glyph stays.
-        const iconT = documentCount === 0 ? 1 : 1 - zoomBand.current;
+        // Semantic-zoom LOD: the glyph is the folder's far representation.
+        // It holds steady while the cards hop out (they burst from a folder
+        // the user can still see) and only fades once they've landed —
+        // delayed against the band. Empty folders have no pile to make way
+        // for, so their glyph stays at every zoom.
+        const iconT = documentCount === 0 ? 1 : 1 - clamp((zoomBand.current - 0.45) / 0.3, 0, 1);
         const icon = iconRef.current;
         const iconMat = iconMatRef.current;
 
@@ -59,8 +61,7 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
             const opacity = iconT * dim;
             icon.visible = opacity > 0.02;
             iconMat.opacity = opacity;
-            // Mirrors the pile's pop: the glyph springs back with a slight
-            // overshoot as the contents tuck themselves away.
+            // Springs back with a slight overshoot as the contents tuck away.
             icon.scale.setScalar(0.55 + 0.45 * easeOutBack(iconT));
         }
 

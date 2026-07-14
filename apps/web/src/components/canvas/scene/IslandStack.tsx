@@ -6,7 +6,7 @@ import { Group, Mesh } from 'three';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
-import { clamp, damp, easeOutBack, requestFrame } from './dampers.js';
+import { clamp, damp, ease, easeOutBack, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
 import { islandDrag, unravelValue, zoomBand } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
@@ -105,17 +105,20 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
-            // Staggered pop: each card bursts out of the glyph a beat after
-            // the one above it, growing with a small overshoot before
-            // settling — and squashes back in the same way on the way out.
-            const t = clamp(band * 1.2 - i * 0.1, 0, 1);
+            // Staggered burst: each card becomes visible almost immediately,
+            // hops UP out of the (still visible) folder in an arc, and lands
+            // on its pile pose while growing with a small overshoot. The
+            // folder glyph only fades once the cards are out — sequencing,
+            // not a crossfade. Reverse plays the hop back into the folder.
+            const t = clamp(band * 1.25 - i * 0.12, 0, 1);
             const pop = easeOutBack(t);
+            const travel = ease(t);
 
             if (mesh) {
-                const emerge = 0.55 + 0.45 * pop;
-                const scale = 0.35 + 0.65 * pop;
-                mesh.position.set(card.dx * emerge, card.y, card.dz * emerge);
-                mesh.rotation.z = card.yaw * (0.4 + 0.6 * pop);
+                const hop = Math.sin(t * Math.PI) * island.radius * 0.35;
+                const scale = 0.4 + 0.6 * pop;
+                mesh.position.set(card.dx * travel, card.y + hop, card.dz * travel);
+                mesh.rotation.z = card.yaw * travel;
                 mesh.scale.set(card.w * scale, card.h * scale, 1);
             }
 
@@ -133,7 +136,7 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
             }
 
             uniforms.uMix.value = mixRefs.current[i] ?? 0;
-            uniforms.uOpacity.value = (1 - unravelValue(island.id)) * focusDimFor(island.id) * clamp(t * 1.5, 0, 1);
+            uniforms.uOpacity.value = (1 - unravelValue(island.id)) * focusDimFor(island.id) * clamp(t * 2.5, 0, 1);
         });
     });
 
