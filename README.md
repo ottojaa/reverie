@@ -118,8 +118,14 @@ PaddleOCR runs on CPU by default. To run OCR on an NVIDIA GPU (e.g. an RTX 3080)
 
 **Enable it:**
 
-- The prod image is GPU-enabled by default (`OCR_GPU=true` → CUDA 12.6 `paddlepaddle-gpu` wheel, which
-  bundles CUDA/cuDNN via pip). Build CPU-only with `--build-arg OCR_GPU=false`.
+- The Python/PaddleOCR + CUDA stack lives in a **separate base image** (`Dockerfile.ocr-base` →
+  `reverie-ocr-base:latest`), built by `scripts/deploy.sh` only when the OCR requirements change. The
+  per-deploy backend build does `FROM reverie-ocr-base`, so ordinary code deploys never rebuild or
+  re-download the multi-GB CUDA/cuDNN wheels. GPU-enabled by default (`OCR_GPU=true` → CUDA 12.6
+  `paddlepaddle-gpu`); build CPU-only with `OCR_GPU=false scripts/deploy.sh`, or rebuild the base by hand:
+    ```sh
+    docker build -f Dockerfile.ocr-base -t reverie-ocr-base:latest .   # add --build-arg OCR_GPU=false for CPU
+    ```
 - Set `OCR_DEVICE=gpu:0` in `/opt/reverie/.env.production`. `docker-compose.prod.yml` already reserves
   the GPU for the backend service. OCR falls back to CPU automatically if GPU init fails.
 

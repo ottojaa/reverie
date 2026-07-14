@@ -1,3 +1,10 @@
+# Base image for the runtime stage: reverie-ocr-base provides Node 22 (slim) +
+# Python + PaddleOCR + the CUDA/cuDNN stack. Built separately and rarely (see
+# Dockerfile.ocr-base + scripts/deploy.sh) so code deploys never re-download CUDA.
+# Declared here (global scope) so it can be used in the runtime `FROM` below.
+# Override with --build-arg OCR_BASE=<image:tag>; defaults to :latest.
+ARG OCR_BASE=reverie-ocr-base:latest
+
 # ─── Stage 1: Builder ───────────────────────────────────────────────────────
 # Compiles TypeScript, builds shared lib, backend dist, and web SPA.
 # Debian (glibc) base so native modules (bcrypt, sharp) built here are ABI-compatible
@@ -34,68 +41,13 @@ RUN node .yarn/releases/yarn-4.17.1.cjs workspaces focus @reverie/backend --prod
 
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────────────
-# Minimal Node.js image with Python + PaddleOCR for the OCR subprocess.
-FROM node:22-slim AS runtime
+# Built FROM reverie-ocr-base, which provides Node 22 (slim) + Python + PaddleOCR
+# and the multi-GB CUDA/cuDNN stack. That base is built separately and rarely (see
+# Dockerfile.ocr-base + scripts/deploy.sh), so ordinary code deploys never rebuild
+# or re-download CUDA — this stage just layers the built app on top.
+# (OCR_BASE is declared in the global scope at the top of this file.)
+FROM ${OCR_BASE} AS runtime
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    ffmpeg \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libfontconfig1 \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install PaddleOCR in an isolated venv.
-# Copied early so this expensive layer is cached independently of app code.
-# OCR_GPU=true (default) installs the CUDA 12.6 paddlepaddle-gpu wheel (bundles
-# CUDA/cuDNN via pip — the host only needs an NVIDIA driver + Container Toolkit).
-# Build with --build-arg OCR_GPU=false for a CPU-only image.
-# The framework wheel is installed BEFORE requirements.txt so paddleocr does not
-# pull in the CPU paddlepaddle wheel (the two must not coexist).
-ARG OCR_GPU=true
-# PaddleOCR (paddlepaddle) wheels are published for x86_64 only. Auto-skip the OCR
-# install on arm64 (e.g. local Apple-Silicon builds) so the image still builds — it
-# just runs without OCR. Force-skip on any arch with --build-arg SKIP_OCR=true.
-# Production is x86_64, so OCR installs there as normal.
-ARG SKIP_OCR=false
-ARG TARGETARCH
-COPY apps/backend/ocr_service/requirements.txt \
-     apps/backend/ocr_service/requirements-gpu.txt \
-     apps/backend/ocr_service/requirements-cpu.txt \
-     /tmp/
-RUN if [ "$SKIP_OCR" = "true" ] || [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping PaddleOCR install (SKIP_OCR=$SKIP_OCR, TARGETARCH=$TARGETARCH)"; \
-    else \
-        python3 -m venv /opt/paddleocr-env && \
-        if [ "$OCR_GPU" = "true" ]; then \
-            /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-gpu.txt; \
-        else \
-            /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements-cpu.txt; \
-        fi && \
-        /opt/paddleocr-env/bin/pip install --no-cache-dir -r /tmp/requirements.txt; \
-    fi
-
-# NOTE: PP-OCRv5 models are intentionally NOT pre-downloaded into the image.
-# Importing the GPU paddlepaddle wheel needs libcuda.so.1, which only exists at
-# runtime (injected by the NVIDIA Container Toolkit), not during `docker build` —
-# so a build-time `import paddleocr` fails on the GPU image. Instead the models are
-# downloaded once at runtime and persisted across container recreates via the
-# `ocr_models` volume mounted at ~/.paddlex (see docker-compose.prod.yml). Runtime
-# startup self-heals if a download stalls (see paddleocr.client.ts / ocr_runner.py).
-
-# Fallback for the GPU build: if paddle fails to dlopen its bundled CUDA/cuDNN
-# at runtime (e.g. "libcudnn.so.* cannot open shared object file"), uncomment and
-# point at the venv's bundled nvidia libs (adjust the python3.X version to match):
-# ENV LD_LIBRARY_PATH=/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cudnn/lib:/opt/paddleocr-env/lib/python3.11/site-packages/nvidia/cublas/lib:$LD_LIBRARY_PATH
-# If that still fails, switch this runtime stage to an nvidia/cuda cudnn-runtime base.
 
 # Copy the focused production node_modules, the built backend, and the workspace lib.
 # node_modules/@reverie/shared is a symlink → ../../libs/shared, so libs/shared (with
