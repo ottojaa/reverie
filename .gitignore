@@ -64,11 +64,13 @@ apps/android/local.properties
 # Verdaccio
 .verdaccio/
 
-# Claude Code (local, per-machine state)
+# Claude Code (local, per-machine state; memories/ is tracked — shared project layer)
 .claude/settings.local.json
-.claude/memories/
 .claude/worktrees/
 
 deploy.log
 # Yarn (Berry local state)
 .yarn/install-state.gz
+
+# Local docker-compose overrides (machine-specific port mappings etc.)
+docker-compose.override.yml

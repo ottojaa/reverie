@@ -1,11 +1,32 @@
 import { config } from 'dotenv';
-import { join } from 'path';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
 import { z } from 'zod';
 
-// Load .env from repo root (path relative to this file so it works from any cwd)
+// Load the env file from the repo root regardless of cwd or build layout:
+// __dirname differs between tsx runs (apps/backend/src/config) and the esbuild
+// output (apps/backend/dist/apps/backend/src/config), so walk upward until the
+// file is found instead of hardcoding the depth.
 // ENV_FILE can override (e.g. .env.prod) when set before import (e.g. create-user --prod)
 const envFile = process.env.ENV_FILE || '.env';
-config({ path: join(__dirname, '../../../../', envFile) });
+const envPath = findUp(envFile, __dirname) ?? join(process.cwd(), envFile);
+config({ path: envPath });
+
+function findUp(name: string, from: string): string | undefined {
+    let dir = from;
+
+    for (;;) {
+        const candidate = join(dir, name);
+
+        if (existsSync(candidate)) return candidate;
+
+        const parent = dirname(dir);
+
+        if (parent === dir) return undefined;
+
+        dir = parent;
+    }
+}
 
 const envSchema = z.object({
     // Server
