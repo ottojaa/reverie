@@ -7,15 +7,10 @@ import type { IslandLayout } from '../types.js';
  * pairs (enter < exit) plus a switch debounce so hovering at a threshold
  * breathes instead of flickering.
  */
-export const UNRAVEL_ENTER_DIST = 36;
-export const UNRAVEL_EXIT_DIST = 44;
-export const APPROACH_DIST = 54;
-/** Hover-unravel works up to this camera distance (folders are readable targets). */
-export const HOVER_UNRAVEL_MAX_DIST = 80;
-/** Dwell required over a plate before hover opens it — a pass-through never triggers. */
-export const HOVER_OPEN_DELAY_MS = 300;
-/** Keep a hover-opened fan alive across pointer gaps between/around cards. */
-export const HOVER_LINGER_MS = 900;
+export const UNRAVEL_ENTER_DIST = 44;
+/** Generous exit so a fan survives zooming out far enough to see all of it. */
+export const UNRAVEL_EXIT_DIST = 58;
+export const APPROACH_DIST = 64;
 export const SWITCH_DEBOUNCE_MS = 150;
 export const FAN_PAGE_LIMIT = 24;
 

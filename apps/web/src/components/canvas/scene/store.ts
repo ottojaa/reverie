@@ -32,7 +32,7 @@ export const cam: CameraTransient = {
 };
 
 /** User-adjustable canvas feel (persisted DOM-side, written via props). */
-export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1, hoverUnravel: true };
+export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1 };
 
 let snapshot: CanvasSnapshot = { unraveledFolderId: null, divePhase: 'idle' };
 const listeners = new Set<() => void>();
@@ -66,7 +66,6 @@ export function resetCanvasStore(initialCamera: CameraState | null): void {
     unravelAnims.clear();
     hover.docId = null;
     hover.islandId = null;
-    hover.plateId = null;
     unravelSuppression.clear();
     patchCanvasSnapshot({ unraveledFolderId: null, divePhase: 'idle' });
 }
@@ -110,27 +109,16 @@ export function unravelValue(folderId: string): number {
     return unravelAnims.get(folderId)?.current ?? 0;
 }
 
-/**
- * Transient hover state — read per frame by cards, never through React.
- * `islandId` is set anywhere over the island group (plate, shadow, labels);
- * `plateId` only while the pointer is over the plate disc itself, which is
- * what hover-unravel keys on so labels don't widen the trigger area.
- */
-export const hover = { docId: null as string | null, islandId: null as string | null, plateId: null as string | null, lift: new Map<string, number>() };
+/** Transient hover state — read per frame by cards, never through React. */
+export const hover = { docId: null as string | null, islandId: null as string | null, lift: new Map<string, number>() };
 
 /**
  * Folders whose auto-unravel is suppressed (click-away collapse, back-nav
- * re-entry). Each entry re-arms per path independently: the zoom path may
- * reopen only after the camera has left the folder's zone, the hover path
- * only after the pointer has left the island — so neither path can undo a
- * deliberate collapse on the very next frame.
+ * re-entry). A folder re-arms only once the camera has left its zone — so
+ * the controller can't undo a deliberate collapse while the camera is still
+ * parked on the folder. An explicit island click also clears its entry.
  */
-export interface UnravelSuppressionEntry {
-    pointerLeft: boolean;
-    cameraLeft: boolean;
-}
-
-export const unravelSuppression = new Map<string, UnravelSuppressionEntry>();
+export const unravelSuppression = new Set<string>();
 
 /** Screen position of the last pointerdown — lets click handlers ignore pan-releases. */
 export const lastPointerDown = { x: 0, y: 0 };

@@ -87,10 +87,9 @@ function InitialFraming({ islands, focusFolderId, initialCamera, returnDive }: I
         if (returnDive && diveCtx) {
             cam.target = { ...diveCtx.camBefore };
             cam.current = { ...diveCtx.camBefore, zoom: Math.min(1, diveCtx.camBefore.zoom + 0.04) };
-            // Neither path is armed: the camera is still inside the folder's
-            // zone and the cursor may be resting where the document was —
-            // reopening requires leaving and coming back (or a direct click).
-            unravelSuppression.set(diveCtx.folderId, { pointerLeft: false, cameraLeft: false });
+            // Reopening requires the camera to leave the folder's zone and
+            // come back (or a direct click on the island).
+            unravelSuppression.add(diveCtx.folderId);
             clearDiveContext();
             requestFrame();
 
@@ -248,7 +247,11 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
             // alpha: an opaque WebGL canvas composites white before its first
             // frame (the ~20ms flash on back-navigation); with alpha the CSS
             // background shows through until the first render lands.
-            gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+            // low-power: requesting the high-performance GPU can trigger a
+            // discrete-GPU switch on dual-GPU Macs, which recomposites the
+            // whole window (intermittent white flash on mount). The scene is
+            // a few hundred unlit quads — the integrated GPU is plenty.
+            gl={{ antialias: true, alpha: true, powerPreference: 'low-power' }}
             onCreated={({ gl, scene, camera }) => {
                 setMaxAnisotropy(gl.capabilities.getMaxAnisotropy());
                 gl.domElement.style.background = 'var(--background)';

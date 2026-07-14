@@ -34,8 +34,6 @@ export interface CameraTuning {
     friction: number;
     /** Multiplier on the zoom distance at which folders unravel (higher = from farther away). */
     unravelDistance: number;
-    /** Unravel a folder by hovering it (no zooming needed). */
-    hoverUnravel: boolean;
 }
 
 export const DEFAULT_CAMERA_TUNING: CameraTuning = {
@@ -43,7 +41,6 @@ export const DEFAULT_CAMERA_TUNING: CameraTuning = {
     zoomSpeed: 1,
     friction: 1,
     unravelDistance: 1,
-    hoverUnravel: true,
 };
 
 export interface UnraveledFolder {
