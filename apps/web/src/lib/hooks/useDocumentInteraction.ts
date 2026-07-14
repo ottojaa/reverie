@@ -1,4 +1,4 @@
-import { useDeleteDocuments } from '@/lib/api/documents';
+import { useDeleteDocuments, useSetDocumentPrivacy } from '@/lib/api/documents';
 import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useLongPress } from '@/lib/hooks/useLongPress';
@@ -25,6 +25,7 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
     const selection = useSelectionOptional();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
+    const setDocumentPrivacy = useSetDocumentPrivacy();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isMobile = useIsMobile();
@@ -173,15 +174,25 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         });
     };
 
+    // --- Privacy ---
+
+    const handleTogglePrivate = () => {
+        // Apply to the whole selection when this card is part of it, otherwise just this doc.
+        const ids = isSelected && selectedIds.size > 0 ? Array.from(selectedIds) : [document.id];
+        setDocumentPrivacy.mutate({ document_ids: ids, is_private: !document.is_private });
+    };
+
     return {
         // State
         isSelected,
         isDragging,
         isMobile,
+        isPrivate: document.is_private,
         // Handlers
         handleClick,
         handleDoubleClick,
         handleDelete,
+        handleTogglePrivate,
         // Drag props (spread onto DOM element)
         dragRef: setNodeRef,
         dragAttributes: attributes,

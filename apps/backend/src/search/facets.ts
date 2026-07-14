@@ -1,6 +1,7 @@
 import { sql, type SqlBool } from 'kysely';
 import type { SearchFacets, FacetItem, ParsedQuery } from '@reverie/shared';
 import { db } from '../db/kysely';
+import { excludePrivateDocuments } from '../services/privacy';
 
 /**
  * Faceted Search - Generate filter counts
@@ -11,18 +12,18 @@ import { db } from '../db/kysely';
 /**
  * Generate all facets for a search query
  */
-export async function generateFacets(parsed: ParsedQuery, userId: string): Promise<SearchFacets> {
+export async function generateFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<SearchFacets> {
     // Run all facet queries in parallel
     const [types, formats, folders, uploadPeriod, tags, hasText, categories, entities, locations] = await Promise.all([
-        getTypeFacets(parsed, userId),
-        getFormatFacets(parsed, userId),
-        getFolderFacets(parsed, userId),
-        getUploadPeriodFacets(parsed, userId),
-        getTagFacets(parsed, userId),
-        getHasTextFacets(parsed, userId),
-        getCategoryFacets(parsed, userId),
-        getEntityFacets(parsed, userId),
-        getLocationFacets(parsed, userId),
+        getTypeFacets(parsed, userId, privateFolderIds),
+        getFormatFacets(parsed, userId, privateFolderIds),
+        getFolderFacets(parsed, userId, privateFolderIds),
+        getUploadPeriodFacets(parsed, userId, privateFolderIds),
+        getTagFacets(parsed, userId, privateFolderIds),
+        getHasTextFacets(parsed, userId, privateFolderIds),
+        getCategoryFacets(parsed, userId, privateFolderIds),
+        getEntityFacets(parsed, userId, privateFolderIds),
+        getLocationFacets(parsed, userId, privateFolderIds),
     ]);
 
     return {
@@ -41,32 +42,34 @@ export async function generateFacets(parsed: ParsedQuery, userId: string): Promi
 /**
  * Get base query for facet counting (applies current filters except the facet being counted)
  */
-function getBaseQuery(userId: string) {
-    return db
+function getBaseQuery(userId: string, privateFolderIds: string[]) {
+    const query = db
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
         .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
         .where('d.user_id', '=', userId);
+
+    return excludePrivateDocuments(query, privateFolderIds, 'd.');
 }
 
 /**
  * Type facets (photo, document, receipt, screenshot)
  */
-async function getTypeFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
+async function getTypeFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
     // Count photos (documents without meaningful text)
-    const photoCount = await getBaseQuery(userId)
+    const photoCount = await getBaseQuery(userId, privateFolderIds)
         .select(sql<number>`count(*)::int`.as('count'))
         .where('d.has_meaningful_text', '=', false)
         .executeTakeFirst();
 
     // Count documents with text
-    const docCount = await getBaseQuery(userId)
+    const docCount = await getBaseQuery(userId, privateFolderIds)
         .select(sql<number>`count(*)::int`.as('count'))
         .where('d.has_meaningful_text', '=', true)
         .executeTakeFirst();
 
     // Count receipts specifically
-    const receiptCount = await getBaseQuery(userId)
+    const receiptCount = await getBaseQuery(userId, privateFolderIds)
         .select(sql<number>`count(*)::int`.as('count'))
         .where('d.document_category', '=', 'transaction_receipt')
         .executeTakeFirst();
@@ -103,8 +106,8 @@ async function getTypeFacets(parsed: ParsedQuery, userId: string): Promise<Facet
 /**
  * Format facets (pdf, jpg, png, etc.)
  */
-async function getFormatFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
-    const results = await getBaseQuery(userId)
+async function getFormatFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+    const results = await getBaseQuery(userId, privateFolderIds)
         .select(['d.mime_type', sql<number>`count(*)::int`.as('count')])
         .groupBy('d.mime_type')
         .orderBy(sql`count(*)`, 'desc')
@@ -121,8 +124,8 @@ async function getFormatFacets(parsed: ParsedQuery, userId: string): Promise<Fac
 /**
  * Folder facets (top folders by document count)
  */
-async function getFolderFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
-    const results = await getBaseQuery(userId)
+async function getFolderFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+    const results = await getBaseQuery(userId, privateFolderIds)
         .select(['f.path', sql<number>`count(*)::int`.as('count')])
         .where('f.path', 'is not', null)
         .groupBy('f.path')
@@ -142,7 +145,7 @@ async function getFolderFacets(parsed: ParsedQuery, userId: string): Promise<Fac
 /**
  * Upload period facets (this week, this month, etc.)
  */
-async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
+async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -150,21 +153,21 @@ async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string): Promi
     const yearAgo = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
 
     const [thisWeek, thisMonth, thisYear, older] = await Promise.all([
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.created_at', '>=', weekAgo)
             .executeTakeFirst(),
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.created_at', '>=', monthAgo)
             .where('d.created_at', '<', weekAgo)
             .executeTakeFirst(),
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.created_at', '>=', yearAgo)
             .where('d.created_at', '<', monthAgo)
             .executeTakeFirst(),
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.created_at', '<', yearAgo)
             .executeTakeFirst(),
@@ -209,16 +212,17 @@ async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string): Promi
 /**
  * Tag facets
  */
-async function getTagFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
-    const results = await db
+async function getTagFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+    const query = db
         .selectFrom('document_tags as dt')
         .innerJoin('documents as d', 'd.id', 'dt.document_id')
         .select(['dt.tag', sql<number>`count(*)::int`.as('count')])
         .where('d.user_id', '=', userId)
         .groupBy('dt.tag')
         .orderBy(sql`count(*)`, 'desc')
-        .limit(20)
-        .execute();
+        .limit(20);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
 
     return results.map((row) => ({
         name: row.tag,
@@ -230,13 +234,13 @@ async function getTagFacets(parsed: ParsedQuery, userId: string): Promise<FacetI
 /**
  * Has text facets
  */
-async function getHasTextFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
+async function getHasTextFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
     const [withText, withoutText] = await Promise.all([
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.has_meaningful_text', '=', true)
             .executeTakeFirst(),
-        getBaseQuery(userId)
+        getBaseQuery(userId, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .where('d.has_meaningful_text', '=', false)
             .executeTakeFirst(),
@@ -266,8 +270,8 @@ async function getHasTextFacets(parsed: ParsedQuery, userId: string): Promise<Fa
 /**
  * Category facets
  */
-async function getCategoryFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
-    const results = await getBaseQuery(userId)
+async function getCategoryFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+    const results = await getBaseQuery(userId, privateFolderIds)
         .select(['d.document_category', sql<number>`count(*)::int`.as('count')])
         .where('d.document_category', 'is not', null)
         .groupBy('d.document_category')
@@ -286,9 +290,9 @@ async function getCategoryFacets(parsed: ParsedQuery, userId: string): Promise<F
 /**
  * Entity facets (companies extracted from OCR)
  */
-async function getEntityFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
+async function getEntityFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
     // Extract companies from OCR metadata JSONB
-    const results = await db
+    const query = db
         .selectFrom('ocr_results as ocr')
         .innerJoin('documents as d', 'd.id', 'ocr.document_id')
         .select([sql<string>`jsonb_array_elements_text(ocr.metadata->'companies')`.as('entity'), sql<number>`count(*)::int`.as('count')])
@@ -297,8 +301,9 @@ async function getEntityFacets(parsed: ParsedQuery, userId: string): Promise<Fac
         .where(sql<SqlBool>`jsonb_array_length(ocr.metadata->'companies') > 0`)
         .groupBy(sql`jsonb_array_elements_text(ocr.metadata->'companies')`)
         .orderBy(sql`count(*)`, 'desc')
-        .limit(15)
-        .execute();
+        .limit(15);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
 
     return results.map((row) => ({
         name: row.entity,
@@ -310,8 +315,8 @@ async function getEntityFacets(parsed: ParsedQuery, userId: string): Promise<Fac
 /**
  * Location facets (countries with photo metadata, ordered by count)
  */
-async function getLocationFacets(parsed: ParsedQuery, userId: string): Promise<FacetItem[]> {
-    const results = await db
+async function getLocationFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+    const query = db
         .selectFrom('photo_metadata as pm')
         .innerJoin('documents as d', 'd.id', 'pm.document_id')
         .select(['pm.country', sql<number>`count(*)::int`.as('count')])
@@ -319,8 +324,9 @@ async function getLocationFacets(parsed: ParsedQuery, userId: string): Promise<F
         .where('pm.country', 'is not', null)
         .groupBy('pm.country')
         .orderBy(sql`count(*)`, 'desc')
-        .limit(20)
-        .execute();
+        .limit(20);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
 
     return results
         .filter((row) => row.country)

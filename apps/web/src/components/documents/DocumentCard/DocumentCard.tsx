@@ -5,7 +5,7 @@ import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
 import type { Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Trash2 } from 'lucide-react';
+import { Lock, LockOpen, Trash2 } from 'lucide-react';
 
 import { DocumentCardVisual } from './DocumentCardVisual';
 
@@ -19,8 +19,20 @@ interface DocumentCardProps {
 
 export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplete, className }: DocumentCardProps) {
     const queryClient = useQueryClient();
-    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, handleDelete, dragRef, dragAttributes, dragListeners, longPressHandlers } =
-        useDocumentInteraction({ document, orderedIds });
+    const {
+        isSelected,
+        isDragging,
+        isMobile,
+        isPrivate,
+        handleClick,
+        handleDoubleClick,
+        handleDelete,
+        handleTogglePrivate,
+        dragRef,
+        dragAttributes,
+        dragListeners,
+        longPressHandlers,
+    } = useDocumentInteraction({ document, orderedIds });
 
     return (
         <ContextMenu>
@@ -28,12 +40,21 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                 <div
                     ref={dragRef}
                     data-document-card
+                    className="relative"
                     style={{ touchAction: isMobile ? 'pan-y' : 'none' }}
                     {...dragAttributes}
                     {...dragListeners}
                     {...longPressHandlers}
                     onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
                 >
+                    {isPrivate && (
+                        <div
+                            className="pointer-events-none absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-accent/90 text-accent-foreground shadow-sm"
+                            aria-label="Private"
+                        >
+                            <Lock className="size-3" />
+                        </div>
+                    )}
                     <Link
                         to="/document/$id"
                         params={{ id: document.id }}
@@ -66,6 +87,10 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
+                <ContextMenuItem onSelect={handleTogglePrivate}>
+                    {isPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                    {isPrivate ? 'Remove from private' : 'Make private'}
+                </ContextMenuItem>
                 <ContextMenuItem variant="destructive" onSelect={handleDelete}>
                     <Trash2 className="size-4" />
                     Delete

@@ -2,6 +2,7 @@ import type { SearchFacets, SearchQuery, SearchResponse, SearchResult, SuggestQu
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { getCategoryDescription } from '../ocr/category-classifier';
+import { excludePrivateDocuments, excludePrivateFolders, getPrivateFolderIds } from '../services/privacy';
 import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
@@ -67,6 +68,9 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         sortOrder: query.sort_order,
     };
 
+    // Private documents/folders are always excluded from search.
+    const privateFolderIds = await getPrivateFolderIds(options.userId);
+
     // Build base query with all joins
     const baseQuery = db
         .selectFrom('documents as d')
@@ -76,7 +80,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Build the search query (cast to any to handle left join nullable types)
-    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
+    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions, privateFolderIds);
 
     // Select fields for results
     const resultsQuery = searchQuery.select([
@@ -121,11 +125,17 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
         .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
     // Apply the same filters to count query
-    const filteredCountQuery = buildSearchQuery(countBaseQuery as any, parsed, options.userId, {
-        ...queryOptions,
-        limit: 1000000,
-        offset: 0,
-    });
+    const filteredCountQuery = buildSearchQuery(
+        countBaseQuery as any,
+        parsed,
+        options.userId,
+        {
+            ...queryOptions,
+            limit: 1000000,
+            offset: 0,
+        },
+        privateFolderIds,
+    );
 
     // Execute queries
     const [rows, countResult, facets] = await Promise.all([
@@ -137,7 +147,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
             .clearOffset()
             .select(sql<number>`count(DISTINCT d.id)::int`.as('count'))
             .executeTakeFirst(),
-        query.include_facets ? generateFacets(parsed, options.userId) : Promise.resolve(undefined),
+        query.include_facets ? generateFacets(parsed, options.userId, privateFolderIds) : Promise.resolve(undefined),
     ]);
 
     // Get document IDs for snippet generation
@@ -260,14 +270,17 @@ export interface CategoryOverviewItem {
 }
 
 export async function getCategoryOverview(userId: string): Promise<{ categories: CategoryOverviewItem[] }> {
-    const rows = await db
+    const privateFolderIds = await getPrivateFolderIds(userId);
+
+    const query = db
         .selectFrom('documents')
         .select(['document_category', sql<number>`count(*)::int`.as('count')])
         .where('user_id', '=', userId)
         .where('document_category', 'is not', null)
         .groupBy('document_category')
-        .orderBy(sql`count(*)`, 'desc')
-        .execute();
+        .orderBy(sql`count(*)`, 'desc');
+
+    const rows = await excludePrivateDocuments(query, privateFolderIds, '').execute();
 
     const categories: CategoryOverviewItem[] = rows
         .filter((r) => r.document_category)
@@ -327,6 +340,9 @@ export async function findDocumentsForOrganize(
         sortOrder: 'desc',
     };
 
+    // Private documents/folders are always excluded from organize retrieval.
+    const privateFolderIds = await getPrivateFolderIds(options.userId);
+
     const baseQuery = db
         .selectFrom('documents as d')
         .leftJoin('folders as f', 'f.id', 'd.folder_id')
@@ -334,7 +350,7 @@ export async function findDocumentsForOrganize(
         .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
         .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
 
-    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions);
+    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions, privateFolderIds);
 
     const rows = await searchQuery
         .select([
@@ -518,13 +534,19 @@ export interface FolderOverviewItem {
 }
 
 export async function getFolderOverview(userId: string): Promise<{ folders: FolderOverviewItem[] }> {
-    const rows = await db
+    const privateFolderIds = await getPrivateFolderIds(userId);
+
+    let query = db
         .selectFrom('folders as f')
         .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id'))
         .select(['f.id', 'f.path', 'f.parent_id', 'f.type', 'f.sort_order', 'd.id as doc_id', 'd.document_category', 'd.extracted_date'])
         .where('f.user_id', '=', userId)
-        .orderBy('f.path', 'asc')
-        .execute();
+        .orderBy('f.path', 'asc');
+
+    query = excludePrivateFolders(query, privateFolderIds, 'f.id');
+    query = excludePrivateDocuments(query, privateFolderIds, 'd.');
+
+    const rows = await query.execute();
 
     const byFolder = new Map<
         string,
@@ -585,8 +607,9 @@ export async function getFolderOverview(userId: string): Promise<{ folders: Fold
  */
 export async function getFacetsOnly(query: string, userId: string): Promise<SearchFacets> {
     const parsed = parseQuery(query);
+    const privateFolderIds = await getPrivateFolderIds(userId);
 
-    return generateFacets(parsed, userId);
+    return generateFacets(parsed, userId, privateFolderIds);
 }
 
 /**
@@ -594,20 +617,21 @@ export async function getFacetsOnly(query: string, userId: string): Promise<Sear
  */
 export async function suggest(query: SuggestQuery, userId: string): Promise<string[]> {
     const { type, q, limit } = query;
+    const privateFolderIds = await getPrivateFolderIds(userId);
 
     switch (type) {
         case 'filename':
-            return suggestFilenames(q, userId, limit);
+            return suggestFilenames(q, userId, limit, privateFolderIds);
         case 'folder':
-            return suggestFolders(q, userId, limit);
+            return suggestFolders(q, userId, limit, privateFolderIds);
         case 'tag':
-            return suggestTags(q, userId, limit);
+            return suggestTags(q, userId, limit, privateFolderIds);
         case 'entity':
-            return suggestEntities(q, userId, limit);
+            return suggestEntities(q, userId, limit, privateFolderIds);
         case 'category':
-            return suggestCategories(q, userId, limit);
+            return suggestCategories(q, userId, limit, privateFolderIds);
         case 'location':
-            return suggestLocations(q, userId, limit);
+            return suggestLocations(q, userId, limit, privateFolderIds);
         default:
             return [];
     }
@@ -616,16 +640,17 @@ export async function suggest(query: SuggestQuery, userId: string): Promise<stri
 /**
  * Suggest filenames
  */
-async function suggestFilenames(prefix: string, userId: string, limit: number): Promise<string[]> {
-    const results = await db
+async function suggestFilenames(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+    const query = db
         .selectFrom('documents')
         .select('original_filename')
         .distinct()
         .where('user_id', '=', userId)
         .where('original_filename', 'ilike', `${prefix}%`)
         .orderBy('original_filename', 'asc')
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, '').execute();
 
     return results.map((r) => r.original_filename);
 }
@@ -633,20 +658,21 @@ async function suggestFilenames(prefix: string, userId: string, limit: number): 
 /**
  * Suggest folders
  */
-async function suggestFolders(prefix: string, userId: string, limit: number): Promise<string[]> {
+async function suggestFolders(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
     // Folder paths start with "/" (e.g. "/Documents/Photos").
     // Use contains match so "Doc" matches "/Documents/Photos".
     const pattern = `%${prefix}%`;
 
-    const results = await db
+    const query = db
         .selectFrom('folders')
         .select('path')
         .distinct()
         .where('user_id', '=', userId)
         .where('path', 'ilike', pattern)
         .orderBy('path', 'asc')
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+    const results = await excludePrivateFolders(query, privateFolderIds, 'id').execute();
 
     return results.map((r) => r.path);
 }
@@ -654,8 +680,8 @@ async function suggestFolders(prefix: string, userId: string, limit: number): Pr
 /**
  * Suggest tags
  */
-async function suggestTags(prefix: string, userId: string, limit: number): Promise<string[]> {
-    const results = await db
+async function suggestTags(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+    const query = db
         .selectFrom('document_tags as dt')
         .innerJoin('documents as d', 'd.id', 'dt.document_id')
         .select('dt.tag')
@@ -663,8 +689,9 @@ async function suggestTags(prefix: string, userId: string, limit: number): Promi
         .where('d.user_id', '=', userId)
         .where('dt.tag', 'ilike', `${prefix}%`)
         .orderBy('dt.tag', 'asc')
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
 
     return results.map((r) => r.tag);
 }
@@ -672,17 +699,18 @@ async function suggestTags(prefix: string, userId: string, limit: number): Promi
 /**
  * Suggest entities (companies from OCR)
  */
-async function suggestEntities(prefix: string, userId: string, limit: number): Promise<string[]> {
+async function suggestEntities(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
     // This is a complex query that extracts entities from JSONB
-    const results = await db
+    const query = db
         .selectFrom('ocr_results as ocr')
         .innerJoin('documents as d', 'd.id', 'ocr.document_id')
         .select(sql<string>`DISTINCT jsonb_array_elements_text(ocr.metadata->'companies')`.as('entity'))
         .where('d.user_id', '=', userId)
         .where(sql<SqlBool>`ocr.metadata->'companies' IS NOT NULL`)
         .where(sql<SqlBool>`jsonb_array_elements_text(ocr.metadata->'companies') ILIKE ${prefix + '%'}`)
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
 
     return results.map((r) => r.entity);
 }
@@ -690,16 +718,17 @@ async function suggestEntities(prefix: string, userId: string, limit: number): P
 /**
  * Suggest categories
  */
-async function suggestCategories(prefix: string, userId: string, limit: number): Promise<string[]> {
-    const results = await db
+async function suggestCategories(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+    const query = db
         .selectFrom('documents')
         .select('document_category')
         .distinct()
         .where('user_id', '=', userId)
         .where('document_category', 'is not', null)
         .where('document_category', 'ilike', `${prefix}%`)
-        .limit(limit)
-        .execute();
+        .limit(limit);
+
+    const results = await excludePrivateDocuments(query, privateFolderIds, '').execute();
 
     return results.filter((r) => r.document_category).map((r) => r.document_category!);
 }
@@ -707,32 +736,34 @@ async function suggestCategories(prefix: string, userId: string, limit: number):
 /**
  * Suggest locations (cities and countries from photo metadata)
  */
-async function suggestLocations(prefix: string, userId: string, limit: number): Promise<string[]> {
+async function suggestLocations(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
     const pattern = `%${prefix}%`;
 
+    const citiesQuery = db
+        .selectFrom('photo_metadata as pm')
+        .innerJoin('documents as d', 'd.id', 'pm.document_id')
+        .select('pm.city')
+        .distinct()
+        .where('d.user_id', '=', userId)
+        .where('pm.city', 'is not', null)
+        .where('pm.city', 'ilike', pattern)
+        .orderBy('pm.city', 'asc')
+        .limit(limit);
+
+    const countriesQuery = db
+        .selectFrom('photo_metadata as pm')
+        .innerJoin('documents as d', 'd.id', 'pm.document_id')
+        .select('pm.country')
+        .distinct()
+        .where('d.user_id', '=', userId)
+        .where('pm.country', 'is not', null)
+        .where('pm.country', 'ilike', pattern)
+        .orderBy('pm.country', 'asc')
+        .limit(limit);
+
     const [cities, countries] = await Promise.all([
-        db
-            .selectFrom('photo_metadata as pm')
-            .innerJoin('documents as d', 'd.id', 'pm.document_id')
-            .select('pm.city')
-            .distinct()
-            .where('d.user_id', '=', userId)
-            .where('pm.city', 'is not', null)
-            .where('pm.city', 'ilike', pattern)
-            .orderBy('pm.city', 'asc')
-            .limit(limit)
-            .execute(),
-        db
-            .selectFrom('photo_metadata as pm')
-            .innerJoin('documents as d', 'd.id', 'pm.document_id')
-            .select('pm.country')
-            .distinct()
-            .where('d.user_id', '=', userId)
-            .where('pm.country', 'is not', null)
-            .where('pm.country', 'ilike', pattern)
-            .orderBy('pm.country', 'asc')
-            .limit(limit)
-            .execute(),
+        excludePrivateDocuments(citiesQuery, privateFolderIds, 'd.').execute(),
+        excludePrivateDocuments(countriesQuery, privateFolderIds, 'd.').execute(),
     ]);
 
     const results = new Set<string>();

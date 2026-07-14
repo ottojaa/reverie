@@ -35,6 +35,7 @@ interface CategorizedSectionsProps {
     onAddCollection?: () => void;
     onDeleteSection?: (section: FolderWithChildren) => void;
     onDeleteCategory?: (category: FolderWithChildren) => void;
+    onTogglePrivate?: (folder: FolderWithChildren, makePrivate: boolean) => void;
     onClose?: () => void;
     treeDndHandlersRef?: RefObject<SortableTreeHandlers | null>;
 }
@@ -81,6 +82,7 @@ export function CategorizedSections({
     onAddCollection,
     onDeleteSection,
     onDeleteCategory,
+    onTogglePrivate,
     onClose,
     treeDndHandlersRef,
 }: CategorizedSectionsProps) {
@@ -462,6 +464,7 @@ export function CategorizedSections({
                                     onRename={onEditCategory}
                                     onDelete={onDeleteCategory}
                                     onAddSection={onAddSection}
+                                    onTogglePrivate={onTogglePrivate}
                                 >
                                     <SortableContext items={category.children.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                                         {category.children.map((section) => (
@@ -473,6 +476,8 @@ export function CategorizedSections({
                                                 disableDrag={filterActive}
                                                 onEditSection={onEditSection}
                                                 onDeleteSection={onDeleteSection}
+                                                onTogglePrivate={onTogglePrivate}
+                                                inheritedPrivate={category.is_private}
                                                 onClose={onClose}
                                             />
                                         ))}

@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError } from '@reverie/shared';
 import type { Kysely } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database, Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
+import { getPrivateFolderIds } from './privacy';
 
 type DbOrTrx = Kysely<Database>;
 
@@ -142,32 +143,39 @@ export class FolderService {
     }
 
     /**
-     * List children of a folder (scoped to user), ordered by sort_order
+     * List children of a folder (scoped to user), ordered by sort_order.
+     * Pass excludePrivateIds to hide (effectively) private folders when the vault is locked.
      */
-    async listChildren(parentId: string | null, userId: string): Promise<Folder[]> {
+    async listChildren(parentId: string | null, userId: string, excludePrivateIds?: string[]): Promise<Folder[]> {
         return db
             .selectFrom('folders')
             .selectAll()
             .where('user_id', '=', userId)
             .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
             .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
+            .$if(!!excludePrivateIds && excludePrivateIds.length > 0, (qb) => qb.where('id', 'not in', excludePrivateIds!))
             .orderBy('sort_order', 'asc')
             .orderBy('name', 'asc')
             .execute();
     }
 
     /**
-     * Get full folder tree (root folders with nested children and document_count)
+     * Get full folder tree (root folders with nested children and document_count).
+     * When excludePrivate is true (vault locked + hiding on), effectively-private folders
+     * are omitted and private documents are dropped from the counts.
      */
     async getFolderTree(
         userId: string,
+        excludePrivate = false,
     ): Promise<Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>> {
+        const privateFolderIds = excludePrivate ? await getPrivateFolderIds(userId) : [];
+
         const buildTree = async (parentId: string | null): Promise<Array<Folder & { children: unknown[]; document_count: number }>> => {
-            const folders = await this.listChildren(parentId, userId);
+            const folders = await this.listChildren(parentId, userId, excludePrivate ? privateFolderIds : undefined);
             const result: Array<Folder & { children: unknown[]; document_count: number }> = [];
 
             for (const folder of folders) {
-                const document_count = await this.getDocumentCount(folder.id, userId);
+                const document_count = await this.getDocumentCount(folder.id, userId, excludePrivate);
                 const children = await buildTree(folder.id);
                 result.push({ ...folder, children, document_count });
             }
@@ -180,12 +188,13 @@ export class FolderService {
         >;
     }
 
-    private async getDocumentCount(folderId: string, userId: string): Promise<number> {
+    private async getDocumentCount(folderId: string, userId: string, excludePrivate = false): Promise<number> {
         const r = await db
             .selectFrom('documents')
             .select(db.fn.countAll().as('count'))
             .where('folder_id', '=', folderId)
             .where('user_id', '=', userId)
+            .$if(excludePrivate, (qb) => qb.where('is_private', '=', false))
             .executeTakeFirst();
 
         return Number(r?.count ?? 0);
@@ -238,6 +247,7 @@ export class FolderService {
             description?: string | null | undefined;
             emoji?: string | null | undefined;
             parent_id?: string | null | undefined;
+            is_private?: boolean | undefined;
         },
     ): Promise<Folder> {
         const folder = await this.getFolder(id, userId);
@@ -338,6 +348,10 @@ export class FolderService {
 
         if (update.emoji !== undefined) {
             updateData.emoji = update.emoji;
+        }
+
+        if (update.is_private !== undefined) {
+            updateData.is_private = update.is_private;
         }
 
         if (Object.keys(updateData).length === 0) {

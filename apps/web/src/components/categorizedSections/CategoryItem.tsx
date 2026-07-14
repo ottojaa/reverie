@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
-import { ChevronDown, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Lock, LockOpen, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
@@ -27,6 +27,7 @@ interface CategoryItemProps {
     onRename?: ((category: FolderWithChildren) => void) | undefined;
     onDelete?: ((category: FolderWithChildren) => void) | undefined;
     onAddSection?: ((category: FolderWithChildren) => void) | undefined;
+    onTogglePrivate?: ((category: FolderWithChildren, makePrivate: boolean) => void) | undefined;
     /** When true, collection row is not draggable (e.g. sidebar tree filter active). */
     disableDrag?: boolean;
     children: ReactNode;
@@ -39,9 +40,11 @@ export function CategoryItem({
     onRename,
     onDelete,
     onAddSection,
+    onTogglePrivate,
     disableDrag = false,
     children,
 }: CategoryItemProps) {
+    const isPrivate = category.is_private;
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
     const sortableId = categoryIdToSortableId(category.id);
@@ -90,6 +93,7 @@ export function CategoryItem({
 
             {/* Category name - uppercase label style */}
             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{category.name}</span>
+            {isPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />}
 
             {/* Add folder */}
             <Button
@@ -131,6 +135,12 @@ export function CategoryItem({
                             <Pencil className="size-4" />
                             Rename
                         </DropdownMenuItem>
+                        {onTogglePrivate && (
+                            <DropdownMenuItem onSelect={() => onTogglePrivate(category, !isPrivate)}>
+                                {isPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                                {isPrivate ? 'Remove from private' : 'Make private'}
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onSelect={() => onDelete?.(category)}>
                             <Trash2 className="size-4" />
@@ -170,6 +180,12 @@ export function CategoryItem({
                             <Pencil className="size-4" />
                             Rename
                         </ContextMenuItem>
+                        {onTogglePrivate && (
+                            <ContextMenuItem onSelect={() => onTogglePrivate(category, !isPrivate)}>
+                                {isPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                                {isPrivate ? 'Remove from private' : 'Make private'}
+                            </ContextMenuItem>
+                        )}
                         <ContextMenuSeparator />
                         <ContextMenuItem variant="destructive" onSelect={() => onDelete?.(category)}>
                             <Trash2 className="size-4" />

@@ -9,3 +9,4 @@ export * from './schemas/organize.js';
 export * from './schemas/search.js';
 export * from './schemas/upload.js';
 export * from './schemas/users.js';
+export * from './schemas/vault.js';

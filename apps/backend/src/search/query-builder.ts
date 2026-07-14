@@ -1,6 +1,7 @@
 import type { DateRange, ParsedQuery, SortBy } from '@reverie/shared';
 import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
 import type { Database } from '../db/schema';
+import { excludePrivateDocuments } from '../services/privacy';
 import { resolveRelativeDate } from './query-parser';
 
 /**
@@ -172,11 +173,18 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
 /**
  * Build the main search query from ParsedQuery
  */
-export function buildSearchQuery(baseQuery: SearchQueryBase, parsed: ParsedQuery, userId: string, options: SearchQueryOptions): SearchQueryBase {
+export function buildSearchQuery(
+    baseQuery: SearchQueryBase,
+    parsed: ParsedQuery,
+    userId: string,
+    options: SearchQueryOptions,
+    privateFolderIds: string[],
+): SearchQueryBase {
     let query = baseQuery;
 
     // Always filter by user
     query = query.where('d.user_id', '=', userId);
+    query = excludePrivateDocuments(query, privateFolderIds, 'd.');
 
     // Full-text search
     if (parsed.fullText) {
@@ -362,14 +370,21 @@ export function buildCountQuery(
     baseQuery: SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', object>,
     parsed: ParsedQuery,
     userId: string,
+    privateFolderIds: string[],
 ): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', { count: number }> {
     // Reuse the search query builder but without sorting and pagination
-    const query = buildSearchQuery(baseQuery, parsed, userId, {
-        limit: 1000000, // Will be ignored
-        offset: 0,
-        sortBy: 'uploaded',
-        sortOrder: 'desc',
-    });
+    const query = buildSearchQuery(
+        baseQuery,
+        parsed,
+        userId,
+        {
+            limit: 1000000, // Will be ignored
+            offset: 0,
+            sortBy: 'uploaded',
+            sortOrder: 'desc',
+        },
+        privateFolderIds,
+    );
 
     // Replace select with count
     return query
