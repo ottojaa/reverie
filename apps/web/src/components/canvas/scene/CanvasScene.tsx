@@ -1,214 +1,36 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useCallback, useEffect, useRef } from 'react';
-import { clearDiveContext, getDiveContext } from '../dive/diveState.js';
+import { Canvas, useThree } from '@react-three/fiber';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { canvasQuality } from '../canvasQuality.js';
 import { releaseReturnShield } from '../dive/returnShield.js';
-import type { CameraState, CanvasSceneHandle, CanvasSceneProps, IslandLayout } from '../types.js';
+import type { CameraState, CanvasSceneHandle, CanvasSceneProps } from '../types.js';
 import { CameraRig } from './CameraRig.js';
 import { CollectionLabels } from './CollectionLabels.js';
-import { clamp, requestFrame, setInvalidator, updateDampers } from './dampers.js';
+import { ContextLossGuard } from './ContextLossGuard.js';
+import { requestFrame } from './dampers.js';
 import { DiveController } from './DiveController.js';
 import { FolderIsland } from './FolderIsland.js';
-import { fitCameraTo, focusCameraOn, visibleIslandIds } from './framing.js';
+import { FrameDriver } from './FrameDriver.js';
+import { visibleIslandIds } from './framing.js';
 import { GroundGrid } from './GroundGrid.js';
+import { InitialFraming } from './InitialFraming.js';
 import { IslandStack } from './IslandStack.js';
 import { disposeEmojiTextures } from './labelAssets.js';
-import { cam, lastPointerDown, resetCanvasStore, tuning, unravelSuppression } from './store.js';
+import { ReturnShieldRelease } from './ReturnShieldRelease.js';
+import { SceneHandleBridge } from './SceneHandleBridge.js';
+import { lastPointerDown, resetCanvasStore, tuning, viewport } from './store.js';
 import { disposeAllTextures, setMaxAnisotropy } from './textureCache.js';
 import { useCanvasTheme } from './theme.js';
 import { collapseUnravel, UnravelController } from './UnravelController.js';
 import { UnravelDebug } from './UnravelDebug.js';
 import { UnraveledCards } from './UnraveledCards.js';
 
-/** Wires the damper registry into R3F's demand frameloop. */
-function FrameDriver() {
-    const invalidate = useThree((s) => s.invalidate);
-
-    useEffect(() => {
-        setInvalidator(() => invalidate());
-
-        return () => setInvalidator(null);
-    }, [invalidate]);
-
-    useFrame((_, dt) => {
-        if (updateDampers(Math.min(dt, 0.1))) requestFrame();
-    });
-
-    return null;
-}
-
 /**
- * Drops the back-navigation shield once the GPU has provably executed the
- * scene's first frame. rAF ticks alone lied: frame one queues context setup,
- * shader compilation and texture uploads, and the compositor can put the
- * brand-new (uninitialized → white) surface on screen long before that work
- * finishes. A GL fence signals actual completion; one extra frame covers the
- * swap that displays it.
+ * Keeps store.viewport in sync with the R3F size — render-body write so the
+ * fan layout and entry framing see the real aspect before any effect runs.
  */
-function ReturnShieldRelease() {
-    const gl = useThree((s) => s.gl);
-    const stateRef = useRef({ frames: 0, sync: null as WebGLSync | null, done: false });
-
-    useFrame(() => {
-        const s = stateRef.current;
-
-        if (s.done) return;
-
-        s.frames += 1;
-        const ctx = gl.getContext();
-
-        if (typeof WebGL2RenderingContext === 'undefined' || !(ctx instanceof WebGL2RenderingContext)) {
-            // WebGL1 fallback: a handful of frames is the best proxy available.
-            if (s.frames >= 8) {
-                s.done = true;
-                releaseReturnShield();
-            }
-
-            return;
-        }
-
-        // Let the first full frame queue its commands before fencing.
-        if (s.frames < 2) return;
-
-        if (!s.sync) {
-            s.sync = ctx.fenceSync(ctx.SYNC_GPU_COMMANDS_COMPLETE, 0);
-            ctx.flush();
-
-            return;
-        }
-
-        const status = ctx.clientWaitSync(s.sync, 0, 0);
-
-        if (status !== ctx.ALREADY_SIGNALED && status !== ctx.CONDITION_SATISFIED) return;
-
-        ctx.deleteSync(s.sync);
-        s.sync = null;
-        s.done = true;
-        requestAnimationFrame(() => releaseReturnShield());
-    });
-
-    return null;
-}
-
-function ContextLossGuard() {
-    const gl = useThree((s) => s.gl);
-
-    useEffect(() => {
-        const el = gl.domElement;
-        const onLost = (e: Event) => e.preventDefault();
-        const onRestored = () => requestFrame();
-
-        el.addEventListener('webglcontextlost', onLost);
-        el.addEventListener('webglcontextrestored', onRestored);
-
-        return () => {
-            el.removeEventListener('webglcontextlost', onLost);
-            el.removeEventListener('webglcontextrestored', onRestored);
-        };
-    }, [gl]);
-
-    return null;
-}
-
-interface InitialFramingProps {
-    islands: IslandLayout[];
-    focusFolderId: string | null;
-    initialCamera: CameraState | null;
-    returnDive: boolean;
-}
-
-/**
- * One-shot entry framing once islands arrive: reverse dive > restored
- * session > ?focus fly-in > zoom-to-fit. Always leaves current slightly
- * behind target so the rig animates a gentle entry AND fires its settle
- * callbacks afterwards.
- */
-function InitialFraming({ islands, focusFolderId, initialCamera, returnDive }: InitialFramingProps) {
+function ViewportSync() {
     const size = useThree((s) => s.size);
-    const framedRef = useRef(false);
-
-    useEffect(() => {
-        if (framedRef.current || islands.length === 0) return;
-
-        framedRef.current = true;
-        const fit = fitCameraTo(islands, size.width / size.height);
-
-        // Back from /document: land where the dive began with only a small
-        // settle-in. Deliberately NO re-unravel and no reverse flight — the
-        // pronounced enter animation reads well, replaying it backwards
-        // doesn't. Suppression stops the controller from instantly
-        // re-opening the folder the camera is still centered on.
-        const diveCtx = getDiveContext();
-
-        if (returnDive && diveCtx) {
-            cam.target = { ...diveCtx.camBefore };
-            cam.current = { ...diveCtx.camBefore, zoom: Math.min(1, diveCtx.camBefore.zoom + 0.04) };
-            // Reopening requires the camera to leave the folder's zone and
-            // come back (or a direct click on the island).
-            unravelSuppression.add(diveCtx.folderId);
-            clearDiveContext();
-            requestFrame();
-
-            return;
-        }
-
-        clearDiveContext();
-
-        if (initialCamera) {
-            cam.target = { ...initialCamera };
-            cam.current = { ...initialCamera, zoom: Math.max(0, initialCamera.zoom - 0.05) };
-            requestFrame();
-
-            return;
-        }
-
-        const focused = focusFolderId ? islands.find((i) => i.id === focusFolderId) : undefined;
-
-        if (focused) {
-            cam.current = { ...fit };
-            cam.target = focusCameraOn(focused);
-            requestFrame();
-
-            return;
-        }
-
-        cam.target = { ...fit };
-        cam.current = { ...fit, zoom: Math.max(0, fit.zoom - 0.06) };
-        requestFrame();
-    }, [islands, focusFolderId, initialCamera, size]);
-
-    return null;
-}
-
-interface SceneHandleBridgeProps {
-    handleRef: React.RefObject<CanvasSceneHandle | null> | undefined;
-    islands: IslandLayout[];
-}
-
-function SceneHandleBridge({ handleRef, islands }: SceneHandleBridgeProps) {
-    const size = useThree((s) => s.size);
-    const islandsRef = useRef(islands);
-    islandsRef.current = islands;
-    const sizeRef = useRef(size);
-    sizeRef.current = size;
-
-    useEffect(() => {
-        if (!handleRef) return;
-
-        handleRef.current = {
-            zoomBy: (delta) => {
-                cam.target.zoom = clamp(cam.target.zoom + delta, 0, 1);
-                requestFrame();
-            },
-            zoomToFit: () => {
-                cam.target = fitCameraTo(islandsRef.current, sizeRef.current.width / sizeRef.current.height);
-                requestFrame();
-            },
-        };
-
-        return () => {
-            handleRef.current = null;
-        };
-    }, [handleRef]);
+    viewport.aspect = size.width / Math.max(1, size.height);
 
     return null;
 }
@@ -228,6 +50,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
         unraveled,
         focusFolderId,
         initialCamera,
+        initialUnraveledFolderId,
         returnDive,
         tuning: tuningProp,
         onCameraChange,
@@ -243,6 +66,29 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
     const islandsRef = useRef(islands);
     islandsRef.current = islands;
 
+    // Mount on "always" to ride out R3F 9.6's init races (missed container
+    // measurement, StrictMode replays, the return-shield GPU fence), then hand
+    // rendering to the damper registry's invalidate wiring on coarse-pointer
+    // devices — continuous rendering is what cooks phone GPUs. Driven through
+    // the PROP (React state), never useThree().setFrameloop: R3F re-applies
+    // the prop on every Canvas re-render and would silently revert a child's
+    // setFrameloop call. Desktop stays on "always" — a swallowed invalidation
+    // there would freeze an animation for no battery win worth the risk.
+    const [frameloop, setFrameloop] = useState<'always' | 'demand'>('always');
+
+    useEffect(() => {
+        if (!canvasQuality.demandFrameloop) return;
+
+        const t = setTimeout(() => setFrameloop('demand'), 1500);
+
+        return () => clearTimeout(t);
+    }, []);
+
+    useEffect(() => {
+        // Prime one frame after the switch so nothing stalls mid-animation.
+        if (frameloop === 'demand') requestFrame();
+    }, [frameloop]);
+
     // Reset the module-transient store exactly once per mount, DURING RENDER —
     // before any child effect can run. Doing this in a child's (layout)effect
     // raced InitialFraming under StrictMode replays: whichever ran last won,
@@ -251,7 +97,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
 
     if (!resetRef.current) {
         resetRef.current = true;
-        resetCanvasStore(initialCamera);
+        resetCanvasStore(initialCamera, initialUnraveledFolderId);
     }
 
     useEffect(() => {
@@ -293,13 +139,11 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
 
     return (
         <Canvas
-            // "always" over "demand": the invalidate-on-demand wiring proved
-            // fragile against R3F 9.6's init/StrictMode quirks (black first
-            // paint, stalled animations when invalidations were swallowed).
-            // The scene is ~200 unlit quads — continuous rendering is cheap.
-            frameloop="always"
-            dpr={[1, 2]}
-            style={{ background: 'var(--background)' }}
+            frameloop={frameloop}
+            dpr={[1, canvasQuality.dprMax]}
+            // touchAction none: without it mobile browsers claim single-finger
+            // drags as native scroll gestures and pointercancel the pan.
+            style={{ background: 'var(--background)', touchAction: 'none' }}
             // alpha: an opaque WebGL canvas composites white before its first
             // frame (the ~20ms flash on back-navigation); with alpha the CSS
             // background shows through until the first render lands.
@@ -307,20 +151,27 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
             // discrete-GPU switch on dual-GPU Macs, which recomposites the
             // whole window (intermittent white flash on mount). The scene is
             // a few hundred unlit quads — the integrated GPU is plenty.
-            gl={{ antialias: true, alpha: true, powerPreference: 'low-power' }}
+            // antialias: MSAA is disproportionately expensive on mobile tile
+            // GPUs; gl props are create-time only, and canvasQuality resolves
+            // before first mount, so this never re-creates the context.
+            gl={{ antialias: canvasQuality.antialias, alpha: true, powerPreference: 'low-power' }}
             onCreated={({ gl, scene, camera }) => {
                 setMaxAnisotropy(gl.capabilities.getMaxAnisotropy());
                 gl.domElement.style.background = 'var(--background)';
+                // The style prop lands on R3F's wrapper div; set it on the
+                // actual event target too so pointer capture is never contested.
+                gl.domElement.style.touchAction = 'none';
                 gl.compile(scene, camera);
             }}
             onPointerMissed={(e) => {
                 // Click-away (not a pan-release) collapses the open fan.
                 const moved = Math.hypot(e.clientX - lastPointerDown.x, e.clientY - lastPointerDown.y);
 
-                if (moved <= 7) collapseUnravel(onUnravelChange);
+                if (moved <= canvasQuality.clickThresholdPx) collapseUnravel(onUnravelChange);
             }}
         >
             <color attach="background" args={[theme.background]} />
+            <ViewportSync />
             <FrameDriver />
             <ReturnShieldRelease />
             <ContextLossGuard />

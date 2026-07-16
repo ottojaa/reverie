@@ -110,7 +110,7 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                             min={0.5}
                             max={2}
                             onChange={(v) => onTuningChange({ ...tuning, unravelDistance: v })}
-                            hint="How far you can be zoomed out and still open folders."
+                            hint="How far you can zoom out before an open folder gathers back up."
                         />
                         <TuningSlider
                             label="Unravel radius"
@@ -118,7 +118,7 @@ export function CanvasOverlay({ onExit, onZoomIn, onZoomOut, onZoomToFit, tuning
                             min={0.5}
                             max={2}
                             onChange={(v) => onTuningChange({ ...tuning, unravelRadius: v })}
-                            hint="Size of the screen-center zone that triggers a folder."
+                            hint="How far you can pan off an open folder before it gathers back up."
                         />
                         <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Unravel debug</span>

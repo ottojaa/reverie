@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { Group, Mesh, MeshBasicMaterial } from 'three';
 import type { IslandLayout } from '../types.js';
 import { zoomToDist } from './cameraMath.js';
-import { cam, getCanvasSnapshot, tuning, unravelSuppression } from './store.js';
+import { cam, getCanvasSnapshot, tuning, unravelRequest } from './store.js';
 import { enterProximity, MAX_OPEN_SWEEP, UNRAVEL_ENTER_DIST, unravelExitRadius, viewSweep } from './unravel.js';
 
 /**
@@ -14,15 +14,16 @@ import { enterProximity, MAX_OPEN_SWEEP, UNRAVEL_ENTER_DIST, unravelExitRadius, 
  *   the point that must land inside a folder's circle to open it):
  *   green = would open · orange = blocked by sweep gate · gray = zoomed out
  *   past the enter distance.
- * - Per folder, the enter-proximity circle (grows with camera distance) in
- *   the same colors, red when the folder is suppressed (click-away/back-nav);
- *   the currently open folder shows its exit boundary instead (dashed-faint).
+ * - Per folder, the arrival-proximity circle (grows with camera distance) in
+ *   the same colors, red when the folder is the pending click-to-open request
+ *   (waiting for the camera to arrive); the currently open folder shows its
+ *   exit boundary instead (dashed-faint).
  */
 
 const COLOR_OPEN = '#22c55e';
 const COLOR_SWEEP = '#f59e0b';
 const COLOR_FAR = '#64748b';
-const COLOR_SUPPRESSED = '#ef4444';
+const COLOR_REQUESTED = '#ef4444';
 const COLOR_EXIT = '#38bdf8';
 
 export function UnravelDebug({ islands }: { islands: IslandLayout[] }) {
@@ -66,7 +67,7 @@ export function UnravelDebug({ islands }: { islands: IslandLayout[] }) {
             const centered = isNearest && nearestD < prox;
 
             if (isOpen) material.color.set(COLOR_EXIT);
-            else if (unravelSuppression.has(island.id)) material.color.set(COLOR_SUPPRESSED);
+            else if (unravelRequest.current?.islandId === island.id) material.color.set(COLOR_REQUESTED);
             else if (centered && zoomOk) material.color.set(sweeping ? COLOR_SWEEP : COLOR_OPEN);
             else material.color.set(COLOR_FAR);
 

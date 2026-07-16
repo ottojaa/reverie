@@ -2,16 +2,16 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import { canvasQuality } from '../canvasQuality.js';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
-import { clamp, easeOutBack, requestFrame } from './dampers.js';
+import { clamp, ease, easeOutBack, requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
-import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue, zoomBand } from './store.js';
+import { cam, isDiving, islandDrag, unravelRequest, unravelValue, zoomBand } from './store.js';
 import type { CanvasTheme } from './theme.js';
 
-const CLICK_THRESHOLD_PX = 7;
 const dragHit = new Vector3();
 
 interface FolderIslandProps {
@@ -48,21 +48,32 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
         if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
 
-        // Semantic-zoom LOD: the glyph is the folder's far representation.
-        // It holds steady while the cards hop out (they burst from a folder
-        // the user can still see) and only fades once they've landed —
-        // delayed against the band. Empty folders have no pile to make way
-        // for, so their glyph stays at every zoom.
-        const iconT = documentCount === 0 ? 1 : 1 - clamp((zoomBand.current - 0.45) / 0.3, 0, 1);
+        // Semantic-zoom LOD: entering the pile band, the glyph recedes to
+        // become the ground its contents rest on — dimming to 0.45, shrinking
+        // 15% and pressing down to y 0.072: above the depth-written plate top
+        // (0.06) so it never occludes away, below the shadow plane (0.085) so
+        // physical stacking matches render order (plate < glyph < shadows <
+        // cards). It stays visible under the scattered pile; the cards spring
+        // out over it (IslandStack). On exit it holds dipped while the pile
+        // dives home, then pops back out (easeOutBack, band 0.42→0.18) the
+        // moment the last card is swallowed — the plate never sits bare, and
+        // the slight overshoot makes the return read as a snap, not a linear
+        // fade. It also joins the pile's unravel crossfade — the open fan is
+        // the folder's inside, its icon shouldn't float in the middle of it.
+        // Empty folders have no pile, so their glyph never gives way.
+        const entering = zoomBand.target >= 0.5;
+        const bandT = entering ? ease(clamp(zoomBand.current / 0.5, 0, 1)) : 1 - easeOutBack(clamp((0.42 - zoomBand.current) / 0.24, 0, 1));
+        const glyphT = documentCount === 0 ? 0 : bandT;
+        const fanFade = documentCount === 0 ? 1 : 1 - unravelValue(island.id);
         const icon = iconRef.current;
         const iconMat = iconMatRef.current;
 
         if (icon && iconMat) {
-            const opacity = iconT * dim;
+            const opacity = (1 - 0.55 * glyphT) * fanFade * dim;
             icon.visible = opacity > 0.02;
             iconMat.opacity = opacity;
-            // Springs back with a slight overshoot as the contents tuck away.
-            icon.scale.setScalar(0.55 + 0.45 * easeOutBack(iconT));
+            icon.position.y = 0.1 - glyphT * 0.028;
+            icon.scale.setScalar(1 - 0.15 * glyphT);
         }
 
         // …and name/count additionally make way for this island's own fan.
@@ -112,31 +123,33 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
                 if (!drag || drag.pointerId !== e.pointerId) return;
 
+                // Explicitly release R3F's internal capture: the automatic
+                // lostpointercapture cleanup is deferred to the next rAF, and
+                // until it runs every intersect includes this island — which
+                // suppresses onPointerMissed (click-away) after any island
+                // click, indefinitely so in a hidden/throttled tab.
+                (e.target as Element).releasePointerCapture(e.pointerId);
                 dragRef.current = null;
                 islandDrag.id = null;
 
-                if (e.delta > CLICK_THRESHOLD_PX) {
+                if (e.delta > canvasQuality.clickThresholdPx) {
                     onMoved(island.id, { x: islandDrag.x, z: islandDrag.z });
 
                     return;
                 }
 
-                // A click (no drag): fly the camera onto this folder. Explicit
-                // intent overrides any click-away/back-nav suppression.
-                unravelSuppression.delete(island.id);
+                // A click (no drag): fly the camera onto this folder and fan
+                // it out on arrival — the only way a folder ever opens.
+                unravelRequest.current = { islandId: island.id, immediate: false };
                 cam.target = focusCameraOn(island);
                 requestFrame();
             }}
             onPointerOver={() => {
-                hover.islandId = island.id;
-
                 if (isDraggable()) document.body.style.cursor = 'grab';
 
                 requestFrame();
             }}
             onPointerOut={() => {
-                if (hover.islandId === island.id) hover.islandId = null;
-
                 if (document.body.style.cursor === 'grab') document.body.style.cursor = '';
 
                 requestFrame();

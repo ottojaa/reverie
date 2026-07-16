@@ -146,7 +146,12 @@ function documentJoins() {
 }
 
 /** Documents-only path: existing behavior (browse, filters, non-relevance sorts). */
-async function searchDocumentsPaged(parsed: ParsedQuery, userId: string, options: SearchQueryOptions, privateFolderIds: string[]): Promise<{ results: SearchHit[]; total: number }> {
+async function searchDocumentsPaged(
+    parsed: ParsedQuery,
+    userId: string,
+    options: SearchQueryOptions,
+    privateFolderIds: string[],
+): Promise<{ results: SearchHit[]; total: number }> {
     const idRows = await buildSearchQuery(documentJoins() as any, parsed, userId, options, privateFolderIds)
         .select('d.id')
         .execute();
@@ -166,7 +171,12 @@ async function searchDocumentsPaged(parsed: ParsedQuery, userId: string, options
  * to cover the requested window after merging — sort them together, slice the page, and
  * only then hydrate full details for the ids actually on the page.
  */
-async function searchInterleaved(parsed: ParsedQuery, userId: string, options: SearchQueryOptions, privateFolderIds: string[]): Promise<{ results: SearchHit[]; total: number }> {
+async function searchInterleaved(
+    parsed: ParsedQuery,
+    userId: string,
+    options: SearchQueryOptions,
+    privateFolderIds: string[],
+): Promise<{ results: SearchHit[]; total: number }> {
     const tsQuery = buildPrefixTsQuery(parsed.fullText!);
 
     if (!tsQuery) return searchDocumentsPaged(parsed, userId, options, privateFolderIds);
@@ -174,7 +184,13 @@ async function searchInterleaved(parsed: ParsedQuery, userId: string, options: S
     const { limit, offset, sortOrder } = options;
     const window = offset + limit;
 
-    const docOrderRows = (await buildSearchQuery(documentJoins() as any, parsed, userId, { limit: window, offset: 0, sortBy: 'relevance', sortOrder }, privateFolderIds)
+    const docOrderRows = (await buildSearchQuery(
+        documentJoins() as any,
+        parsed,
+        userId,
+        { limit: window, offset: 0, sortBy: 'relevance', sortOrder },
+        privateFolderIds,
+    )
         .select(['d.id', 'd.created_at', sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance')])
         .execute()) as Array<{ id: string; created_at: Date; relevance: number }>;
 
@@ -254,7 +270,13 @@ async function searchInterleaved(parsed: ParsedQuery, userId: string, options: S
 
 /** Count matching documents (same filters, no pagination). */
 async function countDocuments(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<number> {
-    const countResult = await buildSearchQuery(documentJoins() as any, parsed, userId, { limit: 1000000, offset: 0, sortBy: 'uploaded', sortOrder: 'desc' }, privateFolderIds)
+    const countResult = await buildSearchQuery(
+        documentJoins() as any,
+        parsed,
+        userId,
+        { limit: 1000000, offset: 0, sortBy: 'uploaded', sortOrder: 'desc' },
+        privateFolderIds,
+    )
         .clearSelect()
         .clearOrderBy()
         .clearLimit()

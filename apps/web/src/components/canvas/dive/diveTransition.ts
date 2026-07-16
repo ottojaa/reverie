@@ -1,4 +1,4 @@
-import type { Document } from '@reverie/shared';
+import { THUMBNAIL_SIZES, type Document } from '@reverie/shared';
 import type { DestRect } from './diveState.js';
 
 /**
@@ -33,10 +33,17 @@ export function computeDestRect(doc: Document): DestRect {
     // Contain-fit WITHOUT upscaling: the viewer's max-w/max-h constraints never
     // grow an image past its natural size, so predicting the padded box for a
     // small image made the dive overshoot and visibly shrink back on settle.
+    // "Natural size" is the lg THUMBNAIL's, not the original's: the viewer hero
+    // is content-sized by the lg thumb (width-capped, never enlarged) with the
+    // full-res img absolutely positioned inside it — so on screens whose box
+    // exceeds the cap, predicting from original dims overshoots the same way.
     if (doc.width && doc.height) {
-        const scale = Math.min(boxW / doc.width, boxH / doc.height, 1);
-        const w = doc.width * scale;
-        const h = doc.height * scale;
+        const capScale = Math.min(1, THUMBNAIL_SIZES.lg / doc.width);
+        const effW = doc.width * capScale;
+        const effH = doc.height * capScale;
+        const scale = Math.min(boxW / effW, boxH / effH, 1);
+        const w = effW * scale;
+        const h = effH * scale;
 
         return { x: boxX + (boxW - w) / 2, y: boxY + (boxH - h) / 2, w, h };
     }

@@ -4,9 +4,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import type { Document } from '@reverie/shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { Euler, Mesh, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { canvasQuality } from '../canvasQuality.js';
 import { DIVE_MS, getDiveContext } from '../dive/diveState.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
-import { requestDive } from './DiveController.js';
+import { HANDOFF_CARD_DEPTH, requestDive } from './DiveController.js';
 import { clamp, damp, ease, lerp, requestFrame } from './dampers.js';
 import { setRawColor } from './glColor.js';
 import { LABEL_FONT_URL } from './labelAssets.js';
@@ -115,7 +116,7 @@ export function DocumentCard3D({ doc, pose, folderId, index, theme, onHover, onO
             const vw = window.innerWidth;
             const vh = window.innerHeight;
             const halfH = Math.tan(((camera.fov / 2) * Math.PI) / 180);
-            const depth = 8;
+            const depth = HANDOFF_CARD_DEPTH;
             const ndcX = ((destRect.x + destRect.w / 2) / vw) * 2 - 1;
             const ndcY = -(((destRect.y + destRect.h / 2) / vh) * 2 - 1);
             const worldH = 2 * depth * halfH * (destRect.h / vh);
@@ -207,20 +208,23 @@ export function DocumentCard3D({ doc, pose, folderId, index, theme, onHover, onO
             >
                 {truncateName(doc.original_filename)}
             </Text>
-            <Text
-                ref={dateRef}
-                position={[pose.fanned.x, 0.12, labelZ + 0.78]}
-                rotation-x={-Math.PI / 2}
-                fontSize={0.24}
-                color={theme.mutedForeground}
-                anchorX="center"
-                anchorY="top"
-                font={LABEL_FONT_URL}
-                visible={false}
-                onSync={requestFrame}
-            >
-                {formatDate(doc.created_at)}
-            </Text>
+            {/* Skipped on coarse-pointer devices — halves the troika Text count per fan. */}
+            {canvasQuality.cardDateLabels && (
+                <Text
+                    ref={dateRef}
+                    position={[pose.fanned.x, 0.12, labelZ + 0.78]}
+                    rotation-x={-Math.PI / 2}
+                    fontSize={0.24}
+                    color={theme.mutedForeground}
+                    anchorX="center"
+                    anchorY="top"
+                    font={LABEL_FONT_URL}
+                    visible={false}
+                    onSync={requestFrame}
+                >
+                    {formatDate(doc.created_at)}
+                </Text>
+            )}
             <mesh
                 ref={meshRef}
                 geometry={cardGeometry}
@@ -243,7 +247,7 @@ export function DocumentCard3D({ doc, pose, folderId, index, theme, onHover, onO
                     e.stopPropagation();
 
                     // Suppress clicks at the end of a camera-pan drag.
-                    if (e.delta > 7 || isDiving()) return;
+                    if (e.delta > canvasQuality.clickThresholdPx || isDiving()) return;
 
                     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                         onOpen(doc);

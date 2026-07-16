@@ -1,3 +1,4 @@
+import { THUMBNAIL_SIZES } from '@reverie/shared';
 import { encode } from 'blurhash';
 import { Job, Worker } from 'bullmq';
 import { spawn } from 'child_process';
@@ -14,13 +15,6 @@ import { getFileCategory, getStorageService } from '../services/storage.service'
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('Thumbnail');
-
-// Thumbnail sizes (pixels on long edge; WebP output for retina-friendly UI)
-const THUMBNAIL_SIZES = {
-    sm: 384,
-    md: 768,
-    lg: 1440,
-} as const;
 
 /**
  * Render first page of PDF to PNG buffer using pdf-to-img
