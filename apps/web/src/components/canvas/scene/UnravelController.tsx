@@ -134,8 +134,7 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
             const island = islandsRef.current.find((i) => i.id === request.islandId)!;
             const d = Math.hypot(island.position.x - cam.current.x, island.position.z - cam.current.z);
             const arrived =
-                request.immediate ||
-                (dist < UNRAVEL_ENTER_DIST * distScale && d < enterProximity(island.radius, dist) && viewSweep(dist) < MAX_OPEN_SWEEP);
+                request.immediate || (dist < UNRAVEL_ENTER_DIST * distScale && d < enterProximity(island.radius, dist) && viewSweep(dist) < MAX_OPEN_SWEEP);
 
             if (arrived) open(request.islandId);
 

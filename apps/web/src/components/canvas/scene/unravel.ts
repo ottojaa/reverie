@@ -45,9 +45,7 @@ export function unravelExitRadius(island: IslandLayout, dist: number): number {
 
 /** Estimated view sweep: pan-damper lag plus inertia, relative to camera distance. */
 export function viewSweep(dist: number): number {
-    return (
-        (Math.hypot(cam.target.x - cam.current.x, cam.target.z - cam.current.z) * PAN_LAMBDA + Math.hypot(cam.vel.x, cam.vel.z)) / Math.max(dist, 1)
-    );
+    return (Math.hypot(cam.target.x - cam.current.x, cam.target.z - cam.current.z) * PAN_LAMBDA + Math.hypot(cam.vel.x, cam.vel.z)) / Math.max(dist, 1);
 }
 
 /** A flat card pose on the plane (y up, yaw = spin around vertical). */

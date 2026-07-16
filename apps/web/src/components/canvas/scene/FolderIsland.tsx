@@ -62,9 +62,7 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
         // the folder's inside, its icon shouldn't float in the middle of it.
         // Empty folders have no pile, so their glyph never gives way.
         const entering = zoomBand.target >= 0.5;
-        const bandT = entering
-            ? ease(clamp(zoomBand.current / 0.5, 0, 1))
-            : 1 - easeOutBack(clamp((0.42 - zoomBand.current) / 0.24, 0, 1));
+        const bandT = entering ? ease(clamp(zoomBand.current / 0.5, 0, 1)) : 1 - easeOutBack(clamp((0.42 - zoomBand.current) / 0.24, 0, 1));
         const glyphT = documentCount === 0 ? 0 : bandT;
         const fanFade = documentCount === 0 ? 1 : 1 - unravelValue(island.id);
         const icon = iconRef.current;
