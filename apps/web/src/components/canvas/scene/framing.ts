@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Vector2, Vector3 } from 'three';
 import type { CameraState, IslandLayout } from '../types.js';
 import { applyPose, distToZoom, FOV, raycastGround } from './cameraMath.js';
-import { tuning } from './store.js';
+import { tuning, viewport } from './store.js';
 import { fanHalfExtents, UNRAVEL_ENTER_DIST } from './unravel.js';
 
 const HALF_FOV_TAN = Math.tan(((FOV / 2) * Math.PI) / 180);
@@ -39,8 +39,11 @@ export function fitCameraTo(islands: IslandLayout[], aspect: number): CameraStat
 export function focusCameraOn(island: IslandLayout): CameraState {
     const { halfW, halfH } = fanHalfExtents(island.documentCount);
     const byPlate = island.radius / (0.6 * HALF_FOV_TAN);
-    // Conservative aspect (1.3) for the width fit; labels pad the height.
-    const byFan = Math.max((halfW + 1.5) / (HALF_FOV_TAN * 1.3), (halfH + 2) / HALF_FOV_TAN);
+    // True width fit on narrow (portrait) viewports so the whole fan is on
+    // screen at settle; wide screens keep the conservative 1.3 (labels pad
+    // the height and the margin absorbs the tilt) — bit-identical to before.
+    const widthAspect = Math.min(viewport.aspect, 1.3);
+    const byFan = Math.max((halfW + 1.5) / (HALF_FOV_TAN * widthAspect), (halfH + 2) / HALF_FOV_TAN);
     const dist = Math.min(UNRAVEL_ENTER_DIST * tuning.unravelDistance - 2, Math.max(6, byPlate, byFan));
 
     return { x: island.position.x, z: island.position.z, zoom: distToZoom(dist) };

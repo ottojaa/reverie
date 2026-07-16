@@ -2,16 +2,16 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import { canvasQuality } from '../canvasQuality.js';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
-import { clamp, easeOutBack, requestFrame } from './dampers.js';
+import { clamp, ease, requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
-import { cam, hover, isDiving, islandDrag, unravelSuppression, unravelValue, zoomBand } from './store.js';
+import { cam, isDiving, islandDrag, unravelRequest, unravelValue, zoomBand } from './store.js';
 import type { CanvasTheme } from './theme.js';
 
-const CLICK_THRESHOLD_PX = 7;
 const dragHit = new Vector3();
 
 interface FolderIslandProps {
@@ -53,16 +53,22 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
         // the user can still see) and only fades once they've landed —
         // delayed against the band. Empty folders have no pile to make way
         // for, so their glyph stays at every zoom.
-        const iconT = documentCount === 0 ? 1 : 1 - clamp((zoomBand.current - 0.45) / 0.3, 0, 1);
+        // Semantic-zoom LOD: entering the pile band, the glyph gives way by
+        // dipping INTO the plate — dimming to half and shrinking a touch as it
+        // sinks below the depth-written plate top — and the stack rises out a
+        // beat later (IslandStack's CARD_DELAY). A falling band plays it
+        // backwards: the pile slurps below, then the glyph climbs back out.
+        // Empty folders have no pile, so their glyph never gives way.
+        const glyphT = documentCount === 0 ? 0 : ease(clamp(zoomBand.current / 0.5, 0, 1));
         const icon = iconRef.current;
         const iconMat = iconMatRef.current;
 
         if (icon && iconMat) {
-            const opacity = iconT * dim;
+            const opacity = (1 - 0.5 * glyphT) * dim;
             icon.visible = opacity > 0.02;
             iconMat.opacity = opacity;
-            // Springs back with a slight overshoot as the contents tuck away.
-            icon.scale.setScalar(0.55 + 0.45 * easeOutBack(iconT));
+            icon.position.y = 0.1 - glyphT * 0.14;
+            icon.scale.setScalar(1 - 0.15 * glyphT);
         }
 
         // …and name/count additionally make way for this island's own fan.
@@ -112,31 +118,33 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
                 if (!drag || drag.pointerId !== e.pointerId) return;
 
+                // Explicitly release R3F's internal capture: the automatic
+                // lostpointercapture cleanup is deferred to the next rAF, and
+                // until it runs every intersect includes this island — which
+                // suppresses onPointerMissed (click-away) after any island
+                // click, indefinitely so in a hidden/throttled tab.
+                (e.target as Element).releasePointerCapture(e.pointerId);
                 dragRef.current = null;
                 islandDrag.id = null;
 
-                if (e.delta > CLICK_THRESHOLD_PX) {
+                if (e.delta > canvasQuality.clickThresholdPx) {
                     onMoved(island.id, { x: islandDrag.x, z: islandDrag.z });
 
                     return;
                 }
 
-                // A click (no drag): fly the camera onto this folder. Explicit
-                // intent overrides any click-away/back-nav suppression.
-                unravelSuppression.delete(island.id);
+                // A click (no drag): fly the camera onto this folder and fan
+                // it out on arrival — the only way a folder ever opens.
+                unravelRequest.current = { islandId: island.id, immediate: false };
                 cam.target = focusCameraOn(island);
                 requestFrame();
             }}
             onPointerOver={() => {
-                hover.islandId = island.id;
-
                 if (isDraggable()) document.body.style.cursor = 'grab';
 
                 requestFrame();
             }}
             onPointerOut={() => {
-                if (hover.islandId === island.id) hover.islandId = null;
-
                 if (document.body.style.cursor === 'grab') document.body.style.cursor = '';
 
                 requestFrame();

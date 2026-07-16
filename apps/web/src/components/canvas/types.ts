@@ -67,6 +67,8 @@ export interface CanvasSceneProps {
     focusFolderId: string | null;
     /** Restored session camera; wins over focus fly-in and auto-fit. */
     initialCamera: CameraState | null;
+    /** Fan to seed already-open on mount (back-nav restore) — no unravel replay. */
+    initialUnraveledFolderId: string | null;
     /** True when this mount is a back-navigation from /document — plays the reverse dive. */
     returnDive: boolean;
     tuning: CameraTuning;

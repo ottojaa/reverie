@@ -1,5 +1,6 @@
 import { decode } from 'blurhash';
 import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, Texture } from 'three';
+import { canvasQuality } from '../canvasQuality.js';
 import { requestFrame } from './dampers.js';
 
 /**
@@ -24,8 +25,8 @@ export interface TextureEntry {
     abort: AbortController | null;
 }
 
-const MAX_INFLIGHT = 5;
-const IDLE_BUDGET = 128;
+const MAX_INFLIGHT = canvasQuality.maxInflightTextures;
+const IDLE_BUDGET = canvasQuality.idleTextureBudget;
 
 const entries = new Map<string, TextureEntry>();
 let inflight = 0;
@@ -68,7 +69,7 @@ async function load(entry: TextureEntry): Promise<void> {
         texture.generateMipmaps = true;
         texture.minFilter = LinearMipmapLinearFilter;
         texture.magFilter = LinearFilter;
-        texture.anisotropy = Math.min(8, maxAnisotropy);
+        texture.anisotropy = Math.min(canvasQuality.anisotropy, maxAnisotropy);
         texture.needsUpdate = true;
         entry.texture = texture;
         entry.state = 'ready';

@@ -3,16 +3,30 @@ import { useFrame } from '@react-three/fiber';
 import type { Document } from '@reverie/shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { Group, Mesh } from 'three';
-import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
 import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMaterial.js';
-import { clamp, damp, ease, easeOutBack, requestFrame } from './dampers.js';
+import { clamp, damp, ease, easeOutBack, lerp, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
 import { islandDrag, unravelValue, zoomBand } from './store.js';
 import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
+import { STACK_COUNT, stackSlot } from './unravel.js';
 
-const STACK_COUNT = 3;
+// Launch/landing y INSIDE the plate: the plate top (y 0.06) depth-writes, so
+// cards below it are genuinely occluded — they emerge from and sink into the
+// folder instead of fading in mid-air.
+const Y_INSIDE = 0.02;
+const PLATE_TOP = 0.06;
+// Drop shadows live just above the plate; cards separate from them as they
+// rise — the strongest height cue an unlit scene can offer.
+const Y_SHADOW = 0.085;
+const SHADOW_ALPHA = 0.3;
+// The stack starts rising a beat after the glyph dips (band-space delay,
+// ~150–200ms through the zoomBand damper), each card trailing the previous.
+// Rate is sized so the last card still completes before the band saturates.
+const CARD_DELAY = 0.35;
+const CARD_RATE = 1.9;
+const CARD_STAGGER = 0.08;
 
 interface StackCard {
     doc: Document;
@@ -23,6 +37,7 @@ interface StackCard {
     dz: number;
     y: number;
     material: ReturnType<typeof makeCardMaterial>;
+    shadowMaterial: ReturnType<typeof makeCardMaterial>;
 }
 
 interface IslandStackProps {
@@ -38,6 +53,7 @@ interface IslandStackProps {
 export function IslandStack({ island, previews, theme }: IslandStackProps) {
     const groupRef = useRef<Group>(null);
     const meshRefs = useRef<(Mesh | null)[]>([]);
+    const shadowRefs = useRef<(Mesh | null)[]>([]);
     const mixRefs = useRef<number[]>([]);
     const entriesRef = useRef<Map<string, TextureEntry>>(new Map());
 
@@ -47,21 +63,21 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         .join(',');
 
     const cards: StackCard[] = useMemo(() => {
-        return previews.slice(0, STACK_COUNT).map((doc, i, all) => {
-            const size = island.radius * 0.62;
-            const aspect = doc.width && doc.height ? doc.width / doc.height : 4 / 3;
-            const h = aspect >= 1 ? size / aspect : size;
+        return previews.slice(0, STACK_COUNT).map((doc, i) => {
+            const slot = stackSlot(doc, island);
             const placeholder = doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getSolidTexture(theme.border);
 
             return {
                 doc,
-                w: h * aspect,
-                h,
-                yaw: (hash01(doc.id + ':sy') - 0.5) * 0.5,
-                dx: (hash01(doc.id + ':sx') - 0.5) * island.radius * 0.3,
-                dz: (hash01(doc.id + ':sz') - 0.5) * island.radius * 0.3,
-                y: 0.1 + (all.length - i) * 0.015,
-                material: makeCardMaterial(placeholder, aspect, theme.primary),
+                w: slot.w,
+                h: slot.h,
+                yaw: slot.yaw,
+                dx: slot.dx,
+                dz: slot.dz,
+                y: 0.1 + (STACK_COUNT - i) * 0.015,
+                material: makeCardMaterial(placeholder, slot.w / slot.h, theme.primary),
+                // Same rounded-corner SDF shape, solid black — a card-shaped shadow.
+                shadowMaterial: makeCardMaterial(getSolidTexture('#000000'), slot.w / slot.h, theme.primary),
             };
         });
         // docIds captures the identity of the doc set; previews array identity churns
@@ -84,7 +100,14 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         };
     }, [cards]);
 
-    useEffect(() => () => cards.forEach((card) => card.material.dispose()), [cards]);
+    useEffect(
+        () => () =>
+            cards.forEach((card) => {
+                card.material.dispose();
+                card.shadowMaterial.dispose();
+            }),
+        [cards],
+    );
 
     useFrame((_, dt) => {
         const group = groupRef.current;
@@ -105,21 +128,24 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
-            // Lootbox pop, staggered per card: each card emerges low in the
-            // folder and RISES up-screen (world −z) into its pile slot,
-            // overshooting a touch before settling back down — the visible
-            // motion is the ascent, never a drop from mid-air. Scale grows
-            // during the rise; the glyph holds until the cards are out.
-            // Reverse: cards sink back down into the folder.
-            const t = clamp(band * 1.25 - i * 0.12, 0, 1);
-            const pop = easeOutBack(t);
-            const travel = ease(t);
+            const shadowMesh = shadowRefs.current[i];
+            // One symmetric path, staggered per card, a beat behind the glyph's
+            // dip (FolderIsland): the stack springs up out of the plate as one
+            // tight cluster, then scatters late to the pile slots. A falling
+            // band plays it backwards — the pile gathers, then slurps below
+            // (LIFO: the top card is the last one in) as the glyph climbs out.
+            const t = clamp((band - CARD_DELAY) * CARD_RATE - i * CARD_STAGGER, 0, 1);
+            const rise = easeOutBack(t);
+            const scatter = ease(clamp((t - 0.45) / 0.55, 0, 1));
+            const x = card.dx * scatter;
+            const z = card.dz * scatter;
+            const y = lerp(Y_INSIDE, card.y, rise);
+            const scale = 0.25 + 0.75 * rise;
 
             if (mesh) {
-                const rise = (1 - pop) * island.radius * 0.5;
-                const scale = 0.35 + 0.65 * ease(clamp(t * 1.5, 0, 1));
-                mesh.position.set(card.dx * travel, card.y, card.dz * travel + rise);
-                mesh.rotation.z = card.yaw * travel;
+                mesh.position.set(x, y, z);
+                mesh.rotation.x = -Math.PI / 2 + (1 - rise) * 0.4;
+                mesh.rotation.z = card.yaw * scatter;
                 mesh.scale.set(card.w * scale, card.h * scale, 1);
             }
 
@@ -137,12 +163,44 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
             }
 
             uniforms.uMix.value = mixRefs.current[i] ?? 0;
-            uniforms.uOpacity.value = (1 - unravelValue(island.id)) * focusDimFor(island.id) * clamp(t * 2.5, 0, 1);
+            // No fade in either direction — the plate's depth occlusion does
+            // the revealing and the swallowing, so the motion stays physical.
+            const cardOpacity = (1 - unravelValue(island.id)) * focusDimFor(island.id);
+            uniforms.uOpacity.value = cardOpacity;
+
+            if (shadowMesh) {
+                // The shadow stays grounded while the card lifts — separating,
+                // drifting, spreading and fading with height — and only exists
+                // once the card has actually cleared the plate.
+                const height = Math.max(0, y - Y_SHADOW);
+                const soften = 1 + height * 0.3;
+                const emerged = clamp((y - PLATE_TOP) / 0.06, 0, 1);
+                shadowMesh.position.set(x + 0.05 + height * 0.22, Y_SHADOW, z + 0.08 + height * 0.3);
+                shadowMesh.rotation.z = card.yaw * scatter;
+                shadowMesh.scale.set(card.w * scale * soften, card.h * scale * soften, 1);
+                const shadowUniforms = card.shadowMaterial.uniforms as unknown as CardUniforms;
+                shadowUniforms.uOpacity.value = (cardOpacity * SHADOW_ALPHA * emerged) / soften;
+            }
         });
     });
 
     return (
         <group ref={groupRef} position={[island.position.x, 0, island.position.z]}>
+            {cards.map((card, i) => (
+                <mesh
+                    key={'shadow:' + card.doc.id}
+                    ref={(mesh) => {
+                        shadowRefs.current[i] = mesh;
+                    }}
+                    geometry={cardGeometry}
+                    material={card.shadowMaterial}
+                    position={[card.dx, Y_SHADOW, card.dz]}
+                    rotation={[-Math.PI / 2, 0, card.yaw]}
+                    scale={[card.w, card.h, 1]}
+                    renderOrder={4}
+                    raycast={noopRaycast}
+                />
+            ))}
             {cards.map((card, i) => (
                 <mesh
                     key={card.doc.id}

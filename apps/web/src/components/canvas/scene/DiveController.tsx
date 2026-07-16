@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import type { Document } from '@reverie/shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from 'three';
-import { clearDiveContext, DIVE_MS, getDiveContext, setDiveContext } from '../dive/diveState.js';
+import { DIVE_MS, getDiveContext, setDiveContext } from '../dive/diveState.js';
 import { computeDestRect } from '../dive/diveTransition.js';
 import { distToZoom } from './cameraMath.js';
 import { cardGeometry } from './cardMaterial.js';
@@ -11,6 +11,16 @@ import { setRawColor } from './glColor.js';
 import { cam, getCanvasSnapshot, patchCanvasSnapshot } from './store.js';
 import type { CanvasTheme } from './theme.js';
 import type { CardPose } from './unravel.js';
+
+/**
+ * Camera-space depths at the flight's end. The diving card's pose is solved so
+ * its projection equals destRect at ANY depth, and both meshes render with
+ * depthTest off under painter ordering (card 600 > quad 500) — so these values
+ * never affect pixel size. The quad still sits genuinely behind the card in
+ * case depth testing is ever re-enabled; keep card < quad.
+ */
+export const HANDOFF_CARD_DEPTH = 8;
+const FADE_QUAD_DEPTH = 9;
 
 let pendingDive: { doc: Document; pose: CardPose; folderId: string } | null = null;
 
@@ -92,7 +102,7 @@ export function DiveController({ theme, onDiveHandoff }: DiveControllerProps) {
 
         // Camera-space fade quad just behind the diving card's handoff depth.
         if (fade) {
-            const depth = 9;
+            const depth = FADE_QUAD_DEPTH;
             const halfH = depth * Math.tan(((camera.fov / 2) * Math.PI) / 180);
             fade.visible = true;
             fade.position.copy(camera.localToWorld(scratch.set(0, 0, -depth)));
@@ -112,11 +122,4 @@ export function DiveController({ theme, onDiveHandoff }: DiveControllerProps) {
     });
 
     return <mesh ref={fadeRef} geometry={cardGeometry} material={fadeMaterial} visible={false} renderOrder={500} frustumCulled={false} />;
-}
-
-/** Abort a dive that never navigated (e.g. overlay failure) — restores input. */
-export function cancelDive(): void {
-    clearDiveContext();
-    patchCanvasSnapshot({ divePhase: 'idle' });
-    requestFrame();
 }

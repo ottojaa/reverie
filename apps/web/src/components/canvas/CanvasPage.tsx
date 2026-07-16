@@ -7,6 +7,7 @@ import { useLocalStorage } from 'usehooks-ts';
 import { CanvasLoading } from './CanvasLoading.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
 import { loadCanvasSession, saveCanvasSession } from './canvasSession.js';
+import { getDiveContext } from './dive/diveState.js';
 import { useCanvasLayout } from './hooks/useCanvasLayout.js';
 import { useIslandPreviews } from './hooks/useIslandPreviews.js';
 import { useOpenDocumentFromCanvas } from './hooks/useOpenDocumentFromCanvas.js';
@@ -55,9 +56,15 @@ export function CanvasPage() {
     // Merge over defaults so settings added later get values on old stores.
     const tuning = useMemo(() => ({ ...DEFAULT_CAMERA_TUNING, ...storedTuning }), [storedTuning]);
     const [visibleFolderIds, setVisibleFolderIds] = useState<string[]>([]);
-    // Deliberately NOT restored on back-navigation — the return animation is
-    // kept minimal, without replaying the unravel.
-    const [unraveledFolderId, setUnraveledFolderId] = useState<string | null>(null);
+    // Restored on back-navigation so the fan you dove from is open again —
+    // the scene seeds it fully open (no replayed unravel animation). Keyed on
+    // the surviving DiveContext, NOT the pathname-based returningFromDocument:
+    // code-split routes can mount a pass after the root's location commit,
+    // which makes the pathname check unreliable, while a render-phase read of
+    // the dive context always wins against InitialFraming's effect-time clear.
+    const [unraveledFolderId, setUnraveledFolderId] = useState<string | null>(() => getDiveContext()?.folderId ?? null);
+    // First-render value only: the scene reads it once, during its mount reset.
+    const initialUnraveledFolderId = useRef(unraveledFolderId).current;
     const { prefetchDocument, openDocument, completeDive } = useOpenDocumentFromCanvas();
 
     // Islands with documents that are visible (or among the first few by tree
@@ -104,6 +111,16 @@ export function CanvasPage() {
         saveCanvasSession({ camera, unraveledFolderId: unraveledIdRef.current });
     }, []);
 
+    const handleUnravelChange = useCallback((folderId: string | null) => {
+        setUnraveledFolderId(folderId);
+        // The camera-settle save alone misses fans opened without a subsequent
+        // settle (e.g. clicking a folder the camera is already parked on) —
+        // keep the session's unravel state fresh so back-nav restores it.
+        const session = loadCanvasSession();
+
+        if (session) saveCanvasSession({ camera: session.camera, unraveledFolderId: folderId });
+    }, []);
+
     const unraveledIsland = unraveledFolderId ? (islands.find((i) => i.id === unraveledFolderId) ?? null) : null;
 
     const initialCamera = focus && !returningFromDocument ? null : (loadCanvasSession()?.camera ?? null);
@@ -117,11 +134,12 @@ export function CanvasPage() {
                     unraveled={unraveled}
                     focusFolderId={returningFromDocument ? null : (focus ?? null)}
                     initialCamera={initialCamera}
+                    initialUnraveledFolderId={initialUnraveledFolderId}
                     returnDive={returningFromDocument}
                     tuning={tuning}
                     onVisibleFoldersChange={setVisibleFolderIds}
                     onApproachFolder={prefetchFolder}
-                    onUnravelChange={setUnraveledFolderId}
+                    onUnravelChange={handleUnravelChange}
                     onIslandMoved={moveIsland}
                     onHoverDocument={prefetchDocument}
                     onOpenDocument={openDocument}

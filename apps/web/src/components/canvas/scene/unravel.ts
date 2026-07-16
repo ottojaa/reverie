@@ -1,33 +1,32 @@
 import type { Document } from '@reverie/shared';
+import { canvasQuality } from '../canvasQuality.js';
 import { hash01 } from '../layout/computeIslandLayout.js';
 import type { IslandLayout } from '../types.js';
-import { cam, tuning } from './store.js';
+import { PAN_LAMBDA } from './cameraMath.js';
+import { cam, tuning, viewport } from './store.js';
 
 /**
- * Semantic-zoom constants and the fan-out layout. Zoom bands use hysteresis
- * pairs (enter < exit) plus a switch debounce so hovering at a threshold
- * breathes instead of flickering. The gating math lives here so the
- * controller and the debug overlay render the exact same conditions.
+ * Unravel gate constants and the fan-out layout. Opening is explicit (a
+ * click/deep-link request that fires on camera arrival); the zoom gates use a
+ * hysteresis pair (enter < exit) so an open fan survives zooming out to see
+ * all of it. The gating math lives here so the controller and the debug
+ * overlay render the exact same conditions.
  */
 export const UNRAVEL_ENTER_DIST = 44;
 /** Generous exit so a fan survives zooming out far enough to see all of it. */
 export const UNRAVEL_EXIT_DIST = 58;
 export const APPROACH_DIST = 64;
-export const SWITCH_DEBOUNCE_MS = 150;
-// CameraRig's pan damping constant — used to estimate the view's sweep speed.
-const PAN_LAMBDA = 18;
 /**
- * Opening is deferred while the view sweeps faster than this fraction of the
- * camera distance per second — panning across a cluster must not pop fans
- * open; stopping on a folder opens it right as the camera settles.
+ * A requested open is deferred while the view sweeps faster than this
+ * fraction of the camera distance per second — the click-to-open flight must
+ * land and settle before the fan pops.
  */
 export const MAX_OPEN_SWEEP = 0.4;
 
 /**
- * Camera must be centered on the island to open it. The tolerance grows with
- * camera distance — when zoomed out, "centered" is coarser in world units,
- * and a fixed radius made distant unravels nearly impossible to aim.
- * User-tunable via the "Unravel radius" slider.
+ * The camera must be centered on the island for a requested open to fire.
+ * The tolerance grows with camera distance — when zoomed out, "centered" is
+ * coarser in world units. User-tunable via the "Unravel radius" slider.
  */
 export function enterProximity(radius: number, dist: number): number {
     return (radius * 0.75 + 0.5 + dist * 0.06) * tuning.unravelRadius;
@@ -50,8 +49,6 @@ export function viewSweep(dist: number): number {
         (Math.hypot(cam.target.x - cam.current.x, cam.target.z - cam.current.z) * PAN_LAMBDA + Math.hypot(cam.vel.x, cam.vel.z)) / Math.max(dist, 1)
     );
 }
-
-export const FAN_PAGE_LIMIT = 24;
 
 /** A flat card pose on the plane (y up, yaw = spin around vertical). */
 export interface CardTransform {
@@ -77,6 +74,9 @@ const GAP_X = 0.6;
 const GAP_Y = 1.7;
 const DEFAULT_ASPECT = 4 / 3;
 
+/** How many pile cards the gathered island renders (IslandStack). */
+export const STACK_COUNT = 3;
+
 function cardSize(doc: Document): { w: number; h: number } {
     const aspect = doc.width && doc.height ? doc.width / doc.height : DEFAULT_ASPECT;
     const h = Math.min(CELL_H, CELL_W / aspect);
@@ -85,16 +85,47 @@ function cardSize(doc: Document): { w: number; h: number } {
 }
 
 /**
- * Centered near-square grid (⌈√n⌉ columns, row-major) around the island,
- * with each card letterboxed into its cell — uniform scale, never stretched.
- * Pure in (docs, island), so appended pages animate in naturally.
+ * Deterministic pile slot on the plate, hashed on doc.id — shared by the
+ * resting pile meshes (IslandStack) and the fan cards' home pose, so
+ * gathering cards land exactly where the pile fades in. Order-independent:
+ * the previews query and the fan page may return docs in different orders,
+ * but a given document always occupies the same slot.
  */
-export function fanLayout(docs: Document[], island: IslandLayout): CardPose[] {
+export function stackSlot(doc: Document, island: IslandLayout): { dx: number; dz: number; yaw: number; w: number; h: number } {
+    const size = island.radius * 0.62;
+    const aspect = doc.width && doc.height ? doc.width / doc.height : DEFAULT_ASPECT;
+    const h = aspect >= 1 ? size / aspect : size;
+
+    return {
+        w: h * aspect,
+        h,
+        yaw: (hash01(doc.id + ':sy') - 0.5) * 0.5,
+        dx: (hash01(doc.id + ':sx') - 0.5) * island.radius * 0.3,
+        dz: (hash01(doc.id + ':sz') - 0.5) * island.radius * 0.3,
+    };
+}
+
+/** Column cap so the fan fits the screen: portrait phones get a narrow grid. */
+export function fanMaxCols(aspect: number = viewport.aspect): number {
+    if (aspect < 0.8) return 3;
+
+    if (aspect < 1.2) return 4;
+
+    return Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Centered near-square grid (⌈√n⌉ columns, capped by maxCols on narrow
+ * viewports, row-major) around the island, with each card letterboxed into
+ * its cell — uniform scale, never stretched. Pure in (docs, island, maxCols),
+ * so appended pages animate in naturally.
+ */
+export function fanLayout(docs: Document[], island: IslandLayout, maxCols: number = fanMaxCols()): CardPose[] {
     const n = docs.length;
 
     if (n === 0) return [];
 
-    const cols = Math.ceil(Math.sqrt(n));
+    const cols = Math.min(Math.ceil(Math.sqrt(n)), Math.max(1, maxCols));
     const rows = Math.ceil(n / cols);
     const { x: cx, z: cz } = island.position;
 
@@ -130,9 +161,9 @@ export function cardProgress(unravelT: number, index: number): number {
 }
 
 /** Approximate half extents of a folder's fanned grid, for camera framing. */
-export function fanHalfExtents(documentCount: number): { halfW: number; halfH: number } {
-    const n = Math.max(1, Math.min(documentCount, FAN_PAGE_LIMIT));
-    const cols = Math.ceil(Math.sqrt(n));
+export function fanHalfExtents(documentCount: number, maxCols: number = fanMaxCols()): { halfW: number; halfH: number } {
+    const n = Math.max(1, Math.min(documentCount, canvasQuality.fanPageLimit));
+    const cols = Math.min(Math.ceil(Math.sqrt(n)), Math.max(1, maxCols));
     const rows = Math.ceil(n / cols);
 
     return { halfW: (cols * (CELL_W + GAP_X)) / 2, halfH: (rows * (CELL_H + GAP_Y)) / 2 };

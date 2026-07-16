@@ -12,6 +12,11 @@ import { clamp, ease, lerp } from './dampers.js';
 export const FOV = 50;
 export const D_MIN = 5;
 export const D_MAX = 240;
+/**
+ * Pan damping constant, shared by CameraRig (the damper itself) and the
+ * unravel sweep estimate (viewSweep) — a single source so they can't desync.
+ */
+export const PAN_LAMBDA = 18;
 const TILT_FAR = (22 * Math.PI) / 180;
 const TILT_NEAR = (14 * Math.PI) / 180;
 

@@ -5,8 +5,8 @@ import type { CameraState, CameraTuning } from '../types.js';
  *
  * Per-frame animation state lives here as plain mutable objects so useFrame
  * can read/write without React re-renders (zero setState in the hot path).
- * The few facts React needs to see go through the snapshot + subscribe API
- * (useSyncExternalStore-compatible).
+ * The few facts React needs to see are pushed out through explicit callbacks
+ * (onUnravelChange etc.); the snapshot is read imperatively per frame.
  */
 
 export type DivePhase = 'idle' | 'flying' | 'handoff';
@@ -35,40 +35,36 @@ export const cam: CameraTransient = {
 export const tuning: CameraTuning = { panSpeed: 1, zoomSpeed: 1, friction: 1, unravelDistance: 1, unravelRadius: 1, debugUnravel: false };
 
 let snapshot: CanvasSnapshot = { unraveledFolderId: null, divePhase: 'idle' };
-const listeners = new Set<() => void>();
 
 export function getCanvasSnapshot(): CanvasSnapshot {
     return snapshot;
 }
 
-export function subscribeCanvasStore(listener: () => void): () => void {
-    listeners.add(listener);
-
-    return () => listeners.delete(listener);
-}
-
 export function patchCanvasSnapshot(patch: Partial<CanvasSnapshot>): void {
-    const next = { ...snapshot, ...patch };
-    const changed = next.unraveledFolderId !== snapshot.unraveledFolderId || next.divePhase !== snapshot.divePhase;
-
-    if (!changed) return;
-
-    snapshot = next;
-    listeners.forEach((fn) => fn());
+    snapshot = { ...snapshot, ...patch };
 }
 
-/** Reset transient state on scene mount (route re-entry). */
-export function resetCanvasStore(initialCamera: CameraState | null): void {
+/**
+ * Reset transient state on scene mount (route re-entry). When returning from
+ * a document dive, the previously open fan is seeded fully open (current ===
+ * target === 1) so it renders open on the first frame behind the return
+ * shield — restoring the view without replaying the unravel animation.
+ * Runs in CanvasScene's render body, so it must stay idempotent under
+ * StrictMode double-renders (it is: both runs seed identically from props).
+ */
+export function resetCanvasStore(initialCamera: CameraState | null, initialUnraveledFolderId: string | null): void {
     const start = initialCamera ?? DEFAULT_CAMERA;
     cam.target = { ...start };
     cam.current = { ...start };
     cam.vel = { x: 0, z: 0 };
     unravelAnims.clear();
     hover.docId = null;
-    hover.islandId = null;
-    zoomBand.current = 0;
-    unravelSuppression.clear();
-    patchCanvasSnapshot({ unraveledFolderId: null, divePhase: 'idle' });
+    zoomBand.current = initialUnraveledFolderId ? 1 : 0;
+    unravelRequest.current = null;
+
+    if (initialUnraveledFolderId) unravelAnims.set(initialUnraveledFolderId, { current: 1, target: 1 });
+
+    patchCanvasSnapshot({ unraveledFolderId: initialUnraveledFolderId, divePhase: 'idle' });
 }
 
 /** Highest unravel value across folders — drives the focus-dim of everything else. */
@@ -111,7 +107,7 @@ export function unravelValue(folderId: string): number {
 }
 
 /** Transient hover state — read per frame by cards, never through React. */
-export const hover = { docId: null as string | null, islandId: null as string | null, lift: new Map<string, number>() };
+export const hover = { docId: null as string | null, lift: new Map<string, number>() };
 
 /**
  * Eased 0→1 "inside the unravel zoom band" value, damped once per frame by
@@ -122,12 +118,20 @@ export const hover = { docId: null as string | null, islandId: null as string | 
 export const zoomBand = { current: 0 };
 
 /**
- * Folders whose auto-unravel is suppressed (click-away collapse, back-nav
- * re-entry). A folder re-arms only once the camera has left its zone — so
- * the controller can't undo a deliberate collapse while the camera is still
- * parked on the folder. An explicit island click also clears its entry.
+ * Explicit fan-out intent: set by an island click, the ?focus deep link, or
+ * back-nav restore; consumed by UnravelController, which opens the island
+ * once the camera arrives on it (or right away when `immediate`). Folders
+ * only ever open through this — there is no proximity auto-open. Cancelled
+ * by any manual camera input, click-away, or zoom-to-fit.
  */
-export const unravelSuppression = new Set<string>();
+export const unravelRequest = { current: null as { islandId: string; immediate: boolean } | null };
+
+/**
+ * Live canvas aspect (width/height), synced from R3F size by ViewportSync in
+ * the scene. Device state, deliberately NOT reset by resetCanvasStore. Read
+ * by the fan layout so narrow (portrait) screens get fewer columns.
+ */
+export const viewport = { aspect: 16 / 9 };
 
 /** Screen position of the last pointerdown — lets click handlers ignore pan-releases. */
 export const lastPointerDown = { x: 0, y: 0 };
