@@ -60,6 +60,7 @@ export function resetCanvasStore(initialCamera: CameraState | null, initialUnrav
     unravelAnims.clear();
     hover.docId = null;
     zoomBand.current = initialUnraveledFolderId ? 1 : 0;
+    zoomBand.target = zoomBand.current;
     unravelRequest.current = null;
 
     if (initialUnraveledFolderId) unravelAnims.set(initialUnraveledFolderId, { current: 1, target: 1 });
@@ -113,9 +114,13 @@ export const hover = { docId: null as string | null, lift: new Map<string, numbe
  * Eased 0→1 "inside the unravel zoom band" value, damped once per frame by
  * UnravelController (mounted before the islands, so consumers read the
  * current frame's value). Drives the semantic-zoom LOD: folder glyphs
- * outside the band crossfade into preview piles inside it.
+ * outside the band crossfade into preview piles inside it. `target` (the
+ * undamped 0/1 the value chases) tells consumers the band's direction —
+ * the glyph↔pile choreography uses different band-space constants per
+ * direction so the exit mirrors the enter in wall-clock (the damper spends
+ * its fast half near the start of whichever way it's going).
  */
-export const zoomBand = { current: 0 };
+export const zoomBand = { current: 0, target: 0 };
 
 /**
  * Explicit fan-out intent: set by an island click, the ?focus deep link, or

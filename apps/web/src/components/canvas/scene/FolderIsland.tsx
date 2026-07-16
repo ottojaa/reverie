@@ -5,7 +5,7 @@ import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import { canvasQuality } from '../canvasQuality.js';
 import type { IslandLayout, PlanePosition } from '../types.js';
 import { groundPlane } from './cameraMath.js';
-import { clamp, ease, requestFrame } from './dampers.js';
+import { clamp, ease, easeOutBack, requestFrame } from './dampers.js';
 import { focusCameraOn } from './framing.js';
 import { getFolderGlyphTexture, LABEL_FONT_URL } from './labelAssets.js';
 import { applyGroupOpacity, focusDimFor } from './focusDim.js';
@@ -48,26 +48,33 @@ export function FolderIsland({ island, theme, onMoved }: FolderIslandProps) {
 
         if (baseGroupRef.current) applyGroupOpacity(baseGroupRef.current, dim);
 
-        // Semantic-zoom LOD: the glyph is the folder's far representation.
-        // It holds steady while the cards hop out (they burst from a folder
-        // the user can still see) and only fades once they've landed —
-        // delayed against the band. Empty folders have no pile to make way
-        // for, so their glyph stays at every zoom.
-        // Semantic-zoom LOD: entering the pile band, the glyph gives way by
-        // dipping INTO the plate — dimming to half and shrinking a touch as it
-        // sinks below the depth-written plate top — and the stack rises out a
-        // beat later (IslandStack's CARD_DELAY). A falling band plays it
-        // backwards: the pile slurps below, then the glyph climbs back out.
+        // Semantic-zoom LOD: entering the pile band, the glyph recedes to
+        // become the ground its contents rest on — dimming to 0.45, shrinking
+        // 15% and pressing down to y 0.072: above the depth-written plate top
+        // (0.06) so it never occludes away, below the shadow plane (0.085) so
+        // physical stacking matches render order (plate < glyph < shadows <
+        // cards). It stays visible under the scattered pile; the cards spring
+        // out over it (IslandStack). On exit it holds dipped while the pile
+        // dives home, then pops back out (easeOutBack, band 0.42→0.18) the
+        // moment the last card is swallowed — the plate never sits bare, and
+        // the slight overshoot makes the return read as a snap, not a linear
+        // fade. It also joins the pile's unravel crossfade — the open fan is
+        // the folder's inside, its icon shouldn't float in the middle of it.
         // Empty folders have no pile, so their glyph never gives way.
-        const glyphT = documentCount === 0 ? 0 : ease(clamp(zoomBand.current / 0.5, 0, 1));
+        const entering = zoomBand.target >= 0.5;
+        const bandT = entering
+            ? ease(clamp(zoomBand.current / 0.5, 0, 1))
+            : 1 - easeOutBack(clamp((0.42 - zoomBand.current) / 0.24, 0, 1));
+        const glyphT = documentCount === 0 ? 0 : bandT;
+        const fanFade = documentCount === 0 ? 1 : 1 - unravelValue(island.id);
         const icon = iconRef.current;
         const iconMat = iconMatRef.current;
 
         if (icon && iconMat) {
-            const opacity = (1 - 0.5 * glyphT) * dim;
+            const opacity = (1 - 0.55 * glyphT) * fanFade * dim;
             icon.visible = opacity > 0.02;
             iconMat.opacity = opacity;
-            icon.position.y = 0.1 - glyphT * 0.14;
+            icon.position.y = 0.1 - glyphT * 0.028;
             icon.scale.setScalar(1 - 0.15 * glyphT);
         }
 

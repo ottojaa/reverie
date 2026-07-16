@@ -65,7 +65,15 @@ export function UnravelController({ islands, onUnravelChange, onApproachFolder }
         const distScale = tuning.unravelDistance;
 
         // Shared zoom-band value for the semantic-zoom LOD (glyph ↔ pile).
-        const inBand = dist < UNRAVEL_ENTER_DIST * distScale ? 1 : 0;
+        // Enter on arrival (damped dist — a click-to-open flight pops the
+        // pile on landing, not on click), but exit on intent (target dist):
+        // gating the exit on the damped zoom makes the pile sit untouched
+        // for up to ~a second while the camera's exponential tail crawls
+        // across the boundary after the user has already stopped zooming.
+        const gate = UNRAVEL_ENTER_DIST * distScale;
+        const targetDist = zoomToDist(cam.target.zoom);
+        const inBand = dist < gate && targetDist < gate ? 1 : 0;
+        zoomBand.target = inBand;
         zoomBand.current = damp(zoomBand.current, inBand, 5, Math.min(dt, 0.1));
 
         if (Math.abs(inBand - zoomBand.current) > 1e-3) requestFrame();

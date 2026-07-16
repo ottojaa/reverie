@@ -21,12 +21,20 @@ const PLATE_TOP = 0.06;
 // rise — the strongest height cue an unlit scene can offer.
 const Y_SHADOW = 0.085;
 const SHADOW_ALPHA = 0.3;
-// The stack starts rising a beat after the glyph dips (band-space delay,
-// ~150–200ms through the zoomBand damper), each card trailing the previous.
-// Rate is sized so the last card still completes before the band saturates.
-const CARD_DELAY = 0.35;
-const CARD_RATE = 1.9;
+// The stack starts rising almost with the glyph's dip (band-space delay,
+// ~25ms through the zoomBand damper — yield and pop read as one gesture),
+// each card trailing the previous. Rate is sized so the last card lands at
+// band ≈ 0.85, before the damper's asymptotic tail turns the fan into a crawl.
+const CARD_DELAY = 0.12;
+const CARD_RATE = 1.6;
 const CARD_STAGGER = 0.08;
+// The exit is the enter played backwards in wall-clock, which needs its own
+// band-space constants: a falling band spends the damper's fast half near 1,
+// so the gather/slurp runs there (band 1→0.17) and the glyph climbs back out
+// after the cards are inside (FolderIsland). The rate is sized so every card
+// sits exactly at t=1 when the band target flips — no pop at the turnaround.
+const CARD_EXIT_FLOOR = 0.17;
+const CARD_EXIT_RATE = 1.4;
 
 interface StackCard {
     doc: Document;
@@ -121,6 +129,7 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         // Semantic-zoom LOD: the pile only exists inside the unravel band —
         // outside it the island shows its folder glyph instead (FolderIsland).
         const band = zoomBand.current;
+        const entering = zoomBand.target >= 0.5;
         const opacity = band * (1 - unravelValue(island.id)) * focusDimFor(island.id);
         group.visible = opacity > 0.012;
 
@@ -129,14 +138,22 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
         cards.forEach((card, i) => {
             const mesh = meshRefs.current[i];
             const shadowMesh = shadowRefs.current[i];
-            // One symmetric path, staggered per card, a beat behind the glyph's
-            // dip (FolderIsland): the stack springs up out of the plate as one
-            // tight cluster, then scatters late to the pile slots. A falling
-            // band plays it backwards — the pile gathers, then slurps below
-            // (LIFO: the top card is the last one in) as the glyph climbs out.
-            const t = clamp((band - CARD_DELAY) * CARD_RATE - i * CARD_STAGGER, 0, 1);
-            const rise = easeOutBack(t);
-            const scatter = ease(clamp((t - 0.45) / 0.55, 0, 1));
+            // One path per direction, staggered per card. Entering: the stack
+            // springs up out of the plate as one tight cluster, overlapping
+            // the glyph's dip (FolderIsland), scattering mid-rise so
+            // pop-and-fan is one motion. Exiting plays that backwards — the
+            // pile gathers, then slurps below (LIFO: the top card is the last
+            // one in), and only then does the glyph climb back out.
+            const t = entering
+                ? clamp((band - CARD_DELAY) * CARD_RATE - i * CARD_STAGGER, 0, 1)
+                : clamp((band - CARD_EXIT_FLOOR) * CARD_EXIT_RATE - i * CARD_STAGGER, 0, 1);
+            // The pop (easeOutBack) is enter-only: run backwards, its
+            // overshoot region makes the pile hover above the plate before
+            // dropping, so the exit dives on a plain smoothstep instead.
+            const rise = entering ? easeOutBack(t) : ease(t);
+            // Scatter from t 0.3: easeOutBack is front-loaded, so cards are at
+            // ~90% height by then — the fan never happens below the plate.
+            const scatter = ease(clamp((t - 0.3) / 0.7, 0, 1));
             const x = card.dx * scatter;
             const z = card.dz * scatter;
             const y = lerp(Y_INSIDE, card.y, rise);
@@ -144,7 +161,13 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
 
             if (mesh) {
                 mesh.position.set(x, y, z);
-                mesh.rotation.x = -Math.PI / 2 + (1 - rise) * 0.4;
+                // The settle tilt must flatten at the bottom of the slot: a
+                // tilted card resting INSIDE the plate (rise 0) pokes its top
+                // edge above the depth-written plate top, which lingers as a
+                // dark sliver across the glyph until the band fully decays.
+                // Flat at rest, full tilt by rise 0.15 — still well below the
+                // breach point, so the visible emergence is unchanged.
+                mesh.rotation.x = -Math.PI / 2 + (1 - rise) * 0.4 * clamp(rise / 0.15, 0, 1);
                 mesh.rotation.z = card.yaw * scatter;
                 mesh.scale.set(card.w * scale, card.h * scale, 1);
             }
