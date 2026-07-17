@@ -17,13 +17,12 @@ import type { PreparedText } from './types';
  * - distributed: Very large files (>500K), take evenly distributed snippets
  */
 export function prepareTextForLlm(rawText: string): PreparedText {
-    // Fix 0/O between letters
-    rawText = rawText.replace(/(?<=[A-Z])0(?=[A-Z])/g, 'O');
+    // NOTE: we deliberately do NOT "fix" 0↔O / 1↔I here. Those swaps corrupted real
+    // identifiers and, more importantly, desynchronized the model's input from
+    // ocr_results.raw_text, which entity grounding checks against. The model handles
+    // OCR noise contextually (see the prompt), and grounding allows the safe fixes.
 
-    // Fix 1/I between letters
-    rawText = rawText.replace(/(?<=[A-Z])1(?=[A-Z])/g, 'I');
-
-    // Collapse double spaces
+    // Collapse double spaces (grounding normalization is whitespace-insensitive, so safe).
     rawText = rawText.replace(/\s{2,}/g, ' ');
 
     // Keep context tight to reduce LLM latency while preserving representative coverage.

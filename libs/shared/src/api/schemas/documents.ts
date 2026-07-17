@@ -52,10 +52,12 @@ export const ThumbnailUrlsSchema = z.object({
 export type ThumbnailUrls = z.infer<typeof ThumbnailUrlsSchema>;
 
 export const EntitySchema = z.object({
-    type: z.enum(['person', 'organization', 'location', 'product', 'account', 'identifier', 'other']),
+    type: z.enum(['person', 'organization', 'location', 'product', 'account', 'identifier', 'contact', 'other']),
     canonical_name: z.string(),
     raw_text: z.string(),
-    confidence: z.enum(['high', 'medium', 'low']),
+    // Optional: the LLM extraction contract no longer requests confidence, and older
+    // stored metadata predates it. Kept optional so both old and new entities validate.
+    confidence: z.enum(['high', 'medium', 'low']).optional(),
 });
 
 export type Entity = z.infer<typeof EntitySchema>;

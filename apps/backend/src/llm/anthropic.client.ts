@@ -10,8 +10,10 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { env } from '../config/env';
-import type { LlmPrompt, LlmSummaryResponse, VisionResponse } from './types';
+import { LlmAnalysisSchema, type LlmAnalysis } from './llm-response.schema';
+import type { LlmPrompt, VisionResponse } from './types';
 
 let anthropicClient: Anthropic | null = null;
 
@@ -49,14 +51,6 @@ export function isVisionAvailable(): boolean {
 /** Image media types the Anthropic vision API accepts. */
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
-const EMPTY_JSON_RETRY_SUFFIX = `
-
-IMPORTANT:
-- Return a valid JSON object only (no markdown, no prose).
-- Keep output compact.
-- Required keys: "summary", "entities", "topics".
-- If uncertain, return best-effort values and keep arrays short.`;
-
 /**
  * Concatenate the text blocks of a Claude message into a single string.
  */
@@ -93,11 +87,12 @@ export function parseJsonResponse<T>(content: string): T {
 /**
  * Call Claude for document text summarization / metadata extraction.
  *
- * The prompt (see prompt-builder.ts) already instructs the model to return
- * strict JSON in a fixed shape; we parse the text response with a tolerant
- * parser and retry once with a JSON-only nudge on empty/malformed output.
+ * Uses structured outputs: the response is constrained to LlmAnalysisSchema and
+ * validated by the SDK (`messages.parse`), so no tolerant text parsing is
+ * needed. temperature is 0 for deterministic extraction. On an unparseable
+ * result (or truncation) we retry once with identical params.
  */
-export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: LlmSummaryResponse; tokenCount: number }> {
+export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: LlmAnalysis; tokenCount: number }> {
     const client = getAnthropicClient();
     const maxOutputTokens = Math.max(256, Math.min(prompt.maxTokens, env.LLM_MAX_OUTPUT_TOKENS));
     const retries = 1;
@@ -105,19 +100,16 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
 
     for (let attempt = 0; attempt <= retries; attempt++) {
         const requestStart = Date.now();
-        const isRetry = attempt > 0;
-        const attemptMaxTokens = isRetry ? Math.max(256, Math.floor(maxOutputTokens * 0.6)) : maxOutputTokens;
-        const userPrompt = isRetry ? `${prompt.user}${EMPTY_JSON_RETRY_SUFFIX}` : prompt.user;
 
         try {
-            const message = await client.messages.create({
+            const message = await client.messages.parse({
                 model: env.ANTHROPIC_SUMMARY_MODEL,
-                max_tokens: attemptMaxTokens,
+                max_tokens: maxOutputTokens,
+                temperature: 0,
                 system: prompt.system,
-                messages: [{ role: 'user', content: userPrompt }],
+                messages: [{ role: 'user', content: prompt.user }],
+                output_config: { format: zodOutputFormat(LlmAnalysisSchema) },
             });
-
-            const content = extractText(message);
 
             if (process.env.NODE_ENV !== 'production') {
                 console.info(
@@ -127,36 +119,19 @@ export async function summarizeDocument(prompt: LlmPrompt): Promise<{ result: Ll
                         attempt: attempt + 1,
                         retries,
                         requestMs: Date.now() - requestStart,
-                        promptChars: prompt.system.length + userPrompt.length,
-                        maxOutputTokens: attemptMaxTokens,
+                        promptChars: prompt.system.length + prompt.user.length,
+                        maxOutputTokens,
                         stopReason: message.stop_reason,
                         usage: message.usage,
                     }),
                 );
             }
 
-            if (content) {
-                const result = parseJsonResponse<LlmSummaryResponse>(content);
-
-                if (!result.summary || typeof result.summary !== 'string') {
-                    throw new Error('Invalid response: missing summary field');
-                }
-
-                return {
-                    result: {
-                        summary: result.summary,
-                        title: result.title,
-                        document_type: result.document_type,
-                        language: result.language,
-                        entities: result.entities ?? [],
-                        topics: result.topics ?? [],
-                        extracted_date: result.extracted_date,
-                    },
-                    tokenCount: totalTokens(message.usage),
-                };
+            if (message.parsed_output) {
+                return { result: message.parsed_output, tokenCount: totalTokens(message.usage) };
             }
 
-            lastError = new Error('Anthropic returned empty response');
+            lastError = new Error('Anthropic returned unparseable structured output: ' + (message.stop_reason ?? 'unknown'));
         } catch (error) {
             lastError = error instanceof Error ? error : new Error('Anthropic request failed');
         }

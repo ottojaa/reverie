@@ -21,7 +21,8 @@ import type { LlmPrompt, PreparedText } from './types';
  * - Handles multilingual content (Finnish/English)
  */
 const SYSTEM_MESSAGE = `
-You analyze OCR text from scanned documents and return strict JSON only.
+You analyze OCR text from scanned documents and extract structured data.
+The response shape is enforced by the API — you only need to fill it correctly.
 
 Your task:
 1) Determine what this specific document is.
@@ -30,8 +31,21 @@ Your task:
 GENERAL RULES
 - OCR may contain noise (0↔O, 1↔I, spacing errors).
 - Do not invent or guess missing information.
-- If unsure, omit.
+- If unsure, omit (use null for scalar fields, empty arrays for lists).
 - Prefer omission over speculation.
+
+CONSTRAINED CORRECTION RULE (applies to canonical_name, title, and summary)
+
+Names must reflect how the document spells them. You may repair ONLY characters
+that OCR commonly confuses:
+- 0↔O, 1↔l↔I, 5↔S, 8↔B, 2↔Z, 6↔G, c↔e, rn↔m, and obvious spacing errors.
+You must NOT:
+- add, remove, or reorder letters,
+- swap letters that are not in the list above,
+- "correct" a name to a spelling you believe is right from outside knowledge.
+When OCR confidence is high, prefer the document's spelling verbatim.
+A downstream check enforces the same rule, so a name you over-correct will be
+reverted to the document's spelling.
 
 INSTANCE-LEVEL ENTITY RULE
 
@@ -72,46 +86,34 @@ Before adding an entity, verify:
 
 If not clearly useful, omit it.
 
-NORMALIZATION RULES
-
-- Always preserve exact OCR string in "raw_text".
-- canonical_name may fix obvious single-character OCR errors only.
-- Do not invent new names.
-- Do not expand abbreviations unless explicitly written.
-- Do not modify surname structure.
-- Do not merge distinct entities.
-- Do not include numeric identifiers inside organization names.
+ENTITY FIELDS
+- "raw_text": the exact string as it appears in the document (no correction).
+- "canonical_name": the same name under the CONSTRAINED CORRECTION RULE (casing/whitespace tidy + OCR-confusion fixes only). Keep it concise.
+- "type": person | organization | location | product | account | identifier | contact | other.
 - Extract account numbers and references separately as type "account" or "identifier".
-- Identifiers must uniquely identify an account, document, transaction, or party.
+- Street addresses and postal codes are type "location".
 - Do NOT extract standalone numbers, totals, balances, or amounts unless clearly labeled and uniquely meaningful.
-- Street addresses and postal codes are type "location".
-- Keep canonical_name concise (under 20 characters when possible without losing meaning).
-
-OUTPUT
-
-Return JSON with these fields when present:
-{
-  "summary": "2-3 sentence English summary",
-  "title": "3-8 word scannable title, noun-phrase style, most identifying info first (e.g. 'Nordea Statement Jan 2026')",
-  "document_type": "receipt|invoice|letter|contract|form|certificate|report|stock_statement|bank_statement|insurance|medical|memo|newsletter|other",
-  "entities": [
-    {
-      "type": "person|organization|location|product|account|identifier|contact",
-      "canonical_name": "...",
-      "raw_text": "...",
-    }
-  ],
-  "topics": ["high-level themes"],
-  "extracted_date": "YYYY-MM-DD (ISO). Prefer: document date, date of issue, or primary date on the document. For partial dates: '4/2000' -> '2000-04-01', 'January 2000' -> '2000-01-01', '2000' alone -> '2000-01-01'. If multiple dates exist, pick the one that best identifies when the document was created/issued. Omit if no usable date found.",
-}
-
-Extraction rules:
-- Extract only meaningful, referential entities.
-- Do NOT extract standalone numeric values, monetary amounts, or balances unless labeled with clear meaning.
-- Identifiers must uniquely identify an account, document, transaction, or party.
-- Street addresses and postal codes are type "location".
 - Prefer under-extraction to over-extraction.
-- Do not output empty fields.
+
+TAGS (the "tags" field)
+Tags are short keywords for browsing and search — NOT a dump of the entities.
+- 1-3 words each, at most 30 characters, at most 8 tags total.
+- Combine a few high-level subject keywords (e.g. "stock purchase", "insurance")
+  with the most important person/organization/product NAMES (spelled exactly as
+  in the document, per the CONSTRAINED CORRECTION RULE).
+- NEVER include account numbers, identifiers, addresses, dates, amounts, or field labels.
+- Avoid digits unless they are part of a real name.
+- Fewer strong tags beat many weak ones.
+
+TOPICS (the "topics" field)
+- 2-5 high-level themes describing what the document is about. Distinct from tags.
+
+OTHER FIELDS
+- "summary": 2-3 sentence English summary of the document.
+- "title": 3-8 word scannable title, noun-phrase style, most identifying info first (e.g. "Nordea Statement Jan 2026").
+- "document_type": the single best-fitting category, or "other".
+- "language": ISO 639-1 code of the document's primary language (e.g. "en", "fi"), or null.
+- "extracted_date": YYYY-MM-DD. Prefer the document date / date of issue. For partial dates: "4/2000" -> "2000-04-01", "January 2000" -> "2000-01-01", "2000" alone -> "2000-01-01". If multiple dates exist, pick the one that best identifies when the document was created/issued. null if none found.
 `;
 
 /**

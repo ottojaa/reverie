@@ -299,17 +299,15 @@ export function buildSearchQuery(
         }
     }
 
-    // Entity filter (search in OCR metadata companies and text)
+    // Entity filter: match the LLM-extracted entities (jsonb containment on the
+    // real 'entities' key) or the full-text vector (which includes tags + OCR text).
     if (parsed.entities?.length) {
         query = query.where((eb) => {
             const conditions = parsed.entities!.map((entity) => {
                 const tsQuery = sql`to_tsquery('english', ${entity.replace(/\s+/g, ' & ')})`;
+                const containment = JSON.stringify([{ canonical_name: entity }]);
 
-                return eb.or([
-                    sql<SqlBool>`ocr.metadata->'companies' ? ${entity}`,
-                    sql<SqlBool>`d.search_vector @@ ${tsQuery}`,
-                    sql<SqlBool>`llm.metadata->'keyEntities' ? ${entity}`,
-                ]);
+                return eb.or([sql<SqlBool>`d.search_vector @@ ${tsQuery}`, sql<SqlBool>`llm.metadata->'entities' @> ${containment}::jsonb`]);
             });
 
             return eb.and(conditions);

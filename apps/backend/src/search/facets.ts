@@ -288,18 +288,20 @@ async function getCategoryFacets(parsed: ParsedQuery, userId: string, privateFol
 }
 
 /**
- * Entity facets (companies extracted from OCR)
+ * Entity facets (organization names extracted by the LLM)
  */
 async function getEntityFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    // Extract companies from OCR metadata JSONB
+    // Unnest llm_results.metadata->'entities' and count organization canonical names.
     const query = db
-        .selectFrom('ocr_results as ocr')
-        .innerJoin('documents as d', 'd.id', 'ocr.document_id')
-        .select([sql<string>`jsonb_array_elements_text(ocr.metadata->'companies')`.as('entity'), sql<number>`count(*)::int`.as('count')])
+        .selectFrom('llm_results as llm')
+        .innerJoin('documents as d', 'd.id', 'llm.document_id')
+        .innerJoinLateral(sql`jsonb_array_elements(llm.metadata->'entities')`.as('ent'), (join) => join.onTrue())
+        .select([sql<string>`ent.value->>'canonical_name'`.as('entity'), sql<number>`count(*)::int`.as('count')])
         .where('d.user_id', '=', userId)
-        .where(sql<SqlBool>`ocr.metadata->'companies' IS NOT NULL`)
-        .where(sql<SqlBool>`jsonb_array_length(ocr.metadata->'companies') > 0`)
-        .groupBy(sql`jsonb_array_elements_text(ocr.metadata->'companies')`)
+        .where(sql<SqlBool>`jsonb_typeof(llm.metadata->'entities') = 'array'`)
+        .where(sql<SqlBool>`ent.value->>'type' = 'organization'`)
+        .where(sql<SqlBool>`ent.value->>'canonical_name' IS NOT NULL`)
+        .groupBy(sql`ent.value->>'canonical_name'`)
         .orderBy(sql`count(*)`, 'desc')
         .limit(15);
 
