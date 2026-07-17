@@ -17,7 +17,7 @@ import { getStorageService } from '../services/storage.service';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
 import { groundEntities } from './entity-grounding';
-import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
+import { buildDocumentPrompt, getVisionPrompt } from './prompt-builder';
 import { buildSpellingCorrector, correctText } from './spelling-corrector';
 import { sanitizeTags } from './tag-sanitizer';
 import { prepareTextForLlm } from './text-preparer';
@@ -115,27 +115,21 @@ async function processTextSummary(
     ocrResult: OcrResult,
     baseTimings: { fetchMs: number; eligibilityMs: number; totalStart: number },
 ): Promise<DocumentLlmResult> {
-    // Check if the LLM is available
+    // No API key → no summary. Record an explicit skip (never a pseudo-summary
+    // built from OCR scraps) so the document stays honest and retryable.
     if (!isLlmAvailable()) {
         const saveStart = Date.now();
-        const fallbackSummary = buildFallbackSummary(document, ocrResult);
 
         await upsertLlmResult(document.id, {
-            summary: fallbackSummary,
-            metadata: {
-                type: 'text_summary',
-                entities: [],
-                topics: [],
-                fallback: true,
-                reason: 'llm_unavailable',
-            },
-            token_count: 0,
+            summary: null,
+            metadata: buildSkipMetadata('llm_unavailable', ocrResult.raw_text?.length),
+            token_count: null,
             processing_type: 'text_summary',
         });
 
-        await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', document.id).execute();
         const saveMs = Date.now() - saveStart;
-        logTimings('text_summary_fallback', document.id, {
+        logTimings('text_summary_unavailable', document.id, {
             ...baseTimings,
             saveMs,
             totalMs: Date.now() - baseTimings.totalStart,
@@ -143,8 +137,8 @@ async function processTextSummary(
 
         return {
             success: true,
-            summary: fallbackSummary,
-            tokenCount: 0,
+            skipped: true,
+            reason: 'llm_unavailable',
         };
     }
 

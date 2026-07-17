@@ -62,6 +62,18 @@ export const EntitySchema = z.object({
 
 export type Entity = z.infer<typeof EntitySchema>;
 
+// EXIF-derived photo metadata (GPS location + capture time), populated at upload
+// time for photos that carry GPS EXIF data.
+export const DocumentPhotoMetadataSchema = z.object({
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    city: z.string().nullable(),
+    country: z.string().nullable(),
+    taken_at: z.string().nullable(),
+});
+
+export type DocumentPhotoMetadata = z.infer<typeof DocumentPhotoMetadataSchema>;
+
 export const DocumentSchema = z.object({
     id: UuidSchema,
     folder_id: UuidSchema.nullable(),
@@ -91,6 +103,9 @@ export const DocumentSchema = z.object({
     // Signed URLs for secure file access
     file_url: z.string().nullable(),
     thumbnail_urls: ThumbnailUrlsSchema.nullable(),
+    // Only populated on the document detail endpoint (GET /documents/:id);
+    // omitted from list responses to avoid per-row joins.
+    photo_metadata: DocumentPhotoMetadataSchema.nullable().optional(),
 });
 
 export type Document = z.infer<typeof DocumentSchema>;

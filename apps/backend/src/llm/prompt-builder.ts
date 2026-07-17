@@ -174,33 +174,3 @@ Analyze this document and extract all structured information as specified. Pay s
 export function getVisionPrompt(): string {
     return VISION_PROMPT;
 }
-
-/**
- * Build a simple fallback summary when LLM is unavailable
- */
-export function buildFallbackSummary(document: Document, ocrResult?: OcrResult | null): string {
-    const parts: string[] = [];
-
-    if (document.document_category) {
-        parts.push(`Document type: ${document.document_category}`);
-    }
-
-    if (document.extracted_date) {
-        const date = new Date(document.extracted_date);
-        parts.push(`Date: ${date.toLocaleDateString()}`);
-    }
-
-    if (ocrResult?.raw_text) {
-        const preview = ocrResult.raw_text.slice(0, 200).replace(/\s+/g, ' ').trim();
-
-        if (preview) {
-            parts.push(`Preview: "${preview}..."`);
-        }
-    }
-
-    if (parts.length === 0) {
-        return `Document: ${document.original_filename}`;
-    }
-
-    return parts.join('. ');
-}

@@ -108,7 +108,6 @@ export class UploadService {
         const documents: Document[] = [];
         const jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
         const userContext = await this.storageService.getUserStorageContext(userId);
-        const skipHashDuplicate = conflictStrategy != null;
 
         const promises = files.map(async (file, index) => {
             const effectiveFilename = effectiveFilenames?.[index] ?? file.filename;
@@ -119,7 +118,6 @@ export class UploadService {
                 resolvedFolderId ?? undefined,
                 sessionId,
                 effectiveFilename,
-                skipHashDuplicate,
                 copyMetadataFromDocumentId,
             );
             documents.push(result.document);
@@ -153,6 +151,31 @@ export class UploadService {
     /**
      * Delete documents in folder that have one of the given filenames (used for replace strategy).
      */
+    /**
+     * Delete a document's stored files. The main file object is content-addressed
+     * and may be shared by other document rows (duplicate uploads) — it is only
+     * removed when this document holds the last reference. Thumbnails are
+     * per-document (`thumbnails/<documentId>/…`) and always removed.
+     */
+    async deleteDocumentFiles(document: Pick<Document, 'id' | 'file_path' | 'thumbnail_paths'>, userId: string): Promise<void> {
+        const otherReference = await db
+            .selectFrom('documents')
+            .select('id')
+            .where('file_path', '=', document.file_path)
+            .where('id', '!=', document.id)
+            .executeTakeFirst();
+
+        if (!otherReference) {
+            await this.storageService.deleteFile(document.file_path, userId);
+        }
+
+        if (document.thumbnail_paths) {
+            for (const path of Object.values(document.thumbnail_paths)) {
+                await this.storageService.deleteFile(path, userId);
+            }
+        }
+    }
+
     async deleteDocumentsInFolderByFilenames(userId: string, folderId: string, filenames: string[]): Promise<void> {
         if (filenames.length === 0) return;
 
@@ -175,13 +198,7 @@ export class UploadService {
             });
 
             try {
-                await this.storageService.deleteFile(doc.file_path, userId);
-
-                if (doc.thumbnail_paths) {
-                    for (const path of Object.values(doc.thumbnail_paths)) {
-                        await this.storageService.deleteFile(path, userId);
-                    }
-                }
+                await this.deleteDocumentFiles(doc, userId);
             } catch (err) {
                 console.error('Failed to delete file from storage:', err);
             }
@@ -201,7 +218,6 @@ export class UploadService {
         folderId: string | undefined,
         sessionId: string,
         effectiveFilename?: string,
-        skipHashDuplicate?: boolean,
         copyMetadataFromDocumentId?: string,
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
         const displayName = effectiveFilename ?? file.filename;
@@ -209,27 +225,11 @@ export class UploadService {
         // Correct generic MIME types (e.g. application/octet-stream for .mov files)
         const mimeType = correctMimeType(file.filename, file.mimetype);
 
-        // Process and store the file (with user context for quotas)
+        // Process and store the file (with user context for quotas). Identical
+        // content deduplicates at the STORAGE layer only (content-addressed path)
+        // — every upload gets its own document row. Deletion must therefore go
+        // through deleteDocumentFiles, which refcounts the shared object.
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
-
-        if (!skipHashDuplicate) {
-            // Check for duplicate by hash in the *target folder* only.
-            // Same hash in a different folder = upload fresh copy to this folder.
-            const hashQuery = db
-                .selectFrom('documents')
-                .selectAll()
-                .where('file_hash', '=', processed.hash)
-                .where('user_id', '=', userId);
-
-            const existing = await (folderId != null ? hashQuery.where('folder_id', '=', folderId) : hashQuery.where('folder_id', 'is', null)).executeTakeFirst();
-
-            if (existing) {
-                return {
-                    document: existing,
-                    jobs: [],
-                };
-            }
-        }
 
         // Determine if we can generate thumbnails for this file type
         const canThumbnail = canGenerateThumbnail(mimeType);
@@ -373,14 +373,11 @@ export class UploadService {
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
         const canThumbnail = canGenerateThumbnail(mimeType);
 
-        // Delete old file and thumbnails from storage
+        // Delete old file and thumbnails from storage (refcount-safe; skip when the
+        // new content hashed to the same object we'd be deleting)
         try {
-            await this.storageService.deleteFile(document.file_path, userId);
-
-            if (document.thumbnail_paths) {
-                for (const path of Object.values(document.thumbnail_paths)) {
-                    await this.storageService.deleteFile(path, userId);
-                }
+            if (document.file_path !== processed.storagePath) {
+                await this.deleteDocumentFiles(document, userId);
             }
         } catch (err) {
             console.error('Failed to delete old files from storage:', err);

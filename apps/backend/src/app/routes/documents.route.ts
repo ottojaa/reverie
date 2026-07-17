@@ -16,13 +16,14 @@ import {
     UuidSchema,
     type Document,
     type DocumentListQuery,
+    type DocumentPhotoMetadata,
     type MoveDocumentsRequest,
     type SetDocumentPrivacyRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { type Document as DbDocument, type LlmResult } from '../../db/schema';
+import { type Document as DbDocument, type LlmResult, type PhotoMetadata } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
@@ -365,8 +366,9 @@ export default async function (fastify: FastifyInstance) {
             }
 
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
+            const photoMeta = await db.selectFrom('photo_metadata').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            return await serializeDocument(document, llmResult);
+            return await serializeDocument(document, llmResult, photoMeta ?? null);
         },
     );
 
@@ -570,13 +572,7 @@ export default async function (fastify: FastifyInstance) {
             });
 
             try {
-                await storageService.deleteFile(document.file_path, userId);
-
-                if (document.thumbnail_paths) {
-                    for (const path of Object.values(document.thumbnail_paths)) {
-                        await storageService.deleteFile(path, userId);
-                    }
-                }
+                await uploadService.deleteDocumentFiles(document, userId);
             } catch (err) {
                 console.error('Failed to delete file from storage:', err);
             }
@@ -620,13 +616,7 @@ export default async function (fastify: FastifyInstance) {
 
             for (const document of found) {
                 try {
-                    await storageService.deleteFile(document.file_path, userId);
-
-                    if (document.thumbnail_paths) {
-                        for (const path of Object.values(document.thumbnail_paths)) {
-                            await storageService.deleteFile(path, userId);
-                        }
-                    }
+                    await uploadService.deleteDocumentFiles(document, userId);
                 } catch (err) {
                     console.error('Failed to delete file from storage:', err);
                 }
@@ -1199,13 +1189,16 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null): Promise<Document> {
+// Detail-only (GET /documents/:id): pass `photoMeta ?? null` to include the
+// photo_metadata field (null when no row exists); omit the argument on list
+// endpoints to leave the field absent and avoid per-row joins.
+async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null, photoMeta?: PhotoMetadata | null): Promise<Document> {
     // Generate signed URLs for file access
     const fileUrl = await storageService.getFileUrl(doc.file_path);
 
     const thumbnailUrls = await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
 
-    return {
+    const serialized: Document = {
         id: doc.id,
         folder_id: doc.folder_id,
         file_path: doc.file_path,
@@ -1231,5 +1224,23 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null):
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
         thumbnail_urls: thumbnailUrls,
+    };
+
+    if (photoMeta === undefined) {
+        return serialized;
+    }
+
+    return { ...serialized, photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null };
+}
+
+function toDocumentPhotoMetadata(photoMeta: PhotoMetadata): DocumentPhotoMetadata {
+    // Legacy rows may hold NaN coordinates (Postgres `real` stores NaN; a since-fixed
+    // EXIF bug wrote them) — z.number() rejects NaN, which would 500 the response
+    return {
+        latitude: Number.isFinite(photoMeta.latitude) ? photoMeta.latitude : null,
+        longitude: Number.isFinite(photoMeta.longitude) ? photoMeta.longitude : null,
+        city: photoMeta.city || null,
+        country: photoMeta.country || null,
+        taken_at: photoMeta.taken_at ? photoMeta.taken_at.toISOString() : null,
     };
 }
