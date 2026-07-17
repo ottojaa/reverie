@@ -40,7 +40,7 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 OCR_DEVICE = os.environ.get("OCR_DEVICE", "cpu")
 
 # Engine identifier stored alongside results (ocr_results.ocr_engine).
-ENGINE_NAME = "paddleocr/PP-OCRv5"
+ENGINE_NAME = "paddleocr/PP-OCRv6"
 
 # Blocks with per-line confidence below this threshold are discarded.
 # Handwritten text / noise typically scores well below 0.50 while
@@ -404,13 +404,26 @@ def process_pdf(ocr, pdf_path):
 
 
 def _build_ocr(device):
-    """Construct a PaddleOCR instance (PP-OCRv5 server models) on the given device."""
+    """Construct a PaddleOCR instance (PP-OCRv6 medium models) on the given device.
+
+    PP-OCRv6 (released 2026-06) markedly out-reads PP-OCRv5_server on our
+    documents — notably Finnish diacritics (ä/ö/å) and small/dense print, which
+    v5 dropped even on clean, high-confidence scans (e.g. "Määrä"->"Mäarä",
+    "SÄILYTTÄKÄÄ"->"SAILYTTAKAA", and a mangled footer line). The `medium` tier is
+    the accuracy tier (34.5M params, 50 languages incl. Latin). Verified with
+    ocr_compare.py against a representative document. Everything else is kept at
+    the pipeline default (doc-preprocessor on, default detection sizing): tuning
+    those made recognition worse in testing.
+
+    NOTE: ocr_version is ignored when explicit model names are set (PaddleOCR
+    emits a warning to stderr); the version is pinned by the model names.
+    """
     from paddleocr import PaddleOCR
 
     return PaddleOCR(
-        ocr_version="PP-OCRv5",
-        text_detection_model_name="PP-OCRv5_server_det",
-        text_recognition_model_name="PP-OCRv5_server_rec",
+        ocr_version="PP-OCRv6",
+        text_detection_model_name="PP-OCRv6_medium_det",
+        text_recognition_model_name="PP-OCRv6_medium_rec",
         use_textline_orientation=True,
         enable_mkldnn=False,  # CPU-only oneDNN accelerator; irrelevant on GPU
         device=device,
