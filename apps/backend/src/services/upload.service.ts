@@ -88,7 +88,11 @@ export class UploadService {
         const resolvedFolderId = folderId ?? null;
 
         if (conflictStrategy === 'replace' && resolvedFolderId) {
-            await this.deleteDocumentsInFolderByFilenames(userId, resolvedFolderId, files.map((f) => f.filename));
+            await this.deleteDocumentsInFolderByFilenames(
+                userId,
+                resolvedFolderId,
+                files.map((f) => f.filename),
+            );
         }
 
         let effectiveFilenames: string[] | undefined;
@@ -138,12 +142,7 @@ export class UploadService {
      * Get original_filename of all documents in a folder (for duplicate naming).
      */
     async getFilenamesInFolder(userId: string, folderId: string): Promise<string[]> {
-        const rows = await db
-            .selectFrom('documents')
-            .select('original_filename')
-            .where('user_id', '=', userId)
-            .where('folder_id', '=', folderId)
-            .execute();
+        const rows = await db.selectFrom('documents').select('original_filename').where('user_id', '=', userId).where('folder_id', '=', folderId).execute();
 
         return rows.map((r) => r.original_filename);
     }
@@ -189,11 +188,7 @@ export class UploadService {
 
         for (const doc of docs) {
             await db.transaction().execute(async (trx) => {
-                await trx
-                    .deleteFrom('processing_jobs')
-                    .where('target_type', '=', 'document')
-                    .where('target_id', '=', doc.id)
-                    .execute();
+                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', doc.id).execute();
                 await trx.deleteFrom('documents').where('id', '=', doc.id).where('user_id', '=', userId).execute();
             });
 
@@ -271,7 +266,14 @@ export class UploadService {
                     .where('document_id', '=', copyMetadataFromDocumentId)
                     .executeTakeFirst();
 
-                if (sourceMetadata && (sourceMetadata.latitude != null || sourceMetadata.longitude != null || sourceMetadata.city != null || sourceMetadata.country != null || sourceMetadata.taken_at != null)) {
+                if (
+                    sourceMetadata &&
+                    (sourceMetadata.latitude != null ||
+                        sourceMetadata.longitude != null ||
+                        sourceMetadata.city != null ||
+                        sourceMetadata.country != null ||
+                        sourceMetadata.taken_at != null)
+                ) {
                     const exifValues = {
                         ...(sourceMetadata.latitude != null && { latitude: sourceMetadata.latitude }),
                         ...(sourceMetadata.longitude != null && { longitude: sourceMetadata.longitude }),
@@ -384,11 +386,7 @@ export class UploadService {
         }
 
         // Delete existing processing jobs
-        await db
-            .deleteFrom('processing_jobs')
-            .where('target_type', '=', 'document')
-            .where('target_id', '=', documentId)
-            .execute();
+        await db.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', documentId).execute();
 
         // Update document record
         const updated = await db

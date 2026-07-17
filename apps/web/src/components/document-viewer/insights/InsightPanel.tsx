@@ -192,7 +192,9 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
             </AnimatePresence>
 
             {/* Mounted outside AnimatePresence so an open dialog survives panel close; admin-only like its trigger */}
-            {isAdmin && <OcrResultDialog documentId={document.id} ocrStatus={document.ocr_status ?? 'skipped'} open={ocrDialogOpen} onOpenChange={setOcrDialogOpen} />}
+            {isAdmin && (
+                <OcrResultDialog documentId={document.id} ocrStatus={document.ocr_status ?? 'skipped'} open={ocrDialogOpen} onOpenChange={setOcrDialogOpen} />
+            )}
         </div>
     );
 }

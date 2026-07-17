@@ -37,11 +37,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         if (!isImage && !isPdfOrTxt) {
             logger.info('Skipping OCR for unsupported file type', { documentId, mimeType: document.mime_type });
 
-            await db
-                .updateTable('documents')
-                .set({ ocr_status: 'complete', has_meaningful_text: false })
-                .where('id', '=', documentId)
-                .execute();
+            await db.updateTable('documents').set({ ocr_status: 'complete', has_meaningful_text: false }).where('id', '=', documentId).execute();
 
             await db
                 .insertInto('ocr_results')

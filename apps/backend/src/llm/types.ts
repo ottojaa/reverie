@@ -2,7 +2,7 @@
  * LLM Module Types
  */
 
-import { Entity } from "@reverie/shared";
+import { Entity } from '@reverie/shared';
 
 // ===== Processing Types =====
 

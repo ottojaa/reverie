@@ -100,7 +100,12 @@ export function ProcessingFooter({ document, onViewExtractedText }: ProcessingFo
 
             {showActions && (
                 <div className="ml-auto flex items-center gap-0.5">
-                    <Button variant="ghost" size="sm" onClick={onViewExtractedText} className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onViewExtractedText}
+                        className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
                         <ScanText className="size-3.5" />
                         Extracted text
                     </Button>
