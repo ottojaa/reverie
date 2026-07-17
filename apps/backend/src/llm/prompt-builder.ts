@@ -34,18 +34,23 @@ GENERAL RULES
 - If unsure, omit (use null for scalar fields, empty arrays for lists).
 - Prefer omission over speculation.
 
-CONSTRAINED CORRECTION RULE (applies to canonical_name, title, and summary)
+CONSTRAINED CORRECTION RULE (applies everywhere a name appears: canonical_name,
+title, summary, tags, and topics)
 
-Names must reflect how the document spells them. You may repair ONLY characters
-that OCR commonly confuses:
+Names must reflect how the document spells them. Copy every proper noun
+character-by-character from the OCR text — do NOT reproduce it from memory or
+general knowledge, even when you recognize the name. This applies just as much
+in the prose summary and in tags as in the entity fields.
+
+You may repair ONLY characters that OCR commonly confuses:
 - 0↔O, 1↔l↔I, 5↔S, 8↔B, 2↔Z, 6↔G, c↔e, rn↔m, and obvious spacing errors.
 You must NOT:
 - add, remove, or reorder letters,
 - swap letters that are not in the list above,
 - "correct" a name to a spelling you believe is right from outside knowledge.
 When OCR confidence is high, prefer the document's spelling verbatim.
-A downstream check enforces the same rule, so a name you over-correct will be
-reverted to the document's spelling.
+A downstream check enforces this in every field, so a name you over-correct or
+re-spell will be reverted to the document's spelling.
 
 INSTANCE-LEVEL ENTITY RULE
 
