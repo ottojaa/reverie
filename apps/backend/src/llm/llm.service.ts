@@ -16,7 +16,9 @@ import { rebuildSearchVector } from '../search/search-indexer';
 import { getStorageService } from '../services/storage.service';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
+import { groundEntities } from './entity-grounding';
 import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
+import { sanitizeTags } from './tag-sanitizer';
 import { prepareTextForLlm } from './text-preparer';
 import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
 
@@ -162,15 +164,20 @@ async function processTextSummary(
     const { result, tokenCount } = await summarizeDocument(prompt);
     const llmMs = Date.now() - llmStart;
 
+    // Ground entity names against the OCR text: accept casing/whitespace tidy and
+    // common OCR-confusion fixes, revert anything else (likely hallucination) to
+    // the document's own spelling. See entity-grounding.ts.
+    const groundedEntities = groundEntities(result.entities, ocrResult.raw_text);
+
     // Build enhanced metadata
     const enhancedMetadata: EnhancedMetadata = {
         type: 'text_summary',
-        title: result.title,
-        language: result.language,
-        entities: result.entities,
+        title: result.title ?? undefined,
+        language: result.language ?? undefined,
+        entities: groundedEntities,
         topics: result.topics,
-        documentType: result.document_type,
-        extractedDate: result.extracted_date,
+        documentType: result.document_type ?? undefined,
+        extractedDate: result.extracted_date ?? undefined,
         // Sampling info
         truncated: prepared.truncated,
         samplingStrategy: prepared.samplingStrategy,
@@ -204,7 +211,7 @@ async function processTextSummary(
         .execute();
 
     // Update search index with enhanced data
-    await updateSearchIndex(document.id, result.summary, result.entities, result.topics);
+    await updateSearchIndex(document.id, { tags: result.tags, topics: result.topics, entities: groundedEntities });
 
     await rebuildSearchVector(db, document.id);
 
@@ -276,11 +283,8 @@ async function processVisionDocument(document: Document, baseTimings: { fetchMs:
 
     await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
 
-    // Index the description for search
-    if (result.description) {
-        const emptyEntities: Entity[] = [];
-        await updateSearchIndex(document.id, result.description, emptyEntities, result.detected_objects ?? []);
-    }
+    // Index detected objects as tag candidates (topics fallback path in the sanitizer).
+    await updateSearchIndex(document.id, { tags: [], topics: result.detected_objects ?? [], entities: [] });
 
     await rebuildSearchVector(db, document.id);
 
@@ -331,41 +335,36 @@ async function upsertLlmResult(
 }
 
 /**
- * Update the search index with LLM-generated content
+ * Replace the document's auto-generated tags with a freshly sanitized set.
  *
- * Stores entities and topics as document tags for faceted search
+ * This is the only writer of document_tags. Deleting existing source='auto' tags
+ * before inserting new ones fixes tag accumulation across reprocesses; user tags
+ * (source='user') are preserved and used as dedup targets. Tag candidates are the
+ * LLM's proposed tags, with topics/entity names as fallbacks (see sanitizeTags).
  */
-async function updateSearchIndex(documentId: string, summary: string, entities: Entity[], topics: string[]): Promise<void> {
-    const searchText = [summary, ...entities, ...topics].filter(Boolean).join(' ');
+async function updateSearchIndex(documentId: string, analysis: { tags: string[]; topics: string[]; entities: Entity[] }): Promise<void> {
+    await db.transaction().execute(async (trx) => {
+        const userTags = await trx.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'user').execute();
 
-    if (!searchText) {
-        return;
-    }
+        const tags = sanitizeTags({
+            proposedTags: analysis.tags,
+            topics: analysis.topics,
+            entities: analysis.entities,
+            existingTags: userTags.map((t) => t.tag),
+        });
 
-    // Store LLM search terms in document tags for faceted search
-    const tagsToAdd = [...entities.map((e) => e.canonical_name), ...topics].filter(Boolean);
+        await trx.deleteFrom('document_tags').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
 
-    if (tagsToAdd.length === 0) {
-        return;
-    }
+        if (tags.length === 0) {
+            return;
+        }
 
-    const existingTags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
-
-    const existingTagSet = new Set(existingTags.map((t) => t.tag.toLowerCase()));
-    const newTags = tagsToAdd.filter((t) => !existingTagSet.has(t.toLowerCase()));
-
-    if (newTags.length > 0) {
-        await db
+        await trx
             .insertInto('document_tags')
-            .values(
-                newTags.map((tag) => ({
-                    document_id: documentId,
-                    tag,
-                    source: 'auto' as const,
-                })),
-            )
+            .values(tags.map((tag) => ({ document_id: documentId, tag, source: 'auto' as const })))
+            .onConflict((oc) => oc.columns(['document_id', 'tag']).doNothing())
             .execute();
-    }
+    });
 }
 
 /**
