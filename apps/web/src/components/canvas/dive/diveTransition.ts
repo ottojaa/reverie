@@ -1,4 +1,4 @@
-import { THUMBNAIL_SIZES, type Document } from '@reverie/shared';
+import type { Document } from '@reverie/shared';
 import type { DestRect } from './diveState.js';
 
 /**
@@ -30,20 +30,17 @@ export function computeDestRect(doc: Document): DestRect {
     const boxW = Math.max(1, vw - sidebar - padX * 2);
     const boxH = Math.max(1, vh - padTop - padBottom);
 
-    // Contain-fit WITHOUT upscaling: the viewer's max-w/max-h constraints never
-    // grow an image past its natural size, so predicting the padded box for a
-    // small image made the dive overshoot and visibly shrink back on settle.
-    // "Natural size" is the lg THUMBNAIL's, not the original's: the viewer hero
-    // is content-sized by the lg thumb (width-capped, never enlarged) with the
-    // full-res img absolutely positioned inside it — so on screens whose box
-    // exceeds the cap, predicting from original dims overshoots the same way.
+    // Contain-fit WITHOUT upscaling: the viewer hero is sized by the full-res
+    // img's width/height attributes — the ORIGINAL's dimensions, clamped to
+    // the box and never grown past natural size. Predicting the padded box
+    // for a small image would land the dive too big and visibly shrink back
+    // on settle. Thumbnail caps play no part here: the lg thumb is only a
+    // stretched placeholder inside the hero (ImageViewMode), so this stays
+    // correct for documents whose stored thumbs predate a cap change.
     if (doc.width && doc.height) {
-        const capScale = Math.min(1, THUMBNAIL_SIZES.lg / doc.width);
-        const effW = doc.width * capScale;
-        const effH = doc.height * capScale;
-        const scale = Math.min(boxW / effW, boxH / effH, 1);
-        const w = effW * scale;
-        const h = effH * scale;
+        const scale = Math.min(boxW / doc.width, boxH / doc.height, 1);
+        const w = doc.width * scale;
+        const h = doc.height * scale;
 
         return { x: boxX + (boxW - w) / 2, y: boxY + (boxH - h) / 2, w, h };
     }

@@ -98,13 +98,14 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
             >
                 <div
                     data-doc-hero
-                    className={cn(
-                        'relative box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden',
-                        isZoomed && 'touch-none',
-                        document.width && document.height && 'h-auto w-auto max-w-full',
-                    )}
+                    className={cn('relative box-border min-h-0 min-w-0 max-h-full max-w-full overflow-hidden', isZoomed && 'touch-none')}
                     style={{
                         ...transformStyle,
+                        // aspect-ratio makes the auto-width hero hug the contained
+                        // image exactly when BOTH max constraints bite: a max-height
+                        // violation transfers through the ratio to shrink the width
+                        // (css-sizing-4) — without it the hero stays box-wide and
+                        // letterboxes, and the dive settle sees a phantom mismatch.
                         ...(document.width && document.height
                             ? { aspectRatio: `${document.width} / ${document.height}` }
                             : { minHeight: 'min(40vh, 240px)', minWidth: 'min(90vw, 320px)' }),
@@ -132,8 +133,7 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                                 decoding="async"
                                 onLoad={() => setPreviewReady(true)}
                                 onError={() => setPreviewFailed(true)}
-                                style={{ opacity: 1 }}
-                                className={cn(imgClass, isZoomed && 'touch-none')}
+                                className={cn('absolute inset-0 h-full w-full select-none object-contain', isZoomed && 'touch-none')}
                                 draggable={false}
                             />
                         </>
@@ -142,24 +142,24 @@ export function ImageViewMode({ document, fileUrl }: ViewerProps) {
                     <img
                         src={lockedFileUrl ?? undefined}
                         alt={document.original_filename}
+                        // The in-flow full-res img sizes the hero: its width/height
+                        // attributes carry the original's intrinsic dimensions, so
+                        // layout is final before any bytes arrive and display size is
+                        // decoupled from thumbnail caps — a 4K original contain-fits
+                        // the box (never upscaled past natural size) even though the
+                        // lg thumb, absolutely stretched over it as the progressive
+                        // placeholder, is far smaller. `relative` keeps it painting
+                        // above that placeholder.
+                        width={document.width || undefined}
+                        height={document.height || undefined}
                         fetchPriority={useProgressive ? 'auto' : 'high'}
                         decoding="async"
                         onLoad={() => setFullReady(true)}
                         style={{
                             opacity: fullReady ? 1 : 0,
                             transition: hasDragged.current ? 'none' : 'opacity 0.15s ease-out',
-                            ...(useProgressive
-                                ? {
-                                      position: 'absolute',
-                                      left: 0,
-                                      top: 0,
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'contain',
-                                  }
-                                : {}),
                         }}
-                        className={cn(imgClass, useProgressive && 'h-full w-full', isZoomed && 'touch-none')}
+                        className={cn('relative', imgClass, isZoomed && 'touch-none')}
                         draggable={false}
                     />
                 </div>
