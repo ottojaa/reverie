@@ -1,19 +1,18 @@
 import { Button } from '@/components/ui/button';
-import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
-import { Spinner } from '@/components/ui/spinner';
 import { buildDownloadUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { useRouter } from '@tanstack/react-router';
-import { ArrowLeft, Download, Edit3, Info, Pencil } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { ArrowLeft, Download, Edit3, Pencil } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useCallback } from 'react';
+import { InsightTitle } from './insights/InsightTitle';
 
 interface ViewerToolbarProps {
     document: Document;
     fileUrl: string | null;
-    isDetailsOpen: boolean;
-    onToggleDetails: () => void;
+    isInsightsOpen: boolean;
+    onToggleInsights: () => void;
     /** Whether this file type supports editing */
     canEdit?: boolean;
     /** Whether edit mode is active (e.g. image editor) */
@@ -22,42 +21,8 @@ interface ViewerToolbarProps {
     onToggleEdit?: () => void;
 }
 
-function isDocumentProcessing(document: Document) {
-    return (
-        document.ocr_status === 'processing' ||
-        document.ocr_status === 'pending' ||
-        document.thumbnail_status === 'processing' ||
-        document.thumbnail_status === 'pending' ||
-        document.llm_status === 'processing' ||
-        document.llm_status === 'pending'
-    );
-}
-
-function ProcessingIndicator({ document }: { document: Document }) {
-    const isProcessing = isDocumentProcessing(document);
-
-    return (
-        <AnimatePresence>
-            {isProcessing && (
-                <motion.span
-                    key="processing"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                >
-                    <Spinner className="size-3" />
-                    Processing...
-                </motion.span>
-            )}
-        </AnimatePresence>
-    );
-}
-
-export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetails, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
+export function ViewerToolbar({ document, fileUrl, isInsightsOpen, onToggleInsights, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
     const router = useRouter();
-    const fileConfig = getFileTypeConfig(document.mime_type);
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
 
     const handleDownload = useCallback(() => {
@@ -83,21 +48,17 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
             {/* Glass background */}
             <div className="absolute inset-0 bg-background/70 backdrop-blur-xl mask-[linear-gradient(to_bottom,black_70%,transparent)]" />
 
-            {/* Left: back + filename */}
+            {/* Left: back + title / AI insight teaser */}
             <div className="relative z-10 flex min-w-0 items-center gap-2">
                 <Button variant="ghost" size="icon-sm" className="shrink-0" onClick={() => router.history.back()}>
                     <ArrowLeft className="size-4" />
                 </Button>
 
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{document.original_filename}</p>
-                    <p className="hidden text-xs text-muted-foreground md:block">{fileConfig.label}</p>
-                </div>
+                <InsightTitle document={document} isOpen={isInsightsOpen} onToggle={onToggleInsights} />
             </div>
 
             {/* Right: actions */}
             <div className="relative z-10 flex items-center gap-3">
-                <ProcessingIndicator document={document} />
                 {/* Edit button (text files use inline edit; images use image editor) */}
                 {!isTextLike && (
                     <Button
@@ -118,16 +79,6 @@ export function ViewerToolbar({ document, fileUrl, isDetailsOpen, onToggleDetail
                         <Download className="size-4" />
                     </Button>
                 )}
-
-                {/* Info / details toggle */}
-                <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onToggleDetails}
-                    className={cn('text-muted-foreground', isDetailsOpen && 'bg-secondary text-foreground')}
-                >
-                    <Info className="size-4" />
-                </Button>
             </div>
         </motion.div>
     );

@@ -1,4 +1,4 @@
-import { DocumentDetailsDrawer } from '@/components/document-viewer/DocumentDetailsDrawer';
+import { InsightPanel } from '@/components/document-viewer/insights/InsightPanel';
 import type { ViewerProps } from '@/components/document-viewer/viewer-registry';
 import { getViewerLoader } from '@/components/document-viewer/viewer-registry';
 import { ViewerToolbar } from '@/components/document-viewer/ViewerToolbar';
@@ -44,14 +44,18 @@ function useDynamicViewer(mimeType: string | undefined, filename?: string) {
 export function DocumentPage() {
     const { id } = useParams({ from: '/document/$id' });
     const { data: document, isLoading, error } = useDocument(id);
-    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isInsightsOpen, setIsInsightsOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
 
     // Subscribe to real-time job status updates via websocket
     useDocumentStatus(document?.id);
 
-    const toggleDetails = useCallback(() => setIsDetailsOpen((v) => !v), []);
-    const toggleEdit = useCallback(() => setIsEditMode((v) => !v), []);
+    const toggleInsights = useCallback(() => setIsInsightsOpen((v) => !v), []);
+    const toggleEdit = useCallback(() => {
+        setIsEditMode((v) => !v);
+        // The editor takes over the viewer — get the insight panel out of the way
+        setIsInsightsOpen(false);
+    }, []);
 
     const videoExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'];
     const ext = document?.original_filename?.split('.').pop()?.toLowerCase() ?? '';
@@ -100,8 +104,8 @@ export function DocumentPage() {
             <ViewerToolbar
                 document={document}
                 fileUrl={fileUrl}
-                isDetailsOpen={isDetailsOpen}
-                onToggleDetails={toggleDetails}
+                isInsightsOpen={isInsightsOpen}
+                onToggleInsights={toggleInsights}
                 canEdit={canEdit}
                 isEditMode={isEditMode}
                 onToggleEdit={toggleEdit}
@@ -128,8 +132,8 @@ export function DocumentPage() {
                 )}
             </motion.div>
 
-            {/* Details drawer */}
-            <DocumentDetailsDrawer document={document} isOpen={isDetailsOpen} onClose={() => setIsDetailsOpen(false)} />
+            {/* Insight panel overlay */}
+            <InsightPanel document={document} isOpen={isInsightsOpen} onClose={() => setIsInsightsOpen(false)} />
         </div>
     );
 }
