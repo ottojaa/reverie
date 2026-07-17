@@ -2,7 +2,7 @@
  * LLM Module Types
  */
 
-import { Entity } from "@reverie/shared";
+import { Entity } from '@reverie/shared';
 
 // ===== Processing Types =====
 
@@ -10,6 +10,7 @@ export type LlmProcessingType = 'text_summary' | 'vision_describe' | 'skip';
 
 export type LlmSkipReason =
     | 'llm_disabled' // LLM feature flag is off
+    | 'llm_unavailable' // No API key configured
     | 'unsupported_file_type' // Binary, media, etc.
     | 'code_file_skipped' // Code files not processed
     | 'no_text_no_vision' // Image without text, vision disabled

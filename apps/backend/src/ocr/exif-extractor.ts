@@ -46,7 +46,9 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
 
         if (!exif) return result;
 
-        if (typeof exif.latitude === 'number' && typeof exif.longitude === 'number') {
+        // Number.isFinite (not typeof): exifr yields NaN for malformed GPS rationals,
+        // and typeof NaN === 'number' would let it into the database
+        if (Number.isFinite(exif.latitude) && Number.isFinite(exif.longitude)) {
             result.latitude = exif.latitude;
             result.longitude = exif.longitude;
 

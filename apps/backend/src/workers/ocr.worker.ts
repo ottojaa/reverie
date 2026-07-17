@@ -37,11 +37,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         if (!isImage && !isPdfOrTxt) {
             logger.info('Skipping OCR for unsupported file type', { documentId, mimeType: document.mime_type });
 
-            await db
-                .updateTable('documents')
-                .set({ ocr_status: 'complete', has_meaningful_text: false })
-                .where('id', '=', documentId)
-                .execute();
+            await db.updateTable('documents').set({ ocr_status: 'complete', has_meaningful_text: false }).where('id', '=', documentId).execute();
 
             await db
                 .insertInto('ocr_results')
@@ -105,15 +101,9 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
                 country: exif.country,
                 takenAt: exif.takenAt,
             });
-
-            if (exif.takenAt) {
-                await db
-                    .updateTable('documents')
-                    .set({ extracted_date: exif.takenAt })
-                    .where('id', '=', documentId)
-                    .where('extracted_date', 'is', null)
-                    .execute();
-            }
+            // Deliberately NOT backfilling documents.extracted_date from EXIF:
+            // extracted_date means "date the document was issued" (LLM-extracted);
+            // a photo's capture time lives in photo_metadata.taken_at instead.
         }
 
         // Sync has_meaningful_text from OCR result back to documents table
