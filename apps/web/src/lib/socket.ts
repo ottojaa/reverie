@@ -12,10 +12,26 @@ const subscribedDocuments = new Set<string>();
  */
 export function getSocket(): Socket {
     if (!socket) {
-        socket = io(API_BASE, {
+        const s = io(API_BASE, {
             transports: ['websocket', 'polling'],
             autoConnect: false,
         });
+
+        // Server-side room membership is per-connection: after a reconnect
+        // (backend restart, network blip) the new connection is in no rooms,
+        // so replay every subscription we're tracking or job events silently
+        // stop arriving until the subscribing components remount.
+        s.on('connect', () => {
+            for (const sessionId of subscribedSessions) {
+                s.emit('subscribe:session', { session_id: sessionId });
+            }
+
+            for (const documentId of subscribedDocuments) {
+                s.emit('subscribe:document', { document_id: documentId });
+            }
+        });
+
+        socket = s;
     }
 
     return socket;
