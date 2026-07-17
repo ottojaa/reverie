@@ -18,6 +18,7 @@ import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
 import { groundEntities } from './entity-grounding';
 import { buildDocumentPrompt, buildFallbackSummary, getVisionPrompt } from './prompt-builder';
+import { buildSpellingCorrector, correctText } from './spelling-corrector';
 import { sanitizeTags } from './tag-sanitizer';
 import { prepareTextForLlm } from './text-preparer';
 import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
@@ -169,13 +170,22 @@ async function processTextSummary(
     // the document's own spelling. See entity-grounding.ts.
     const groundedEntities = groundEntities(result.entities, ocrResult.raw_text);
 
+    // Scrub the free-text fields (summary/title/topics/tags) for proper nouns the
+    // model re-typed with a hallucinated spelling, using the grounded entities as
+    // the source of the document's true spellings. See spelling-corrector.ts.
+    const corrector = buildSpellingCorrector(groundedEntities, ocrResult.raw_text);
+    const summary = correctText(result.summary, corrector);
+    const title = result.title ? correctText(result.title, corrector) : result.title;
+    const topics = result.topics.map((topic) => correctText(topic, corrector));
+    const proposedTags = result.tags.map((tag) => correctText(tag, corrector));
+
     // Build enhanced metadata
     const enhancedMetadata: EnhancedMetadata = {
         type: 'text_summary',
-        title: result.title ?? undefined,
+        title: title ?? undefined,
         language: result.language ?? undefined,
         entities: groundedEntities,
-        topics: result.topics,
+        topics,
         documentType: result.document_type ?? undefined,
         extractedDate: result.extracted_date ?? undefined,
         // Sampling info
@@ -194,7 +204,7 @@ async function processTextSummary(
     const dbWriteStart = Date.now();
 
     await upsertLlmResult(document.id, {
-        summary: result.summary,
+        summary,
         metadata: enhancedMetadata,
         token_count: tokenCount,
         processing_type: 'text_summary',
@@ -210,8 +220,8 @@ async function processTextSummary(
         .where('id', '=', document.id)
         .execute();
 
-    // Update search index with enhanced data
-    await updateSearchIndex(document.id, { tags: result.tags, topics: result.topics, entities: groundedEntities });
+    // Update search index with enhanced data (spelling-corrected tags/topics)
+    await updateSearchIndex(document.id, { tags: proposedTags, topics, entities: groundedEntities });
 
     await rebuildSearchVector(db, document.id);
 
@@ -227,7 +237,7 @@ async function processTextSummary(
 
     return {
         success: true,
-        summary: result.summary,
+        summary,
         enhancedMetadata,
         tokenCount,
         truncated: prepared.truncated,
