@@ -50,6 +50,7 @@
         "prettier-eslint": "^16.4.2"
     },
     "scripts": {
-        "create-user": "node apps/backend/src/scripts/create-user.js"
+        "create-user": "node apps/backend/src/scripts/create-user.js",
+        "reprocess": "node apps/backend/src/scripts/reprocess.js"
     }
 }

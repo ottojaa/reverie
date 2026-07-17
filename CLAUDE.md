@@ -76,7 +76,7 @@ This memories file is git-ignored, per-machine state; it complements Claude Code
 
 ## Skills (area conventions, loaded on demand)
 
-`.claude/skills/`: `backend-conventions`, `database-conventions`, `web-conventions`, `workers-conventions`, `android-conventions`, `shared-conventions`, `brand-guidelines`, `frontend-design`.
+`.claude/skills/`: `backend-conventions`, `database-conventions`, `web-conventions`, `workers-conventions`, `android-conventions`, `shared-conventions`, `brand-guidelines`, `frontend-design`, `reverie-jobs` (operate/debug the background job pipeline — inspect & reprocess, vs. `workers-conventions` for writing worker code).
 
 ## Subagents (specialized tasks)
 
