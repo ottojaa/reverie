@@ -1,12 +1,7 @@
 package com.reverie.app.ui.navigation
 
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -19,14 +14,6 @@ import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
 
-private const val PUSH_MS = 300
-private const val TAB_FADE_MS = 200
-
-/** Switching between two bottom-nav tabs has no direction, so it fades instead of sliding. */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.betweenTabs(): Boolean =
-    initialState.destination.route in Routes.tabRoutes &&
-        targetState.destination.route in Routes.tabRoutes
-
 @Composable
 fun ReverieNavGraph(
     navController: NavHostController,
@@ -36,24 +23,12 @@ fun ReverieNavGraph(
         navController = navController,
         startDestination = Screen.Files.route,
         modifier = modifier,
-        // Directional shared-axis motion: pushing a detail slides in from the right; back reverses.
-        // Tab↔tab switches fade (no meaningful direction).
-        enterTransition = {
-            if (betweenTabs()) fadeIn(tween(TAB_FADE_MS))
-            else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PUSH_MS)) + fadeIn(tween(PUSH_MS))
-        },
-        exitTransition = {
-            if (betweenTabs()) fadeOut(tween(TAB_FADE_MS))
-            else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(PUSH_MS)) + fadeOut(tween(PUSH_MS))
-        },
-        popEnterTransition = {
-            if (betweenTabs()) fadeIn(tween(TAB_FADE_MS))
-            else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PUSH_MS)) + fadeIn(tween(PUSH_MS))
-        },
-        popExitTransition = {
-            if (betweenTabs()) fadeOut(tween(TAB_FADE_MS))
-            else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(PUSH_MS)) + fadeOut(tween(PUSH_MS))
-        },
+        // Material shared-axis motion (see Motion.kt): pushing a detail slides forward, back
+        // reverses, and tab↔tab switches slide in the direction of the tab order.
+        enterTransition = { reverieEnter() },
+        exitTransition = { reverieExit() },
+        popEnterTransition = { reveriePopEnter() },
+        popExitTransition = { reveriePopExit() },
     ) {
         composable(Screen.Files.route) {
             BrowseScreen(
