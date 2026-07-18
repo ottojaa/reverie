@@ -4,39 +4,49 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import com.reverie.app.ui.navigation.ReverieNavGraph
-import com.reverie.app.ui.navigation.Screen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.reverie.app.domain.model.AuthState
+import com.reverie.app.ui.AppViewModel
+import com.reverie.app.ui.navigation.MainShell
+import com.reverie.app.ui.screens.auth.LoginScreen
 import com.reverie.app.ui.theme.ReverieTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ReverieTheme {
+            val appViewModel: AppViewModel = hiltViewModel()
+            val settings by appViewModel.settings.collectAsStateWithLifecycle()
+            val authState by appViewModel.authState.collectAsStateWithLifecycle()
+
+            ReverieTheme(
+                themeMode = settings.themeMode,
+                dynamicColor = settings.dynamicColor,
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
-                    ReverieApp()
+                    when (authState) {
+                        is AuthState.Unknown -> LoadingScreen()
+                        is AuthState.LoggedOut -> LoginScreen()
+                        is AuthState.Authenticated -> MainShell()
+                    }
                 }
             }
         }
@@ -44,50 +54,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ReverieApp() {
-    val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
-    
-    // Hide bottom nav on document detail screen
-    val showBottomBar = currentDestination?.route != Screen.Document.route
-
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    Screen.bottomNavItems.forEach { screen ->
-                        val selected = currentDestination?.hierarchy?.any { 
-                            it.route == screen.route 
-                        } == true
-                        
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                    contentDescription = screen.title
-                                )
-                            },
-                            label = { Text(screen.title) },
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    ) { innerPadding ->
-        ReverieNavGraph(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding)
-        )
+private fun LoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
