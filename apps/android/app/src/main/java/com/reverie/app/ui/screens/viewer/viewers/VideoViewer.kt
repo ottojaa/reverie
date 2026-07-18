@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.viewer.viewers
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,14 +21,18 @@ fun VideoViewer(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            if (fileUrl != null) {
-                setMediaItem(MediaItem.fromUri(fileUrl))
-                prepare()
-                playWhenReady = false
-            }
-        }
+    val player = remember { ExoPlayer.Builder(context).build() }
+
+    // The signed file_url is never cached, so it arrives only after the network fetch —
+    // on first composition fileUrl is null. Load the media when it lands. Key on the path
+    // (minus the ?e/?s signature) so a signature rotation from a realtime refresh or a
+    // rename doesn't reset playback mid-watch.
+    val urlKey = fileUrl?.substringBefore('?')
+    LaunchedEffect(urlKey) {
+        if (fileUrl == null) return@LaunchedEffect
+        player.setMediaItem(MediaItem.fromUri(fileUrl))
+        player.prepare()
+        player.playWhenReady = false
     }
 
     DisposableEffect(Unit) {
