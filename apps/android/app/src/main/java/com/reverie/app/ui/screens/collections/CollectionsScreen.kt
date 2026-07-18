@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -30,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.ui.components.CollectionHeaderRow
@@ -58,7 +62,7 @@ fun CollectionsScreen(
     var showVaultUnlock by remember { mutableStateOf(false) }
     var showOrganizeSoon by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         OfflineBanner(visible = state.isOffline)
 
         LazyColumn(
@@ -125,7 +129,11 @@ fun CollectionsScreen(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(
+            Modifier
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp, bottom = bottomBarInset() + 12.dp),
+        ) {
             VaultControlRow(
                 vault = state.vault,
                 onReveal = { showVaultUnlock = true },

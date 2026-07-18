@@ -41,4 +41,7 @@ object Routes {
 
     /** Routes where the bottom bar is hidden. */
     val fullScreenRoutes = setOf(DOCUMENT)
+
+    /** The four bottom-nav destinations. Switching between these fades; pushing a detail slides. */
+    val tabRoutes: Set<String> = Screen.bottomNavItems.map { it.route }.toSet()
 }

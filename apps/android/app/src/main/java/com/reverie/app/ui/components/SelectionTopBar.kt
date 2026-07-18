@@ -10,7 +10,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -26,7 +25,7 @@ fun SelectionTopBar(
     onDelete: () -> Unit,
 ) {
     TopAppBar(
-        windowInsets = WindowInsets(0, 0, 0, 0),
+        windowInsets = TopAppBarDefaults.windowInsets,
         title = { Text("$count selected") },
         navigationIcon = {
             IconButton(onClick = onClose) {

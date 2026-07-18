@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SectionIcon resolves Lucide drawables dynamically by name (Resources.getIdentifier), so the
+  resource shrinker (isShrinkResources = true) can't see them as used and would strip every
+  lucide_ic_* drawable from release builds → blank folder/collection icons. Keep them all.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/lucide_ic_*" />

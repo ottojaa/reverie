@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,12 +24,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,6 +51,7 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.rememberSkeletonVisible
+import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
@@ -70,6 +76,8 @@ fun BrowseScreen(
     var showUploadActions by remember { mutableStateOf(false) }
 
     val onUploadClick: () -> Unit = { showUploadActions = true }
+    // Collapsing top bar: hides on scroll down, returns on scroll up.
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // Infinite scroll: fetch the next page as we approach the end.
     androidx.compose.runtime.LaunchedEffect(gridState, state.hasMore, state.documents.size) {
@@ -81,7 +89,7 @@ fun BrowseScreen(
     }
 
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             if (state.inSelectionMode) {
@@ -101,29 +109,43 @@ fun BrowseScreen(
                     processingCount = state.processingCount,
                     onBack = onBack,
                     onCanvas = { showCanvasSoon = true },
+                    scrollBehavior = scrollBehavior,
                 )
             }
         },
         floatingActionButton = {
-            ReverieFab(onClick = onUploadClick, visible = !state.inSelectionMode)
+            ReverieFab(
+                onClick = onUploadClick,
+                visible = !state.inSelectionMode,
+                modifier = Modifier.padding(bottom = bottomBarInset()),
+            )
         },
     ) { innerPadding ->
-      androidx.compose.foundation.layout.Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-        Column {
-            OfflineBanner(visible = state.isOffline)
-
+        // Top inset lives in the scroll content (grid contentPadding) so it scrolls away with the
+        // collapsing bar; the bottom reserves space for the overlaid nav bar.
+        val gridPadding = PaddingValues(
+            start = 10.dp,
+            end = 10.dp,
+            top = innerPadding.calculateTopPadding() + 4.dp,
+            bottom = bottomBarInset() + 12.dp,
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
             when {
-                state.isLoading -> LoadingGrid()
+                state.isLoading -> LoadingGrid(contentPadding = gridPadding)
                 state.error != null && state.documents.isEmpty() ->
-                    ErrorState(message = state.error!!, onRetry = { viewModel.refresh(initial = true) })
+                    Box(Modifier.padding(innerPadding).fillMaxSize()) {
+                        ErrorState(message = state.error!!, onRetry = { viewModel.refresh(initial = true) })
+                    }
                 state.documents.isEmpty() ->
-                    EmptyState(
-                        icon = Icons.Outlined.FolderOpen,
-                        title = if (viewModel.folderId != null) "This folder is empty" else "No documents yet",
-                        description = "Tap + to upload or scan a document.",
-                        actionLabel = "Upload",
-                        onAction = onUploadClick,
-                    )
+                    Box(Modifier.padding(innerPadding).fillMaxSize()) {
+                        EmptyState(
+                            icon = Icons.Outlined.FolderOpen,
+                            title = if (viewModel.folderId != null) "This folder is empty" else "No documents yet",
+                            description = "Tap + to upload or scan a document.",
+                            actionLabel = "Upload",
+                            onAction = onUploadClick,
+                        )
+                    }
                 else -> ReverieRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { viewModel.refresh() },
@@ -131,9 +153,9 @@ fun BrowseScreen(
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Adaptive(160.dp),
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                        contentPadding = gridPadding,
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(state.documents, key = { it.id }) { document ->
@@ -153,17 +175,24 @@ fun BrowseScreen(
                     }
                 }
             }
-        }
-        if (activeUploads > 0 && review == null) {
-            UploadStatusPill(
-                count = activeUploads,
-                onClick = { showUploadActions = true },
-                modifier = androidx.compose.ui.Modifier
-                    .align(androidx.compose.ui.Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
+
+            OfflineBanner(
+                visible = state.isOffline,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = innerPadding.calculateTopPadding()),
             )
+
+            if (activeUploads > 0 && review == null) {
+                UploadStatusPill(
+                    count = activeUploads,
+                    onClick = { showUploadActions = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomBarInset() + 16.dp),
+                )
+            }
         }
-      }
     }
 
     if (showUploadActions) {
@@ -212,10 +241,12 @@ private fun BrowseTopBar(
     processingCount: Int,
     onBack: (() -> Unit)?,
     onCanvas: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
-        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+        scrollBehavior = scrollBehavior,
+        windowInsets = TopAppBarDefaults.windowInsets,
         title = {
             Column {
                 Text(
@@ -260,17 +291,17 @@ private fun BrowseTopBar(
 }
 
 @Composable
-private fun LoadingGrid() {
+private fun LoadingGrid(contentPadding: PaddingValues) {
     val visible = rememberSkeletonVisible(isLoading = true)
     if (!visible) return
     LazyVerticalGrid(
         columns = GridCells.Adaptive(160.dp),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+        contentPadding = contentPadding,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(9) { DocumentCardSkeleton(Modifier.fillMaxSize()) }
+        items(9) { DocumentCardSkeleton() }
     }
 }
 

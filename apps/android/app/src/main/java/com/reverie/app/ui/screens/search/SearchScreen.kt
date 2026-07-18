@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SearchFacets
@@ -81,7 +82,7 @@ fun SearchScreen(
     val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
         dateActive || state.activeValues(FilterKey.SIZE).isNotEmpty() || state.activeValues(FilterKey.HAS).isNotEmpty()
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().statusBarsPadding()) {
         SearchField(
             value = state.freeText,
             onValueChange = viewModel::setFreeText,
@@ -236,7 +237,11 @@ private fun ResultsList(
     }
     val showBuckets = state.sortBy == SortBy.UPLOADED || state.sortBy == SortBy.DATE
 
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = bottomBarInset()),
+    ) {
         var lastBucket: String? = null
         state.results.forEach { hit ->
             when (hit) {
@@ -271,7 +276,7 @@ private fun ResultsGrid(state: SearchUiState, onDocumentClick: (String) -> Unit,
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Adaptive(110.dp),
-        contentPadding = PaddingValues(12.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + bottomBarInset()),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize(),
@@ -293,7 +298,7 @@ private fun IdleState(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (quickFilters.isNotEmpty()) {

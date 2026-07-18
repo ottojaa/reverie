@@ -111,6 +111,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.zoomable.image.coil)
 
+    // Lucide icons (vector drawables) — folder/collection section icons, resolved by name at runtime
+    implementation(libs.icons.lucide.android)
+
     // Realtime + lifecycle
     // Exclude the bundled org.json — Android ships its own, which collides at packaging time.
     implementation(libs.socketio.client) {

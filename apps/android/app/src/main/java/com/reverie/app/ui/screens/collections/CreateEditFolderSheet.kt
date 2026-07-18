@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.reverie.app.ui.components.SectionIcon
 
 data class FolderFormData(
     val name: String,
@@ -39,8 +40,14 @@ data class FolderFormData(
     val isPrivate: Boolean,
 )
 
-private val CURATED_EMOJI = listOf(
-    "📁", "📄", "💰", "🧾", "📸", "🎬", "📚", "🏠", "✈️", "🩺", "📊", "⭐", "🔒", "🗂️", "📇", "🎨",
+// Lucide icon names — the same catalog the web writes into `emoji`, so a folder created here shows
+// the same glyph on web. Rendered via [SectionIcon], which resolves them to lucide_ic_* drawables.
+private val CURATED_ICONS = listOf(
+    "folder", "folder-open", "file-text", "image", "wallet", "receipt", "credit-card",
+    "briefcase", "graduation-cap", "house", "building", "plane", "car", "map-pin",
+    "camera", "film", "music", "book", "heart", "heart-pulse", "stethoscope",
+    "utensils", "coffee", "gift", "shopping-cart", "calendar", "star", "palette",
+    "leaf", "sun", "paw-print", "dumbbell", "code", "shield",
 )
 
 /** Create/edit a collection or folder: emoji, name, description, private toggle. */
@@ -74,9 +81,9 @@ fun CreateEditFolderSheet(
             Text(title, style = MaterialTheme.typography.titleMedium)
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                EmojiChoice(emoji = null, selected = emoji == null, onClick = { emoji = null })
-                CURATED_EMOJI.forEach { choice ->
-                    EmojiChoice(emoji = choice, selected = emoji == choice, onClick = { emoji = choice })
+                IconChoice(name = null, selected = emoji == null, onClick = { emoji = null })
+                CURATED_ICONS.forEach { choice ->
+                    IconChoice(name = choice, selected = emoji == choice, onClick = { emoji = choice })
                 }
             }
 
@@ -111,7 +118,7 @@ fun CreateEditFolderSheet(
 }
 
 @Composable
-private fun EmojiChoice(emoji: String?, selected: Boolean, onClick: () -> Unit) {
+private fun IconChoice(name: String?, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(40.dp)
@@ -122,11 +129,15 @@ private fun EmojiChoice(emoji: String?, selected: Boolean, onClick: () -> Unit) 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = emoji ?: "—",
-            fontSize = if (emoji != null) 20.sp else 16.sp,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (name == null) {
+            Text(
+                text = "—",
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            SectionIcon(emoji = name, size = 20.dp)
+        }
     }
 }
