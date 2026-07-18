@@ -2,6 +2,7 @@ package com.reverie.app.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -139,31 +140,34 @@ private fun TreeItemMenu(
     onDelete: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    IconButton(onClick = { open = true }) {
-        Icon(Icons.Outlined.MoreVert, contentDescription = "Actions")
-    }
-    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-        if (onNewFolder != null) {
+    // Wrap button + menu in a Box so the menu anchors to the button, not to the parent Row.
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "Actions")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (onNewFolder != null) {
+                DropdownMenuItem(
+                    text = { Text("New folder") },
+                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
+                    onClick = { open = false; onNewFolder() },
+                )
+            }
             DropdownMenuItem(
-                text = { Text("New folder") },
-                leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
-                onClick = { open = false; onNewFolder() },
+                text = { Text("Edit") },
+                leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                onClick = { open = false; onEdit() },
+            )
+            DropdownMenuItem(
+                text = { Text(if (isPrivate) "Remove from private" else "Make private") },
+                leadingIcon = { Icon(if (isPrivate) Icons.Outlined.LockOpen else Icons.Outlined.Lock, contentDescription = null) },
+                onClick = { open = false; onTogglePrivate() },
+            )
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                onClick = { open = false; onDelete() },
             )
         }
-        DropdownMenuItem(
-            text = { Text("Edit") },
-            leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-            onClick = { open = false; onEdit() },
-        )
-        DropdownMenuItem(
-            text = { Text(if (isPrivate) "Remove from private" else "Make private") },
-            leadingIcon = { Icon(if (isPrivate) Icons.Outlined.LockOpen else Icons.Outlined.Lock, contentDescription = null) },
-            onClick = { open = false; onTogglePrivate() },
-        )
-        DropdownMenuItem(
-            text = { Text("Delete") },
-            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-            onClick = { open = false; onDelete() },
-        )
     }
 }

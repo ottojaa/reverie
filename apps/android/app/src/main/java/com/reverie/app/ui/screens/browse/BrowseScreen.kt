@@ -275,15 +275,18 @@ private fun BrowseTopBar(
         actions = {
             ProcessingStatusBadge(count = processingCount)
             if (isFolder) {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "More")
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Open in Canvas") },
-                        leadingIcon = { Icon(Icons.Outlined.Dashboard, contentDescription = null) },
-                        onClick = { menuOpen = false; onCanvas() },
-                    )
+                // Wrap button + menu in a Box so the menu anchors to the button.
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Open in Canvas") },
+                            leadingIcon = { Icon(Icons.Outlined.Dashboard, contentDescription = null) },
+                            onClick = { menuOpen = false; onCanvas() },
+                        )
+                    }
                 }
             }
         },
