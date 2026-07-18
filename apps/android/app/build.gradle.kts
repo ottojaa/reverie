@@ -19,13 +19,16 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Default backend for ALL build types. Overridable at build time with
+        // -PREVERIE_SERVER_URL=... (e.g. http://10.0.2.2:3000 for a local emulator backend —
+        // which also needs the debug build's cleartext exception). Runtime-overridable in-app
+        // via Settings → Server / the login screen.
+        val serverUrl = providers.gradleProperty("REVERIE_SERVER_URL").getOrElse("https://api.reverieapp.dev")
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"$serverUrl\"")
     }
 
     buildTypes {
-        debug {
-            // Emulator loopback to a backend on the host machine (`10.0.2.2` == host `localhost`).
-            buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:3000\"")
-        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -33,9 +36,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Prod URL comes from a gradle property so it never lands in source control.
-            val prodUrl = providers.gradleProperty("REVERIE_PROD_URL").getOrElse("https://reverie.example.com")
-            buildConfigField("String", "DEFAULT_SERVER_URL", "\"$prodUrl\"")
         }
     }
 
