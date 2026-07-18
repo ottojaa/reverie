@@ -21,6 +21,8 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = false,
+    /** Slide the bottom navigation bar away while scrolling a list. */
+    val hideNavOnScroll: Boolean = false,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
     val serverUrlOverride: String? = null,
     /** Original-file cache cap in bytes. */
@@ -37,6 +39,7 @@ class SettingsRepository @Inject constructor(
 ) {
     private val themeKey = stringPreferencesKey("theme_mode")
     private val dynamicKey = booleanPreferencesKey("dynamic_color")
+    private val hideNavKey = booleanPreferencesKey("hide_nav_on_scroll")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
 
@@ -44,6 +47,7 @@ class SettingsRepository @Inject constructor(
         AppSettings(
             themeMode = prefs[themeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[dynamicKey] ?: false,
+            hideNavOnScroll = prefs[hideNavKey] ?: false,
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
         )
@@ -55,6 +59,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.settingsDataStore.edit { it[dynamicKey] = enabled }
+    }
+
+    suspend fun setHideNavOnScroll(enabled: Boolean) {
+        context.settingsDataStore.edit { it[hideNavKey] = enabled }
     }
 
     suspend fun setServerUrlOverride(url: String?) {

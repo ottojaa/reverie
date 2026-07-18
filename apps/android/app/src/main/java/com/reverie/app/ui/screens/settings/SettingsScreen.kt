@@ -113,6 +113,21 @@ fun SettingsScreen(
                     )
                 }
             }
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Hide navigation while scrolling", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Slide the bottom bar away as you scroll down a list",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.hideNavOnScroll,
+                    onCheckedChange = viewModel::setHideNavOnScroll,
+                )
+            }
         }
 
         if (vault?.has_password == true) {

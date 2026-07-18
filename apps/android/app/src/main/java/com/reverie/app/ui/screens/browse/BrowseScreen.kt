@@ -51,6 +51,7 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.rememberSkeletonVisible
+import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
@@ -88,8 +89,25 @@ fun BrowseScreen(
             }
     }
 
+    // Drive the shell's bottom-bar visibility off the same collapsing-top-bar state, so both bars
+    // move in lockstep and the bottom bar reappears at the top. Honored only when the setting is on.
+    val bottomBarScroll = LocalBottomBarScrollState.current
+    androidx.compose.runtime.LaunchedEffect(scrollBehavior, bottomBarScroll) {
+        val bar = bottomBarScroll ?: return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { scrollBehavior.state.collapsedFraction > 0.5f }
+            .distinctUntilChanged()
+            .collect { collapsed -> bar.value = !collapsed }
+    }
+
+    // Pull-to-refresh wraps the whole Scaffold so its indicator floats over the app-bar region
+    // instead of dropping below the top bar.
+    ReverieRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = modifier,
+    ) {
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             if (state.inSelectionMode) {
@@ -146,32 +164,27 @@ fun BrowseScreen(
                             onAction = onUploadClick,
                         )
                     }
-                else -> ReverieRefreshBox(
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = { viewModel.refresh() },
+                else -> LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Adaptive(160.dp),
+                    contentPadding = gridPadding,
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyVerticalGrid(
-                        state = gridState,
-                        columns = GridCells.Adaptive(160.dp),
-                        contentPadding = gridPadding,
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.documents, key = { it.id }, contentType = { "document" }) { document ->
-                            DocumentCard(
-                                document = document,
-                                selected = document.id in state.selectedIds,
-                                onClick = {
-                                    if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                    else onDocumentClick(document.id)
-                                },
-                                onLongClick = {
-                                    if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                    else viewModel.enterSelection(document.id)
-                                },
-                            )
-                        }
+                    items(state.documents, key = { it.id }, contentType = { "document" }) { document ->
+                        DocumentCard(
+                            document = document,
+                            selected = document.id in state.selectedIds,
+                            onClick = {
+                                if (state.inSelectionMode) viewModel.toggleSelect(document.id)
+                                else onDocumentClick(document.id)
+                            },
+                            onLongClick = {
+                                if (state.inSelectionMode) viewModel.toggleSelect(document.id)
+                                else viewModel.enterSelection(document.id)
+                            },
+                        )
                     }
                 }
             }
@@ -193,6 +206,7 @@ fun BrowseScreen(
                 )
             }
         }
+    }
     }
 
     if (showUploadActions) {

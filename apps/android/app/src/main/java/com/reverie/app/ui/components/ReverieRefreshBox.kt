@@ -1,6 +1,7 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -29,7 +30,9 @@ fun ReverieRefreshBox(
             PullToRefreshDefaults.Indicator(
                 state = state,
                 isRefreshing = isRefreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
+                // statusBarsPadding so the indicator floats over the app-bar region (this box wraps
+                // the whole Scaffold) rather than dropping below the top bar.
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 color = MaterialTheme.colorScheme.primary,
             )

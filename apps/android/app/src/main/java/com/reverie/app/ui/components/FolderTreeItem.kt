@@ -44,10 +44,11 @@ fun CollectionHeaderRow(
     onEdit: () -> Unit,
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "chevron")
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
             .padding(vertical = 10.dp),
@@ -94,9 +95,10 @@ fun FolderTreeItem(
     onEdit: () -> Unit,
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen)
             .padding(start = 32.dp, top = 8.dp, bottom = 8.dp),

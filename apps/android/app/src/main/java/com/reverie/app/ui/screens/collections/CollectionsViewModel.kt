@@ -25,12 +25,14 @@ import javax.inject.Inject
 data class CollectionsUiState(
     val tree: List<FolderWithChildren> = emptyList(),
     val collapsedIds: Set<String> = emptySet(),
+    val filter: String = "",
     val storageUsed: Long = 0,
     val storageQuota: Long = 0,
     val vault: VaultStatus? = null,
     val isOffline: Boolean = false,
 ) {
-    fun isExpanded(id: String): Boolean = id !in collapsedIds
+    // While filtering, everything is force-expanded so matches are visible.
+    fun isExpanded(id: String): Boolean = filter.isNotBlank() || id !in collapsedIds
 }
 
 @HiltViewModel
@@ -42,18 +44,21 @@ class CollectionsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val collapsed = MutableStateFlow<Set<String>>(emptySet())
+    private val filter = MutableStateFlow("")
 
     val uiState: StateFlow<CollectionsUiState> = combine(
         folderRepository.observeTree(),
         authRepository.authState,
         vaultRepository.status,
         connectivity.isOnline,
-        collapsed,
-    ) { tree, auth, vault, online, collapsedIds ->
+        // combine tops out at 5 flows, so fold expansion + filter into one.
+        combine(collapsed, filter) { c, f -> c to f },
+    ) { tree, auth, vault, online, (collapsedIds, filterText) ->
         val user = (auth as? AuthState.Authenticated)?.user
         CollectionsUiState(
-            tree = tree,
+            tree = filterTree(tree, filterText),
             collapsedIds = collapsedIds,
+            filter = filterText,
             storageUsed = user?.storage_used_bytes ?: 0,
             storageQuota = user?.storage_quota_bytes ?: 0,
             vault = vault,
@@ -72,6 +77,19 @@ class CollectionsViewModel @Inject constructor(
 
     fun toggleExpand(id: String) = collapsed.update {
         if (id in it) it - id else it + id
+    }
+
+    fun setFilter(text: String) {
+        filter.value = text
+    }
+
+    private fun filterTree(tree: List<FolderWithChildren>, query: String): List<FolderWithChildren> {
+        if (query.isBlank()) return tree
+        return tree.mapNotNull { node ->
+            if (node.name.contains(query, ignoreCase = true)) return@mapNotNull node
+            val children = node.children.filter { it.name.contains(query, ignoreCase = true) }
+            if (children.isEmpty()) null else node.copy(children = children)
+        }
     }
 
     fun createCollection(name: String, emoji: String?, description: String?, isPrivate: Boolean) =

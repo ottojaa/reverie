@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
                     when (authState) {
                         is AuthState.Unknown -> LoadingScreen()
                         is AuthState.LoggedOut -> LoginScreen()
-                        is AuthState.Authenticated -> MainShell()
+                        is AuthState.Authenticated -> MainShell(hideNavOnScroll = settings.hideNavOnScroll)
                     }
                 }
             }

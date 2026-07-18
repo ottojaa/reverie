@@ -16,12 +16,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,8 +39,6 @@ import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.ui.components.CollectionHeaderRow
-import com.reverie.app.ui.components.ComingSoonBadge
-import com.reverie.app.ui.components.ComingSoonSheet
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderTreeItem
 import com.reverie.app.ui.components.OfflineBanner
@@ -60,7 +60,6 @@ fun CollectionsScreen(
     var editTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var deleteTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var showVaultUnlock by remember { mutableStateOf(false) }
-    var showOrganizeSoon by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         OfflineBanner(visible = state.isOffline)
@@ -79,14 +78,7 @@ fun CollectionsScreen(
                 )
             }
             item { PrimaryRow(icon = Icons.Outlined.GridView, label = "All Documents", onClick = onOpenAllDocuments) }
-            item {
-                PrimaryRow(
-                    icon = Icons.Outlined.AutoAwesome,
-                    label = "Organize with AI",
-                    trailing = { ComingSoonBadge() },
-                    onClick = { showOrganizeSoon = true },
-                )
-            }
+            item { CollectionsFilterField(value = state.filter, onValueChange = viewModel::setFilter) }
             item { SectionHeader(onAdd = { showCreateCollection = true }) }
 
             state.tree.forEach { node ->
@@ -101,6 +93,7 @@ fun CollectionsScreen(
                             onEdit = { editTarget = node },
                             onTogglePrivate = { viewModel.setPrivate(node.id, !node.is_private) },
                             onDelete = { deleteTarget = node },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                     if (state.isExpanded(node.id)) {
@@ -111,6 +104,7 @@ fun CollectionsScreen(
                                 onEdit = { editTarget = folder },
                                 onTogglePrivate = { viewModel.setPrivate(folder.id, !folder.is_private) },
                                 onDelete = { deleteTarget = folder },
+                                modifier = Modifier.animateItem(),
                             )
                         }
                     }
@@ -122,6 +116,7 @@ fun CollectionsScreen(
                             onEdit = { editTarget = node },
                             onTogglePrivate = { viewModel.setPrivate(node.id, !node.is_private) },
                             onDelete = { deleteTarget = node },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -205,15 +200,27 @@ fun CollectionsScreen(
             onDismiss = { showVaultUnlock = false },
         )
     }
+}
 
-    if (showOrganizeSoon) {
-        ComingSoonSheet(
-            icon = Icons.Outlined.AutoAwesome,
-            title = "Organize with AI is coming soon",
-            description = "Let AI tidy your library — sort photos by place and year, group receipts, and more. Available on desktop today.",
-            onDismiss = { showOrganizeSoon = false },
-        )
-    }
+@Composable
+private fun CollectionsFilterField(value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text("Filter collections") },
+        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+        trailingIcon = {
+            if (value.isNotEmpty()) {
+                IconButton(onClick = { onValueChange("") }) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Clear filter")
+                }
+            }
+        },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
 
 @Composable

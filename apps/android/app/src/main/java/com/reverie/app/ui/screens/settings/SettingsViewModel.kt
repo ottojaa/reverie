@@ -53,6 +53,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setDynamicColor(enabled) }
     }
 
+    fun setHideNavOnScroll(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHideNavOnScroll(enabled) }
+    }
+
     fun setServerUrl(url: String?) {
         viewModelScope.launch {
             settingsRepository.setServerUrlOverride(url)
