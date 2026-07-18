@@ -28,11 +28,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatShortDate
 
-private val TileShape = RoundedCornerShape(16.dp)
+// Hoisted so every tile shares one Brush instance instead of allocating on each recomposition.
+private val CardScrim = Brush.verticalGradient(
+    0.45f to Color.Transparent,
+    1f to Color.Black.copy(alpha = 0.78f),
+)
 
 /** A gallery tile: a cropped thumbnail with the filename/size/date laid over a bottom scrim. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -46,31 +51,27 @@ fun DocumentCard(
 ) {
     val isVideo = document.mime_type.startsWith("video/")
     val extension = document.original_filename.substringAfterLast('.', "").uppercase()
+    val tileShape = MaterialTheme.shapes.extraSmall
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(4f / 5f)
             .documentSharedBounds(document.id)
-            .clip(TileShape)
+            .clip(tileShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .then(
-                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, TileShape) else Modifier,
+                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, tileShape) else Modifier,
             ),
     ) {
-        DocumentThumbnail(document = document, modifier = Modifier.matchParentSize())
+        DocumentThumbnail(document = document, size = GRID_THUMBNAIL_SIZE, modifier = Modifier.matchParentSize())
 
         // A bottom scrim keeps the filename/meta legible over any image — and gives icon-only
         // tiles a caption bar so white text reads in light mode too.
         Box(
             Modifier
                 .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.45f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.78f),
-                    ),
-                ),
+                .background(CardScrim),
         )
 
         Column(
@@ -172,7 +173,7 @@ fun DocumentCardSkeleton(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(4f / 5f)
-            .clip(TileShape)
+            .clip(MaterialTheme.shapes.extraSmall)
             .background(shimmerBrush()),
     )
 }

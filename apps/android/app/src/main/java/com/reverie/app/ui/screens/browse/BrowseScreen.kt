@@ -158,7 +158,7 @@ fun BrowseScreen(
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(state.documents, key = { it.id }) { document ->
+                        items(state.documents, key = { it.id }, contentType = { "document" }) { document ->
                             DocumentCard(
                                 document = document,
                                 selected = document.id in state.selectedIds,

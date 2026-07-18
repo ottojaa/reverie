@@ -108,7 +108,7 @@ fun PhotoResultTile(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
         size = ThumbnailSize.MD,
         modifier = modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(MaterialTheme.shapes.extraSmall)
             .clickable(onClick = onClick),
     )
 }
