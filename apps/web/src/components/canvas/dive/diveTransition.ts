@@ -101,9 +101,9 @@ const SETTLE_MOVE_MS = 160;
 const FADE_MS = 130;
 
 export interface SettleOptions {
-    /** How long to wait for [data-doc-hero]. Non-image viewers (PDF/txt) never
-     *  render one, so callers pass a short timeout to fade promptly instead of
-     *  holding the backdrop for the full default. */
+    /** How long to wait for [data-doc-hero]. Viewers without a hero (PDF/txt)
+     *  never render one, so callers pass a short timeout to fade promptly
+     *  instead of holding the backdrop for the full default. */
     heroTimeoutMs?: number;
 }
 
