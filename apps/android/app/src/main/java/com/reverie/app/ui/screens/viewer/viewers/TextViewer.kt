@@ -3,8 +3,11 @@ package com.reverie.app.ui.screens.viewer.viewers
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -52,13 +55,15 @@ fun TextViewer(
             lines == null -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             else -> {
                 val gutterWidth = lines!!.size.toString().length
+                // Clear the status bar + floating toolbar so the first lines aren't hidden.
+                val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + VIEWER_TOOLBAR_INSET
                 SelectionContainer {
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                             .horizontalScroll(rememberScrollState())
-                            .padding(12.dp),
+                            .padding(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),
                     ) {
                         Text(
                             text = lines!!.indices.joinToString("\n") { (it + 1).toString().padStart(gutterWidth) },

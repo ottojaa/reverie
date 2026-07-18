@@ -3,6 +3,7 @@ package com.reverie.app.ui.navigation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -48,12 +49,16 @@ fun MainShell(
         if (currentRoute in Routes.tabRoutes) lastTabRoute = currentRoute!!
     }
     val selectedRoute = currentRoute?.takeIf { it in Routes.tabRoutes } ?: lastTabRoute
-    val barVisible = !fullScreen && (!hideNavOnScroll || scrollVisible.value)
 
     // SharedTransitionLayout wraps the whole shell so the document container transform renders in
     // its overlay above the bottom bar (which slides away underneath). The NavHost fills the window
     // and never resizes on navigation — the bottom bar is an overlay that slides out of the way.
     SharedTransitionLayout {
+        // Keep the bar hidden while a shared transition is active, so on document close the
+        // shrinking image (drawn in the shared-transition overlay) never paints over the bar as it
+        // slides back in. On open, `fullScreen` already hides it, so this only affects the return.
+        val barEnterMs = MotionTuning.spec.barEnterMs
+        val barVisible = !fullScreen && !isTransitionActive && (!hideNavOnScroll || scrollVisible.value)
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this,
             LocalBottomBarScrollState provides scrollVisible,
@@ -65,7 +70,7 @@ fun MainShell(
                 )
                 AnimatedVisibility(
                     visible = barVisible,
-                    enter = slideInVertically { it } + fadeIn(),
+                    enter = slideInVertically(tween(barEnterMs)) { it } + fadeIn(tween(barEnterMs)),
                     exit = slideOutVertically { it } + fadeOut(),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {

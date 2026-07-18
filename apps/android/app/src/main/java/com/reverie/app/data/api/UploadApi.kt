@@ -29,7 +29,7 @@ class UploadApi @Inject constructor(
         filename: String,
         mimeType: String,
         conflictStrategy: String?,
-        onProgress: (sent: Long, total: Long) -> Unit,
+        onProgress: suspend (sent: Long, total: Long) -> Unit,
     ): UploadResponse {
         val response = client.submitFormWithBinaryData(
             url = "upload",

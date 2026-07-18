@@ -1,5 +1,10 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -109,27 +114,20 @@ fun BrowseScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+        // The normal top bar stays mounted (so the grid's top inset never changes); the selection
+        // bar is drawn as an opaque overlay over it (below) instead of swapping in this slot, which
+        // is what used to shift the grid content down when selection started.
         topBar = {
-            if (state.inSelectionMode) {
-                SelectionTopBar(
-                    count = state.selectedIds.size,
-                    allPrivate = state.allSelectedPrivate,
-                    onClose = viewModel::clearSelection,
-                    onTogglePrivate = viewModel::togglePrivateSelected,
-                    onDelete = { showDeleteConfirm = true },
-                )
-            } else {
-                BrowseTopBar(
-                    isFolder = viewModel.folderId != null,
-                    folderName = state.folder?.name,
-                    folderEmoji = state.folder?.emoji,
-                    subtitle = folderSubtitle(state.folder?.description, state.documents.size),
-                    processingCount = state.processingCount,
-                    onBack = onBack,
-                    onCanvas = { showCanvasSoon = true },
-                    scrollBehavior = scrollBehavior,
-                )
-            }
+            BrowseTopBar(
+                isFolder = viewModel.folderId != null,
+                folderName = state.folder?.name,
+                folderEmoji = state.folder?.emoji,
+                subtitle = folderSubtitle(state.folder?.description, state.documents.size),
+                processingCount = state.processingCount,
+                onBack = onBack,
+                onCanvas = { showCanvasSoon = true },
+                scrollBehavior = scrollBehavior,
+            )
         },
         floatingActionButton = {
             ReverieFab(
@@ -141,9 +139,10 @@ fun BrowseScreen(
     ) { innerPadding ->
         // Top inset lives in the scroll content (grid contentPadding) so it scrolls away with the
         // collapsing bar; the bottom reserves space for the overlaid nav bar.
+        // Edge-to-edge gallery: no horizontal padding, hairline gaps between tiles.
         val gridPadding = PaddingValues(
-            start = 10.dp,
-            end = 10.dp,
+            start = 0.dp,
+            end = 0.dp,
             top = innerPadding.calculateTopPadding() + 4.dp,
             bottom = bottomBarInset() + 12.dp,
         )
@@ -166,10 +165,10 @@ fun BrowseScreen(
                     }
                 else -> LazyVerticalGrid(
                     state = gridState,
-                    columns = GridCells.Adaptive(160.dp),
+                    columns = GridCells.Fixed(3),
                     contentPadding = gridPadding,
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(state.documents, key = { it.id }, contentType = { "document" }) { document ->
@@ -189,8 +188,25 @@ fun BrowseScreen(
                 }
             }
 
+            // Selection bar overlays the top region (opaque) rather than replacing the top bar, so
+            // entering selection never changes the grid's reserved top inset — no content shift.
+            AnimatedVisibility(
+                visible = state.inSelectionMode,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                SelectionTopBar(
+                    count = state.selectedIds.size,
+                    allPrivate = state.allSelectedPrivate,
+                    onClose = viewModel::clearSelection,
+                    onTogglePrivate = viewModel::togglePrivateSelected,
+                    onDelete = { showDeleteConfirm = true },
+                )
+            }
+
             OfflineBanner(
-                visible = state.isOffline,
+                visible = state.isOffline && !state.inSelectionMode,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = innerPadding.calculateTopPadding()),
@@ -312,10 +328,10 @@ private fun LoadingGrid(contentPadding: PaddingValues) {
     val visible = rememberSkeletonVisible(isLoading = true)
     if (!visible) return
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
+        columns = GridCells.Fixed(3),
         contentPadding = contentPadding,
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(9) { DocumentCardSkeleton() }

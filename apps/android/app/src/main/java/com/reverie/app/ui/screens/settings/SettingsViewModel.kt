@@ -57,6 +57,16 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setHideNavOnScroll(enabled) }
     }
 
+    /** TEMPORARY / DEV TUNING — persist the edited motion spec (whole AppSettings carries it). */
+    fun setMotion(updated: AppSettings) {
+        viewModelScope.launch { settingsRepository.setMotion(updated) }
+    }
+
+    /** TEMPORARY / DEV TUNING — reset all motion knobs to defaults. */
+    fun resetMotion() {
+        viewModelScope.launch { settingsRepository.resetMotion() }
+    }
+
     fun setServerUrl(url: String?) {
         viewModelScope.launch {
             settingsRepository.setServerUrlOverride(url)

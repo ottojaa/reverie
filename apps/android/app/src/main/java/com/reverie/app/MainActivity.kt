@@ -10,6 +10,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +20,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.AppViewModel
 import com.reverie.app.ui.navigation.MainShell
+import com.reverie.app.ui.navigation.MotionTuning
+import com.reverie.app.ui.navigation.toMotionSpec
 import com.reverie.app.ui.screens.auth.LoginScreen
 import com.reverie.app.ui.theme.ReverieTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -33,6 +36,9 @@ class MainActivity : ComponentActivity() {
             val appViewModel: AppViewModel = hiltViewModel()
             val settings by appViewModel.settings.collectAsStateWithLifecycle()
             val authState by appViewModel.authState.collectAsStateWithLifecycle()
+
+            // TEMPORARY / DEV TUNING — bridge persisted motion knobs into the runtime holder.
+            LaunchedEffect(settings) { MotionTuning.spec = settings.toMotionSpec() }
 
             ReverieTheme(
                 themeMode = settings.themeMode,

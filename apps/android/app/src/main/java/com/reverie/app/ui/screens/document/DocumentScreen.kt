@@ -31,6 +31,7 @@ import com.reverie.app.domain.model.toInsightPhase
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ErrorState
 import com.reverie.app.ui.navigation.aboveSharedElements
+import com.reverie.app.ui.navigation.animateViewerChrome
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.DocumentViewerBody
@@ -90,7 +91,7 @@ fun DocumentScreen(
                 visible = !immersive,
                 enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it / 3 },
                 exit = slideOutVertically(tween(150)) { -it / 3 } + fadeOut(tween(150)),
-                modifier = Modifier.aboveSharedElements(),
+                modifier = Modifier.aboveSharedElements().animateViewerChrome(),
             ) {
                 ViewerToolbar(
                     document = document,
@@ -99,7 +100,10 @@ fun DocumentScreen(
                     menuOpen = menuOpen,
                     onBack = onBackClick,
                     onTitleClick = { if (document != null) insightOpen = true },
-                    onEdit = { scope.launch { snackbarHostState.showSnackbar("Editing is coming soon on Android") } },
+                    onEdit = {
+                        menuOpen = false
+                        scope.launch { snackbarHostState.showSnackbar("Editing is coming soon on Android") }
+                    },
                     onDownload = { document?.let { downloadDocument(context, state.fileUrl, it) } },
                     onMenuToggle = { menuOpen = it },
                     onRename = { menuOpen = false; showRename = true },

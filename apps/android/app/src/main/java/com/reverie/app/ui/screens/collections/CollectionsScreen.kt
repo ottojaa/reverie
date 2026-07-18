@@ -43,8 +43,6 @@ import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderTreeItem
 import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.StorageMeter
-import com.reverie.app.ui.components.VaultControlRow
-import com.reverie.app.ui.components.VaultUnlockSheet
 
 @Composable
 fun CollectionsScreen(
@@ -59,7 +57,6 @@ fun CollectionsScreen(
     var createFolderParentId by remember { mutableStateOf<String?>(null) }
     var editTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var deleteTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
-    var showVaultUnlock by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         OfflineBanner(visible = state.isOffline)
@@ -124,22 +121,15 @@ fun CollectionsScreen(
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        // Vault reveal/lock/hide lives in Settings › Privacy; the footer here is just storage.
         Column(
             Modifier
                 .padding(horizontal = 16.dp)
                 .padding(top = 12.dp, bottom = bottomBarInset() + 12.dp),
         ) {
-            VaultControlRow(
-                vault = state.vault,
-                onReveal = { showVaultUnlock = true },
-                onLock = viewModel::lockVault,
-                onEnableHide = { viewModel.setHidePrivate(true) },
-                onExpired = viewModel::refresh,
-            )
             StorageMeter(
                 usedBytes = state.storageUsed,
                 quotaBytes = state.storageQuota,
-                modifier = Modifier.padding(top = 8.dp),
             )
         }
     }
@@ -191,13 +181,6 @@ fun CollectionsScreen(
             destructive = true,
             onConfirm = { viewModel.delete(target.id); deleteTarget = null },
             onDismiss = { deleteTarget = null },
-        )
-    }
-
-    if (showVaultUnlock) {
-        VaultUnlockSheet(
-            onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
-            onDismiss = { showVaultUnlock = false },
         )
     }
 }

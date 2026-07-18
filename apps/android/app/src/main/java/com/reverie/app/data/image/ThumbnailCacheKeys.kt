@@ -4,12 +4,13 @@ import coil.memory.MemoryCache
 import com.reverie.app.domain.model.ThumbnailSize
 
 /**
- * The thumbnail size the gallery grid decodes. Grid cells are ~160-220dp wide (~440-600px), so SM
- * (384px) is enough and decodes ~4x less than MD — noticeably smoother scrolling. The document
- * viewer reuses this exact size as its instant placeholder, so the two MUST agree — keep both
- * pinned to this one constant.
+ * The thumbnail size the gallery grid decodes. On the dense 3-column gallery a cell is ~130dp wide
+ * (~350-400px), so MD (768px) keeps tiles crisp across densities; Coil downsamples to the measured
+ * cell size, so it stays sharp without holding an oversized bitmap. (SM (384px) looked pixelated on
+ * high-density screens — see PR #36.) The document viewer reuses this exact size as its instant
+ * placeholder, so the two MUST agree — keep both pinned to this one constant.
  */
-val GRID_THUMBNAIL_SIZE = ThumbnailSize.SM
+val GRID_THUMBNAIL_SIZE = ThumbnailSize.MD
 
 /**
  * Stable Coil memory-cache key for a document thumbnail. Set explicitly on BOTH the grid request

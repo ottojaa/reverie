@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,6 +58,9 @@ fun FolderPickerSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                // Lift the sheet above the keyboard when the search field is focused. No outer
+                // verticalScroll here — the folder list is a LazyColumn (own scroll).
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 16.dp),
         ) {

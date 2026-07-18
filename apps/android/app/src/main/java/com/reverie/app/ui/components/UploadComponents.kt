@@ -80,12 +80,12 @@ fun UploadFileRow(
             Text(item.displayName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(formatBytes(item.sizeBytes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        UploadStatusGlyph(status = item.status, onRetry = onRetry)
+        UploadStatusGlyph(status = item.status, progress = item.progress, onRetry = onRetry)
     }
 }
 
 @Composable
-private fun UploadStatusGlyph(status: String, onRetry: (() -> Unit)?) {
+private fun UploadStatusGlyph(status: String, progress: Int, onRetry: (() -> Unit)?) {
     when (status) {
         "complete" -> Icon(Icons.Filled.CheckCircle, contentDescription = "Uploaded", tint = ReverieTheme.extendedColors.success, modifier = Modifier.size(22.dp))
         "failed" -> if (onRetry != null) {
@@ -93,7 +93,13 @@ private fun UploadStatusGlyph(status: String, onRetry: (() -> Unit)?) {
         } else {
             Icon(Icons.Outlined.ErrorOutline, contentDescription = "Failed", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(22.dp))
         }
-        "uploading", "processing" -> CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        // Determinate while streaming bytes; indeterminate for server-side processing (no byte signal).
+        "uploading" -> CircularProgressIndicator(
+            progress = { progress.coerceIn(0, 100) / 100f },
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp),
+        )
+        "processing" -> CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
         else -> Box(
             modifier = Modifier
                 .size(10.dp)
@@ -107,7 +113,12 @@ private fun UploadStatusGlyph(status: String, onRetry: (() -> Unit)?) {
 fun TwoPhaseProgressBar(items: List<UploadItemEntity>, modifier: Modifier = Modifier) {
     val total = items.size.coerceAtLeast(1)
     val done = items.count { it.status == "complete" || it.status == "failed" }
-    val fraction by animateFloatAsState(done.toFloat() / total, animationSpec = androidx.compose.animation.core.tween(300, easing = LinearEasing), label = "upload")
+    // Continuous fraction: finished files count as 100%, the in-flight file contributes its bytes,
+    // so the bar advances smoothly instead of jumping a whole file at a time.
+    val accumulated = items.sumOf { item ->
+        if (item.status == "complete" || item.status == "failed") 100 else item.progress.coerceIn(0, 100)
+    }
+    val fraction by animateFloatAsState(accumulated.toFloat() / (total * 100f), animationSpec = androidx.compose.animation.core.tween(200, easing = LinearEasing), label = "upload")
     val allDone = done == items.size
 
     Column(modifier = modifier.fillMaxWidth()) {

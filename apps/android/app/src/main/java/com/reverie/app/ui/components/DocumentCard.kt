@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,31 +14,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.ui.navigation.documentSharedBounds
-import com.reverie.app.util.formatBytes
-import com.reverie.app.util.formatShortDate
 
-// Hoisted so every tile shares one Brush instance instead of allocating on each recomposition.
-private val CardScrim = Brush.verticalGradient(
-    0.45f to Color.Transparent,
-    1f to Color.Black.copy(alpha = 0.78f),
-)
-
-/** A gallery tile: a cropped thumbnail with the filename/size/date laid over a bottom scrim. */
+/**
+ * A Google-Photos-style gallery tile: a square, edge-to-edge cropped thumbnail with no caption and
+ * no corner radius. Non-media files carry a subtle file-type glyph so they read as documents; media
+ * tiles stay clean. Overlays (video/type/selection/private badges) sit in the corners.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DocumentCard(
@@ -50,60 +47,30 @@ fun DocumentCard(
     modifier: Modifier = Modifier,
 ) {
     val isVideo = document.mime_type.startsWith("video/")
-    val extension = document.original_filename.substringAfterLast('.', "").uppercase()
-    val tileShape = MaterialTheme.shapes.extraSmall
+    val isImage = document.mime_type.startsWith("image/")
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(4f / 5f)
+            .aspectRatio(1f)
             .documentSharedBounds(document.id)
-            .clip(tileShape)
+            .clip(RectangleShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .then(
-                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, tileShape) else Modifier,
+                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RectangleShape) else Modifier,
             ),
     ) {
         DocumentThumbnail(document = document, size = GRID_THUMBNAIL_SIZE, modifier = Modifier.matchParentSize())
 
-        // A bottom scrim keeps the filename/meta legible over any image — and gives icon-only
-        // tiles a caption bar so white text reads in light mode too.
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(CardScrim),
-        )
-
-        Column(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 9.dp),
-        ) {
-            Text(
-                text = document.original_filename,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "${formatBytes(document.size_bytes)} · ${formatShortDate(document.created_at)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.72f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
         if (isVideo) VideoPlayBadge(Modifier.align(Alignment.Center))
-        if (extension.isNotEmpty() && extension.length <= 4) {
-            ExtensionBadge(text = extension, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
+        // Distinguish non-media files without an extension badge on photos/videos.
+        if (!isImage && !isVideo) {
+            FileTypeBadge(mime = document.mime_type, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
         }
         // Top-start slot: the selection check takes over the private-lock's spot while selecting.
         when {
-            selected -> SelectedCheck(Modifier.align(Alignment.TopStart).padding(8.dp))
-            document.is_private -> PrivateLockBadge(Modifier.align(Alignment.TopStart).padding(8.dp))
+            selected -> SelectedCheck(Modifier.align(Alignment.TopStart).padding(6.dp))
+            document.is_private -> PrivateLockBadge(Modifier.align(Alignment.TopStart).padding(6.dp))
         }
     }
 }
@@ -154,16 +121,28 @@ private fun SelectedCheck(modifier: Modifier = Modifier) {
     }
 }
 
+/** Subtle corner glyph marking a non-media file's type, so documents stand out in the photo grid. */
 @Composable
-private fun ExtensionBadge(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = Color.White,
+private fun FileTypeBadge(mime: String, modifier: Modifier = Modifier) {
+    Box(
         modifier = modifier
             .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    )
+            .padding(4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = fileTypeIcon(mime),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+private fun fileTypeIcon(mime: String): ImageVector = when {
+    mime == "application/pdf" -> Icons.Outlined.PictureAsPdf
+    mime.startsWith("text/") || mime == "application/json" -> Icons.Outlined.Description
+    else -> Icons.Outlined.InsertDriveFile
 }
 
 /** Placeholder tile shown while the grid loads. */
@@ -172,8 +151,8 @@ fun DocumentCardSkeleton(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(4f / 5f)
-            .clip(MaterialTheme.shapes.extraSmall)
+            .aspectRatio(1f)
+            .clip(RectangleShape)
             .background(shimmerBrush()),
     )
 }

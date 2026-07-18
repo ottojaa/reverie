@@ -4,6 +4,8 @@ import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,12 +21,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -42,11 +46,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.BuildConfig
 import com.reverie.app.data.api.model.UserDto
+import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
 import com.reverie.app.ui.components.StorageMeter
+import com.reverie.app.ui.navigation.EasingPreset
 import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.navigation.toEasingPreset
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.ui.theme.ThemeMode
 
@@ -212,6 +219,17 @@ fun SettingsScreen(
             }
         }
 
+        // TEMPORARY / DEV TUNING — live motion controls (debug builds only). See MotionSpec.kt.
+        if (BuildConfig.DEBUG) {
+            SettingsCard(title = "Motion (dev)") {
+                MotionDevControls(
+                    settings = settings,
+                    onCommit = viewModel::setMotion,
+                    onReset = viewModel::resetMotion,
+                )
+            }
+        }
+
         OutlinedButton(
             onClick = { showSignOut = true },
             modifier = Modifier.fillMaxWidth(),
@@ -332,6 +350,96 @@ private fun ThemeModeSelector(
             ) {
                 Text(label)
             }
+        }
+    }
+}
+
+// TEMPORARY / DEV TUNING — live motion controls. Delete along with MotionSpec.kt once tuned.
+@Composable
+private fun MotionDevControls(
+    settings: AppSettings,
+    onCommit: (AppSettings) -> Unit,
+    onReset: () -> Unit,
+) {
+    // Local slider state, re-seeded whenever the persisted value changes (commit or reset), so
+    // dragging never persists mid-gesture yet reset snaps the sliders back to defaults.
+    var navMs by remember(settings.motionNavMs) { mutableStateOf(settings.motionNavMs.toFloat()) }
+    var slideFraction by remember(settings.motionSlideFraction) { mutableStateOf(settings.motionSlideFraction) }
+    var popScale by remember(settings.motionPopScale) { mutableStateOf(settings.motionPopScale) }
+    var diveMs by remember(settings.motionDiveMs) { mutableStateOf(settings.motionDiveMs.toFloat()) }
+    var barEnterMs by remember(settings.motionBarEnterMs) { mutableStateOf(settings.motionBarEnterMs.toFloat()) }
+    var toolbarExitMs by remember(settings.motionToolbarExitMs) { mutableStateOf(settings.motionToolbarExitMs.toFloat()) }
+
+    Text(
+        "Directional transitions preview on the next navigation; dive/bar/toolbar update live.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    LabeledSlider("Nav duration", "${navMs.toInt()} ms", navMs, 100f..600f,
+        onChange = { navMs = it }, onCommit = { onCommit(settings.copy(motionNavMs = navMs.toInt())) })
+    LabeledSlider("Slide fraction", String.format(java.util.Locale.US, "%.2f", slideFraction), slideFraction, 0f..0.30f,
+        onChange = { slideFraction = it }, onCommit = { onCommit(settings.copy(motionSlideFraction = slideFraction)) })
+    LabeledSlider("Pop scale", String.format(java.util.Locale.US, "%.2f", popScale), popScale, 0.80f..1.0f,
+        onChange = { popScale = it }, onCommit = { onCommit(settings.copy(motionPopScale = popScale)) })
+    LabeledSlider("Dive duration", "${diveMs.toInt()} ms", diveMs, 150f..700f,
+        onChange = { diveMs = it }, onCommit = { onCommit(settings.copy(motionDiveMs = diveMs.toInt())) })
+    LabeledSlider("Bar enter", "${barEnterMs.toInt()} ms", barEnterMs, 100f..500f,
+        onChange = { barEnterMs = it }, onCommit = { onCommit(settings.copy(motionBarEnterMs = barEnterMs.toInt())) })
+    LabeledSlider("Toolbar exit", "${toolbarExitMs.toInt()} ms", toolbarExitMs, 100f..400f,
+        onChange = { toolbarExitMs = it }, onCommit = { onCommit(settings.copy(motionToolbarExitMs = toolbarExitMs.toInt())) })
+
+    Spacer(Modifier.height(12.dp))
+    Text("Directional easing", style = MaterialTheme.typography.titleSmall)
+    EasingChips(
+        selected = settings.motionDirectionalEasing.toEasingPreset(),
+        onSelect = { onCommit(settings.copy(motionDirectionalEasing = it.name)) },
+    )
+    Spacer(Modifier.height(8.dp))
+    Text("Dive easing", style = MaterialTheme.typography.titleSmall)
+    EasingChips(
+        selected = settings.motionDiveEasing.toEasingPreset(),
+        onSelect = { onCommit(settings.copy(motionDiveEasing = it.name)) },
+    )
+
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onReset) { Text("Reset to defaults") }
+}
+
+@Composable
+private fun LabeledSlider(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    Column(Modifier.padding(top = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(valueLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            onValueChangeFinished = onCommit,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EasingChips(selected: EasingPreset, onSelect: (EasingPreset) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        EasingPreset.entries.forEach { preset ->
+            FilterChip(
+                selected = selected == preset,
+                onClick = { onSelect(preset) },
+                label = { Text(preset.name, style = MaterialTheme.typography.labelSmall) },
+            )
         }
     }
 }

@@ -8,8 +8,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +50,8 @@ fun PdfViewer(
         }.onSuccess { pages = it }.onFailure { failed = true }
     }
 
+    // Clear the status bar + the floating viewer toolbar so the first page isn't hidden beneath them.
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + VIEWER_TOOLBAR_INSET
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             failed -> Text(
@@ -57,7 +62,7 @@ fun PdfViewer(
             pages == null -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
             ) {
                 items(pages!!) { bitmap ->

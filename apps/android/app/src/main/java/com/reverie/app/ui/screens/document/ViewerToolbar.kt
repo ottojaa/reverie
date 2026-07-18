@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
@@ -92,15 +93,6 @@ fun ViewerToolbar(
                     modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                 )
             }
-            if (canEdit) {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        Icons.Outlined.Edit,
-                        contentDescription = "Edit (coming soon)",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    )
-                }
-            }
             IconButton(onClick = onDownload) {
                 Icon(Icons.Outlined.Download, contentDescription = "Download")
             }
@@ -111,6 +103,13 @@ fun ViewerToolbar(
                     Icon(Icons.Outlined.MoreVert, contentDescription = "More")
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenuToggle(false) }) {
+                    if (canEdit) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            leadingIcon = { Icon(Icons.Outlined.Brush, contentDescription = null) },
+                            onClick = onEdit,
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },

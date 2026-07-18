@@ -47,6 +47,8 @@ class UploadWorker @AssistedInject constructor(
             setForeground(foregroundInfo(index + 1, pending.size))
             uploadDao.updateProgress(item.id, 0, "uploading")
             val file = File(item.stagedPath)
+            // Only persist on whole-percent changes so the byte stream doesn't thrash Room.
+            var lastPct = 0
             try {
                 val response = uploadApi.uploadFile(
                     sessionId = sessionId,
@@ -55,7 +57,13 @@ class UploadWorker @AssistedInject constructor(
                     filename = item.displayName,
                     mimeType = item.mimeType,
                     conflictStrategy = task.conflictStrategy,
-                    onProgress = { _, _ -> },
+                    onProgress = { sent, total ->
+                        val pct = if (total > 0) ((sent * 100) / total).toInt().coerceIn(0, 100) else 0
+                        if (pct != lastPct) {
+                            lastPct = pct
+                            uploadDao.updateProgress(item.id, pct, "uploading")
+                        }
+                    },
                 )
                 val documentId = response.documents.firstOrNull()?.id
                 uploadDao.updateItemResult(item.id, "complete", null, documentId)
