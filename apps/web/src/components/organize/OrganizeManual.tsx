@@ -1,4 +1,4 @@
-import { SearchFilterPopover } from '@/components/search/SearchFilterPopover';
+import { FilterMenuButton } from '@/components/search/filter-bar/FilterMenuButton';
 import { SearchResultItem } from '@/components/search/SearchResultItem';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import type { DocumentSearchResult, FolderWithChildren, OrganizeOperation, SearchResult } from '@reverie/shared';
 import { ArrowLeft, Check, ChevronDown, FolderPlus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { SectionIcon } from '../ui/SectionIcon';
 
@@ -382,7 +382,7 @@ export function OrganizeManual() {
 
     const { data: searchData, isLoading } = useInfiniteSearch({
         q: activeQuery,
-        include_facets: true,
+        include_facets: false,
         limit: 30,
         sort_by: 'uploaded',
         sort_order: 'desc',
@@ -393,26 +393,12 @@ export function OrganizeManual() {
         () => (searchData?.pages.flatMap((p) => p.results) ?? []).filter((r): r is DocumentSearchResult => r.result_type === 'document'),
         [searchData],
     );
-    const facets = searchData?.pages[0]?.facets;
 
     const selectedResults = useMemo(() => results.filter((r) => selectedIds.has(r.document_id)), [results, selectedIds]);
 
     useEffect(() => {
         setActiveQuery(query);
     }, [query]);
-
-    const addFilter = useCallback((filter: string) => {
-        setQuery((q) => (q ? `${q} ${filter}` : filter));
-    }, []);
-
-    const removeFilter = useCallback((filter: string) => {
-        setQuery((q) => q.replace(filter, '').trim());
-    }, []);
-
-    const replaceFilter = useCallback((prefix: string, newValue: string) => {
-        const regex = new RegExp(`(?:^|\\s)-?${prefix}:(?:"[^"]+"|\\S+)`, 'g');
-        setQuery((q) => q.replace(regex, '').trim() + ` ${newValue}`);
-    }, []);
 
     const toggleSelect = (id: string) => {
         setSelectedIds((prev) => {
@@ -488,13 +474,7 @@ export function OrganizeManual() {
                             className="pl-8"
                         />
                     </div>
-                    <SearchFilterPopover
-                        currentQuery={query}
-                        facets={facets}
-                        onAddFilter={addFilter}
-                        onRemoveFilter={removeFilter}
-                        onReplaceFilter={replaceFilter}
-                    />
+                    <FilterMenuButton query={query} onQueryChange={setQuery} />
                 </div>
             </div>
 

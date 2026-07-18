@@ -122,7 +122,7 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                         // ml-[34px] = back button 32px + gap 8px − title-block pad 6px: left-aligns the card with the title block it drops from
                         className="pointer-events-auto ml-[34px] max-w-xl overflow-hidden rounded-xl border border-border/50 bg-background/80 shadow-xl backdrop-blur-xl"
                     >
-                        <div className="max-h-[min(60vh,30rem)] space-y-4 overflow-y-auto p-5">
+                        <div className="max-h-[min(72vh,36rem)] space-y-4 overflow-y-auto p-5">
                             {/* AI summary, headed by the AI title with the category chip beside it */}
                             {aiSummary && (
                                 <Section delay={nextDelay()} className="space-y-1.5">
@@ -150,16 +150,24 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                 </Section>
                             )}
 
-                            {/* One topics cloud — entities (primary chips) and topics (secondary chips) drive the same thing */}
-                            {(entities.length > 0 || topics.length > 0) && (
+                            {/* Mentions (specific names the document contains) and topics (what it's about) are different kinds of facts — separate sections */}
+                            {entities.length > 0 && (
+                                <Section delay={nextDelay()} className="space-y-1.5">
+                                    <MicroLabel>Mentions</MicroLabel>
+                                    <div className="flex flex-wrap gap-1">
+                                        {entities.map((name) => (
+                                            <Chip key={name}>{name}</Chip>
+                                        ))}
+                                    </div>
+                                </Section>
+                            )}
+
+                            {topics.length > 0 && (
                                 <Section delay={nextDelay()} className="space-y-1.5">
                                     <MicroLabel>Topics</MicroLabel>
                                     <div className="flex flex-wrap gap-1">
-                                        {entities.map((name) => (
-                                            <Chip key={`entity-${name}`}>{name}</Chip>
-                                        ))}
                                         {topics.map((topic) => (
-                                            <Chip key={`topic-${topic}`} variant="secondary">
+                                            <Chip key={topic} variant="secondary">
                                                 {topic}
                                             </Chip>
                                         ))}

@@ -1,6 +1,7 @@
 // Search module exports
 export { parseQuery, validateQuery, stringifyQuery, resolveRelativeDate } from './query-parser';
 export { buildSearchQuery, buildCountQuery, type SearchQueryOptions } from './query-builder';
+export { applySearchFilters, applyTypesFilter, buildPrefixTsQuery, documentJoins, type FilterDimension } from './filter-application';
 export {
     generateSnippet,
     generateSnippets,

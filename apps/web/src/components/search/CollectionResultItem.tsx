@@ -2,8 +2,8 @@ import { cn } from '@/lib/utils';
 import type { CollectionSearchResult } from '@reverie/shared';
 import { Folder, FolderOpen } from 'lucide-react';
 import { memo } from 'react';
-import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { SectionIcon } from '../ui/SectionIcon';
 
 interface CollectionResultItemProps {
     result: CollectionSearchResult;
@@ -16,7 +16,7 @@ interface CollectionResultItemProps {
 export const CollectionResultItem = memo(function CollectionResultItem({ result, isActive, compact, onClick }: CollectionResultItemProps) {
     const Icon = result.folder_type === 'collection' ? FolderOpen : Folder;
     const typeLabel = result.folder_type === 'collection' ? 'Collection' : 'Folder';
-    const size = compact ? 'size-8' : 'size-10';
+    const size = compact ? 'size-8' : 'size-12';
 
     return (
         <Button
@@ -24,19 +24,21 @@ export const CollectionResultItem = memo(function CollectionResultItem({ result,
             variant="ghost"
             onClick={onClick}
             className={cn(
-                'h-auto flex w-full min-w-0 shrink items-start justify-start gap-3 overflow-hidden px-3 py-2.5 text-left',
+                'h-auto flex w-full min-w-0 shrink items-start justify-start gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-left hover:bg-secondary/60 dark:hover:bg-secondary/60',
                 isActive && 'bg-secondary',
             )}
         >
-            <div className={cn('flex shrink-0 items-center justify-center rounded-md bg-primary/10 text-lg', size)}>
-                {result.emoji ? <span aria-hidden>{result.emoji}</span> : <Icon className={cn('text-primary', compact ? 'size-4' : 'size-5')} />}
+            <div className={cn('flex shrink-0 items-center justify-center rounded-md bg-muted text-lg', size)}>
+                {/* emoji can hold a lucide icon slug — SectionIcon resolves it (never render it as text) */}
+                {result.emoji ? (
+                    <SectionIcon value={result.emoji} className={cn('text-muted-foreground', compact ? 'size-4' : 'size-5')} />
+                ) : (
+                    <Icon className={cn('text-muted-foreground', compact ? 'size-4' : 'size-5')} />
+                )}
             </div>
 
             <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-sm font-medium text-foreground">{result.name}</p>
-                    <Badge className="shrink-0">{typeLabel}</Badge>
-                </div>
+                <p className="truncate text-sm font-medium text-foreground">{result.name}</p>
 
                 {result.snippet ? (
                     <p
@@ -47,8 +49,14 @@ export const CollectionResultItem = memo(function CollectionResultItem({ result,
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{result.path}</p>
                 )}
 
-                <div className="mt-1 text-xs text-muted-foreground">
-                    {result.document_count} {result.document_count === 1 ? 'document' : 'documents'}
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                    <span>{typeLabel}</span>
+                    <span aria-hidden className="text-muted-foreground/40">
+                        ·
+                    </span>
+                    <span className="tabular-nums">
+                        {result.document_count} {result.document_count === 1 ? 'document' : 'documents'}
+                    </span>
                 </div>
             </div>
         </Button>

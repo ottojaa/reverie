@@ -1,9 +1,11 @@
 import {
+    FacetsResponseSchema,
     QuickFiltersResponseSchema,
     SearchHelpSchema,
     SearchResponseSchema,
     SuggestResponseSchema,
     type QuickFilter,
+    type SearchFacets,
     type SearchHelp,
     type SearchResponse,
     type SuggestionType,
@@ -14,10 +16,6 @@ import { apiClient } from './client';
 
 export interface SearchParams {
     q: string;
-    category?: string;
-    date_from?: string;
-    date_to?: string;
-    folder_id?: string;
     sort_by?: 'relevance' | 'uploaded' | 'date' | 'filename' | 'size';
     sort_order?: 'asc' | 'desc';
     limit?: number;
@@ -30,6 +28,12 @@ export const searchApi = {
         const { data } = await apiClient.get('/search', { params });
 
         return SearchResponseSchema.parse(data);
+    },
+
+    async getFacets(): Promise<SearchFacets> {
+        const { data } = await apiClient.get('/search/facets', { params: { q: '' } });
+
+        return FacetsResponseSchema.parse(data).facets;
     },
 
     async suggest(type: SuggestionType, q: string, limit = 10): Promise<string[]> {
@@ -66,7 +70,7 @@ export function useSearch(params: SearchParams, enabled = true) {
     });
 }
 
-export function useInfiniteSearch(params: Omit<SearchParams, 'offset'>) {
+export function useInfiniteSearch(params: Omit<SearchParams, 'offset'>, enabled = true) {
     const { isAuthenticated } = useAuth();
     const limit = params.limit ?? DEFAULT_PAGE_SIZE;
 
@@ -79,8 +83,22 @@ export function useInfiniteSearch(params: Omit<SearchParams, 'offset'>) {
 
             return nextOffset < lastPage.total ? nextOffset : undefined;
         },
-        enabled: isAuthenticated,
+        enabled: isAuthenticated && enabled,
         staleTime: 30_000,
+        // Keep previous results/facets visible while a pill click refetches — no flash to empty
+        placeholderData: (prev) => prev,
+    });
+}
+
+/** Full-corpus facet values for the filter panels — never narrowed by the active query. */
+export function useSearchFacets() {
+    const { isAuthenticated } = useAuth();
+
+    return useQuery({
+        queryKey: ['search', 'facets'],
+        queryFn: () => searchApi.getFacets(),
+        enabled: isAuthenticated,
+        staleTime: 5 * 60_000,
     });
 }
 
