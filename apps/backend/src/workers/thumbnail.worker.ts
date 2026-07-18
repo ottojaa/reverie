@@ -2,16 +2,18 @@ import { THUMBNAIL_SIZES } from '@reverie/shared';
 import { encode } from 'blurhash';
 import { Job, Worker } from 'bullmq';
 import { spawn } from 'child_process';
-import { mkdtemp, unlink, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { extname, join } from 'path';
 import sharp from 'sharp';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
+import { decodeTextForPreview } from '../ocr/text-extractor';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
 import type { ThumbnailJobData, ThumbnailJobResult } from '../queues/thumbnail.queue';
-import { getFileCategory, getStorageService } from '../services/storage.service';
+import { getStorageService } from '../services/storage.service';
+import { getThumbnailStrategy } from '../services/thumbnail-strategy';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('Thumbnail');
@@ -88,28 +90,152 @@ async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<
     }
 }
 
-/**
- * Get image buffer for thumbnail generation based on file type
- */
-async function getImageBuffer(fileBuffer: Buffer, mimeType: string): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number } }> {
-    const category = getFileCategory(mimeType);
+// LibreOffice binary; overridable for local dev (macOS cask installs it off-PATH at
+// /Applications/LibreOffice.app/Contents/MacOS/soffice). In the container it's `soffice`.
+const LIBREOFFICE_BIN = process.env.LIBREOFFICE_BIN ?? 'soffice';
+const OFFICE_CONVERT_TIMEOUT_MS = 90_000;
 
-    if (category === 'pdf') {
-        // For PDFs, render first page as image
-        const pngBuffer = await renderPdfFirstPage(fileBuffer);
+/** Spawn a command, capturing stderr and enforcing a hard timeout. */
+function runCommand(cmd: string, args: string[], timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+        const stderrChunks: Buffer[] = [];
+
+        child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+        const timer = setTimeout(() => {
+            child.kill('SIGKILL');
+            reject(new Error(`${cmd} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        child.on('error', (err) => {
+            clearTimeout(timer);
+            reject(err);
+        });
+
+        child.on('close', (code) => {
+            clearTimeout(timer);
+
+            if (code === 0) resolve();
+            else reject(new Error(`${cmd} exited ${code}: ${Buffer.concat(stderrChunks).toString('utf8').slice(-500)}`));
+        });
+    });
+}
+
+/**
+ * Convert an office document (docx/xlsx/pptx/odt/rtf/…) to PDF with headless LibreOffice
+ * so it can flow through the existing PDF-first-page renderer.
+ */
+async function renderOfficeToPdf(fileBuffer: Buffer, filename: string): Promise<Buffer> {
+    const ext = extname(filename) || '.bin';
+    const workDir = await mkdtemp(join(tmpdir(), 'reverie-office-'));
+    // soffice serialises on a shared profile lock — give each conversion its own
+    // UserInstallation so concurrent thumbnail jobs don't block or corrupt one another.
+    const profileDir = await mkdtemp(join(tmpdir(), 'reverie-lo-profile-'));
+    const inputPath = join(workDir, `input${ext}`);
+
+    try {
+        await writeFile(inputPath, fileBuffer);
+
+        await runCommand(
+            LIBREOFFICE_BIN,
+            ['--headless', '--norestore', '--nolockcheck', `-env:UserInstallation=file://${profileDir}`, '--convert-to', 'pdf', '--outdir', workDir, inputPath],
+            OFFICE_CONVERT_TIMEOUT_MS,
+        );
+
+        // soffice writes `<inputBasename>.pdf` (extension swapped) into outdir.
+        try {
+            const pdfBuffer = await readFile(join(workDir, 'input.pdf'));
+
+            if (pdfBuffer.length === 0) {
+                throw new NonRetryableJobError('LibreOffice produced an empty PDF');
+            }
+
+            return pdfBuffer;
+        } catch (err) {
+            if (err instanceof NonRetryableJobError) throw err;
+
+            throw new NonRetryableJobError('LibreOffice produced no PDF output');
+        }
+    } finally {
+        await rm(workDir, { recursive: true, force: true }).catch(() => {});
+        await rm(profileDir, { recursive: true, force: true }).catch(() => {});
+    }
+}
+
+// Text-preview page layout (portrait, ~letter aspect). Rendered as SVG then rasterised.
+const TEXT_PREVIEW = { width: 800, height: 1035, padding: 40, headerHeight: 56, bodyFontSize: 15, lineHeight: 21, maxCharsPerLine: 92 } as const;
+
+function escapeXml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/**
+ * Render the first screenful of a text/code file as a document-preview PNG. Uses an SVG
+ * composed of one <text> per line, rasterised by sharp (needs a monospace font available
+ * via fontconfig — see Dockerfile.ocr-base).
+ */
+async function renderTextPreview(text: string, filename: string): Promise<Buffer> {
+    const { width, height, padding, headerHeight, bodyFontSize, lineHeight, maxCharsPerLine } = TEXT_PREVIEW;
+    const bodyTop = headerHeight + 34;
+    const maxLines = Math.max(1, Math.floor((height - bodyTop - padding) / lineHeight));
+
+    // Normalise newlines, expand tabs, drop control chars that would break the SVG, clip to page.
+    const normalized = text
+        .replace(/\r\n?/g, '\n')
+        .replace(/\t/g, '    ')
+        // Intentionally match control chars — they would produce invalid SVG markup.
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '');
+
+    const bodyLines = normalized
+        .split('\n')
+        .slice(0, maxLines)
+        .map((line, i) => {
+            const clipped = line.length > maxCharsPerLine ? line.slice(0, maxCharsPerLine) : line;
+            const y = bodyTop + i * lineHeight;
+
+            // A single space keeps a blank line from collapsing its baseline.
+            return `<text x="${padding}" y="${y}" fill="#374151" font-size="${bodyFontSize}" xml:space="preserve">${escapeXml(clipped) || ' '}</text>`;
+        })
+        .join('');
+
+    const headerName = filename.length > 48 ? filename.slice(0, 47) + '…' : filename;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff"/>
+  <rect width="${width}" height="${headerHeight}" fill="#f3f4f6"/>
+  <rect y="${headerHeight}" width="${width}" height="2" fill="#6366f1"/>
+  <g font-family="'DejaVu Sans Mono','Liberation Mono','Menlo','Consolas',monospace">
+    <text x="${padding}" y="${Math.round(headerHeight / 2) + 6}" fill="#111827" font-size="18" font-weight="600">${escapeXml(headerName)}</text>
+    ${bodyLines}
+  </g>
+</svg>`;
+
+    return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+/**
+ * Produce the raster image (and its natural dimensions) that thumbnails are generated
+ * from, routed by the shared thumbnail strategy. The upload gate only enqueues a job when
+ * the strategy is thumbnailable, so `none` should never reach here.
+ */
+async function getImageBuffer(fileBuffer: Buffer, mimeType: string, filename: string): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number } }> {
+    const strategy = getThumbnailStrategy(mimeType, filename);
+
+    if (strategy === 'pdf' || strategy === 'office') {
+        const pdfBuffer = strategy === 'office' ? await renderOfficeToPdf(fileBuffer, filename) : fileBuffer;
+        const pngBuffer = await renderPdfFirstPage(pdfBuffer);
         const metadata = await sharp(pngBuffer).metadata();
 
         if (!metadata.width || !metadata.height) {
             throw new NonRetryableJobError('Could not get PDF page dimensions');
         }
 
-        return {
-            imageBuffer: pngBuffer,
-            originalDimensions: { width: metadata.width, height: metadata.height },
-        };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
     }
 
-    if (category === 'video') {
+    if (strategy === 'video') {
         const pngBuffer = await renderVideoFrame(fileBuffer, mimeType);
         const metadata = await sharp(pngBuffer).metadata();
 
@@ -117,23 +243,28 @@ async function getImageBuffer(fileBuffer: Buffer, mimeType: string): Promise<{ i
             throw new NonRetryableJobError('Could not get video frame dimensions');
         }
 
-        return {
-            imageBuffer: pngBuffer,
-            originalDimensions: { width: metadata.width, height: metadata.height },
-        };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
     }
 
-    // For images, use buffer directly
+    if (strategy === 'text') {
+        const pngBuffer = await renderTextPreview(decodeTextForPreview(fileBuffer), filename);
+        const metadata = await sharp(pngBuffer).metadata();
+
+        if (!metadata.width || !metadata.height) {
+            throw new NonRetryableJobError('Could not render text preview');
+        }
+
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
+    }
+
+    // Images: use the original buffer directly.
     const metadata = await sharp(fileBuffer).metadata();
 
     if (!metadata.width || !metadata.height) {
         throw new NonRetryableJobError('Could not read image dimensions');
     }
 
-    return {
-        imageBuffer: fileBuffer,
-        originalDimensions: { width: metadata.width, height: metadata.height },
-    };
+    return { imageBuffer: fileBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
 }
 
 /**
@@ -157,8 +288,8 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     // Read original file from storage
     const fileBuffer = await storageService.readFile(filePath);
 
-    // Get image buffer based on file type (renders PDF first page if needed)
-    const { imageBuffer, originalDimensions } = await getImageBuffer(fileBuffer, document.mime_type);
+    // Get image buffer based on file type (renders PDF/office/text as needed)
+    const { imageBuffer, originalDimensions } = await getImageBuffer(fileBuffer, document.mime_type, document.original_filename);
 
     await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
 
@@ -239,6 +370,22 @@ export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobRe
 
     worker.on('failed', (job, error) => {
         logger.error('Job failed', error, { jobId: job?.id });
+
+        if (!job) return;
+
+        // Mark the document's thumbnail as failed once retries are exhausted (or the
+        // error is non-retryable) so clients stop showing a "processing" state and fall
+        // back to the file-type icon. The worker.utils tracker only updates the job row.
+        const maxAttempts = job.opts.attempts ?? 1;
+        const isTerminal = error?.name === 'NonRetryableJobError' || job.attemptsMade >= maxAttempts;
+
+        if (!isTerminal) return;
+
+        db.updateTable('documents')
+            .set({ thumbnail_status: 'failed' })
+            .where('id', '=', job.data.documentId)
+            .execute()
+            .catch((err) => logger.error('Failed to mark thumbnail_status=failed', err instanceof Error ? err : undefined, { documentId: job.data.documentId }));
     });
 
     worker.on('error', (error) => {

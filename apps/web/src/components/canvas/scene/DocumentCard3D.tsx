@@ -12,7 +12,7 @@ import { clamp, damp, ease, lerp, requestFrame } from './dampers.js';
 import { setRawColor } from './glColor.js';
 import { LABEL_FONT_URL } from './labelAssets.js';
 import { getCanvasSnapshot, hover, isDiving, unravelAnims, unravelValue } from './store.js';
-import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
+import { acquireTexture, getBlurhashTexture, getIconTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
 import { cardProgress, type CardPose } from './unravel.js';
 
@@ -62,7 +62,9 @@ export function DocumentCard3D({ doc, pose, folderId, index, theme, onHover, onO
     const material = useMemo(
         () =>
             makeCardMaterial(
-                doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getSolidTexture(theme.border),
+                // Thumbnailed docs carry a blurhash; the rest (binaries, audio, unknown)
+                // get a file-type icon card instead of a blank solid colour.
+                doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getIconTexture(doc.mime_type, doc.original_filename, theme.card),
                 pose.w / pose.h,
                 theme.primary,
             ),

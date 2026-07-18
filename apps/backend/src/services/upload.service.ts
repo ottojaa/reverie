@@ -227,7 +227,7 @@ export class UploadService {
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
 
         // Determine if we can generate thumbnails for this file type
-        const canThumbnail = canGenerateThumbnail(mimeType);
+        const canThumbnail = canGenerateThumbnail(mimeType, displayName);
 
         // Create document record (with user_id)
         const newDocument: NewDocument = {
@@ -373,7 +373,7 @@ export class UploadService {
         const userContext = await this.storageService.getUserStorageContext(userId);
         const mimeType = correctMimeType(file.filename, file.mimetype);
         const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
-        const canThumbnail = canGenerateThumbnail(mimeType);
+        const canThumbnail = canGenerateThumbnail(mimeType, file.filename);
 
         // Delete old file and thumbnails from storage (refcount-safe; skip when the
         // new content hashed to the same object we'd be deleting)

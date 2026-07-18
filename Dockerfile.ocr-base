@@ -26,6 +26,14 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender1 \
     libfontconfig1 \
+    # Thumbnail rendering: fonts for the text-preview SVG (DejaVu monospace) and
+    # MS-compatible metrics for office docs (Liberation), plus headless LibreOffice
+    # (writer/calc/impress) to convert office files → PDF for the first-page renderer.
+    fonts-dejavu-core \
+    fonts-liberation \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 

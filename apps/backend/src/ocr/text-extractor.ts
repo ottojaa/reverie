@@ -42,3 +42,13 @@ export async function extractTextFromBuffer(
         return { text: '' };
     }
 }
+
+/**
+ * Decode the head of a buffer as UTF-8 for a text-preview thumbnail. Unlike
+ * extractTextFromBuffer this is MIME-independent — the caller has already decided the
+ * file is text (source files often arrive as application/octet-stream) — and only reads
+ * the first slice, since a preview never needs more than the first screenful of lines.
+ */
+export function decodeTextForPreview(buffer: Buffer, maxBytes = 128 * 1024): string {
+    return buffer.subarray(0, maxBytes).toString('utf-8');
+}
