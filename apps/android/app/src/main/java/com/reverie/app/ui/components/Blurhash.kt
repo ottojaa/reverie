@@ -111,6 +111,8 @@ object BlurhashDecoder {
 private val painterCache = LruCache<String, BitmapPainter>(128)
 
 /** Decodes [blurhash] off the main thread and remembers the resulting painter, cached by hash. */
+// The producer intentionally leaves value unassigned on a cache hit (initialValue already holds it).
+@Suppress("ProduceStateDoesNotAssignValue")
 @Composable
 fun rememberBlurhashPainter(blurhash: String?): Painter? {
     if (blurhash.isNullOrBlank()) return null

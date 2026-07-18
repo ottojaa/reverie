@@ -54,9 +54,11 @@ android {
     }
 
     lint {
-        // AGP 8.7's bundled lint crashes in this detector under JDK 21+
-        // (IncompatibleClassChangeError: KaCallableMemberCall). It flags nothing we rely on.
+        // AGP 8.7's bundled lint crashes in these detectors under JDK 21+
+        // (IncompatibleClassChangeError). They flag nothing we rely on.
         disable += "NullSafeMutableLiveData"
+        disable += "FrequentlyChangingValue"
+        disable += "RememberInComposition"
     }
 }
 

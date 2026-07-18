@@ -2,6 +2,7 @@ package com.reverie.app.data.upload
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.reverie.app.di.IoDispatcher
@@ -44,7 +45,8 @@ class UploadStager @Inject constructor(
         val meta = queryMeta(uri)
         val mime = resolver.getType(uri) ?: "application/octet-stream"
 
-        val readUri = if (mime.startsWith("image/")) {
+        // setRequireOriginal (EXIF-preserving) is API 29+; on older devices fall back to the plain uri.
+        val readUri = if (mime.startsWith("image/") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             runCatching { MediaStore.setRequireOriginal(uri) }.getOrDefault(uri)
         } else {
             uri
