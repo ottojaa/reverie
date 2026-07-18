@@ -29,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -92,7 +93,7 @@ fun SearchScreen(
             activeValues = state::activeValues,
             dateActive = dateActive,
             hasAnyActive = hasAnyActive,
-            onOpenDimension = { openSheet = OpenSheet.Facet(it) },
+            onOpenDimension = { openSheet = OpenSheet.Facet(it); viewModel.ensureBaseFacets() },
             onOpenDate = { openSheet = OpenSheet.Date },
             onOpenMore = { openSheet = OpenSheet.More },
             onClearAll = viewModel::clearFilters,
@@ -123,10 +124,17 @@ fun SearchScreen(
                 )
                 state.error != null && state.results.isEmpty() ->
                     EmptyState(icon = Icons.Outlined.Search, title = "Search failed", description = state.error)
-                state.results.isEmpty() && !state.isLoading ->
+                // Only "No results" once the search for the current query has actually returned —
+                // during the debounce, stale results stay visible under the progress bar instead.
+                state.results.isEmpty() && !state.isSearching ->
                     EmptyState(icon = Icons.Outlined.Search, title = "No results", description = "Try different keywords or clear some filters.")
                 state.viewMode == ViewMode.GRID -> ResultsGrid(state, onDocumentClick, viewModel::loadMore)
                 else -> ResultsList(state, onDocumentClick, onOpenFolder, viewModel::loadMore)
+            }
+
+            // Thin indeterminate bar overlaid at the top while a search is in flight (no layout shift).
+            if (state.isSearching) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
     }

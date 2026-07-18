@@ -48,6 +48,7 @@ data class SearchUiState(
     val sortOrder: SortOrder = SortOrder.DESC,
     val viewMode: ViewMode = ViewMode.LIST,
     val isLoading: Boolean = false,
+    val isSearching: Boolean = false,
     val error: String? = null,
     val hasMore: Boolean = false,
     val isOffline: Boolean = false,
@@ -61,6 +62,11 @@ private data class SearchControl(
     val results: List<SearchHit> = emptyList(),
     val total: Int = 0,
     val facets: SearchFacets? = null,
+    // Whole-library facets, fetched once, so the filter sheets have options before/without a query.
+    val baseFacets: SearchFacets? = null,
+    // The query the current [results] belong to; lets the UI tell "typing, results are stale" apart
+    // from "searched, genuinely empty" so it never flashes "No results" during the debounce.
+    val resultsQuery: String? = null,
     val quickFilters: List<QuickFilter> = emptyList(),
     val sortBy: SortBy = SortBy.RELEVANCE,
     val sortOrder: SortOrder = SortOrder.DESC,
@@ -91,13 +97,16 @@ class SearchViewModel @Inject constructor(
             freeText = getFreeText(tokenizeQuery(q)),
             results = ctrl.results,
             total = ctrl.total,
-            facets = ctrl.facets,
+            facets = ctrl.facets ?: ctrl.baseFacets,
             quickFilters = ctrl.quickFilters,
             recents = recents,
             sortBy = ctrl.sortBy,
             sortOrder = ctrl.sortOrder,
             viewMode = ctrl.userViewMode ?: if (isPhotoish(q)) ViewMode.GRID else ViewMode.LIST,
             isLoading = ctrl.isLoading,
+            // True from the first keystroke (before the debounce fires) until the response for the
+            // current query lands — so the UI shows a loading bar, not a "No results" flash.
+            isSearching = q.isNotBlank() && (ctrl.isLoading || ctrl.resultsQuery != q),
             error = ctrl.error,
             hasMore = ctrl.results.size < ctrl.total,
             isOffline = !online,
@@ -109,6 +118,7 @@ class SearchViewModel @Inject constructor(
             val filters = searchRepository.quickFilters()
             control.update { it.copy(quickFilters = filters) }
         }
+        ensureBaseFacets()
         viewModelScope.launch {
             combine(query, control.map { it.sortBy to it.sortOrder }.distinctUntilChanged()) { q, sort -> Triple(q, sort.first, sort.second) }
                 .debounce(300)
@@ -116,9 +126,18 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    /** Fetch whole-library facets so the filter sheets have options before/without a query. */
+    fun ensureBaseFacets() {
+        if (control.value.baseFacets != null) return
+        viewModelScope.launch {
+            runCatching { searchRepository.facets("") }
+                .onSuccess { f -> control.update { it.copy(baseFacets = f) } }
+        }
+    }
+
     private suspend fun runSearch(q: String, sortBy: SortBy, sortOrder: SortOrder, offset: Int) {
         if (q.isBlank()) {
-            control.update { it.copy(results = emptyList(), total = 0, facets = null, isLoading = false, error = null, offset = 0) }
+            control.update { it.copy(results = emptyList(), total = 0, facets = null, resultsQuery = "", isLoading = false, error = null, offset = 0) }
             return
         }
         control.update { it.copy(isLoading = offset == 0, error = null) }
@@ -130,6 +149,7 @@ class SearchViewModel @Inject constructor(
                     results = if (offset == 0) response.results else it.results + response.results,
                     total = response.total,
                     facets = if (offset == 0) response.facets ?: it.facets else it.facets,
+                    resultsQuery = q,
                     offset = offset + response.results.size,
                     isLoading = false,
                     error = null,
@@ -138,7 +158,7 @@ class SearchViewModel @Inject constructor(
             if (offset == 0) searchRepository.recordSearch(q)
         }.onFailure { t ->
             control.update {
-                it.copy(isLoading = false, error = if (connectivity.currentlyOnline()) messageFor(t) else null)
+                it.copy(resultsQuery = q, isLoading = false, error = if (connectivity.currentlyOnline()) messageFor(t) else null)
             }
         }
     }

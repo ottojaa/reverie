@@ -2,6 +2,7 @@ package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,7 +32,6 @@ import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
-import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatShortDate
 
 @Composable
@@ -40,24 +40,21 @@ fun SearchResultRow(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchThumbnail(hit.document_id, hit.blurhash, ThumbnailSize.SM, Modifier.size(48.dp))
+        SearchThumbnail(hit.document_id, hit.blurhash, ThumbnailSize.SM, Modifier.size(56.dp))
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(hit.display_name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            hit.snippet?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
             Text(
                 text = listOfNotNull(
                     hit.folder_path?.trim('/')?.takeIf { it.isNotBlank() },
                     formatShortDate(hit.extracted_date ?: hit.uploaded_at),
-                    formatBytes(hit.size_bytes),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
