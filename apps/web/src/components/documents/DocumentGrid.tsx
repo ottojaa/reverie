@@ -10,6 +10,13 @@ import { DocumentCard } from './DocumentCard';
 const GAP = 16; // gap-4 = 1rem = 16px
 const COL_DEBOUNCE_MS = 80;
 const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
+const CONTENT_PADDING_X = 24; // Browse wraps the grid in p-6 (24px each side); cold-start width fallback only
+
+// Module-scoped so they survive unmount: on a back-navigation remount they seed the exact
+// previous layout, so getTotalSize() is correct on the first render and the router's scroll
+// restoration isn't clamped by a briefly-too-short grid (wrong columnCount / row estimate).
+let cachedGridWidth = 0;
+let cachedGridOffsetTop = 0;
 
 /** Match Tailwind responsive grid breakpoints: sm:2 / md:3 / lg:4 / xl:5 */
 function getColumnCount(width: number, prevCols?: number): number {
@@ -54,7 +61,13 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     const [columnCount, setColumnCount] = useState(() => {
         if (typeof window === 'undefined') return 1;
 
-        return window.matchMedia('(pointer: coarse)').matches ? 1 : getColumnCount(window.innerWidth);
+        if (window.matchMedia('(pointer: coarse)').matches) return 1;
+
+        // Seed from the widest synchronous source available on a remount: the cached grid
+        // width (exact, from a previous mount) or the persistent <main> minus its padding.
+        const width = cachedGridWidth || (scrollContainerRef.current ? scrollContainerRef.current.clientWidth - CONTENT_PADDING_X * 2 : window.innerWidth);
+
+        return getColumnCount(width);
     });
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,6 +117,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
             if (!entry) return;
 
+            cachedGridWidth = entry.contentRect.width; // keep warm for the next remount
             latestWidthRef.current = entry.contentRect.width;
 
             if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -117,8 +131,10 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         });
 
         // Set initial from observed element (not window)
-        const width = el.getBoundingClientRect().width;
-        setColumnCount(isMobile ? 1 : getColumnCount(width));
+        const rect = el.getBoundingClientRect();
+        cachedGridWidth = rect.width;
+        cachedGridOffsetTop = el.offsetTop;
+        setColumnCount(isMobile ? 1 : getColumnCount(rect.width));
         observer.observe(el);
 
         return () => {
@@ -132,17 +148,32 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
     const rowCount = Math.ceil(documents.length / columnCount);
 
+    // Widest synchronous width source, most precise first: the mounted grid, the cached width
+    // from a previous mount, the persistent <main> minus padding, then the window.
+    const resolveGridWidth = useCallback(() => {
+        const grid = gridRef.current;
+
+        if (grid?.clientWidth) return grid.clientWidth;
+
+        if (cachedGridWidth) return cachedGridWidth;
+
+        const main = scrollContainerRef.current;
+
+        if (main?.clientWidth) return main.clientWidth - CONTENT_PADDING_X * 2;
+
+        return typeof window !== 'undefined' ? window.innerWidth : 0;
+    }, [scrollContainerRef]);
+
     const estimateRowHeight = useCallback(() => {
-        const el = gridRef.current;
+        const containerWidth = resolveGridWidth();
 
-        if (!el) return 350;
+        if (!containerWidth) return 350;
 
-        const containerWidth = el.clientWidth;
         const colWidth = (containerWidth - (columnCount - 1) * GAP) / columnCount;
 
         // aspect-4/3 thumbnail + ~48px footer
         return colWidth * 0.75 + 80;
-    }, [columnCount]);
+    }, [columnCount, resolveGridWidth]);
 
     // Read <main>'s cached scroll position so the virtualizer renders the
     // correct rows immediately (before the router restores scrollTop).
@@ -150,7 +181,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         id: 'main-scroll-area',
     });
 
-    const scrollMargin = gridRef.current?.offsetTop ?? 0;
+    const scrollMargin = gridRef.current?.offsetTop ?? cachedGridOffsetTop;
 
     const virtualizer = useVirtualizer({
         count: rowCount,

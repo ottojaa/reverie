@@ -21,17 +21,15 @@ interface FilterBarProps {
 
 const DIMENSION_KEYS = new Set<string>(FILTER_DIMENSIONS.map((dimension) => dimension.key));
 
-/** Tokens the pills don't own — negations, scopes, stray `has:` values — rendered as removable chips so the bar stays a lossless view of `q`. */
+/** Tokens the pills don't own — negations, scopes, stray has: and size values — rendered as removable chips so the bar stays a lossless view of `q`. */
 function getUnmanagedTokens(tokens: QueryToken[]): QueryToken[] {
     return tokens.filter((token) => {
         if (!isKnownFilter(token) || !token.key) return false;
 
-        // The Text tri-state owns has:text / -has:text; other has:* values are unmanaged
-        if (token.key === 'has') return token.value.toLowerCase() !== 'text';
-
         if (token.negated) return true;
 
-        return !DIMENSION_KEYS.has(token.key) && !['uploaded', 'date', 'size'].includes(token.key);
+        // content (Text-contains) and size live in the More panel; every other off-pill filter is a chip
+        return !DIMENSION_KEYS.has(token.key) && !['uploaded', 'date', 'size', 'content'].includes(token.key);
     });
 }
 

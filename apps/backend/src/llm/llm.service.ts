@@ -14,6 +14,7 @@ import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
 import { rebuildSearchVector } from '../search/search-indexer';
 import { getStorageService } from '../services/storage.service';
+import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
 import { groundEntities } from './entity-grounding';
@@ -192,8 +193,10 @@ async function processTextSummary(
     // Parse primary extracted date into a Date for the DB column
     const extractedDate = result.extracted_date ? new Date(`${result.extracted_date}T00:00:00Z`) : null;
 
-    // Update document with LLM-determined category if available
-    const documentCategory = result.document_type ?? document.document_category;
+    // Update document with LLM-determined category if available, but never overwrite a
+    // visual category (screenshot/photo/graphic/video) set during OCR — the text LLM only
+    // sees OCR text, not pixels, and its type enum has no visual categories.
+    const documentCategory = isVisualCategory(document.document_category) ? document.document_category : (result.document_type ?? document.document_category);
 
     const dbWriteStart = Date.now();
 

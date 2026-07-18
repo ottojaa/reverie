@@ -1,4 +1,5 @@
 import { useDeleteDocuments, useSetDocumentPrivacy } from '@/lib/api/documents';
+import { buildDownloadUrl, buildFileUrl } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useLongPress } from '@/lib/hooks/useLongPress';
@@ -181,6 +182,20 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         setDocumentPrivacy.mutate({ document_ids: ids, is_private: !document.is_private });
     };
 
+    // --- Download ---
+
+    const handleDownload = () => {
+        const fileUrl = buildFileUrl(document.file_url);
+
+        if (!fileUrl) return;
+
+        // Download flag on the signed URL → server responds with Content-Disposition: attachment
+        const a = window.document.createElement('a');
+        a.href = buildDownloadUrl(fileUrl, document.original_filename);
+        a.rel = 'noopener';
+        a.click();
+    };
+
     return {
         // State
         isSelected,
@@ -192,6 +207,9 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         handleDoubleClick,
         handleDelete,
         handleTogglePrivate,
+        handleDownload,
+        // Selection-aware target ids: the whole selection when this card is selected, else just this doc
+        targetIds: documentIds,
         // Drag props (spread onto DOM element)
         dragRef: setNodeRef,
         dragAttributes: attributes,

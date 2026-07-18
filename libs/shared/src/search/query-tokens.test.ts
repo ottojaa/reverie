@@ -107,6 +107,14 @@ describe('isKnownFilter / getFreeText / getFilterTokens', () => {
 
         expect(getFilterTokens(tokens, 'tag').map((t) => t.value)).toEqual(['a', 'b']);
     });
+
+    it('recognizes the content filter key (not free text)', () => {
+        const tokens = tokenizeQuery('content:"invoice number" beach');
+
+        expect(isKnownFilter(tokens[0]!)).toBe(true);
+        expect(getFreeText(tokens)).toBe('beach');
+        expect(getFilterTokens(tokens, 'content').map((t) => t.value)).toEqual(['invoice number']);
+    });
 });
 
 describe('addFilter', () => {

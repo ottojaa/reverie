@@ -5,7 +5,7 @@ import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
 import { getStorageService } from '../services/storage.service';
-import { classifyNonTextImage } from './category-classifier';
+import { classifyNonTextImage, detectScreenshot } from './category-classifier';
 import { extractExifMetadata } from './exif-extractor';
 import { getImageMetadata, getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
 import { recognizeFromFilePath, recognizeText as recognizeWithPaddleOcr } from './paddleocr.client';
@@ -125,10 +125,14 @@ export async function processDocument(documentId: string, options: ProcessDocume
     // 8. Detect if meaningful text exists
     const textDetection = detectTextPresence(ocrOutput, imageSize);
 
-    // 9. Classify non-text images only (text documents classified by LLM later)
+    // 9. Categorize. Screenshot detection runs first for every image regardless of text
+    // (screenshots are full of UI text, so they'd otherwise skip the only screenshot-capable
+    // classifier and get overwritten by the LLM, whose type enum has no visual categories).
     let category: DocumentCategory;
 
-    if (textDetection.hasMeaningfulText) {
+    if (detectScreenshot({ filename: document.original_filename, mimeType: document.mime_type, imageSize })) {
+        category = 'screenshot';
+    } else if (textDetection.hasMeaningfulText) {
         // LLM will classify later; set placeholder
         category = 'other';
     } else {
