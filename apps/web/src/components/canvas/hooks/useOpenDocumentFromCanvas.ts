@@ -54,13 +54,16 @@ export function useOpenDocumentFromCanvas() {
         async (doc: Document) => {
             const cached = queryClient.getQueryData<Document>(['document', doc.id]) ?? doc;
             const imageUrl = getThumbnailUrl(cached, 'lg') ?? getThumbnailUrl(cached, 'sm');
-            const isImage = cached.mime_type?.startsWith('image/') ?? false;
+            const mime = cached.mime_type ?? '';
+            // Image and video viewers both paint a [data-doc-hero] (their poster
+            // is this exact overlay image), so the FLIP settle can land on it.
+            const rendersHero = mime.startsWith('image/') || mime.startsWith('video/');
 
             await mountDiveOverlay(computeDestRect(cached), imageUrl);
             navigate({ to: '/document/$id', params: { id: doc.id } });
-            // Non-image viewers (PDF/txt) never paint a [data-doc-hero], so let
-            // the overlay yield to them quickly instead of holding the backdrop.
-            settleDiveOverlay(isImage ? {} : { heroTimeoutMs: 250 });
+            // Viewers without a hero (PDF/txt) never paint one, so let the overlay
+            // yield to them quickly instead of holding the backdrop.
+            settleDiveOverlay(rendersHero ? {} : { heroTimeoutMs: 250 });
         },
         [queryClient, navigate],
     );
