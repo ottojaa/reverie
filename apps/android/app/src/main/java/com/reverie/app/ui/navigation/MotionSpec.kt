@@ -35,6 +35,16 @@ enum class EasingPreset {
         LINEAR -> LinearEasing
         FAST_OUT_SLOW_IN -> FastOutSlowInEasing
     }
+
+    /** Human-readable label for the tuning UI (no SCREAMING_SNAKE_CASE). */
+    fun displayName(): String = when (this) {
+        STANDARD -> "Standard"
+        EMPHASIZED -> "Emphasized"
+        EMPHASIZED_DECELERATE -> "Emphasized decelerate"
+        EMPHASIZED_ACCELERATE -> "Emphasized accelerate"
+        LINEAR -> "Linear"
+        FAST_OUT_SLOW_IN -> "Fast out, slow in"
+    }
 }
 
 fun String.toEasingPreset(): EasingPreset =
@@ -43,21 +53,21 @@ fun String.toEasingPreset(): EasingPreset =
 /** The full set of tunable motion values. Defaults mirror the previous compile-time constants. */
 data class MotionSpec(
     /** Directional (shared-axis) page-transition duration. */
-    val navMs: Int = 300,
+    val navMs: Int = 310,
     val directionalEasing: EasingPreset = EasingPreset.FAST_OUT_SLOW_IN,
     /** Fraction of the container width the shared-axis slide travels. */
     val slideFraction: Float = 0.10f,
     /** Predictive-back pop scale target. */
-    val popScale: Float = 0.9f,
+    val popScale: Float = 0.85f,
     /** Portion of [navMs] the outgoing content fades over (the rest is the incoming fade). */
     val progressThreshold: Float = 0.35f,
     /** Container-transform (document open/close) duration. */
-    val diveMs: Int = 350,
-    val diveEasing: EasingPreset = EasingPreset.EMPHASIZED,
+    val diveMs: Int = 300,
+    val diveEasing: EasingPreset = EasingPreset.EMPHASIZED_DECELERATE,
     /** Bottom-nav re-entrance duration. */
-    val barEnterMs: Int = 300,
+    val barEnterMs: Int = 280,
     /** Viewer toolbar exit (slide-up + fade) duration on back. */
-    val toolbarExitMs: Int = 200,
+    val toolbarExitMs: Int = 280,
 ) {
     companion object {
         val Default = MotionSpec()

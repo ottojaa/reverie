@@ -24,21 +24,23 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = false,
     /** Slide the bottom navigation bar away while scrolling a list. */
-    val hideNavOnScroll: Boolean = false,
+    val hideNavOnScroll: Boolean = true,
+    /** Number of columns in the Files grid (1–4). */
+    val gridColumns: Int = 3,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
     val serverUrlOverride: String? = null,
     /** Original-file cache cap in bytes. */
     val fileCacheCapBytes: Long = DEFAULT_FILE_CACHE_CAP,
-    // TEMPORARY / DEV TUNING — motion parameters editable from the debug-only "Motion (dev)"
-    // Settings card. Bridged into MotionTuning.spec (see MotionSpec.kt). Delete with that card.
-    val motionNavMs: Int = 300,
+    // TEMPORARY / DEV TUNING — motion parameters editable from the debug-only "Animation settings"
+    // card. Bridged into MotionTuning.spec (see MotionSpec.kt). Delete with that card.
+    val motionNavMs: Int = 310,
     val motionDirectionalEasing: String = "FAST_OUT_SLOW_IN",
     val motionSlideFraction: Float = 0.10f,
-    val motionPopScale: Float = 0.9f,
-    val motionDiveMs: Int = 350,
-    val motionDiveEasing: String = "EMPHASIZED",
-    val motionBarEnterMs: Int = 300,
-    val motionToolbarExitMs: Int = 200,
+    val motionPopScale: Float = 0.85f,
+    val motionDiveMs: Int = 300,
+    val motionDiveEasing: String = "EMPHASIZED_DECELERATE",
+    val motionBarEnterMs: Int = 280,
+    val motionToolbarExitMs: Int = 280,
 ) {
     companion object {
         const val DEFAULT_FILE_CACHE_CAP = 500L * 1024 * 1024
@@ -52,6 +54,7 @@ class SettingsRepository @Inject constructor(
     private val themeKey = stringPreferencesKey("theme_mode")
     private val dynamicKey = booleanPreferencesKey("dynamic_color")
     private val hideNavKey = booleanPreferencesKey("hide_nav_on_scroll")
+    private val gridColumnsKey = intPreferencesKey("grid_columns")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
     // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
@@ -69,7 +72,8 @@ class SettingsRepository @Inject constructor(
         AppSettings(
             themeMode = prefs[themeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[dynamicKey] ?: false,
-            hideNavOnScroll = prefs[hideNavKey] ?: false,
+            hideNavOnScroll = prefs[hideNavKey] ?: defaults.hideNavOnScroll,
+            gridColumns = (prefs[gridColumnsKey] ?: defaults.gridColumns).coerceIn(1, 4),
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
             motionNavMs = prefs[motionNavMsKey] ?: defaults.motionNavMs,
@@ -93,6 +97,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setHideNavOnScroll(enabled: Boolean) {
         context.settingsDataStore.edit { it[hideNavKey] = enabled }
+    }
+
+    suspend fun setGridColumns(columns: Int) {
+        context.settingsDataStore.edit { it[gridColumnsKey] = columns.coerceIn(1, 4) }
     }
 
     suspend fun setServerUrlOverride(url: String?) {

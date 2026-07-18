@@ -16,9 +16,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,6 +80,7 @@ fun BrowseScreen(
     val activeUploads by uploadViewModel.activeCount.collectAsStateWithLifecycle()
     val review by uploadViewModel.review.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
+    val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
@@ -124,6 +128,8 @@ fun BrowseScreen(
                 folderEmoji = state.folder?.emoji,
                 subtitle = folderSubtitle(state.folder?.description, state.documents.size),
                 processingCount = state.processingCount,
+                columns = columns,
+                onSetColumns = viewModel::setGridColumns,
                 onBack = onBack,
                 onCanvas = { showCanvasSoon = true },
                 scrollBehavior = scrollBehavior,
@@ -148,7 +154,7 @@ fun BrowseScreen(
         )
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                state.isLoading -> LoadingGrid(contentPadding = gridPadding)
+                state.isLoading -> LoadingGrid(contentPadding = gridPadding, columns = columns)
                 state.error != null && state.documents.isEmpty() ->
                     Box(Modifier.padding(innerPadding).fillMaxSize()) {
                         ErrorState(message = state.error!!, onRetry = { viewModel.refresh(initial = true) })
@@ -165,7 +171,7 @@ fun BrowseScreen(
                     }
                 else -> LazyVerticalGrid(
                     state = gridState,
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Fixed(columns),
                     contentPadding = gridPadding,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
@@ -269,14 +275,23 @@ private fun BrowseTopBar(
     folderEmoji: String?,
     subtitle: String,
     processingCount: Int,
+    columns: Int,
+    onSetColumns: (Int) -> Unit,
     onBack: (() -> Unit)?,
     onCanvas: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var gridMenuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         scrollBehavior = scrollBehavior,
         windowInsets = TopAppBarDefaults.windowInsets,
+        // Transparent so the gallery reads edge-to-edge (content sits below; only the surface tint
+        // is removed) — consistent with the translucent viewer chrome.
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
+        ),
         title = {
             Column {
                 Text(
@@ -304,6 +319,24 @@ private fun BrowseTopBar(
         },
         actions = {
             ProcessingStatusBadge(count = processingCount)
+            // Grid density picker (1–4 columns), persisted. Anchored via a Box so the menu opens
+            // under the button.
+            Box {
+                IconButton(onClick = { gridMenuOpen = true }) {
+                    Icon(Icons.Outlined.GridView, contentDescription = "Grid size")
+                }
+                DropdownMenu(expanded = gridMenuOpen, onDismissRequest = { gridMenuOpen = false }) {
+                    (1..4).forEach { count ->
+                        DropdownMenuItem(
+                            text = { Text(if (count == 1) "1 column" else "$count columns") },
+                            leadingIcon = {
+                                if (count == columns) Icon(Icons.Outlined.Check, contentDescription = null)
+                            },
+                            onClick = { gridMenuOpen = false; onSetColumns(count) },
+                        )
+                    }
+                }
+            }
             if (isFolder) {
                 // Wrap button + menu in a Box so the menu anchors to the button.
                 Box {
@@ -324,17 +357,17 @@ private fun BrowseTopBar(
 }
 
 @Composable
-private fun LoadingGrid(contentPadding: PaddingValues) {
+private fun LoadingGrid(contentPadding: PaddingValues, columns: Int) {
     val visible = rememberSkeletonVisible(isLoading = true)
     if (!visible) return
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Fixed(columns),
         contentPadding = contentPadding,
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(9) { DocumentCardSkeleton() }
+        items(columns * columns * 2) { DocumentCardSkeleton() }
     }
 }
 

@@ -6,15 +6,20 @@ import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FolderDto
+import com.reverie.app.data.api.model.JobEventType
 import com.reverie.app.data.connectivity.ConnectivityMonitor
+import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
+import com.reverie.app.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,12 +56,22 @@ class BrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val documentRepository: DocumentRepository,
     private val folderRepository: FolderRepository,
+    private val settingsRepository: SettingsRepository,
+    private val realtimeManager: RealtimeManager,
     private val connectivity: ConnectivityMonitor,
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
 
     private val control = MutableStateFlow(BrowseControl())
+
+    /** User-chosen Files grid column count (1–4). */
+    val gridColumns: StateFlow<Int> = settingsRepository.settings
+        .map { it.gridColumns }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
+
+    // Open realtime subscriptions for documents whose thumbnail is still generating (keyed by id).
+    private val thumbnailSubscriptions = mutableMapOf<String, AutoCloseable>()
 
     val uiState: StateFlow<BrowseUiState> = combine(
         documentRepository.observeDocuments(folderId),
@@ -82,6 +97,51 @@ class BrowseViewModel @Inject constructor(
         if (folderId != null) {
             viewModelScope.launch { runCatching { folderRepository.refresh() } }
         }
+        observePendingThumbnails()
+        collectThumbnailJobEvents()
+    }
+
+    fun setGridColumns(columns: Int) {
+        viewModelScope.launch { settingsRepository.setGridColumns(columns) }
+    }
+
+    /**
+     * Keep a realtime subscription open for every document whose thumbnail is still being generated.
+     * Video thumbnails (ffmpeg frame extraction) finish well after the upload HTTP call returns, so
+     * without this the grid would keep showing the placeholder until a manual refresh.
+     */
+    private fun observePendingThumbnails() {
+        viewModelScope.launch {
+            documentRepository.observeDocuments(folderId)
+                .map { docs -> docs.filter { !it.thumbnail_status.isTerminal }.map { it.id }.toSet() }
+                .distinctUntilChanged()
+                .collect { pending ->
+                    (pending - thumbnailSubscriptions.keys).forEach { id ->
+                        thumbnailSubscriptions[id] = realtimeManager.subscribeDocument(id)
+                    }
+                    (thumbnailSubscriptions.keys - pending).forEach { id ->
+                        thumbnailSubscriptions.remove(id)?.close()
+                    }
+                }
+        }
+    }
+
+    /** Refetch a document (updating its cached status) when its thumbnail/processing job settles. */
+    private fun collectThumbnailJobEvents() {
+        viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                val id = event.document_id ?: return@collect
+                if (id !in thumbnailSubscriptions) return@collect
+                if (event.type == JobEventType.COMPLETE || event.type == JobEventType.FAILED) {
+                    runCatching { documentRepository.fetchDocument(id) }
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        thumbnailSubscriptions.values.forEach { it.close() }
+        thumbnailSubscriptions.clear()
     }
 
     fun refresh(initial: Boolean = false) {

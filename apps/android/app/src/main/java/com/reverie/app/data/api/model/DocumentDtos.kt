@@ -1,5 +1,6 @@
 package com.reverie.app.data.api.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -27,6 +28,10 @@ data class DocumentPhotoMetadata(
     val taken_at: String? = null,
 )
 
+// @Immutable so the Files grid can skip recomposing unchanged tiles. All fields are `val`s over
+// immutable types (JsonObject is a read-only map), so treating instances as stable is accurate and
+// lets DocumentCard skip when the same instance is re-passed. See the startup-perf notes.
+@Immutable
 @Serializable
 data class DocumentDto(
     val id: String,

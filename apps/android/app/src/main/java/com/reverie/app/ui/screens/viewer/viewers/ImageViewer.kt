@@ -25,6 +25,7 @@ import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.ui.navigation.LocalSharedTransitionScope
 import com.reverie.app.ui.navigation.MotionTuning
 import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
+import kotlin.math.pow
 
 /**
  * Full-resolution image with pinch-zoom/pan; tap toggles the immersive toolbar. Until the signed
@@ -33,8 +34,11 @@ import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
  *
  * During the open container transform the thumbnail is drawn with a Crop→Fit morph so it starts
  * filling the (cropped) grid tile and smoothly opens to a letterboxed fit — matching Google Photos
- * and avoiding the crop-vs-fit "growing shadow" mismatch. The zoomable image mounts once the
- * transform settles (and then stays mounted, so the close transform doesn't flicker back).
+ * and avoiding the crop-vs-fit "growing shadow" mismatch. The morph is FRONT-LOADED (see
+ * [MORPH_LEAD_EXP]): it reaches Fit well before the bounds finish expanding, otherwise a landscape
+ * image — whose Crop scale in a near-fullscreen box is far larger than its Fit scale — balloons
+ * past its final size around the mid-point and then visibly shrinks. The zoomable image mounts once
+ * the transform settles (and then stays mounted, so the close transform doesn't flicker back).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -82,12 +86,19 @@ fun ImageViewer(
                 .memoryCacheKey(thumbnailMemoryCacheKey(documentId, GRID_THUMBNAIL_SIZE))
                 .build(),
             contentDescription = contentDescription,
-            contentScale = MorphContentScale(morph.value),
+            // Front-load the morph toward Fit so the image never overshoots its final size while the
+            // bounds are still growing (see MORPH_LEAD_EXP + the class-level note).
+            contentScale = MorphContentScale(morph.value.pow(MORPH_LEAD_EXP)),
             modifier = modifier.fillMaxSize(),
         )
         else -> Box(modifier.fillMaxSize())
     }
 }
+
+// Exponent (<1) applied to the linear transform progress to advance the Crop→Fit morph ahead of the
+// bounds growth. ~0.3 keeps typical landscape (4:3, 16:9) monotonic — the drawn image approaches its
+// final letterboxed size from below instead of overshooting it. Smaller = more front-loaded.
+private const val MORPH_LEAD_EXP = 0.3f
 
 /**
  * A [ContentScale] that interpolates between Crop (fraction 0) and Fit (fraction 1). ContentScale

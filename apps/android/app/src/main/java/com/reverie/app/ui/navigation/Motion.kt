@@ -55,7 +55,12 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.betweenTabs(): Boo
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabForward(): Boolean =
     tabIndex(targetState.destination.route) > tabIndex(initialState.destination.route)
 
-/** Opening/closing the document viewer — a plain fade so the shared-element transform drives it. */
+/**
+ * Opening/closing the document viewer — the shared-element container transform drives the visual.
+ * Only the DOCUMENT screen fades; the grid underneath is held fully opaque (see [reverieExit] /
+ * [reveriePopEnter]). Cross-fading BOTH would momentarily expose the (light) window background
+ * between the two half-transparent layers — the "washed-out flash" during the expand.
+ */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesDocument(): Boolean =
     initialState.destination.route == Routes.DOCUMENT || targetState.destination.route == Routes.DOCUMENT
 
@@ -69,13 +74,17 @@ fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieEnter(): EnterTrans
 }
 
 fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieExit(): ExitTransition = when {
-    involvesDocument() -> fadeOut(tween(MotionTuning.spec.diveMs))
+    // Grid → document (open): keep the grid fully opaque under the fading-in viewer, so no window
+    // background shows through the cross-fade.
+    involvesDocument() -> ExitTransition.None
     betweenTabs() -> sharedAxisOut(tabDirection(tabForward()))
     else -> sharedAxisOut(SlideDirection.Left)
 }
 
 fun AnimatedContentTransitionScope<NavBackStackEntry>.reveriePopEnter(): EnterTransition = when {
-    involvesDocument() -> fadeIn(tween(MotionTuning.spec.diveMs))
+    // Document → grid (close): the grid appears instantly opaque underneath while the viewer fades
+    // out on top and the shared element shrinks — again avoiding a see-through cross-fade.
+    involvesDocument() -> EnterTransition.None
     betweenTabs() -> sharedAxisIn(tabDirection(tabForward()))
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> sharedAxisIn(SlideDirection.Right) + popEnterScale()
     else -> sharedAxisIn(SlideDirection.Right)
