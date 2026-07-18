@@ -50,18 +50,33 @@ fi
 # This is the fast, per-deploy build; it does NOT touch Python/CUDA.
 docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend
 
-# Extract web dist from builder stage
+# Extract web dist from builder stage.
 docker build \
     --target builder \
     --build-arg VITE_API_URL=https://api.reverieapp.dev \
     -t reverie-builder \
     .
-cid=$(docker create reverie-builder)
+
+# Remove any leftover extractor container from a prior run BEFORE creating a new one.
+# A stale `docker create` container used to survive an aborted deploy and then block
+# `docker rmi reverie-builder`; under `set -e` that aborted the whole deploy *before*
+# `up -d`, silently leaving the old backend running (build succeeded, restart never ran).
+docker rm -f reverie-web-extract >/dev/null 2>&1 || true
+
+cid=$(docker create --name reverie-web-extract reverie-builder)
+# Always remove the extractor container, even if `docker cp` below fails, so it can
+# never orphan and block a future deploy.
+trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+
 mkdir -p "$WEB_DIR"
 rm -rf "${WEB_DIR:?}"/*
 docker cp "$cid:/app/apps/web/dist/." "$WEB_DIR/"
-docker rm "$cid"
-docker rmi reverie-builder
+
+docker rm -f "$cid" >/dev/null 2>&1 || true
+trap - EXIT
+# Best-effort image cleanup — this is cosmetic and must NEVER abort the deploy, so the
+# critical `up -d` + migrations below always run.
+docker rmi -f reverie-builder >/dev/null 2>&1 || true
 
 # Start/restart containers
 docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d
