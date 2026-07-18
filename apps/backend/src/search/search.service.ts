@@ -16,8 +16,9 @@ import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { generateFacets } from './facets';
+import { buildPrefixTsQuery, documentJoins } from './filter-application';
 import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
-import { buildPrefixTsQuery, buildSearchQuery, type SearchQueryOptions } from './query-builder';
+import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
 import { parseQuery, validateQuery } from './query-parser';
 
 /**
@@ -36,31 +37,8 @@ export interface SearchServiceOptions {
 export async function search(query: SearchQuery, options: SearchServiceOptions): Promise<SearchResponse> {
     const startTime = performance.now();
 
-    // Parse the query string
+    // Parse the query string — all filtering is expressed inside the q DSL
     const parsed = parseQuery(query.q);
-
-    // Apply API-level filters (these override/supplement parsed query)
-    if (query.category) {
-        parsed.categories = parsed.categories ? [...parsed.categories, query.category] : [query.category];
-    }
-
-    if (query.folder_id) {
-        parsed.folderIds = parsed.folderIds ? [...parsed.folderIds, query.folder_id] : [query.folder_id];
-    }
-
-    if (query.date_from) {
-        parsed.extractedDateRange = {
-            ...parsed.extractedDateRange,
-            start: new Date(query.date_from),
-        };
-    }
-
-    if (query.date_to) {
-        parsed.extractedDateRange = {
-            ...parsed.extractedDateRange,
-            end: new Date(query.date_to),
-        };
-    }
 
     // Validate the parsed query
     const errors = validateQuery(parsed);
@@ -135,16 +113,6 @@ function shouldSearchFolders(parsed: ParsedQuery, query: SearchQuery): boolean {
     return !hasDocumentFilters;
 }
 
-/** documents + the joins the search filters/snippets reference. */
-function documentJoins() {
-    return db
-        .selectFrom('documents as d')
-        .leftJoin('folders as f', 'f.id', 'd.folder_id')
-        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
-        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
-}
-
 /** Documents-only path: existing behavior (browse, filters, non-relevance sorts). */
 async function searchDocumentsPaged(
     parsed: ParsedQuery,
@@ -152,9 +120,7 @@ async function searchDocumentsPaged(
     options: SearchQueryOptions,
     privateFolderIds: string[],
 ): Promise<{ results: SearchHit[]; total: number }> {
-    const idRows = await buildSearchQuery(documentJoins() as any, parsed, userId, options, privateFolderIds)
-        .select('d.id')
-        .execute();
+    const idRows = await buildSearchQuery(documentJoins(), parsed, userId, options, privateFolderIds).select('d.id').execute();
     const ids = (idRows as Array<{ id: string }>).map((r) => r.id);
 
     const [detailMap, total] = await Promise.all([fetchDocumentDetails(userId, ids, parsed), countDocuments(parsed, userId, privateFolderIds)]);
@@ -185,7 +151,7 @@ async function searchInterleaved(
     const window = offset + limit;
 
     const docOrderRows = (await buildSearchQuery(
-        documentJoins() as any,
+        documentJoins(),
         parsed,
         userId,
         { limit: window, offset: 0, sortBy: 'relevance', sortOrder },
@@ -269,9 +235,9 @@ async function searchInterleaved(
 }
 
 /** Count matching documents (same filters, no pagination). */
-async function countDocuments(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<number> {
+export async function countDocuments(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<number> {
     const countResult = await buildSearchQuery(
-        documentJoins() as any,
+        documentJoins(),
         parsed,
         userId,
         { limit: 1000000, offset: 0, sortBy: 'uploaded', sortOrder: 'desc' },
@@ -523,14 +489,7 @@ export async function findDocumentsForOrganize(
     // Private documents/folders are always excluded from organize retrieval.
     const privateFolderIds = await getPrivateFolderIds(options.userId);
 
-    const baseQuery = db
-        .selectFrom('documents as d')
-        .leftJoin('folders as f', 'f.id', 'd.folder_id')
-        .leftJoin('ocr_results as ocr', 'ocr.document_id', 'd.id')
-        .leftJoin('llm_results as llm', 'llm.document_id', 'd.id')
-        .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id');
-
-    const searchQuery = buildSearchQuery(baseQuery as any, parsed, options.userId, queryOptions, privateFolderIds);
+    const searchQuery = buildSearchQuery(documentJoins(), parsed, options.userId, queryOptions, privateFolderIds);
 
     const rows = await searchQuery
         .select([

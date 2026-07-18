@@ -1,12 +1,14 @@
+import { QuickFilterChips } from '@/components/search/QuickFilterChips';
 import { Button } from '@/components/ui/button';
+import { SectionIcon } from '@/components/ui/SectionIcon';
 import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSearchState } from '@/lib/hooks/useSearchState';
 import { cn } from '@/lib/utils';
-import type { SearchHit, SuggestionType } from '@reverie/shared';
+import { addFilter, type SearchHit, type SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { ArrowRight, Clock, FileText, Folder, FolderOpen, HardDrive, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, TrendingUp, X } from 'lucide-react';
+import { ArrowRight, Clock, FileText, Folder, FolderOpen, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -16,15 +18,6 @@ interface SearchCommandPaletteProps {
     onOpenChange: (open: boolean) => void;
     initialQuery?: string;
 }
-
-const quickFilterIcons: Record<string, typeof FileText> = {
-    image: Image,
-    'file-text': FileText,
-    receipt: FileText,
-    clock: Clock,
-    'hard-drive': HardDrive,
-    'trending-up': TrendingUp,
-};
 
 const suggestionTypeIcons: Record<SuggestionType, typeof FileText> = {
     filename: FileText,
@@ -55,8 +48,6 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const hasQuery = query.trim().length > 0;
     const hasDebounced = debouncedQuery.trim().length > 0;
 
-    const { data: quickFilters } = useQuickFilters();
-
     const { data: suggestions, isLoading: suggestionsLoading } = useSearchSuggestions(activeSuggestionType, debouncedQuery, 5);
 
     const { data: previewResults, isLoading: searchLoading } = useSearch({ q: debouncedQuery, limit: 5, include_facets: false }, hasDebounced);
@@ -82,7 +73,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
             if (!searchQuery.trim()) return;
 
             onOpenChange(false);
-            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc' } });
+            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined } });
         },
         [navigate, onOpenChange],
     );
@@ -111,15 +102,8 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
     const handleSuggestionClick = useCallback(
         (suggestion: string, type: SuggestionType) => {
-            const filterMap: Record<SuggestionType, string> = {
-                filename: suggestion,
-                folder: `folder:${suggestion}`,
-                tag: `tag:${suggestion}`,
-                entity: `entity:${suggestion}`,
-                category: `category:${suggestion}`,
-                location: `location:${suggestion}`,
-            };
-            const newQuery = type === 'filename' ? suggestion : `${query.trim()} ${filterMap[type]}`.trim();
+            // Token-level append handles quoting for multi-word values (folder:"New York")
+            const newQuery = type === 'filename' ? suggestion : addFilter(query.trim(), type, suggestion);
             setQuery(newQuery);
             navigateToSearch(newQuery);
         },
@@ -204,7 +188,6 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                     <EmptyState
                                         key="empty"
                                         recentSearches={recentSearches.slice(0, 5)}
-                                        quickFilters={quickFilters ?? []}
                                         onRecentSearch={handleRecentSearch}
                                         onRemoveRecent={removeRecentSearch}
                                         onQuickFilter={handleQuickFilter}
@@ -259,13 +242,14 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
 interface EmptyStateProps {
     recentSearches: Array<{ query: string }>;
-    quickFilters: Array<{ label: string; query: string; icon?: string }>;
     onRecentSearch: (query: string) => void;
     onRemoveRecent: (query: string) => void;
     onQuickFilter: (query: string) => void;
 }
 
-function EmptyState({ recentSearches, quickFilters, onRecentSearch, onRemoveRecent, onQuickFilter }: EmptyStateProps) {
+function EmptyState({ recentSearches, onRecentSearch, onRemoveRecent, onQuickFilter }: EmptyStateProps) {
+    const { data: quickFilters } = useQuickFilters();
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
             {recentSearches.length > 0 && (
@@ -296,30 +280,26 @@ function EmptyState({ recentSearches, quickFilters, onRecentSearch, onRemoveRece
                 </Command.Group>
             )}
 
-            {quickFilters.length > 0 && (
+            {(quickFilters?.length ?? 0) > 0 && (
                 <Command.Group heading={<span className="px-1 text-xs font-medium text-muted-foreground">Quick Filters</span>}>
-                    <div className="flex flex-wrap gap-1.5 px-1 py-1.5">
-                        {quickFilters.map((filter) => {
-                            const Icon = filter.icon ? (quickFilterIcons[filter.icon] ?? FileText) : FileText;
-
-                            return (
-                                <Button
-                                    key={filter.query}
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => onQuickFilter(filter.query)}
-                                    className="rounded-full gap-1.5 px-3 py-1.5 text-xs"
-                                >
-                                    <Icon className="size-3 text-muted-foreground" />
-                                    {filter.label}
-                                </Button>
-                            );
-                        })}
-                    </div>
+                    <QuickFilterChips
+                        onSelect={onQuickFilter}
+                        className="flex flex-wrap gap-1.5 px-1 py-1.5"
+                        renderItem={(chip, filter) => (
+                            <Command.Item
+                                key={filter.id}
+                                value={`quick-${filter.id}`}
+                                onSelect={() => onQuickFilter(filter.query)}
+                                className="rounded-full data-[selected=true]:ring-2 data-[selected=true]:ring-ring/50"
+                            >
+                                {chip}
+                            </Command.Item>
+                        )}
+                    />
                 </Command.Group>
             )}
 
-            {recentSearches.length === 0 && quickFilters.length === 0 && (
+            {recentSearches.length === 0 && (quickFilters?.length ?? 0) === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                     <Search className="mx-auto mb-2 size-8 opacity-30" />
                     <p>Search your documents by content, filename, or metadata</p>
@@ -488,7 +468,8 @@ function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: 
                 className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors aria-selected:bg-secondary data-[selected=true]:bg-secondary"
             >
                 <div className="flex size-7 shrink-0 items-center justify-center rounded bg-primary/10 text-sm">
-                    {result.emoji ? <span aria-hidden>{result.emoji}</span> : <FolderIcon className="size-3.5 text-primary" />}
+                    {/* emoji can hold a lucide icon slug — SectionIcon resolves it (never render it as text) */}
+                    {result.emoji ? <SectionIcon value={result.emoji} className="size-3.5 text-primary" /> : <FolderIcon className="size-3.5 text-primary" />}
                 </div>
                 <div className="min-w-0 flex-1">
                     <span className="block truncate">{result.name}</span>

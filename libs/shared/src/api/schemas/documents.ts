@@ -35,6 +35,14 @@ export const DocumentCategoryEnum = z.enum([
 
 export type DocumentCategory = z.infer<typeof DocumentCategoryEnum>;
 
+/** Categories for visual/media content that carries no meaningful text. */
+export const NON_TEXT_CATEGORIES = ['photo', 'screenshot', 'graphic', 'video'] as const satisfies readonly DocumentCategory[];
+
+/** Text-bearing document categories — everything in DocumentCategoryEnum that isn't visual/media. */
+export const TEXT_DOCUMENT_CATEGORIES: readonly DocumentCategory[] = DocumentCategoryEnum.options.filter(
+    (category) => !(NON_TEXT_CATEGORIES as readonly string[]).includes(category),
+);
+
 export const ThumbnailPathsSchema = z.object({
     sm: z.string(),
     md: z.string(),

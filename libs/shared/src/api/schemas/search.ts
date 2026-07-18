@@ -65,15 +65,13 @@ export type ParsedQuery = z.infer<typeof ParsedQuerySchema>;
 export const SortByEnum = z.enum(['relevance', 'uploaded', 'date', 'filename', 'size']);
 export type SortBy = z.infer<typeof SortByEnum>;
 
+// All filtering is expressed inside the `q` DSL (see libs/shared/src/search/query-tokens.ts)
 export const SearchQuerySchema = PaginationQuerySchema.extend({
     q: z.string().min(0).default(''), // Allow empty for browsing
-    category: DocumentCategoryEnum.optional(),
-    date_from: DateOnlySchema.optional(),
-    date_to: DateOnlySchema.optional(),
-    folder_id: UuidSchema.optional(),
     sort_by: SortByEnum.default('relevance'),
     sort_order: z.enum(['asc', 'desc']).default('desc'),
-    include_facets: z.coerce.boolean().default(true),
+    // Not z.coerce.boolean(): that turns the query-string "false" into true
+    include_facets: z.union([z.boolean(), z.string().transform((v) => v !== 'false' && v !== '0')]).default(true),
 });
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
@@ -153,6 +151,17 @@ export type SearchHit = z.infer<typeof SearchHitSchema>;
 // Facets
 // ============================================================================
 
+/**
+ * A single facet value with its query-narrowed count.
+ *
+ * Semantics (computed backend-side in search/facets.ts):
+ * - `count` applies every active filter EXCEPT the facet's own dimension, so it
+ *   answers "how many results if I click this?" (facet count === result count).
+ * - `selected` means the value is present in the query's positive filters.
+ * - Selected values are always returned, even as `{ count: 0, selected: true }`,
+ *   so a checked filter entry never disappears from the UI. Zero-count
+ *   unselected values are omitted.
+ */
 export const FacetItemSchema = z.object({
     name: z.string(),
     count: z.number(),
@@ -248,10 +257,17 @@ export type FacetsResponse = z.infer<typeof FacetsResponseSchema>;
 // Quick filters and help
 // ============================================================================
 
+/**
+ * A predefined search shortcut with its live result count. Counts run through
+ * the real search count path, so a chip's count always equals what clicking it
+ * returns; zero-count candidates are dropped backend-side.
+ */
 export const QuickFilterSchema = z.object({
+    id: z.string(),
     label: z.string(),
     query: z.string(),
     icon: z.string().optional(),
+    count: z.number(),
 });
 
 export type QuickFilter = z.infer<typeof QuickFilterSchema>;

@@ -12,6 +12,9 @@ export * from './domain/thumbnails.js';
 // Errors
 export * from './errors.js';
 
+// Search query DSL tokens
+export * from './search/query-tokens.js';
+
 // Helpers
 export * from './helpers/formatting.js';
 export * from './helpers/utils.js';

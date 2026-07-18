@@ -1,6 +1,6 @@
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
-import { buildPrefixTsQuery } from './query-builder';
+import { buildPrefixTsQuery } from './filter-application';
 
 /**
  * Snippet/Highlight Generator for Search Results

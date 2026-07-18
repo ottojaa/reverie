@@ -7,10 +7,12 @@ import {
     SuggestResponseSchema,
     FacetsQuerySchema,
     FacetsResponseSchema,
+    QuickFiltersResponseSchema,
     type SearchQuery,
     type SuggestQuery,
     type FacetsQuery,
 } from '@reverie/shared';
+import { getQuickFilters } from '../../search/quick-filters';
 import { search, getFacetsOnly, suggest } from '../../search/search.service';
 
 export default async function (fastify: FastifyInstance) {
@@ -129,7 +131,7 @@ export default async function (fastify: FastifyInstance) {
     );
 
     /**
-     * Quick search filters (predefined shortcuts)
+     * Quick search filters (predefined shortcuts with live counts)
      *
      * GET /api/search/quick-filters
      */
@@ -138,30 +140,15 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Get predefined quick search filters',
+                description: 'Get predefined quick search filters with live result counts',
                 tags: ['search'],
                 response: {
-                    200: z.array(
-                        z.object({
-                            label: z.string(),
-                            query: z.string(),
-                            icon: z.string().optional(),
-                        }),
-                    ),
+                    200: QuickFiltersResponseSchema,
                 },
             },
         },
-        async function () {
-            return [
-                { label: 'Photos', query: 'type:photo', icon: 'image' },
-                { label: 'Documents', query: 'type:document', icon: 'file-text' },
-                { label: 'Receipts', query: 'category:transaction_receipt', icon: 'receipt' },
-                { label: 'Recent', query: 'uploaded:last-week', icon: 'clock' },
-                { label: 'Large files', query: 'size:>10MB', icon: 'hard-drive' },
-                { label: 'No text', query: '-has:text', icon: 'image' },
-                { label: 'With summary', query: 'has:summary', icon: 'file-text' },
-                { label: 'Stock statements', query: 'category:stock_overview', icon: 'trending-up' },
-            ];
+        async function (request) {
+            return getQuickFilters(request.user.id);
         },
     );
 
@@ -214,7 +201,7 @@ export default async function (fastify: FastifyInstance) {
                     {
                         name: 'category',
                         syntax: 'category:<name>',
-                        examples: ['category:stock_overview', 'category:transaction_receipt'],
+                        examples: ['category:stock_statement', 'category:receipt'],
                         description: 'Filter by document category',
                     },
                     {
@@ -269,10 +256,10 @@ export default async function (fastify: FastifyInstance) {
                 examples: [
                     { query: 'vacation beach', description: 'Search for "vacation beach" in all fields' },
                     { query: 'type:photo folder:vacation uploaded:2024', description: 'Photos in vacation folder from 2024' },
-                    { query: 'category:stock_overview company:Apple date:2022-2025', description: 'Apple stock statements from 2022-2025' },
+                    { query: 'category:stock_statement company:Apple date:2022-2025', description: 'Apple stock statements from 2022-2025' },
                     { query: 'format:pdf folder:/documents/tax', description: 'PDFs in tax folder' },
                     { query: 'size:>5MB -has:thumbnail', description: 'Large files without thumbnails' },
-                    { query: '"dividend payment" category:dividend_statement', description: 'Dividend statements containing "dividend payment"' },
+                    { query: '"dividend payment" category:stock_statement', description: 'Dividend statements containing "dividend payment"' },
                 ],
             };
         },

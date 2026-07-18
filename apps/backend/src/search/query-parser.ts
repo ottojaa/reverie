@@ -1,4 +1,4 @@
-import type { ParsedQuery, DateRange } from '@reverie/shared';
+import { tokenizeQuery, type ParsedQuery, type DateRange } from '@reverie/shared';
 
 /**
  * Query Parser for Advanced Search
@@ -18,14 +18,6 @@ import type { ParsedQuery, DateRange } from '@reverie/shared';
  * - Negation: -has:text, -type:photo
  */
 
-// Token types
-interface Token {
-    type: 'text' | 'quoted' | 'filter';
-    value: string;
-    key?: string;
-    negated?: boolean;
-}
-
 // Size units
 const SIZE_UNITS: Record<string, number> = {
     b: 1,
@@ -43,110 +35,24 @@ const RELATIVE_DATES: Record<string, DateRange['relative']> = {
     'last-year': 'last-year',
 };
 
-// Type aliases (what users type -> internal category)
-const TYPE_ALIASES: Record<string, string[]> = {
-    photo: ['photo'],
-    photos: ['photo'],
-    image: ['photo'],
-    images: ['photo'],
-    document: ['document', 'stock_overview', 'stock_split', 'dividend_statement', 'transaction_receipt'],
-    documents: ['document', 'stock_overview', 'stock_split', 'dividend_statement', 'transaction_receipt'],
-    doc: ['document', 'stock_overview', 'stock_split', 'dividend_statement', 'transaction_receipt'],
-    receipt: ['transaction_receipt'],
-    receipts: ['transaction_receipt'],
-    screenshot: ['screenshot'],
-    screenshots: ['screenshot'],
-    video: ['video'],
-    videos: ['video'],
+// Type aliases (what users type -> canonical type token). Expansion of a
+// canonical type into document categories lives in the query builder
+// (TYPE_TO_CATEGORIES), not here — parsed.types holds canonical tokens only.
+const TYPE_ALIASES: Record<string, string> = {
+    photo: 'photo',
+    photos: 'photo',
+    image: 'photo',
+    images: 'photo',
+    document: 'document',
+    documents: 'document',
+    doc: 'document',
+    receipt: 'receipt',
+    receipts: 'receipt',
+    screenshot: 'screenshot',
+    screenshots: 'screenshot',
+    video: 'video',
+    videos: 'video',
 };
-
-/**
- * Tokenize the query string into parts
- */
-function tokenize(query: string): Token[] {
-    const tokens: Token[] = [];
-    let i = 0;
-    const chars = Array.from(query); // Convert to array for safer indexing
-
-    while (i < chars.length) {
-        // Skip whitespace
-        while (i < chars.length && /\s/.test(chars[i] ?? '')) {
-            i++;
-        }
-
-        if (i >= chars.length) break;
-
-        // Check for negation
-        const negated = chars[i] === '-';
-
-        if (negated) i++;
-
-        // Check for quoted string
-        if (chars[i] === '"') {
-            i++; // Skip opening quote
-            let value = '';
-
-            while (i < chars.length && chars[i] !== '"') {
-                value += chars[i] ?? '';
-                i++;
-            }
-
-            i++; // Skip closing quote
-            tokens.push({ type: 'quoted', value, negated });
-            continue;
-        }
-
-        // Read until whitespace or end
-        let word = '';
-
-        while (i < chars.length && !/\s/.test(chars[i] ?? '')) {
-            word += chars[i] ?? '';
-            i++;
-        }
-
-        // Check if it's a filter (key:value)
-        const colonIndex = word.indexOf(':');
-
-        if (colonIndex > 0) {
-            const key = word.slice(0, colonIndex).toLowerCase();
-            let value = word.slice(colonIndex + 1);
-
-            // Handle quoted values in filters like entity:"John Smith"
-            if (value.startsWith('"') && !value.endsWith('"')) {
-                // Read until closing quote
-                value = value.slice(1); // Remove opening quote
-
-                while (i < chars.length && chars[i - 1] !== '"') {
-                    const currentChar = chars[i] ?? '';
-
-                    if (/\s/.test(currentChar)) {
-                        value += currentChar;
-                        i++;
-                    } else {
-                        // Continue reading the word
-                        while (i < chars.length && !/\s/.test(chars[i] ?? '') && chars[i] !== '"') {
-                            value += chars[i] ?? '';
-                            i++;
-                        }
-
-                        if (chars[i] === '"') {
-                            i++; // Skip closing quote
-                            break;
-                        }
-                    }
-                }
-            } else if (value.startsWith('"') && value.endsWith('"')) {
-                value = value.slice(1, -1); // Remove quotes
-            }
-
-            tokens.push({ type: 'filter', key, value, negated });
-        } else {
-            tokens.push({ type: 'text', value: word, negated });
-        }
-    }
-
-    return tokens;
-}
 
 /**
  * Parse a size string like "10MB" or ">5KB"
@@ -287,7 +193,7 @@ export function resolveRelativeDate(relative: DateRange['relative']): { start: D
  * Parse the query string into a structured ParsedQuery object
  */
 export function parseQuery(query: string): ParsedQuery {
-    const tokens = tokenize(query.trim());
+    const tokens = tokenizeQuery(query.trim());
     const parsed: ParsedQuery = {};
     const negations: Partial<ParsedQuery> = {};
     const textParts: string[] = [];
@@ -315,11 +221,11 @@ export function parseQuery(query: string): ParsedQuery {
 
             case 'type': {
                 // File type: type:photo, type:document
-                const types = TYPE_ALIASES[token.value.toLowerCase()] || [token.value.toLowerCase()];
+                const type = TYPE_ALIASES[token.value.toLowerCase()] ?? token.value.toLowerCase();
 
                 if (!target.types) target.types = [];
 
-                target.types.push(...types);
+                target.types.push(type);
                 break;
             }
 
