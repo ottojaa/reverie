@@ -56,22 +56,34 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.betweenTabs(): Boo
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabForward(): Boolean =
     tabIndex(targetState.destination.route) > tabIndex(initialState.destination.route)
 
+/** Opening/closing the document viewer — a plain fade so the shared-element transform drives it. */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesDocument(): Boolean =
+    initialState.destination.route == Routes.DOCUMENT || targetState.destination.route == Routes.DOCUMENT
+
 private fun tabDirection(forward: Boolean): SlideDirection =
     if (forward) SlideDirection.Left else SlideDirection.Right
 
-fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieEnter(): EnterTransition =
-    if (betweenTabs()) sharedAxisIn(tabDirection(tabForward())) else sharedAxisIn(SlideDirection.Left)
+fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieEnter(): EnterTransition = when {
+    involvesDocument() -> fadeIn(tween(NAV_MS))
+    betweenTabs() -> sharedAxisIn(tabDirection(tabForward()))
+    else -> sharedAxisIn(SlideDirection.Left)
+}
 
-fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieExit(): ExitTransition =
-    if (betweenTabs()) sharedAxisOut(tabDirection(tabForward())) else sharedAxisOut(SlideDirection.Left)
+fun AnimatedContentTransitionScope<NavBackStackEntry>.reverieExit(): ExitTransition = when {
+    involvesDocument() -> fadeOut(tween(NAV_MS))
+    betweenTabs() -> sharedAxisOut(tabDirection(tabForward()))
+    else -> sharedAxisOut(SlideDirection.Left)
+}
 
 fun AnimatedContentTransitionScope<NavBackStackEntry>.reveriePopEnter(): EnterTransition = when {
+    involvesDocument() -> fadeIn(tween(NAV_MS))
     betweenTabs() -> sharedAxisIn(tabDirection(tabForward()))
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> sharedAxisIn(SlideDirection.Right) + popEnterScale()
     else -> sharedAxisIn(SlideDirection.Right)
 }
 
 fun AnimatedContentTransitionScope<NavBackStackEntry>.reveriePopExit(): ExitTransition = when {
+    involvesDocument() -> fadeOut(tween(NAV_MS))
     betweenTabs() -> sharedAxisOut(tabDirection(tabForward()))
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> sharedAxisOut(SlideDirection.Right) + popExitScale()
     else -> sharedAxisOut(SlideDirection.Right)

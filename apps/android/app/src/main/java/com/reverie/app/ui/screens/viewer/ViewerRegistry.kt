@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.viewer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.ui.screens.viewer.viewers.FallbackViewer
 import com.reverie.app.ui.screens.viewer.viewers.ImageViewer
 import com.reverie.app.ui.screens.viewer.viewers.PdfViewer
@@ -37,7 +38,14 @@ fun DocumentViewerBody(
     modifier: Modifier = Modifier,
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
-        ViewerType.IMAGE -> ImageViewer(fileUrl = fileUrl, contentDescription = document.original_filename, onTap = onToggleImmersive, modifier = modifier)
+        ViewerType.IMAGE -> ImageViewer(
+            fileUrl = fileUrl,
+            documentId = document.id,
+            hasThumbnail = document.thumbnail_status == JobStatus.COMPLETE,
+            contentDescription = document.original_filename,
+            onTap = onToggleImmersive,
+            modifier = modifier,
+        )
         ViewerType.VIDEO -> VideoViewer(fileUrl = fileUrl, modifier = modifier)
         ViewerType.PDF -> PdfViewer(loadFile = loadFile, modifier = modifier)
         ViewerType.TEXT -> TextViewer(loadFile = loadFile, modifier = modifier)

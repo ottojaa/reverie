@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatShortDate
 
@@ -50,6 +51,7 @@ fun DocumentCard(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(4f / 5f)
+            .documentSharedBounds(document.id)
             .clip(TileShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .then(

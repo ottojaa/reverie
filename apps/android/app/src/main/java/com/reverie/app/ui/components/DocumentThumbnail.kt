@@ -16,10 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
 
@@ -39,7 +42,12 @@ fun DocumentThumbnail(
         if (hasThumbnail) {
             val placeholder = rememberBlurhashPainter(document.thumbnail_blurhash)
             AsyncImage(
-                model = ThumbnailRef(document.id, size),
+                // Explicit memory-cache key so the viewer can reuse this exact decoded bitmap as
+                // its placeholder during the container transform (see thumbnailMemoryCacheKey).
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(ThumbnailRef(document.id, size))
+                    .memoryCacheKey(thumbnailMemoryCacheKey(document.id, size))
+                    .build(),
                 contentDescription = document.original_filename,
                 contentScale = ContentScale.Crop,
                 placeholder = placeholder,

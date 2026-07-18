@@ -1,8 +1,13 @@
 package com.reverie.app.ui.navigation
 
+import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -30,7 +35,7 @@ fun ReverieNavGraph(
         popEnterTransition = { reveriePopEnter() },
         popExitTransition = { reveriePopExit() },
     ) {
-        composable(Screen.Files.route) {
+        reverieComposable(Screen.Files.route) {
             BrowseScreen(
                 onDocumentClick = { navController.navigate(Routes.document(it)) },
             )
@@ -49,7 +54,7 @@ fun ReverieNavGraph(
             )
         }
 
-        composable(Screen.Search.route) {
+        reverieComposable(Screen.Search.route) {
             SearchScreen(
                 onDocumentClick = { navController.navigate(Routes.document(it)) },
                 onOpenFolder = { navController.navigate(Routes.folder(it)) },
@@ -68,7 +73,7 @@ fun ReverieNavGraph(
             )
         }
 
-        composable(
+        reverieComposable(
             route = Routes.FOLDER,
             arguments = listOf(navArgument("folderId") { type = NavType.StringType }),
         ) { entry ->
@@ -80,7 +85,7 @@ fun ReverieNavGraph(
             )
         }
 
-        composable(
+        reverieComposable(
             route = Routes.DOCUMENT,
             arguments = listOf(navArgument("id") { type = NavType.StringType }),
         ) { entry ->
@@ -90,5 +95,19 @@ fun ReverieNavGraph(
                 onBackClick = { navController.popBackStack() },
             )
         }
+    }
+}
+
+/**
+ * A nav destination that exposes its [AnimatedContentScope] via [LocalNavAnimatedContentScope] so
+ * shared-element transforms (document open) can bridge across destinations.
+ */
+private fun NavGraphBuilder.reverieComposable(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
+) = composable(route, arguments) { entry ->
+    CompositionLocalProvider(LocalNavAnimatedContentScope provides this) {
+        content(entry)
     }
 }

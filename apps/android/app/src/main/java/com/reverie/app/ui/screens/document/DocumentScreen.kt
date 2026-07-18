@@ -30,6 +30,8 @@ import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.domain.model.toInsightPhase
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ErrorState
+import com.reverie.app.ui.navigation.aboveSharedElements
+import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.DocumentViewerBody
 import com.reverie.app.ui.screens.viewer.InsightSheet
@@ -62,27 +64,33 @@ fun DocumentScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { _ ->
         Box(Modifier.fillMaxSize()) {
-            when {
-                document != null -> DocumentViewerBody(
-                    document = document,
-                    fileUrl = state.fileUrl,
-                    loadFile = { viewModel.originalFile() },
-                    onToggleImmersive = { immersive = !immersive },
-                    onDownload = { downloadDocument(context, state.fileUrl, document) },
-                    modifier = Modifier.fillMaxSize(),
-                )
-                state.error != null -> ErrorState(message = state.error!!, onRetry = viewModel::load)
-                else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            // The shared container transform expands the tapped grid tile into this box (keyed on
+            // the nav-arg id so the match exists on the very first frame, before the doc loads).
+            Box(Modifier.fillMaxSize().documentSharedBounds(documentId)) {
+                when {
+                    document != null -> DocumentViewerBody(
+                        document = document,
+                        fileUrl = state.fileUrl,
+                        loadFile = { viewModel.originalFile() },
+                        onToggleImmersive = { immersive = !immersive },
+                        onDownload = { downloadDocument(context, state.fileUrl, document) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    state.error != null -> ErrorState(message = state.error!!, onRetry = viewModel::load)
+                    else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
 
             // Subtle fade + short vertical slide. The old default (fadeIn + expandIn from the
-            // bottom-end) combined with the screen push read as a diagonal fly-in.
+            // bottom-end) combined with the screen push read as a diagonal fly-in. Rendered above
+            // the shared element so it isn't occluded during the container transform.
             AnimatedVisibility(
                 visible = !immersive,
                 enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it / 3 },
                 exit = slideOutVertically(tween(150)) { -it / 3 } + fadeOut(tween(150)),
+                modifier = Modifier.aboveSharedElements(),
             ) {
                 ViewerToolbar(
                     document = document,
