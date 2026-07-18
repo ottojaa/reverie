@@ -51,6 +51,7 @@
     },
     "scripts": {
         "create-user": "node apps/backend/src/scripts/create-user.js",
-        "reprocess": "node apps/backend/src/scripts/reprocess.js"
+        "reprocess": "node apps/backend/src/scripts/reprocess.js",
+        "backfill-thumbnails": "node apps/backend/src/scripts/backfill-thumbnails.js"
     }
 }
