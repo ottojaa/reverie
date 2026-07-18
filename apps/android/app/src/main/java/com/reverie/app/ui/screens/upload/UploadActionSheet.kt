@@ -110,7 +110,7 @@ fun UploadActionSheet(
                 requestMediaThenPick(context, mediaPermission::launch) { showMediaPicker = true }
             }
             ActionRow(Icons.Outlined.Folder, "Files") {
-                documentsLauncher.launch(arrayOf("application/pdf", "image/*", "text/*", "application/*"))
+                documentsLauncher.launch(arrayOf("application/pdf", "image/*", "video/*", "audio/*", "text/*", "application/*"))
             }
         }
     }

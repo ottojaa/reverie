@@ -5,13 +5,16 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.UpdateFolderRequest
 import com.reverie.app.data.local.entity.UploadItemEntity
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.UploadRepository
 import com.reverie.app.data.upload.MediaAsset
 import com.reverie.app.data.upload.MediaStorePhotoSource
+import com.reverie.app.ui.screens.collections.FolderFormData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +28,19 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class FolderOption(val id: String, val label: String, val emoji: String?)
+
+/**
+ * A collection (or the root pseudo-group) with its uploadable child folders, for the hierarchical
+ * folder picker. [collectionId] is the parent id used when creating a folder here — null for the
+ * root pseudo-section, whose new folders have no parent.
+ */
+data class FolderPickerSection(
+    val id: String,
+    val name: String,
+    val emoji: String?,
+    val collectionId: String?,
+    val folders: List<FolderOption>,
+)
 
 data class ReviewState(
     val uris: List<Uri>,
@@ -40,15 +56,21 @@ class UploadViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val uploadRepository: UploadRepository,
     private val mediaSource: MediaStorePhotoSource,
-    folderRepository: FolderRepository,
+    private val folderRepository: FolderRepository,
 ) : ViewModel() {
 
     suspend fun loadMedia(): List<MediaAsset> = mediaSource.queryRecent()
 
     private var lastUsedFolderId: String? = null
 
+    /** Flat list of all selectable folders, for default selection and name lookup. */
     val folders: StateFlow<List<FolderOption>> = folderRepository.observeTree()
         .map { flattenFolders(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Collections with their child folders, for the hierarchical picker. */
+    val pickerSections: StateFlow<List<FolderPickerSection>> = folderRepository.observeTree()
+        .map { toPickerSections(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _review = MutableStateFlow<ReviewState?>(null)
@@ -102,6 +124,28 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    /** Create a folder inline from the picker and select it. [parentId] null → a root-level folder. */
+    fun createFolder(parentId: String?, form: FolderFormData) {
+        viewModelScope.launch {
+            runCatching {
+                val created = folderRepository.create(
+                    CreateFolderRequest(
+                        name = form.name,
+                        parent_id = parentId,
+                        description = form.description,
+                        emoji = form.emoji,
+                        type = FolderType.FOLDER,
+                    ),
+                )
+                if (form.isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))
+                created
+            }.onSuccess { created ->
+                lastUsedFolderId = created.id
+                _review.update { it?.copy(folderId = created.id, folderName = created.name) }
+            }
+        }
+    }
+
     fun dismiss() {
         _review.value = null
     }
@@ -131,10 +175,33 @@ class UploadViewModel @Inject constructor(
             }
             node.children.forEach { child ->
                 if (child.type == FolderType.FOLDER) {
-                    out += FolderOption(child.id, "${node.name} / ${child.name}", child.emoji)
+                    out += FolderOption(child.id, child.name, child.emoji)
                 }
             }
         }
         return out
+    }
+
+    private fun toPickerSections(tree: List<FolderWithChildren>): List<FolderPickerSection> {
+        val sections = mutableListOf<FolderPickerSection>()
+        val rootFolders = mutableListOf<FolderOption>()
+        tree.forEach { node ->
+            when (node.type) {
+                FolderType.COLLECTION -> sections += FolderPickerSection(
+                    id = node.id,
+                    name = node.name,
+                    emoji = node.emoji,
+                    collectionId = node.id,
+                    folders = node.children
+                        .filter { it.type == FolderType.FOLDER }
+                        .map { FolderOption(it.id, it.name, it.emoji) },
+                )
+                FolderType.FOLDER -> rootFolders += FolderOption(node.id, node.name, node.emoji)
+            }
+        }
+        if (rootFolders.isNotEmpty()) {
+            sections += FolderPickerSection(id = "root", name = "Folders", emoji = null, collectionId = null, folders = rootFolders)
+        }
+        return sections
     }
 }

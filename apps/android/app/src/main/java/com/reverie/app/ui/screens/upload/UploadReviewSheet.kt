@@ -1,5 +1,10 @@
 package com.reverie.app.ui.screens.upload
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.local.entity.UploadItemEntity
+import com.reverie.app.ui.components.AnimatedSuccessCheck
 import com.reverie.app.ui.components.TwoPhaseProgressBar
 import com.reverie.app.ui.components.UploadFileRow
 import kotlinx.coroutines.delay
@@ -45,7 +50,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
     val review by viewModel.review.collectAsStateWithLifecycle()
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val sections by viewModel.pickerSections.collectAsStateWithLifecycle()
     val state = review ?: return
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -87,8 +92,9 @@ fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
 
     if (showFolderPicker) {
         FolderPickerSheet(
-            folders = folders,
+            sections = sections,
             onSelect = { viewModel.setFolder(it.id); showFolderPicker = false },
+            onCreateFolder = { parentId, form -> viewModel.createFolder(parentId, form); showFolderPicker = false },
             onDismiss = { showFolderPicker = false },
         )
     }
@@ -151,7 +157,7 @@ private fun ProgressContent(viewModel: UploadViewModel, sessionId: String) {
 
     LaunchedEffect(allDone) {
         if (allDone) {
-            delay(1800)
+            delay(2000)
             viewModel.clearCompleted()
             viewModel.dismiss()
         }
@@ -159,12 +165,17 @@ private fun ProgressContent(viewModel: UploadViewModel, sessionId: String) {
 
     if (allSucceeded) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = com.reverie.app.ui.theme.ReverieTheme.extendedColors.success)
-            Text(
-                "  ${items.size} ${if (items.size == 1) "document" else "documents"} uploaded",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(start = 4.dp),
-            )
+            AnimatedSuccessCheck(color = com.reverie.app.ui.theme.ReverieTheme.extendedColors.success)
+            AnimatedVisibility(
+                visibleState = remember { MutableTransitionState(false).apply { targetState = true } },
+                enter = fadeIn(tween(300, delayMillis = 200)) + slideInVertically(tween(300)) { it / 2 },
+            ) {
+                Text(
+                    "${items.size} ${if (items.size == 1) "document" else "documents"} uploaded",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
         }
     } else {
         TwoPhaseProgressBar(items = items)

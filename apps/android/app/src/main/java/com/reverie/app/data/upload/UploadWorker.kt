@@ -14,6 +14,8 @@ import com.reverie.app.R
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.local.dao.UploadDao
+import com.reverie.app.data.repository.DocumentRepository
+import com.reverie.app.data.repository.FolderRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.File
@@ -30,6 +32,8 @@ class UploadWorker @AssistedInject constructor(
     private val uploadDao: UploadDao,
     private val uploadApi: UploadApi,
     private val stager: UploadStager,
+    private val documentRepository: DocumentRepository,
+    private val folderRepository: FolderRepository,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -74,6 +78,13 @@ class UploadWorker @AssistedInject constructor(
         val hasFailure = items.any { it.status == "failed" }
         uploadDao.updateTaskStatus(sessionId, if (hasFailure) "failed" else "complete")
         stager.cleanup(sessionId)
+
+        // Pull the newly-uploaded documents into the Room cache so the browse grid (both the folder
+        // and the all-documents view) and the collection counts update without a manual refresh.
+        // Swallowed so a refresh hiccup can never flip a successful upload to a retry/failure.
+        runCatching { documentRepository.refresh(task.folderId, limit = 30, offset = 0) }
+        runCatching { folderRepository.refresh() }
+
         return Result.success()
     }
 
