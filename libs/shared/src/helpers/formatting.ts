@@ -102,6 +102,8 @@ export function formatFilterChip(type: string, value: string): string {
             return NEGATED_HAS_LABELS[value] ?? `No ${value}`;
         case 'size':
             return `Size ${value}`;
+        case 'content':
+            return `Text contains “${value}”`;
         case 'in':
             return `In ${value}`;
         default:

@@ -219,6 +219,14 @@ export function parseQuery(query: string): ParsedQuery {
                 break;
             }
 
+            case 'content': {
+                // Substring match against OCR content: content:invoice, content:"invoice number"
+                if (!target.contentContains) target.contentContains = [];
+
+                target.contentContains.push(token.value);
+                break;
+            }
+
             case 'type': {
                 // File type: type:photo, type:document
                 const type = TYPE_ALIASES[token.value.toLowerCase()] ?? token.value.toLowerCase();
@@ -388,6 +396,10 @@ export function stringifyQuery(parsed: ParsedQuery): string {
 
     if (parsed.searchScope && parsed.searchScope !== 'all') {
         parts.push(`in:${parsed.searchScope}`);
+    }
+
+    if (parsed.contentContains?.length) {
+        parts.push(...parsed.contentContains.map((c) => `content:${c.includes(' ') ? `"${c}"` : c}`));
     }
 
     if (parsed.types?.length) {

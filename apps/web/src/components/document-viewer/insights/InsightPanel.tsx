@@ -3,7 +3,8 @@ import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { useUser } from '@/lib/api/users';
 import { formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
-import type { Document } from '@reverie/shared';
+import { addFilter, type Document } from '@reverie/shared';
+import { useNavigate } from '@tanstack/react-router';
 import { Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -67,6 +68,14 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
     // Processing internals (extracted text, re-runs, pipeline status) are admin tooling
     const { data: user } = useUser();
     const isAdmin = user?.role === 'admin';
+
+    const navigate = useNavigate();
+
+    // Jump to search filtered by the clicked chip. Topics have no `topic:` filter, so they map to tags.
+    const searchBy = (key: 'category' | 'entity' | 'tag', value: string) => {
+        onClose();
+        navigate({ to: '/search', search: { q: addFilter('', key, value), sort_by: 'relevance', sort_order: 'desc', view: undefined } });
+    };
 
     const entities = metadata?.entities.map((entity) => entity.canonical_name) ?? [];
     const topics = metadata?.topics ?? [];
@@ -137,7 +146,15 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                                 <MicroLabel>AI summary</MicroLabel>
                                             )}
                                         </div>
-                                        {document.document_category && <Chip className="shrink-0">{formatCategory(document.document_category)}</Chip>}
+                                        {document.document_category && (
+                                            <Chip
+                                                className="shrink-0"
+                                                title="Search this category"
+                                                onClick={() => searchBy('category', document.document_category!)}
+                                            >
+                                                {formatCategory(document.document_category)}
+                                            </Chip>
+                                        )}
                                     </div>
                                     <p className="text-sm leading-relaxed text-foreground/90">{aiSummary}</p>
                                 </Section>
@@ -146,7 +163,9 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                             {/* Category still deserves a home when there's no summary block to host it */}
                             {!aiSummary && document.document_category && (
                                 <Section delay={nextDelay()}>
-                                    <Chip>{formatCategory(document.document_category)}</Chip>
+                                    <Chip title="Search this category" onClick={() => searchBy('category', document.document_category!)}>
+                                        {formatCategory(document.document_category)}
+                                    </Chip>
                                 </Section>
                             )}
 
@@ -156,7 +175,9 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                     <MicroLabel>Mentions</MicroLabel>
                                     <div className="flex flex-wrap gap-1">
                                         {entities.map((name) => (
-                                            <Chip key={name}>{name}</Chip>
+                                            <Chip key={name} title="Search this mention" onClick={() => searchBy('entity', name)}>
+                                                {name}
+                                            </Chip>
                                         ))}
                                     </div>
                                 </Section>
@@ -167,7 +188,7 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                     <MicroLabel>Topics</MicroLabel>
                                     <div className="flex flex-wrap gap-1">
                                         {topics.map((topic) => (
-                                            <Chip key={topic} variant="secondary">
+                                            <Chip key={topic} variant="secondary" title="Search this topic" onClick={() => searchBy('tag', topic)}>
                                                 {topic}
                                             </Chip>
                                         ))}

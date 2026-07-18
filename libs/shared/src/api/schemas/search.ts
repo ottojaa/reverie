@@ -20,6 +20,8 @@ const ParsedQueryBaseSchema = z.object({
     // Text search
     fullText: z.string().optional(),
     searchScope: z.enum(['all', 'filename', 'content', 'summary']).optional(),
+    // Substring match against OCR'd document content (the `content:` DSL filter → ocr.raw_text ILIKE)
+    contentContains: z.array(z.string()).optional(),
 
     // File type filters
     types: z.array(z.string()).optional(), // photo, document, receipt, screenshot

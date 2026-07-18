@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { FilterKey, QueryToken, SearchFacets } from '@reverie/shared';
+import { useEffect, useState } from 'react';
 import { DimensionDisclosureList } from './DimensionDisclosureList';
 import { FILTER_DIMENSIONS } from './filter-defs';
 
@@ -13,52 +15,41 @@ const SIZE_PRESETS = [
     { label: 'Under 1 MB', value: '<1MB' },
 ];
 
-const TRI_STATE_OPTIONS: Array<{ label: string; value: TriState }> = [
-    { label: 'Any', value: 'any' },
-    { label: 'Yes', value: 'include' },
-    { label: 'No', value: 'exclude' },
-];
-
-export function getTriState(tokens: QueryToken[], key: FilterKey, value: string): TriState {
-    const token = tokens.find((t) => t.type === 'filter' && t.key === key && t.value.toLowerCase() === value);
-
-    if (!token) return 'any';
-
-    return token.negated ? 'exclude' : 'include';
-}
-
-/** Count of active filters the More panel owns exclusively (has:text tri-state + size). */
-export function countMorePanelFilters(tokens: QueryToken[], filterValues: Map<FilterKey, string[]>): number {
-    const hasTextCount = tokens.filter((t) => t.type === 'filter' && t.key === 'has' && t.value.toLowerCase() === 'text').length;
+/** Count of active filters the More panel owns exclusively (Text-contains + size). */
+export function countMorePanelFilters(_tokens: QueryToken[], filterValues: Map<FilterKey, string[]>): number {
+    const contentCount = filterValues.get('content')?.length ?? 0;
     const sizeCount = filterValues.get('size')?.length ?? 0;
 
-    return hasTextCount + sizeCount;
+    return contentCount + sizeCount;
 }
 
 function MicroLabel({ children }: { children: React.ReactNode }) {
     return <div className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">{children}</div>;
 }
 
-function TriStateRow({ label, state, onChange }: { label: string; state: TriState; onChange: (state: TriState) => void }) {
+/**
+ * Debounced text input that filters to documents whose OCR'd content contains the
+ * phrase (the `content:` DSL filter → `ocr.raw_text ILIKE`). Replaces the old has:text
+ * yes/no toggle — presence-of-text is rarely useful; "contains what?" usually is.
+ */
+function TextContainsRow({ value, onCommit }: { value: string; onCommit: (value: string) => void }) {
+    const [draft, setDraft] = useState(value);
+
+    // Re-sync when the committed value changes from outside (e.g. Clear all).
+    useEffect(() => setDraft(value), [value]);
+
+    // Debounce so each keystroke doesn't push a navigation.
+    useEffect(() => {
+        if (draft.trim() === value.trim()) return;
+
+        const id = setTimeout(() => onCommit(draft.trim()), 250);
+
+        return () => clearTimeout(id);
+    }, [draft, value, onCommit]);
+
     return (
-        <div className="flex items-center justify-between gap-2 px-3 py-1">
-            <span className="text-sm">{label}</span>
-            <div className="flex rounded-md border border-border/60 p-0.5">
-                {TRI_STATE_OPTIONS.map((option) => (
-                    <Button
-                        key={option.value}
-                        type="button"
-                        variant="ghost"
-                        onClick={() => onChange(option.value)}
-                        className={cn(
-                            'h-5 rounded-[5px] px-2 text-[11px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-secondary',
-                            state === option.value && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary dark:hover:bg-primary/15',
-                        )}
-                    >
-                        {option.label}
-                    </Button>
-                ))}
-            </div>
+        <div className="px-3 py-1.5">
+            <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Text contains…" className="h-7 text-sm" />
         </div>
     );
 }
@@ -72,13 +63,14 @@ interface PropertySectionsProps {
 }
 
 /** Property tri-state + size presets — shared between the More popover and the mobile drawer. */
-export function PropertySections({ tokens, filterValues, onReplaceValue, onClearDimension, onSetValueState }: PropertySectionsProps) {
+export function PropertySections({ filterValues, onReplaceValue, onClearDimension }: PropertySectionsProps) {
     const activeSize = filterValues.get('size')?.[0] ?? null;
+    const contentValue = filterValues.get('content')?.[0] ?? '';
 
     return (
         <>
             <MicroLabel>Properties</MicroLabel>
-            <TriStateRow label="Text" state={getTriState(tokens, 'has', 'text')} onChange={(state) => onSetValueState('has', 'text', state)} />
+            <TextContainsRow value={contentValue} onCommit={(v) => (v ? onReplaceValue('content', v) : onClearDimension('content'))} />
 
             <MicroLabel>Size</MicroLabel>
             <div className="flex flex-wrap gap-1 px-3 py-1">

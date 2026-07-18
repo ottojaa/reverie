@@ -22,7 +22,22 @@
  * - A bare `*` means match-all and is excluded from free text.
  */
 
-export const FILTER_KEYS = ['in', 'type', 'format', 'category', 'uploaded', 'date', 'folder', 'has', 'size', 'tag', 'entity', 'company', 'location'] as const;
+export const FILTER_KEYS = [
+    'in',
+    'type',
+    'format',
+    'category',
+    'uploaded',
+    'date',
+    'folder',
+    'has',
+    'size',
+    'tag',
+    'entity',
+    'company',
+    'location',
+    'content',
+] as const;
 
 export type FilterKey = (typeof FILTER_KEYS)[number];
 

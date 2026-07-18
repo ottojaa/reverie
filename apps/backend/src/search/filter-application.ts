@@ -28,6 +28,7 @@ export type SearchQueryBase = SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'oc
 /** One filterable dimension of a ParsedQuery (positive and negated filters together). */
 export type FilterDimension =
     | 'fullText'
+    | 'contentContains'
     | 'types'
     | 'formats'
     | 'categories'
@@ -248,6 +249,14 @@ export function applySearchFilters(
         } else if (tsQuery) {
             // Unified search vector includes filename, OCR text, LLM data, photo metadata, tags
             query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
+        }
+    }
+
+    // Content-contains filter: substring match on OCR text (ANDs multiple values).
+    // `ocr` is left-joined; NULL raw_text (no OCR) correctly fails to match.
+    if (!omit?.has('contentContains') && parsed.contentContains?.length) {
+        for (const value of parsed.contentContains) {
+            query = query.where(sql<SqlBool>`ocr.raw_text ILIKE ${'%' + value + '%'}`);
         }
     }
 

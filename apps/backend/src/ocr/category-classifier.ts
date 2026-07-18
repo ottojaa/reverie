@@ -1,3 +1,4 @@
+import { NON_TEXT_CATEGORIES } from '@reverie/shared';
 import type { DocumentCategory, ImageSize } from './types';
 
 /**
@@ -6,6 +7,94 @@ import type { DocumentCategory, ImageSize } from './types';
  * Lightweight classifier for non-text images only (screenshot vs photo detection).
  * For documents with text, the LLM handles classification.
  */
+
+/**
+ * Screenshot filename markers. Anchored so it matches "Screenshot", "Screen Shot"
+ * (macOS), "Screenshot_20260102-…" (Android), "screencapture", "screen grab", and
+ * "screen recording" without false-matching words like "sunscreen" or "screencast".
+ */
+const SCREENSHOT_FILENAME_RE = /screen[\s._-]?shot|screen[\s._-]?(?:capture|grab|recording)/i;
+
+/**
+ * Exact device screen resolutions (stored as min×max; matched in either orientation).
+ * Screenshots are pixel-exact to a device resolution and effectively always PNG — this
+ * catches captures whose filenames give nothing away (e.g. iOS "IMG_1234.PNG").
+ */
+const SCREEN_RESOLUTION_PAIRS: ReadonlyArray<readonly [number, number]> = [
+    // iPhone
+    [1170, 2532],
+    [1179, 2556],
+    [1284, 2778],
+    [1290, 2796],
+    [1206, 2622],
+    [1320, 2868],
+    [1125, 2436],
+    [1242, 2688],
+    [828, 1792],
+    [750, 1334],
+    [640, 1136],
+    // iPad
+    [1620, 2160],
+    [1640, 2360],
+    [1668, 2388],
+    [1668, 2224],
+    [1488, 2266],
+    [2048, 2732],
+    // Android
+    [1080, 1920],
+    [1080, 2340],
+    [1080, 2400],
+    [1080, 2280],
+    [1440, 2560],
+    [1440, 3040],
+    [1440, 3200],
+    [720, 1280],
+    // Desktop / laptop
+    [1920, 1080],
+    [2560, 1440],
+    [3840, 2160],
+    [1366, 768],
+    [1280, 800],
+    [1440, 900],
+    [1680, 1050],
+    [2560, 1600],
+    [2880, 1800],
+    [1512, 982],
+    [1728, 1117],
+    [3024, 1964],
+    [3456, 2234],
+];
+
+const SCREEN_RESOLUTIONS = new Set(SCREEN_RESOLUTION_PAIRS.map(([a, b]) => `${Math.min(a, b)}x${Math.max(a, b)}`));
+
+function matchesExactScreenResolution(width: number, height: number): boolean {
+    return SCREEN_RESOLUTIONS.has(`${Math.min(width, height)}x${Math.max(width, height)}`);
+}
+
+export interface ScreenshotDetectionInput {
+    filename: string;
+    mimeType: string;
+    imageSize: ImageSize;
+}
+
+/**
+ * High-precision screenshot detector. Runs for every image regardless of OCR text —
+ * real screenshots are full of UI text, so they can't rely on `classifyNonTextImage`.
+ * Both signals that could touch a real photo require PNG, so JPEG/HEIC photos and
+ * print-resolution scans (e.g. A4 @ 300dpi) are never mislabeled.
+ */
+export function detectScreenshot({ filename, mimeType, imageSize }: ScreenshotDetectionInput): boolean {
+    if (SCREENSHOT_FILENAME_RE.test(filename)) return true;
+
+    const isPng = mimeType.toLowerCase() === 'image/png';
+
+    return isPng && matchesExactScreenResolution(imageSize.width, imageSize.height);
+}
+
+/** Whether a category is a visual (non-text) one the LLM text path must not overwrite. */
+export function isVisualCategory(category: string | null): boolean {
+    return category != null && (NON_TEXT_CATEGORIES as readonly string[]).includes(category);
+}
 
 /**
  * Common screenshot aspect ratios
