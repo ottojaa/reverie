@@ -1,0 +1,135 @@
+package com.reverie.app.data.settings
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.reverie.app.ui.theme.ThemeMode
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
+
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "reverie_settings")
+
+/** User-facing app settings persisted across launches. */
+data class AppSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = false,
+    /** Slide the bottom navigation bar away while scrolling a list. */
+    val hideNavOnScroll: Boolean = false,
+    /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
+    val serverUrlOverride: String? = null,
+    /** Original-file cache cap in bytes. */
+    val fileCacheCapBytes: Long = DEFAULT_FILE_CACHE_CAP,
+    // TEMPORARY / DEV TUNING — motion parameters editable from the debug-only "Motion (dev)"
+    // Settings card. Bridged into MotionTuning.spec (see MotionSpec.kt). Delete with that card.
+    val motionNavMs: Int = 300,
+    val motionDirectionalEasing: String = "FAST_OUT_SLOW_IN",
+    val motionSlideFraction: Float = 0.10f,
+    val motionPopScale: Float = 0.9f,
+    val motionDiveMs: Int = 350,
+    val motionDiveEasing: String = "EMPHASIZED",
+    val motionBarEnterMs: Int = 300,
+    val motionToolbarExitMs: Int = 200,
+) {
+    companion object {
+        const val DEFAULT_FILE_CACHE_CAP = 500L * 1024 * 1024
+    }
+}
+
+@Singleton
+class SettingsRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
+    private val themeKey = stringPreferencesKey("theme_mode")
+    private val dynamicKey = booleanPreferencesKey("dynamic_color")
+    private val hideNavKey = booleanPreferencesKey("hide_nav_on_scroll")
+    private val serverUrlKey = stringPreferencesKey("server_url")
+    private val cacheCapKey = longPreferencesKey("file_cache_cap")
+    // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
+    private val motionNavMsKey = intPreferencesKey("motion_nav_ms")
+    private val motionDirEasingKey = stringPreferencesKey("motion_dir_easing")
+    private val motionSlideFractionKey = floatPreferencesKey("motion_slide_fraction")
+    private val motionPopScaleKey = floatPreferencesKey("motion_pop_scale")
+    private val motionDiveMsKey = intPreferencesKey("motion_dive_ms")
+    private val motionDiveEasingKey = stringPreferencesKey("motion_dive_easing")
+    private val motionBarEnterMsKey = intPreferencesKey("motion_bar_enter_ms")
+    private val motionToolbarExitMsKey = intPreferencesKey("motion_toolbar_exit_ms")
+
+    val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
+        val defaults = AppSettings()
+        AppSettings(
+            themeMode = prefs[themeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
+            dynamicColor = prefs[dynamicKey] ?: false,
+            hideNavOnScroll = prefs[hideNavKey] ?: false,
+            serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
+            fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
+            motionNavMs = prefs[motionNavMsKey] ?: defaults.motionNavMs,
+            motionDirectionalEasing = prefs[motionDirEasingKey] ?: defaults.motionDirectionalEasing,
+            motionSlideFraction = prefs[motionSlideFractionKey] ?: defaults.motionSlideFraction,
+            motionPopScale = prefs[motionPopScaleKey] ?: defaults.motionPopScale,
+            motionDiveMs = prefs[motionDiveMsKey] ?: defaults.motionDiveMs,
+            motionDiveEasing = prefs[motionDiveEasingKey] ?: defaults.motionDiveEasing,
+            motionBarEnterMs = prefs[motionBarEnterMsKey] ?: defaults.motionBarEnterMs,
+            motionToolbarExitMs = prefs[motionToolbarExitMsKey] ?: defaults.motionToolbarExitMs,
+        )
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.settingsDataStore.edit { it[themeKey] = mode.name }
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.settingsDataStore.edit { it[dynamicKey] = enabled }
+    }
+
+    suspend fun setHideNavOnScroll(enabled: Boolean) {
+        context.settingsDataStore.edit { it[hideNavKey] = enabled }
+    }
+
+    suspend fun setServerUrlOverride(url: String?) {
+        context.settingsDataStore.edit {
+            if (url.isNullOrBlank()) it.remove(serverUrlKey) else it[serverUrlKey] = url.trim()
+        }
+    }
+
+    suspend fun setFileCacheCap(bytes: Long) {
+        context.settingsDataStore.edit { it[cacheCapKey] = bytes }
+    }
+
+    /** TEMPORARY / DEV TUNING — persist all motion knobs from the debug "Motion (dev)" card. */
+    suspend fun setMotion(s: AppSettings) {
+        context.settingsDataStore.edit {
+            it[motionNavMsKey] = s.motionNavMs
+            it[motionDirEasingKey] = s.motionDirectionalEasing
+            it[motionSlideFractionKey] = s.motionSlideFraction
+            it[motionPopScaleKey] = s.motionPopScale
+            it[motionDiveMsKey] = s.motionDiveMs
+            it[motionDiveEasingKey] = s.motionDiveEasing
+            it[motionBarEnterMsKey] = s.motionBarEnterMs
+            it[motionToolbarExitMsKey] = s.motionToolbarExitMs
+        }
+    }
+
+    /** TEMPORARY / DEV TUNING — clear all persisted motion knobs (reset to defaults). */
+    suspend fun resetMotion() {
+        context.settingsDataStore.edit {
+            it.remove(motionNavMsKey)
+            it.remove(motionDirEasingKey)
+            it.remove(motionSlideFractionKey)
+            it.remove(motionPopScaleKey)
+            it.remove(motionDiveMsKey)
+            it.remove(motionDiveEasingKey)
+            it.remove(motionBarEnterMsKey)
+            it.remove(motionToolbarExitMsKey)
+        }
+    }
+}

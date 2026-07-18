@@ -1,9 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Reverie" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      The app UI is entirely Jetpack Compose, so this XML theme only governs the launch
+      window (background colour, transparent system bars for edge-to-edge). Colours are
+      applied by ReverieTheme in Compose.
+    -->
+    <style name="Theme.Reverie" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Cold-start splash: brand background + white "R" on a teal disc. -->
+    <style name="Theme.Reverie.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/brand_teal</item>
+        <item name="postSplashScreenTheme">@style/Theme.Reverie</item>
+    </style>
 </resources>
-
-
-
-
-
