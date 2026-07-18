@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { db } from '../db/kysely';
 import type { ThumbnailPaths } from '../db/schema';
 import { generateStoragePath, getExtension, getStorage } from '../storage';
+import { getThumbnailStrategy } from './thumbnail-strategy';
 
 /**
  * File type categories for processing strategies
@@ -69,12 +70,11 @@ export function getFileCategory(mimeType: string): FileCategory {
 }
 
 /**
- * Check if a MIME type can have visual thumbnails generated
+ * Whether we can generate a thumbnail for this file (image, pdf, video, office, or text).
+ * Delegates to the shared strategy router so the upload gate and the worker never diverge.
  */
-export function canGenerateThumbnail(mimeType: string): boolean {
-    const category = getFileCategory(mimeType);
-
-    return category === 'image' || category === 'pdf' || category === 'video';
+export function canGenerateThumbnail(mimeType: string, filename: string): boolean {
+    return getThumbnailStrategy(mimeType, filename) !== 'none';
 }
 
 export interface UserStorageContext {

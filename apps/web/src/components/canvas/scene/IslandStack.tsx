@@ -8,7 +8,7 @@ import { cardGeometry, makeCardMaterial, type CardUniforms } from './cardMateria
 import { clamp, damp, ease, easeOutBack, lerp, requestFrame } from './dampers.js';
 import { focusDimFor } from './focusDim.js';
 import { islandDrag, unravelValue, zoomBand } from './store.js';
-import { acquireTexture, getBlurhashTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
+import { acquireTexture, getBlurhashTexture, getIconTexture, getSolidTexture, releaseTexture, type TextureEntry } from './textureCache.js';
 import type { CanvasTheme } from './theme.js';
 import { STACK_COUNT, stackSlot } from './unravel.js';
 
@@ -73,7 +73,7 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
     const cards: StackCard[] = useMemo(() => {
         return previews.slice(0, STACK_COUNT).map((doc, i) => {
             const slot = stackSlot(doc, island);
-            const placeholder = doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getSolidTexture(theme.border);
+            const placeholder = doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getIconTexture(doc.mime_type, doc.original_filename, theme.card);
 
             return {
                 doc,

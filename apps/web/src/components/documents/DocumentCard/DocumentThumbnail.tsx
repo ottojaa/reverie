@@ -8,7 +8,7 @@ import { memo, useRef } from 'react';
 
 export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: { document: Document }) {
     const thumbnailRef = useRef<HTMLDivElement>(null);
-    const fileConfig = getFileTypeConfig(document.mime_type);
+    const fileConfig = getFileTypeConfig(document.mime_type, document.original_filename);
     const extension = getFileExtension(document.original_filename);
     const thumbnailUrl = getThumbnailUrl(document, 'lg');
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
@@ -44,7 +44,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
                 </>
             ) : (
                 <div className={cn('flex h-full w-full items-center justify-center', fileConfig.bgColor)}>
-                    <FileTypeIcon mimeType={document.mime_type} size="xl" className="opacity-80" />
+                    <FileTypeIcon mimeType={document.mime_type} filename={document.original_filename} size="xl" className="opacity-80" />
                 </div>
             )}
 
