@@ -82,6 +82,8 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var openSheet by remember { mutableStateOf<OpenSheet?>(null) }
+    // Publish the result order so the viewer can swipe between hits, then open the tapped one.
+    val openDocument: (String) -> Unit = { id -> viewModel.prepareSequence(); onDocumentClick(id) }
 
     val dateActive = state.activeValues(FilterKey.UPLOADED).isNotEmpty() || state.activeValues(FilterKey.DATE).isNotEmpty()
     val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
@@ -165,8 +167,8 @@ fun SearchScreen(
                 // during the debounce, stale results stay visible under the progress bar instead.
                 state.results.isEmpty() && !state.isSearching ->
                     EmptyState(icon = Icons.Outlined.Search, title = "No results", description = "Try different keywords or clear some filters.")
-                state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, onDocumentClick, viewModel::loadMore)
-                else -> ResultsList(state, listState, onDocumentClick, onOpenFolder, viewModel::loadMore)
+                state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, openDocument, viewModel::loadMore)
+                else -> ResultsList(state, listState, openDocument, onOpenFolder, viewModel::loadMore)
             }
 
             // Thin indeterminate bar overlaid at the top while a search is in flight (no layout shift).

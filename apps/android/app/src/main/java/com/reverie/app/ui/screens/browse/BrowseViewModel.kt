@@ -13,6 +13,8 @@ import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.settings.SettingsRepository
+import com.reverie.app.ui.screens.viewer.DocumentSequence
+import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,9 +66,28 @@ class BrowseViewModel @Inject constructor(
     private val realtimeManager: RealtimeManager,
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
+    private val sequenceHolder: DocumentSequenceHolder,
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
+
+    /** The document the viewer is showing, so the grid can scroll it into view on return. */
+    val focusedDocumentId: StateFlow<String?> get() = sequenceHolder.focused
+
+    /** Consume the focus signal once the grid has scrolled to it, so later list updates don't re-scroll. */
+    fun clearFocusedDocument() = sequenceHolder.setFocused(null)
+
+    /**
+     * Hand this grid's ordered documents to the viewer so it can swipe through them. Call right
+     * before navigating into a document. [ids] stays live so the pager grows as we [loadMore].
+     */
+    fun prepareSequence() = sequenceHolder.set(
+        DocumentSequence(
+            initialIds = uiState.value.documents.map(DocumentDto::id),
+            ids = uiState.map { s -> s.documents.map(DocumentDto::id) }.distinctUntilChanged(),
+            loadMore = ::loadMore,
+        ),
+    )
 
     private val control = MutableStateFlow(BrowseControl())
 
