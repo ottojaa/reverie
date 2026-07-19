@@ -27,6 +27,14 @@ private fun viewerTypeFor(mimeType: String, filename: String): ViewerType = when
     else -> extensionFallback[filename.substringAfterLast('.', "").lowercase()] ?: ViewerType.FALLBACK
 }
 
+/**
+ * Whether this document opens in the zoomable [ImageViewer] (image MIME, or a heic/heif fallback).
+ * Only images fit themselves into an aspect-matched box for the dive transform — every other viewer
+ * wants the full screen (see DocumentScreen), so callers gate the aspect box on this.
+ */
+fun isImageDocument(document: DocumentDto): Boolean =
+    viewerTypeFor(document.mime_type, document.original_filename) == ViewerType.IMAGE
+
 /** Mirrors the web viewer registry: dispatches to the right viewer by MIME (+ extension fallback). */
 @Composable
 fun DocumentViewerBody(
