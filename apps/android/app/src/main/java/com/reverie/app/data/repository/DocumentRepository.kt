@@ -9,6 +9,7 @@ import com.reverie.app.data.local.toEntity
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -32,7 +33,9 @@ class DocumentRepository @Inject constructor(
     /** Cached documents for the grid. `folderId == null` is the all-documents view. */
     fun observeDocuments(folderId: String?): Flow<List<DocumentDto>> {
         val source = if (folderId == null) documentDao.observeAll() else documentDao.observeByFolder(folderId)
-        return source.map { rows -> rows.map(DocumentEntity::toDto) }
+        // Map entities→DTOs (allocations + JSON parsing) off the main thread; without this the grid's
+        // combine/stateIn on viewModelScope (Main) re-maps the whole cached list on every Room write.
+        return source.map { rows -> rows.map(DocumentEntity::toDto) }.flowOn(io)
     }
 
     fun observeDocument(id: String): Flow<DocumentDto?> =

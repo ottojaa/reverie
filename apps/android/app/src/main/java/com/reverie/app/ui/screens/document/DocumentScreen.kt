@@ -7,9 +7,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -26,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.domain.model.toInsightPhase
 import com.reverie.app.ui.components.ConfirmDialog
@@ -36,6 +40,7 @@ import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.DocumentViewerBody
 import com.reverie.app.ui.screens.viewer.InsightSheet
+import com.reverie.app.ui.screens.viewer.viewers.DocumentDiveHero
 import com.reverie.app.util.enqueueDownload
 import kotlinx.coroutines.launch
 
@@ -44,6 +49,7 @@ fun DocumentScreen(
     documentId: String,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
+    aspect: Float? = null,
     viewModel: DocumentViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -65,21 +71,38 @@ fun DocumentScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { _ ->
         Box(Modifier.fillMaxSize()) {
-            // The shared container transform expands the tapped grid tile into this box (keyed on
-            // the nav-arg id so the match exists on the very first frame, before the doc loads).
-            Box(Modifier.fillMaxSize().documentSharedBounds(documentId)) {
-                when {
-                    document != null -> DocumentViewerBody(
-                        document = document,
-                        fileUrl = state.fileUrl,
-                        loadFile = { viewModel.originalFile() },
-                        onToggleImmersive = { immersive = !immersive },
-                        onDownload = { downloadDocument(context, state.fileUrl, document) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    state.error != null -> ErrorState(message = state.error!!, onRetry = viewModel::load)
-                    else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            // The shared container transform expands the tapped grid tile into this box. It's sized
+            // to the image's real aspect rect (centered), so a square grid tile grows into an
+            // aspect-matched rectangle: Crop fills both ends exactly → the image grows monotonically
+            // with NO overshoot, and rests where it started (no jump). Docs with no known aspect
+            // (pdf/text, or before the record loads) fall back to a full-screen box.
+            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // Prefer the aspect passed as a nav arg (known on frame 1, so the shared bounds never
+                // change shape mid-transition); fall back to the loaded record's dimensions.
+                val effectiveAspect = aspect ?: document?.mediaAspectOrNull()
+                val screenAspect = maxWidth.value / maxHeight.value
+                val heroBounds = when {
+                    effectiveAspect == null -> Modifier.fillMaxSize()
+                    effectiveAspect >= screenAspect -> Modifier.fillMaxWidth().aspectRatio(effectiveAspect)
+                    else -> Modifier.fillMaxHeight().aspectRatio(effectiveAspect, matchHeightConstraintsFirst = true)
+                }
+                Box(heroBounds.documentSharedBounds(documentId)) {
+                    // Base layer: the thumbnail hero drives the whole grow (present from frame 1, so
+                    // the shared node never shows a spinner or cross-fade — that was the "flash").
+                    // Real content draws on top: for images the zoomable mounts after the transform
+                    // settles; the other viewers paint over it.
+                    DocumentDiveHero(documentId, Modifier.fillMaxSize())
+                    when {
+                        document != null -> DocumentViewerBody(
+                            document = document,
+                            fileUrl = state.fileUrl,
+                            loadFile = { viewModel.originalFile() },
+                            onToggleImmersive = { immersive = !immersive },
+                            onDownload = { downloadDocument(context, state.fileUrl, document) },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        state.error != null -> ErrorState(message = state.error!!, onRetry = viewModel::load)
+                        else -> Unit
                     }
                 }
             }

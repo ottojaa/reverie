@@ -68,8 +68,18 @@ class AuthSessionManager @Inject constructor(
         expiresAtEpochMs = bundle.expiresAtEpochMs
         currentUser = bundle.user
         _authState.value = AuthState.Authenticated(bundle.user)
-        scope.launch { validateSession() }
+        scope.launch {
+            // If the persisted access token is already expired, refresh ONCE up front. Otherwise the
+            // first grid list + the burst of thumbnail requests all 401 at once and each parks an
+            // OkHttp thread in the authenticator's runBlocking refresh — a big chunk of the
+            // cold-start stall. Single-flight in refresh() collapses this into one network call.
+            if (isAccessTokenExpired()) refresh(accessToken)
+            validateSession()
+        }
     }
+
+    private fun isAccessTokenExpired(): Boolean =
+        expiresAtEpochMs != 0L && nowMs() >= expiresAtEpochMs - EXPIRY_SKEW_MS
 
     /**
      * Confirm the persisted session is still valid via GET /auth/me. A hard auth failure is
@@ -162,5 +172,7 @@ class AuthSessionManager @Inject constructor(
 
     private companion object {
         const val REFRESH_COOKIE = "refresh_token"
+        // Treat a token expiring within this window as already expired, to refresh before the burst.
+        const val EXPIRY_SKEW_MS = 30_000L
     }
 }

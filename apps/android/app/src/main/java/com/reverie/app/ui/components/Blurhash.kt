@@ -40,7 +40,6 @@ object BlurhashDecoder {
             }
         }
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val cosX = FloatArray(width * numCompX)
         val cosY = FloatArray(height * numCompY)
         for (x in 0 until width) for (i in 0 until numCompX) {
@@ -50,6 +49,9 @@ object BlurhashDecoder {
             cosY[y * numCompY + j] = cos(PI * y * j / height).toFloat()
         }
 
+        // Fill an IntArray and blit once (setPixels) instead of `width*height` setPixel JNI calls —
+        // the per-pixel path was a real CPU cost during the cold-start grid fill.
+        val pixels = IntArray(width * height)
         for (y in 0 until height) {
             for (x in 0 until width) {
                 var r = 0f; var g = 0f; var b = 0f
@@ -62,10 +64,12 @@ object BlurhashDecoder {
                         b += color[2] * basis
                     }
                 }
-                bitmap.setPixel(x, y, 0xFF shl 24 or (linearToSrgb(r) shl 16) or (linearToSrgb(g) shl 8) or linearToSrgb(b))
+                pixels[y * width + x] = 0xFF shl 24 or (linearToSrgb(r) shl 16) or (linearToSrgb(g) shl 8) or linearToSrgb(b)
             }
         }
-        return bitmap
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels, 0, width, 0, 0, width, height)
+        }
     }
 
     private fun decode83(str: String, from: Int, to: Int): Int? {
@@ -108,7 +112,9 @@ object BlurhashDecoder {
     }
 }
 
-private val painterCache = LruCache<String, BitmapPainter>(128)
+// Sized generously so a fast scroll through the grid doesn't evict + re-decode placeholders while
+// the thumbnail disk cache is still cold.
+private val painterCache = LruCache<String, BitmapPainter>(256)
 
 /** Decodes [blurhash] off the main thread and remembers the resulting painter, cached by hash. */
 // The producer intentionally leaves value unassigned on a cache hit (initialValue already holds it).

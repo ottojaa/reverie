@@ -1,6 +1,8 @@
 package com.reverie.app.ui.screens.settings
 
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -40,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -219,14 +223,40 @@ fun SettingsScreen(
             }
         }
 
-        // TEMPORARY / DEV TUNING — live motion controls (debug builds only). See MotionSpec.kt.
+        // TEMPORARY / DEV TUNING — collapsible animation controls (debug builds only). See MotionSpec.kt.
         if (BuildConfig.DEBUG) {
-            SettingsCard(title = "Motion (dev)") {
-                MotionDevControls(
-                    settings = settings,
-                    onCommit = viewModel::setMotion,
-                    onReset = viewModel::resetMotion,
-                )
+            var animExpanded by remember { mutableStateOf(false) }
+            SettingsCard(title = "Animation settings") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { animExpanded = !animExpanded },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Transition tuning", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Fine-tune the durations and curves used across the app's animations.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    val rotation by animateFloatAsState(if (animExpanded) 180f else 0f, label = "chevron")
+                    Icon(
+                        Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = if (animExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.rotate(rotation),
+                    )
+                }
+                AnimatedVisibility(visible = animExpanded) {
+                    Column {
+                        Spacer(Modifier.height(12.dp))
+                        MotionDevControls(
+                            settings = settings,
+                            onCommit = viewModel::setMotion,
+                            onReset = viewModel::resetMotion,
+                        )
+                    }
+                }
             }
         }
 
@@ -377,28 +407,36 @@ private fun MotionDevControls(
     )
     Spacer(Modifier.height(12.dp))
 
-    LabeledSlider("Nav duration", "${navMs.toInt()} ms", navMs, 100f..600f,
+    LabeledSlider("Nav duration", "Length of page-to-page transitions (tabs, opening a folder).",
+        "${navMs.toInt()} ms", navMs, 100f..600f,
         onChange = { navMs = it }, onCommit = { onCommit(settings.copy(motionNavMs = navMs.toInt())) })
-    LabeledSlider("Slide fraction", String.format(java.util.Locale.US, "%.2f", slideFraction), slideFraction, 0f..0.30f,
+    LabeledSlider("Slide fraction", "How far pages travel as they slide (0 = a pure fade).",
+        String.format(java.util.Locale.US, "%.2f", slideFraction), slideFraction, 0f..0.30f,
         onChange = { slideFraction = it }, onCommit = { onCommit(settings.copy(motionSlideFraction = slideFraction)) })
-    LabeledSlider("Pop scale", String.format(java.util.Locale.US, "%.2f", popScale), popScale, 0.80f..1.0f,
+    LabeledSlider("Pop scale", "How much the previous screen shrinks during a back-swipe.",
+        String.format(java.util.Locale.US, "%.2f", popScale), popScale, 0.80f..1.0f,
         onChange = { popScale = it }, onCommit = { onCommit(settings.copy(motionPopScale = popScale)) })
-    LabeledSlider("Dive duration", "${diveMs.toInt()} ms", diveMs, 150f..700f,
+    LabeledSlider("Dive duration", "Length of the document open/close expand.",
+        "${diveMs.toInt()} ms", diveMs, 150f..700f,
         onChange = { diveMs = it }, onCommit = { onCommit(settings.copy(motionDiveMs = diveMs.toInt())) })
-    LabeledSlider("Bar enter", "${barEnterMs.toInt()} ms", barEnterMs, 100f..500f,
+    LabeledSlider("Bar enter", "How quickly the bottom navigation slides back in.",
+        "${barEnterMs.toInt()} ms", barEnterMs, 100f..500f,
         onChange = { barEnterMs = it }, onCommit = { onCommit(settings.copy(motionBarEnterMs = barEnterMs.toInt())) })
-    LabeledSlider("Toolbar exit", "${toolbarExitMs.toInt()} ms", toolbarExitMs, 100f..400f,
+    LabeledSlider("Toolbar exit", "How quickly the viewer's top bar slides away on back.",
+        "${toolbarExitMs.toInt()} ms", toolbarExitMs, 100f..400f,
         onChange = { toolbarExitMs = it }, onCommit = { onCommit(settings.copy(motionToolbarExitMs = toolbarExitMs.toInt())) })
 
     Spacer(Modifier.height(12.dp))
-    Text("Directional easing", style = MaterialTheme.typography.titleSmall)
-    EasingChips(
+    EasingSetting(
+        title = "Directional easing",
+        description = "Speed curve for page-to-page transitions.",
         selected = settings.motionDirectionalEasing.toEasingPreset(),
         onSelect = { onCommit(settings.copy(motionDirectionalEasing = it.name)) },
     )
-    Spacer(Modifier.height(8.dp))
-    Text("Dive easing", style = MaterialTheme.typography.titleSmall)
-    EasingChips(
+    Spacer(Modifier.height(12.dp))
+    EasingSetting(
+        title = "Dive easing",
+        description = "Speed curve for the document open/close expand.",
         selected = settings.motionDiveEasing.toEasingPreset(),
         onSelect = { onCommit(settings.copy(motionDiveEasing = it.name)) },
     )
@@ -408,19 +446,34 @@ private fun MotionDevControls(
 }
 
 @Composable
+private fun EasingSetting(
+    title: String,
+    description: String,
+    selected: EasingPreset,
+    onSelect: (EasingPreset) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleSmall)
+    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(6.dp))
+    EasingChips(selected = selected, onSelect = onSelect)
+}
+
+@Composable
 private fun LabeledSlider(
     label: String,
+    description: String,
     valueLabel: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
     onCommit: () -> Unit,
 ) {
-    Column(Modifier.padding(top = 4.dp)) {
+    Column(Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text(valueLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
             value = value,
             onValueChange = onChange,
@@ -438,7 +491,7 @@ private fun EasingChips(selected: EasingPreset, onSelect: (EasingPreset) -> Unit
             FilterChip(
                 selected = selected == preset,
                 onClick = { onSelect(preset) },
-                label = { Text(preset.name, style = MaterialTheme.typography.labelSmall) },
+                label = { Text(preset.displayName(), style = MaterialTheme.typography.labelSmall) },
             )
         }
     }
