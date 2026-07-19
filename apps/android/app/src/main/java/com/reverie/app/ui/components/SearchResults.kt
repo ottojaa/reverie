@@ -3,11 +3,9 @@ package com.reverie.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,17 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
-import com.reverie.app.data.image.thumbnailMemoryCacheKey
-import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
+import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatShortDate
 
 @Composable
@@ -43,7 +37,15 @@ fun SearchResultRow(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchThumbnail(hit.document_id, hit.blurhash, ThumbnailSize.SM, Modifier.size(56.dp))
+        DocumentThumbnail(
+            documentId = hit.document_id,
+            mimeType = hit.mime_type,
+            filename = hit.filename,
+            blurhash = hit.blurhash,
+            hasThumbnail = !hit.blurhash.isNullOrBlank(),
+            size = ThumbnailSize.SM,
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -100,37 +102,25 @@ fun DateBucketHeader(label: String, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * A search grid tile — identical to the Files grid tile: a square, edge-to-edge cropped thumbnail
+ * (or a file-type icon when there's no preview) with a video play overlay, and a shared-element
+ * container transform into the viewer. `blurhash` is the cache-safe "has a rendered preview" signal.
+ */
 @Composable
 fun PhotoResultTile(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    SearchThumbnail(
+    GalleryThumbnail(
         documentId = hit.document_id,
+        mimeType = hit.mime_type,
+        filename = hit.filename,
         blurhash = hit.blurhash,
+        hasThumbnail = !hit.blurhash.isNullOrBlank(),
         size = ThumbnailSize.MD,
         modifier = modifier
+            .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(MaterialTheme.shapes.extraSmall)
+            .documentSharedBounds(hit.document_id)
+            .clip(RectangleShape)
             .clickable(onClick = onClick),
     )
-}
-
-@Composable
-private fun SearchThumbnail(documentId: String, blurhash: String?, size: ThumbnailSize, modifier: Modifier) {
-    val placeholder = rememberBlurhashPainter(blurhash)
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(ThumbnailRef(documentId, size))
-                .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            placeholder = placeholder,
-            error = placeholder,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
 }

@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -317,13 +319,28 @@ private fun BrowseTopBar(
     var menuOpen by remember { mutableStateOf(false) }
     var gridMenuOpen by remember { mutableStateOf(false) }
     TopAppBar(
+        // A top scrim keeps "My Files" and the actions legible over bright gallery content while the
+        // bar container stays transparent (edge-to-edge). Surface-tinted so it adapts to light/dark and
+        // backs the onSurface title/icons in either theme; the middle stop keeps it strong through the
+        // title row, then it fades to nothing. It rides with the bar as it collapses on scroll.
+        modifier = Modifier.background(
+            Brush.verticalGradient(
+                listOf(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    Color.Transparent,
+                ),
+            ),
+        ),
         scrollBehavior = scrollBehavior,
         windowInsets = TopAppBarDefaults.windowInsets,
-        // Transparent so the gallery reads edge-to-edge (content sits below; only the surface tint
-        // is removed) — consistent with the translucent viewer chrome.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,
             scrolledContainerColor = Color.Transparent,
+            // Match the title so the action icons (grid size, more) read as clearly as "My Files".
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
         ),
         title = {
             Column {
