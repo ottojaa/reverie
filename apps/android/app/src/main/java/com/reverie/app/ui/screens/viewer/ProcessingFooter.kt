@@ -30,7 +30,11 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentOcrResult
 import com.reverie.app.data.api.model.JobStatus
 
-/** Admin-only per-stage processing status with retry/regenerate actions and raw OCR access. */
+/**
+ * Admin-only per-stage processing status with retry/regenerate actions and raw OCR access. The
+ * section header is supplied by the enclosing [com.reverie.app.ui.components.ExpandableSection];
+ * this renders the content only.
+ */
 @Composable
 fun ProcessingFooter(
     document: DocumentDto,
@@ -41,7 +45,6 @@ fun ProcessingFooter(
     var showOcr by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MicroLabel("PROCESSING")
         StageRow("OCR", ocrLabel(document.ocr_status), document.ocr_status)
         StageRow("Insights", llmLabel(document.llm_status), document.llm_status)
         StageRow("Thumbnail", thumbnailLabel(document.thumbnail_status), document.thumbnail_status)
@@ -54,6 +57,18 @@ fun ProcessingFooter(
 
     if (showOcr) {
         OcrResultDialog(loadOcr = loadOcr, onDismiss = { showOcr = false })
+    }
+}
+
+/** One-line status summary for the collapsed Processing accordion header. */
+fun processingSummary(document: DocumentDto): String {
+    val statuses = listOf(document.ocr_status, document.llm_status, document.thumbnail_status)
+    val failed = statuses.count { it == JobStatus.FAILED }
+    val active = statuses.count { it == JobStatus.PENDING || it == JobStatus.PROCESSING }
+    return when {
+        failed > 0 -> "$failed ${if (failed == 1) "stage" else "stages"} failed"
+        active > 0 -> "Processing…"
+        else -> "All stages complete"
     }
 }
 

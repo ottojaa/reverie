@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -74,6 +76,16 @@ class UploadViewModel @Inject constructor(
         .map { tree -> flattenFolders(tree).associate { it.id to it.label } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    private val _foldersLoading = MutableStateFlow(false)
+
+    /**
+     * True while the folder tree is being fetched. The picker only ever observed the Room cache, so
+     * before Collections had been opened once the tree was empty and the picker showed "No folders
+     * yet". We now fetch on [beginReview]; this flag lets the picker show a spinner instead of the
+     * empty state during that first fetch.
+     */
+    val foldersLoading: StateFlow<Boolean> = _foldersLoading.asStateFlow()
+
     private val _review = MutableStateFlow<ReviewState?>(null)
 
     /**
@@ -100,6 +112,30 @@ class UploadViewModel @Inject constructor(
             folderId = defaultFolderId ?: lastUsedFolderId,
             folderName = null,
         )
+        // Set synchronously so the picker never flashes the empty state before the fetch starts.
+        _foldersLoading.value = true
+        loadFolders()
+    }
+
+    /**
+     * Fetch the folder tree so the picker is populated regardless of whether Collections was ever
+     * opened, then — matching web, which preselects the current/first folder — default the selection
+     * to the first uploadable folder when nothing is selected yet (share-sheet / root-Browse entry).
+     */
+    private fun loadFolders() {
+        viewModelScope.launch {
+            runCatching { folderRepository.refresh() }
+            _foldersLoading.value = false
+            preselectDefaultFolder()
+        }
+    }
+
+    private suspend fun preselectDefaultFolder() {
+        if (_review.value?.folderId != null) return
+        val first = runCatching { folderRepository.observeTree().first() }.getOrNull()
+            ?.let { tree -> toPickerSections(tree).flatMap { it.folders }.firstOrNull() }
+            ?: return
+        _review.update { it?.copy(folderId = first.id, folderName = first.label) }
     }
 
     fun setFolder(id: String) {
@@ -152,6 +188,29 @@ class UploadViewModel @Inject constructor(
             }.onSuccess { created ->
                 lastUsedFolderId = created.id
                 _review.update { it?.copy(folderId = created.id, folderName = created.name) }
+            }
+        }
+    }
+
+    /**
+     * Create a root-level collection from the picker's empty state. Collections aren't uploadable
+     * (upload needs a folder) and can't be selected here, but the backend requires every folder to
+     * live in a collection — so this is the first step for a genuinely empty account. Once created,
+     * the section appears with its own "+" to add an uploadable folder.
+     */
+    fun createCollection(form: FolderFormData) {
+        viewModelScope.launch {
+            runCatching {
+                val created = folderRepository.create(
+                    CreateFolderRequest(
+                        name = form.name,
+                        parent_id = null,
+                        description = form.description,
+                        emoji = form.emoji,
+                        type = FolderType.COLLECTION,
+                    ),
+                )
+                if (form.isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))
             }
         }
     }

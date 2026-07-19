@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,8 +17,8 @@ android {
         applicationId = "com.reverie.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -26,6 +28,19 @@ android {
         // via Settings → Server / the login screen.
         val serverUrl = providers.gradleProperty("REVERIE_SERVER_URL").getOrElse("https://api.reverieapp.dev")
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"$serverUrl\"")
+
+        // Google Maps key for the viewer's location card (lite-mode static map). Add
+        //   MAPS_API_KEY=AIza…
+        // to apps/android/local.properties (gitignored, machine-local) or pass -PMAPS_API_KEY=…
+        // Builds WITHOUT a key still work: the card degrades to a plain location row (see
+        // LocationMapCard, which never composes a GoogleMap when the key is blank).
+        val mapsApiKey = providers.gradleProperty("MAPS_API_KEY").orNull
+            ?: Properties().apply {
+                val f = rootProject.file("local.properties")
+                if (f.exists()) f.inputStream().use { load(it) }
+            }.getProperty("MAPS_API_KEY").orEmpty()
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
     }
 
     buildTypes {
@@ -92,6 +107,10 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.exifinterface)
     implementation(libs.mlkit.document.scanner)
+
+    // Maps — location card in the document viewer (Google Maps SDK, lite mode)
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
 
     // Networking — Ktor on the OkHttp engine (shared with Coil + socket.io)
     implementation(libs.ktor.client.core)

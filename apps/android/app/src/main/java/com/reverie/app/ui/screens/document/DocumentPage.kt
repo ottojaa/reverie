@@ -21,14 +21,14 @@ import com.reverie.app.ui.screens.viewer.isImageDocument
 import com.reverie.app.ui.screens.viewer.viewers.DocumentDiveHero
 
 /**
- * One page of the swipe viewer: a single document's hero + real viewer, for [id]. Mirrors the old
- * single-document [DocumentScreen] body — including the image-only aspect box that the container
- * transform grows into — but is parameterized by id so the pager can host many.
+ * One page of the swipe viewer: a single document's hero + real viewer, for [id], parameterized so
+ * the pager can host many.
  *
- * The shared-element ([documentSharedBounds]) is applied only to the **current** page: at nav
- * enter/pop the pager's current page is the entry/target document, so only it morphs from/to the
- * grid tile; neighbor pages (composed by [beyondViewportPageCount]) would otherwise falsely match a
- * grid tile of the same id and animate off-screen.
+ * The thumbnail hero sits in an image-aspect box carrying the shared-element ([documentSharedBounds])
+ * so the grid tile morphs into it; the shared element is applied only to the **current** page so
+ * neighbor pages (composed by [beyondViewportPageCount]) don't falsely match a grid tile of the same
+ * id. The real viewer is a separate **full-screen** layer on top — so a pinch-zoomed image uses the
+ * whole screen rather than being clipped to the letterboxed thumbnail box.
  */
 @Composable
 fun DocumentPage(
@@ -36,10 +36,12 @@ fun DocumentPage(
     aspectHint: Float?,
     isCurrentPage: Boolean,
     isSettledPage: Boolean,
-    onToggleImmersive: () -> Unit,
+    onMediaTap: () -> Unit,
     onDownloadStarted: () -> Unit,
     viewModel: DocumentViewModel,
     modifier: Modifier = Modifier,
+    detailsOpen: Boolean = false,
+    onZoomChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val document by viewModel.observeDocument(id).collectAsStateWithLifecycle(initialValue = null)
@@ -60,20 +62,31 @@ fun DocumentPage(
             else -> Modifier.fillMaxHeight().aspectRatio(effectiveAspect, matchHeightConstraintsFirst = true)
         }
         val bounds = if (isCurrentPage) heroBounds.documentSharedBounds(id) else heroBounds
-        Box(bounds) {
-            // Base layer: the thumbnail hero (present from frame 1). Real content draws on top.
-            DocumentDiveHero(id, Modifier.fillMaxSize())
+
+        val viewer: @Composable (Modifier) -> Unit = { mod ->
             document?.let { doc ->
                 DocumentViewerBody(
                     document = doc,
                     fileUrl = fileUrl,
                     loadFile = { viewModel.originalFile(id) },
-                    onToggleImmersive = onToggleImmersive,
+                    onMediaTap = onMediaTap,
                     onDownload = { if (downloadDocument(context, fileUrl, doc)) onDownloadStarted() },
                     isSettledPage = isSettledPage,
-                    modifier = Modifier.fillMaxSize(),
+                    detailsOpen = detailsOpen,
+                    // Only the current page's zoom drives the chrome — neighbors stay reset.
+                    onZoomChanged = { zoomed -> if (isCurrentPage) onZoomChanged(zoomed) },
+                    modifier = mod,
                 )
             }
         }
+
+        // Base layer: the thumbnail hero in the aspect box (present from frame 1, morphs on dive).
+        // Non-image viewers ride inside it so they morph with the container transform; the image
+        // viewer is pulled out to a full-screen sibling so a zoomed image uses the whole screen.
+        Box(bounds) {
+            DocumentDiveHero(id, Modifier.fillMaxSize())
+            if (!isImage) viewer(Modifier.fillMaxSize())
+        }
+        if (isImage) viewer(Modifier.fillMaxSize())
     }
 }

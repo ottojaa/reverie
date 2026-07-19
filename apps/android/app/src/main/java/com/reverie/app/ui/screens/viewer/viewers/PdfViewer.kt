@@ -39,6 +39,8 @@ import kotlin.math.min
 fun PdfViewer(
     loadFile: suspend () -> File,
     modifier: Modifier = Modifier,
+    // Disabled while the details pane is open so the page list doesn't steal the drag-to-close.
+    scrollEnabled: Boolean = true,
 ) {
     var pages by remember { mutableStateOf<List<Bitmap>?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -68,6 +70,7 @@ fun PdfViewer(
                     .background(MaterialTheme.colorScheme.background),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                userScrollEnabled = scrollEnabled,
             ) {
                 items(pages!!) { bitmap ->
                     Image(

@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Brush
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -43,16 +41,14 @@ import com.reverie.app.ui.screens.viewer.InsightTitleBlock
 fun ViewerToolbar(
     document: DocumentDto?,
     phase: InsightPhase,
-    insightOpen: Boolean,
+    detailsOpen: Boolean,
     menuOpen: Boolean,
     onBack: () -> Unit,
     onTitleClick: () -> Unit,
     onEdit: () -> Unit,
-    onDownload: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onRename: () -> Unit,
     onTogglePrivate: () -> Unit,
-    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val canEdit = document != null &&
@@ -89,13 +85,12 @@ fun ViewerToolbar(
                     filename = document?.original_filename ?: "",
                     phase = phase,
                     idleLabel = document?.let { fileTypeLabel(it.mime_type) } ?: "",
-                    expanded = insightOpen,
+                    expanded = detailsOpen,
                     modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                 )
             }
-            IconButton(onClick = onDownload) {
-                Icon(Icons.Outlined.Download, contentDescription = "Download")
-            }
+            // Download and Delete live in the bottom action bar now; the overflow keeps the
+            // less-frequent actions.
             // Wrap the button and its menu in a Box so the menu anchors to the button,
             // not to the trailing edge of the Row.
             Box {
@@ -124,11 +119,6 @@ fun ViewerToolbar(
                             )
                         },
                         onClick = onTogglePrivate,
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
-                        onClick = onDelete,
                     )
                 }
             }

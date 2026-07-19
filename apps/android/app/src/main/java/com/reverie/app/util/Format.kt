@@ -4,11 +4,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ln
 import kotlin.math.pow
 
 private val shortDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
+private val dayDateFormatter = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.US)
+private val timeOfDayFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
 /** Parse an ISO-8601 instant (or a YYYY-MM-DD date) into a short local date, e.g. "Jun 1, 2024". */
 fun formatShortDate(iso: String?): String {
@@ -21,6 +24,42 @@ fun formatShortDate(iso: String?): String {
 private fun toLocalDate(iso: String): LocalDate =
     if (iso.length == 10) LocalDate.parse(iso)
     else Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalDate()
+
+/**
+ * Weekday-led date for scannable detail rows, e.g. "Mon, 27 Oct 2003". The leading weekday is the
+ * parseability win over [formatShortDate]; empty on a parse failure.
+ */
+fun formatDayDate(iso: String?): String {
+    if (iso.isNullOrBlank()) return ""
+    return runCatching { toLocalDate(iso).format(dayDateFormatter) }.getOrDefault("")
+}
+
+/** Local time-of-day "HH:mm" when the timestamp carries one; null for date-only values (never fabricate midnight). */
+fun formatTimeOfDay(iso: String?): String? {
+    if (iso.isNullOrBlank() || iso.length == 10) return null
+    return runCatching {
+        Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalTime().format(timeOfDayFormatter)
+    }.getOrNull()
+}
+
+/**
+ * Coarse "how long ago" for a detail row's secondary line: today / yesterday / N days ago /
+ * N weeks ago; null once it's older than ~a month (the absolute date already carries it) or unparseable.
+ * Prose-oriented, unlike [dateBucket] which produces group headers.
+ */
+fun formatRelativeAge(iso: String?): String? {
+    if (iso.isNullOrBlank()) return null
+    val date = runCatching { toLocalDate(iso) }.getOrNull() ?: return null
+    val days = ChronoUnit.DAYS.between(date, LocalDate.now())
+    return when {
+        days < 0L -> null
+        days == 0L -> "today"
+        days == 1L -> "yesterday"
+        days < 7L -> "$days days ago"
+        days < 30L -> (days / 7).let { "$it ${if (it == 1L) "week" else "weeks"} ago" }
+        else -> null
+    }
+}
 
 /** A coarse date bucket label for grouping search results: Today / This week / 2023 / … */
 fun dateBucket(iso: String?): String {

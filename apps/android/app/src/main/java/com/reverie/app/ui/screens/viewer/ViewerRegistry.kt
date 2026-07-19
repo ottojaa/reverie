@@ -41,13 +41,18 @@ fun DocumentViewerBody(
     document: DocumentDto,
     fileUrl: String?,
     loadFile: suspend () -> File,
-    onToggleImmersive: () -> Unit,
+    onMediaTap: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
     // Whether this document is the pager's settled page. Non-settled image pages reset their zoom so
     // a zoomed-in image doesn't restore its transform when swiped back to. Defaults true for callers
     // outside the pager.
     isSettledPage: Boolean = true,
+    // While the details pane is open the media is lifted out of the way; disable each viewer's own
+    // zoom/scroll so it doesn't fight the pane's drag-to-close.
+    detailsOpen: Boolean = false,
+    // Reports whether the image is pinch-zoomed (image viewer only), so the chrome can hide.
+    onZoomChanged: (Boolean) -> Unit = {},
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
@@ -55,13 +60,15 @@ fun DocumentViewerBody(
             documentId = document.id,
             hasThumbnail = document.hasRenderedThumbnail,
             contentDescription = document.original_filename,
-            onTap = onToggleImmersive,
+            onTap = onMediaTap,
             isSettledPage = isSettledPage,
+            gesturesEnabled = !detailsOpen,
+            onZoomChanged = onZoomChanged,
             modifier = modifier,
         )
         ViewerType.VIDEO -> VideoViewer(fileUrl = fileUrl, modifier = modifier)
-        ViewerType.PDF -> PdfViewer(loadFile = loadFile, modifier = modifier)
-        ViewerType.TEXT -> TextViewer(loadFile = loadFile, modifier = modifier)
+        ViewerType.PDF -> PdfViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
+        ViewerType.TEXT -> TextViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
         ViewerType.FALLBACK -> FallbackViewer(document = document, onDownload = onDownload, modifier = modifier)
     }
 }
