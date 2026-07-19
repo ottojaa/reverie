@@ -12,7 +12,6 @@ import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
-import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -62,7 +61,6 @@ class BrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val documentRepository: DocumentRepository,
     private val folderRepository: FolderRepository,
-    private val settingsRepository: SettingsRepository,
     private val realtimeManager: RealtimeManager,
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
@@ -90,11 +88,6 @@ class BrowseViewModel @Inject constructor(
     )
 
     private val control = MutableStateFlow(BrowseControl())
-
-    /** User-chosen Files grid column count (1–4). */
-    val gridColumns: StateFlow<Int> = settingsRepository.settings
-        .map { it.gridColumns }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 
     // Open realtime subscriptions for documents whose thumbnail is still generating (keyed by id).
     private val thumbnailSubscriptions = mutableMapOf<String, AutoCloseable>()
@@ -125,10 +118,6 @@ class BrowseViewModel @Inject constructor(
         }
         observePendingThumbnails()
         collectThumbnailJobEvents()
-    }
-
-    fun setGridColumns(columns: Int) {
-        viewModelScope.launch { settingsRepository.setGridColumns(columns) }
     }
 
     /**

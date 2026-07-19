@@ -12,7 +12,6 @@ import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
 import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.repository.SearchRepository
-import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import com.reverie.app.domain.search.FilterKey
@@ -97,16 +96,10 @@ class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
     private val connectivity: ConnectivityMonitor,
     private val sequenceHolder: DocumentSequenceHolder,
-    settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
     private val control = MutableStateFlow(SearchControl())
-
-    /** User-chosen grid column count (1–4), shared with the Files grid so both stay in lockstep. */
-    val gridColumns: StateFlow<Int> = settingsRepository.settings
-        .map { it.gridColumns }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 
     /** The document the viewer is showing, so the grid can scroll it into view on return. */
     val focusedDocumentId: StateFlow<String?> get() = sequenceHolder.focused

@@ -27,9 +27,11 @@ import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.ui.navigation.documentSharedBounds
 
 /**
- * A Google-Photos-style gallery tile: a square, edge-to-edge cropped thumbnail with no caption and
- * no corner radius. Non-media files carry a subtle file-type glyph so they read as documents; media
- * tiles stay clean. Overlays (video/type/selection/private badges) sit in the corners.
+ * A Google-Photos-style gallery tile: an edge-to-edge cropped thumbnail with no caption and no
+ * corner radius. Non-media files carry a subtle file-type glyph so they read as documents; media
+ * tiles stay clean. Overlays (video/type/selection/private badges) sit in the corners. The caller
+ * sizes the tile via [modifier] (the justified grid passes an explicit width/height), so this
+ * composable no longer forces a square.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -42,8 +44,6 @@ fun DocumentCard(
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
             .documentSharedBounds(document.id)
             .clip(RectangleShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
