@@ -40,6 +40,7 @@ import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.DocumentViewerBody
 import com.reverie.app.ui.screens.viewer.InsightSheet
+import com.reverie.app.ui.screens.viewer.isImageDocument
 import com.reverie.app.ui.screens.viewer.viewers.DocumentDiveHero
 import com.reverie.app.util.enqueueDownload
 import kotlinx.coroutines.launch
@@ -77,9 +78,15 @@ fun DocumentScreen(
             // with NO overshoot, and rests where it started (no jump). Docs with no known aspect
             // (pdf/text, or before the record loads) fall back to a full-screen box.
             BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // Only images fit themselves into an aspect-matched box: that box is the dive-transform
+                // target and letterboxing a photo is correct. PDF/text/video/other viewers get the full
+                // screen — their thumbnail-derived width/height must NOT shrink the viewer into a
+                // centered band with limited height (default to image bounds until the record loads;
+                // BrowseScreen only passes `aspect` for images, so the frame-1 default stays correct).
+                val isImage = document?.let(::isImageDocument) ?: true
                 // Prefer the aspect passed as a nav arg (known on frame 1, so the shared bounds never
                 // change shape mid-transition); fall back to the loaded record's dimensions.
-                val effectiveAspect = aspect ?: document?.mediaAspectOrNull()
+                val effectiveAspect = if (isImage) aspect ?: document?.mediaAspectOrNull() else null
                 val screenAspect = maxWidth.value / maxHeight.value
                 val heroBounds = when {
                     effectiveAspect == null -> Modifier.fillMaxSize()

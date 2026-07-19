@@ -63,6 +63,7 @@ import com.reverie.app.ui.components.rememberSkeletonVisible
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.screens.viewer.isImageDocument
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
@@ -187,7 +188,12 @@ fun BrowseScreen(
                             selected = document.id in state.selectedIds,
                             onClick = {
                                 if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                else onDocumentClick(document.id, document.mediaAspectOrNull())
+                                // Only images size the dive transform to their aspect — for other file
+                                // types the thumbnail aspect would letterbox the full-screen viewer.
+                                else onDocumentClick(
+                                    document.id,
+                                    if (isImageDocument(document)) document.mediaAspectOrNull() else null,
+                                )
                             },
                             onLongClick = {
                                 if (state.inSelectionMode) viewModel.toggleSelect(document.id)

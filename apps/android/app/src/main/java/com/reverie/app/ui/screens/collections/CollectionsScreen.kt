@@ -41,7 +41,7 @@ import com.reverie.app.ui.components.CollectionHeaderRow
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderTreeItem
 import com.reverie.app.ui.components.OfflineBanner
-import com.reverie.app.ui.components.StorageSummary
+import com.reverie.app.ui.components.StorageSummaryCard
 
 @Composable
 fun CollectionsScreen(
@@ -68,21 +68,21 @@ fun CollectionsScreen(
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomBarInset() + 16.dp),
         ) {
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Library",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f),
+                Text(
+                    "Library",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                )
+            }
+            // Storage glance up top — visible but scrolls with the list (not a sticky footer).
+            // The full meter lives in Settings.
+            if (state.storageQuota > 0) {
+                item {
+                    StorageSummaryCard(
+                        usedBytes = state.storageUsed,
+                        quotaBytes = state.storageQuota,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
-                    // Minimal storage glance up top (the full meter lives in Settings).
-                    if (state.storageQuota > 0) {
-                        StorageSummary(usedBytes = state.storageUsed, quotaBytes = state.storageQuota)
-                    }
                 }
             }
             item { PrimaryRow(icon = Icons.Outlined.GridView, label = "All Documents", onClick = onOpenAllDocuments) }
