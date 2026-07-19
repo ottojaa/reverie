@@ -23,24 +23,24 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
 
 /**
- * Google-Photos-style "quilted" grid for the Files view. Every tile snaps to one fixed cell size on
- * a fixed column count, so columns line up top-to-bottom and the grid reads clean rather than busy.
- * Three tile shapes, all integer multiples of the cell:
- *   - 1×1 — the default square cell (portraits/landscapes are center-cropped),
- *   - 2×2 — an occasional "feature" tile, paired with 1×1 fillers so the band stays rectangular,
- *   - full-width — a panorama spanning every column at one cell of height.
+ * Google-Photos-style "quilted" grid for the Files view. A fixed 3-column cell grid where **most
+ * photos are 1×1 squares**; larger tiles are sprinkled in on a jittered cadence so the grid reads
+ * clean but not repetitive:
+ *   - 1×1 — the default square cell (photos are center-cropped),
+ *   - 2×2 / 3×2 — feature blocks; 3×2 spans the full width two rows tall,
+ *   - 3×3 — a rare full-width, three-row hero,
+ *   - 1×3 / 2×3 — tall blocks, used **only for portrait photos** so a landscape is never forced tall.
  *
- * All geometry is in dp. [computeMosaicSections] is pure so it can be unit-tested and re-run cheaply
- * on rotation/width change.
+ * A photo's aspect ratio does NOT decide its size — a position hash does (with tall tiles gated to
+ * portraits). The hash is position-based, so the layout is stable across pagination. Every band fills
+ * the full width, so there are never empty cells mid-grid. [computeMosaicSections] is pure and cheap.
  */
 
 /** Hairline gap between tiles. */
 const val MOSAIC_GAP = 2f
 
 private const val TARGET_CELL = 125f // dp; yields 3 columns on a typical phone
-private const val PANO_ASPECT = 2.2f // width/height ≥ this (with real dims) → full-width band
-private const val FEATURE_MIN_ASPECT = 0.5f // a 2×2 crop of anything taller than this reads fine
-private const val FEATURE_COOLDOWN_BANDS = 3 // ≥ this many plain bands between feature blocks
+private const val PORTRAIT_MAX = 0.9f // aspect below this → portrait → eligible for a tall tile
 
 /** One tile: the document plus its resolved size in dp. */
 data class MosaicTile(val doc: DocumentDto, val width: Float, val height: Float)
@@ -54,90 +54,97 @@ sealed interface MosaicSection {
 /** A row of 1×1 cells (1..columns of them; fewer only in the trailing row). */
 data class MosaicRow(override val tiles: List<MosaicTile>) : MosaicSection
 
-/** A single full-width tile, one cell tall — a panorama. */
-data class MosaicWide(val tile: MosaicTile) : MosaicSection {
-    override val tiles: List<MosaicTile> get() = listOf(tile)
-}
-
-/** A 2×2 feature tile plus 1×1 fillers packed into the remaining cells; sides alternate per block. */
-data class MosaicFeature(
+/**
+ * A feature block: one large [feature] tile spanning [featureCols]×[blockRows] cells, plus 1×1
+ * [fillers] packing the remaining `(columns - featureCols)` columns over [blockRows] rows (empty when
+ * the feature is full-width). [featureOnLeft] alternates the big tile's side.
+ */
+data class MosaicBlock(
     val feature: MosaicTile,
-    val fillers: List<MosaicTile>, // 2 per remaining column, stacked
+    val fillers: List<MosaicTile>,
+    val blockRows: Int,
     val featureOnLeft: Boolean,
 ) : MosaicSection {
     override val tiles: List<MosaicTile> get() = listOf(feature) + fillers
 }
 
-private fun DocumentDto.isPano(): Boolean = (mediaAspectOrNull() ?: 0f) >= PANO_ASPECT
-
-// Any real photo/video (a rendered thumbnail with sane dims) can lead a feature — the 2×2 tile is a
-// center crop, so the aspect barely matters. Panoramas are excluded (they get their own full-width
-// band) and non-previewable files (icons) never balloon to a broken 2×2.
-private fun DocumentDto.canFeature(): Boolean {
-    if (!hasRenderedThumbnail) return false
-    val aspect = mediaAspectOrNull() ?: return false
-    return aspect >= FEATURE_MIN_ASPECT && aspect < PANO_ASPECT
+/** Deterministic hash of an integer → [0,1). Position-based so the layout is stable across pagination. */
+private fun hash01(seed: Int): Float {
+    var n = seed
+    n = (n xor 61) xor (n ushr 16)
+    n += n shl 3
+    n = n xor (n ushr 4)
+    n *= 0x27d4eb2d
+    n = n xor (n ushr 15)
+    return (n.toLong() and 0xffffffffL).toFloat() / 4294967296f
 }
 
+/** True when [doc] is a real photo/video (rendered thumbnail + known dims) that can lead a feature. */
+private fun DocumentDto.canFeature(): Boolean = hasRenderedThumbnail && mediaAspectOrNull() != null
+
 /**
- * Pack [docs] onto a fixed [availableWidth]-wide cell grid. The column count comes from [targetCell];
- * every tile is a whole number of cells, so the layout aligns to a grid like Google Photos.
- *
- * The packer is a left-to-right fold whose decision at each position looks only at the current
- * document (plus a fixed lookahead for a feature's fillers). A band is closed and never revised once
- * emitted, so appending more documents only reflows the trailing partial row — pagination never
- * reshuffles bands already on screen.
+ * Pack [docs] onto a fixed [availableWidth]-wide cell grid. A larger feature tile appears roughly
+ * every [featureEvery] photos, jittered by a position hash so the placement looks organic but is
+ * deterministic (stable across pagination — a band is never revised once emitted).
  */
 fun computeMosaicSections(
     docs: List<DocumentDto>,
     availableWidth: Float,
+    featureEvery: Int,
     targetCell: Float = TARGET_CELL,
     gap: Float = MOSAIC_GAP,
 ): List<MosaicSection> {
     if (docs.isEmpty() || availableWidth <= 0f || targetCell <= 0f) return emptyList()
     val columns = (availableWidth / targetCell).roundToInt().coerceAtLeast(3)
     val cell = (availableWidth - (columns - 1) * gap) / columns
-    val featureEdge = 2f * cell + gap // a 2×2 tile spans two cells plus the gap between them
-    val fillerCount = 2 * (columns - 2) // fill the (columns-2)×2 cells beside the feature
+    fun span(n: Int) = n * cell + (n - 1) * gap // dp size across n cells
 
     val sections = mutableListOf<MosaicSection>()
     var i = 0
-    var bandsSinceFeature = FEATURE_COOLDOWN_BANDS // allow a feature as soon as content permits
-    var featureCount = 0
+    var since = 0
+    var featureIndex = 0
+    // The next feature fires once `since` reaches this jittered target (featureEvery ± ~2, min 2).
+    fun nextTarget() = (featureEvery + (hash01(featureIndex * 9176 + 3) * 5f).roundToInt() - 2).coerceAtLeast(2)
+    var target = nextTarget()
+
     while (i < docs.size) {
-        // 1) Panorama → its own full-width band, one cell tall.
-        if (docs[i].isPano()) {
-            sections += MosaicWide(MosaicTile(docs[i], availableWidth, cell))
-            i++
-            bandsSinceFeature++
-            continue
+        val doc = docs[i]
+        if (since >= target && doc.canFeature()) {
+            val roll = hash01(i * 2654 + 1)
+            val aspect = doc.mediaAspectOrNull() ?: 1f
+            // (featureCols, blockRows) chosen by hash; tall tiles gated to portraits, 3×3 is rare.
+            val (featureCols, blockRows) = when {
+                aspect < PORTRAIT_MAX -> if (roll < 0.5f) 2 to 3 else 1 to 3
+                roll < 0.55f -> 2 to 2
+                roll < 0.90f -> columns to 2
+                else -> columns to 3
+            }
+            val fillerCount = (columns - featureCols) * blockRows
+            if (i + fillerCount < docs.size) {
+                val fillers = (0 until fillerCount).map { MosaicTile(docs[i + 1 + it], cell, cell) }
+                sections += MosaicBlock(
+                    feature = MosaicTile(doc, span(featureCols), span(blockRows)),
+                    fillers = fillers,
+                    blockRows = blockRows,
+                    featureOnLeft = hash01(i * 71 + 7) < 0.5f,
+                )
+                i += 1 + fillerCount
+                featureIndex++
+                since = 0
+                target = nextTarget()
+                continue
+            }
+            // Not enough photos left for the fillers → fall through to a plain row.
         }
-        // 2) Occasional 2×2 feature (needs non-pano fillers to complete the rectangle).
-        if (bandsSinceFeature >= FEATURE_COOLDOWN_BANDS && docs[i].canFeature() && fillersAvailable(docs, i + 1, fillerCount)) {
-            val fillers = (0 until fillerCount).map { MosaicTile(docs[i + 1 + it], cell, cell) }
-            sections += MosaicFeature(MosaicTile(docs[i], featureEdge, featureEdge), fillers, featureOnLeft = featureCount % 2 == 0)
-            i += 1 + fillerCount
-            featureCount++
-            bandsSinceFeature = 0
-            continue
-        }
-        // 3) A plain row of 1×1 cells, stopping before a panorama (it wants its own full-width band).
         val row = mutableListOf<MosaicTile>()
-        while (i < docs.size && row.size < columns && !docs[i].isPano()) {
+        while (i < docs.size && row.size < columns) {
             row += MosaicTile(docs[i], cell, cell)
             i++
         }
         sections += MosaicRow(row)
-        bandsSinceFeature++
+        since += row.size
     }
     return sections
-}
-
-/** True when [count] documents starting at [start] all exist and none is a panorama. */
-private fun fillersAvailable(docs: List<DocumentDto>, start: Int, count: Int): Boolean {
-    if (start + count > docs.size) return false
-    for (k in start until start + count) if (docs[k].isPano()) return false
-    return true
 }
 
 /**
@@ -149,6 +156,7 @@ fun MosaicDocumentGrid(
     documents: List<DocumentDto>,
     listState: LazyListState,
     contentPadding: PaddingValues,
+    featureEvery: Int,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
     focusedId: String?,
@@ -159,8 +167,8 @@ fun MosaicDocumentGrid(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val sections = remember(documents, maxWidth) {
-            computeMosaicSections(documents, maxWidth.value)
+        val sections = remember(documents, maxWidth, featureEvery) {
+            computeMosaicSections(documents, maxWidth.value, featureEvery)
         }
 
         // Infinite scroll: fetch the next page as the last band approaches.
@@ -170,8 +178,7 @@ fun MosaicDocumentGrid(
                 .collect { lastIndex -> if (hasMore && lastIndex >= sections.size - 2) onLoadMore() }
         }
 
-        // Return-transform sync: scroll the band holding the focused document into view so the
-        // shared-element container transform lands on the right tile when the viewer pops back.
+        // Return-transform sync: scroll the band holding the focused document into view.
         LaunchedEffect(focusedId, sections) {
             val id = focusedId ?: return@LaunchedEffect
             val index = sections.indexOfFirst { section -> section.tiles.any { it.doc.id == id } }
@@ -201,14 +208,13 @@ private fun MosaicSectionView(
     onLongClick: (DocumentDto) -> Unit,
 ) {
     when (section) {
-        is MosaicWide -> MosaicCard(section.tile, selected, onClick, onLongClick)
         is MosaicRow -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
             section.tiles.forEach { tile -> MosaicCard(tile, selected, onClick, onLongClick) }
         }
-        is MosaicFeature -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
-            // Fillers pack into columns of two stacked cells, filling the space beside the 2×2 tile.
+        is MosaicBlock -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
+            // Fillers pack into columns of `blockRows` stacked cells, beside the feature tile.
             val fillerColumns: @Composable () -> Unit = {
-                section.fillers.chunked(2).forEach { column ->
+                section.fillers.chunked(section.blockRows).forEach { column ->
                     Column(verticalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
                         column.forEach { tile -> MosaicCard(tile, selected, onClick, onLongClick) }
                     }

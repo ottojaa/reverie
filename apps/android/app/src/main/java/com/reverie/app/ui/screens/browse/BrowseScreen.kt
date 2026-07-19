@@ -96,6 +96,7 @@ fun BrowseScreen(
     // Infinite scroll and the return-transform scroll sync live inside MosaicDocumentGrid, which
     // owns the packed sections those effects key on. We only forward the focused id here.
     val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    val featureEvery by viewModel.mosaicFeatureEvery.collectAsStateWithLifecycle()
 
     // Drive the shell's bottom-bar visibility off the same collapsing-top-bar state, so both bars
     // move in lockstep and the bottom bar reappears at the top. Honored only when the setting is on.
@@ -170,6 +171,7 @@ fun BrowseScreen(
                     documents = state.documents,
                     listState = listState,
                     contentPadding = gridPadding,
+                    featureEvery = featureEvery,
                     hasMore = state.hasMore,
                     onLoadMore = viewModel::loadMore,
                     focusedId = focusedId,

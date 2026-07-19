@@ -57,6 +57,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setHideNavOnScroll(enabled) }
     }
 
+    fun setMosaicFeatureEvery(every: Int) {
+        viewModelScope.launch { settingsRepository.setMosaicFeatureEvery(every) }
+    }
+
     /** TEMPORARY / DEV TUNING — persist the edited motion spec (whole AppSettings carries it). */
     fun setMotion(updated: AppSettings) {
         viewModelScope.launch { settingsRepository.setMotion(updated) }

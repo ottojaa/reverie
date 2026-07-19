@@ -51,6 +51,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.BuildConfig
 import com.reverie.app.data.api.model.UserDto
 import com.reverie.app.data.settings.AppSettings
+import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MAX
+import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MIN
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
@@ -60,6 +62,7 @@ import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.navigation.toEasingPreset
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.ui.theme.ThemeMode
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -139,6 +142,18 @@ fun SettingsScreen(
                     onCheckedChange = viewModel::setHideNavOnScroll,
                 )
             }
+            Spacer(Modifier.height(4.dp))
+            var featureEvery by remember(settings.mosaicFeatureEvery) { mutableStateOf(settings.mosaicFeatureEvery.toFloat()) }
+            LabeledSlider(
+                label = "Featured tiles in Files",
+                description = "How often a photo gets a larger tile in the grid. Lower is livelier; higher is calmer.",
+                valueLabel = "every ${featureEvery.roundToInt()} photos",
+                value = featureEvery,
+                range = MOSAIC_FEATURE_EVERY_MIN.toFloat()..MOSAIC_FEATURE_EVERY_MAX.toFloat(),
+                steps = MOSAIC_FEATURE_EVERY_MAX - MOSAIC_FEATURE_EVERY_MIN - 1,
+                onChange = { featureEvery = it },
+                onCommit = { viewModel.setMosaicFeatureEvery(featureEvery.roundToInt()) },
+            )
         }
 
         if (vault?.has_password == true) {
@@ -467,6 +482,7 @@ private fun LabeledSlider(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
     onCommit: () -> Unit,
+    steps: Int = 0,
 ) {
     Column(Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -478,6 +494,7 @@ private fun LabeledSlider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
+            steps = steps,
             onValueChangeFinished = onCommit,
         )
     }

@@ -12,6 +12,7 @@ import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
+import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,9 +66,15 @@ class BrowseViewModel @Inject constructor(
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
     private val sequenceHolder: DocumentSequenceHolder,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
+
+    /** How often the mosaic grid promotes a photo to a larger tile (user setting). */
+    val mosaicFeatureEvery: StateFlow<Int> = settingsRepository.settings
+        .map { it.mosaicFeatureEvery }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 
     /** The document the viewer is showing, so the grid can scroll it into view on return. */
     val focusedDocumentId: StateFlow<String?> get() = sequenceHolder.focused
