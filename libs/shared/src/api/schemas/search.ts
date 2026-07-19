@@ -111,6 +111,8 @@ export const DocumentSearchResultSchema = z.object({
 
     // Metadata
     size_bytes: z.number(),
+    // Video length in seconds; null for non-video hits.
+    duration_seconds: z.number().nullable(),
     tags: z.array(z.string()),
 
     // Relevance (for text searches)

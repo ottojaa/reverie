@@ -92,6 +92,8 @@ export const DocumentSchema = z.object({
     size_bytes: z.number(),
     width: z.number().nullable(),
     height: z.number().nullable(),
+    // Video length in seconds; null for non-video documents (and videos not yet reprocessed).
+    duration_seconds: z.number().nullable(),
     thumbnail_blurhash: z.string().nullable(),
     thumbnail_paths: ThumbnailPathsSchema.nullable(),
     document_category: DocumentCategoryEnum.nullable(),

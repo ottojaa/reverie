@@ -262,6 +262,7 @@ interface DocumentRow {
     document_category: string | null;
     mime_type: string;
     size_bytes: number | string;
+    duration_seconds: number | null;
     has_meaningful_text: boolean;
     thumbnail_paths: unknown;
     thumbnail_blurhash: string | null;
@@ -292,6 +293,7 @@ async function fetchDocumentDetails(userId: string, ids: string[], parsed: Parse
             'd.document_category',
             'd.mime_type',
             'd.size_bytes',
+            'd.duration_seconds',
             'd.has_meaningful_text',
             'd.thumbnail_paths',
             'd.thumbnail_blurhash',
@@ -376,6 +378,7 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
                 thumbnail_urls: thumbnailUrls,
                 blurhash: row.thumbnail_blurhash,
                 size_bytes: Number(row.size_bytes),
+                duration_seconds: row.duration_seconds,
                 tags: tagMap.get(row.id) ?? [],
                 relevance: row.relevance ?? null,
             };

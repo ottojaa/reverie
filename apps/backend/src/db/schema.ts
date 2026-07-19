@@ -65,6 +65,7 @@ export interface DocumentsTable {
     size_bytes: number;
     width: number | null;
     height: number | null;
+    duration_seconds: number | null;
     thumbnail_blurhash: string | null;
     thumbnail_paths: ThumbnailPaths | null;
     document_category: string | null;
