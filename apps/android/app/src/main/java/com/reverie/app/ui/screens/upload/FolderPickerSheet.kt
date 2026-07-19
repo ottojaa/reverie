@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.upload
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,9 +10,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +46,7 @@ fun FolderPickerSheet(
     onSelect: (FolderOption) -> Unit,
     onCreateFolder: (parentId: String?, form: FolderFormData) -> Unit,
     onDismiss: () -> Unit,
+    selectedId: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
@@ -95,7 +100,11 @@ fun FolderPickerSheet(
                     }
                     if (expanded) {
                         items(section.folders, key = { "folder-${it.id}" }) { folder ->
-                            FolderRow(folder = folder, onClick = { onSelect(folder) })
+                            FolderRow(
+                                folder = folder,
+                                selected = folder.id == selectedId,
+                                onClick = { onSelect(folder) },
+                            )
                         }
                     }
                 }
@@ -150,16 +159,37 @@ private fun SectionHeaderRow(
 }
 
 @Composable
-private fun FolderRow(folder: FolderOption, onClick: () -> Unit) {
+private fun FolderRow(folder: FolderOption, selected: Boolean, onClick: () -> Unit) {
+    val rowBackground = if (selected) {
+        Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+    } else {
+        Modifier
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(rowBackground)
             .clickable(onClick = onClick)
-            .padding(start = 32.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 32.dp, top = 10.dp, bottom = 10.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SectionIcon(emoji = folder.emoji, size = 20.dp)
-        Text(folder.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+        Text(
+            folder.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .weight(1f),
+        )
+        if (selected) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 

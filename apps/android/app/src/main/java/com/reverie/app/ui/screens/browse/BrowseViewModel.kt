@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
+import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.JobEventType
@@ -41,6 +42,9 @@ data class BrowseUiState(
         get() = selectedIds.isNotEmpty() && documents.filter { it.id in selectedIds }.all { it.is_private }
 }
 
+/** A resolved, ready-to-enqueue download: a signed file URL + the name to save it under. */
+data class DownloadTarget(val url: String, val filename: String)
+
 private data class BrowseControl(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
@@ -59,6 +63,7 @@ class BrowseViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val realtimeManager: RealtimeManager,
     private val connectivity: ConnectivityMonitor,
+    private val serverUrlProvider: ServerUrlProvider,
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
@@ -202,6 +207,28 @@ class BrowseViewModel @Inject constructor(
             clearSelection()
         }
     }
+
+    /**
+     * Resolve fresh signed URLs for the selected documents (the cached copies strip file_url) and
+     * hand them to [onTargets] to enqueue — the caller owns the platform DownloadManager.
+     */
+    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) {
+        val ids = control.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val targets = ids.mapNotNull { id ->
+                runCatching {
+                    val doc = documentRepository.fetchDocument(id)
+                    doc.file_url?.let { DownloadTarget(absolute(it), doc.original_filename) }
+                }.getOrNull()
+            }
+            clearSelection()
+            onTargets(targets)
+        }
+    }
+
+    private fun absolute(url: String): String =
+        if (url.startsWith("http")) url else serverUrlProvider.current().removeSuffix("/") + url
 
     private fun isFullyProcessed(doc: DocumentDto): Boolean =
         doc.ocr_status.isTerminal && doc.thumbnail_status.isTerminal && doc.llm_status.isTerminal

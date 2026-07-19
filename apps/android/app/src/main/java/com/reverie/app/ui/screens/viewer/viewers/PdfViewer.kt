@@ -60,8 +60,12 @@ fun PdfViewer(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             pages == null -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            // Opaque backdrop so the dive-hero thumbnail (drawn beneath every viewer for the
+            // container transform) doesn't bleed through the page gaps/padding once pages render.
             else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
             ) {

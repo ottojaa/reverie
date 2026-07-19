@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.viewer.viewers
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -59,8 +60,11 @@ fun TextViewer(
                 val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + VIEWER_TOOLBAR_INSET
                 SelectionContainer {
                     Row(
+                        // Opaque backdrop so the dive-hero thumbnail beneath the viewer doesn't
+                        // bleed through the text (see DocumentScreen's container transform).
                         modifier = Modifier
                             .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
                             .verticalScroll(rememberScrollState())
                             .horizontalScroll(rememberScrollState())
                             .padding(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),

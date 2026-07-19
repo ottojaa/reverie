@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.viewer
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -9,14 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -43,7 +45,7 @@ fun InsightSheet(
     loadOcr: suspend () -> DocumentOcrResult,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val isFallback = isFallbackLlmMetadata(document.llm_metadata)
     val metadata = if (isFallback) null else LlmMetadata.from(document.llm_metadata)
     val summary = if (isFallback) null else document.llm_summary
@@ -54,8 +56,10 @@ fun InsightSheet(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
+            // Scrollable so long mention/topic lists and details never overflow past the sheet.
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
@@ -105,7 +109,7 @@ private fun SummarySection(title: String?, category: String?, summary: String?) 
             )
         }
         if (category != null) {
-            AssistChip(onClick = {}, label = { Text(formatCategory(category)) })
+            CategoryChip(formatCategory(category))
         }
         Text(
             text = summary ?: "No summary available for this document yet.",
@@ -120,16 +124,42 @@ private fun SummarySection(title: String?, category: String?, summary: String?) 
 private fun ChipSection(label: String, items: List<String>, primary: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         MicroLabel(label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items.forEach { item ->
-                if (primary) {
-                    AssistChip(onClick = {}, label = { Text(item) })
-                } else {
-                    SuggestionChip(onClick = {}, label = { Text(item) })
-                }
-            }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items.forEach { item -> CompactChip(text = item, emphasized = primary) }
         }
     }
+}
+
+/** A small, dense label pill — far more compact than a Material AssistChip. */
+@Composable
+private fun CompactChip(text: String, emphasized: Boolean) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (emphasized) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .background(
+                color = if (emphasized) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
+}
+
+/** The document category, tinted with the brand (primary) container so it stands out. */
+@Composable
+private fun CategoryChip(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable

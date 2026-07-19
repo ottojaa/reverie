@@ -1,18 +1,41 @@
 import { Button } from '@/components/ui/button';
 import { useDeleteDocuments } from '@/lib/api/documents';
+import { buildDownloadUrl, buildFileUrl } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useSelection } from '@/lib/selection';
+import type { Document } from '@reverie/shared';
 import { useLocation } from '@tanstack/react-router';
-import { Trash2, X } from 'lucide-react';
+import { Download, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
 
-export function SelectionBanner() {
+export function SelectionBanner({ documents }: { documents: Document[] }) {
     const { pathname } = useLocation();
     const { selectedIds, clear } = useSelection();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
     const count = selectedIds.size;
+
+    const handleDownload = () => {
+        const byId = new Map(documents.map((doc) => [doc.id, doc]));
+        const targets = Array.from(selectedIds)
+            .map((id) => byId.get(id))
+            .filter((doc): doc is Document => doc != null);
+
+        // Stagger the clicks so the browser doesn't collapse rapid downloads into just one.
+        targets.forEach((doc, index) => {
+            const fileUrl = buildFileUrl(doc.file_url);
+
+            if (!fileUrl) return;
+
+            window.setTimeout(() => {
+                const a = window.document.createElement('a');
+                a.href = buildDownloadUrl(fileUrl, doc.original_filename);
+                a.rel = 'noopener';
+                a.click();
+            }, index * 300);
+        });
+    };
 
     const handleDelete = async () => {
         const confirmed = await confirm({
@@ -48,6 +71,10 @@ export function SelectionBanner() {
                     <div className="flex w-full max-w-7xl items-center justify-between gap-4 px-4 pt-3">
                         <span className="text-sm font-medium text-primary">{count} selected</span>
                         <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={handleDownload} disabled={deleteDocuments.isPending}>
+                                <Download className="size-4" />
+                                Download
+                            </Button>
                             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteDocuments.isPending}>
                                 <Trash2 className="size-4" />
                                 Delete

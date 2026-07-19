@@ -140,7 +140,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                 )}
                 <UploadFAB />
             </div>
-            <SelectionBanner />
+            <SelectionBanner documents={documents} />
         </div>
     );
 }

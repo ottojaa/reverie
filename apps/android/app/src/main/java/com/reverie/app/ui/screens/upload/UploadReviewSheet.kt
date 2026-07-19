@@ -93,6 +93,7 @@ fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
     if (showFolderPicker) {
         FolderPickerSheet(
             sections = sections,
+            selectedId = state.folderId,
             onSelect = { viewModel.setFolder(it.id); showFolderPicker = false },
             onCreateFolder = { parentId, form -> viewModel.createFolder(parentId, form); showFolderPicker = false },
             onDismiss = { showFolderPicker = false },
