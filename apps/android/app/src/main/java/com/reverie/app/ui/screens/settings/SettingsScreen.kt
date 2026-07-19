@@ -51,6 +51,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.BuildConfig
 import com.reverie.app.data.api.model.UserDto
 import com.reverie.app.data.settings.AppSettings
+import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MAX
+import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MIN
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
@@ -60,6 +63,7 @@ import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.navigation.toEasingPreset
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.ui.theme.ThemeMode
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -137,6 +141,24 @@ fun SettingsScreen(
                 Switch(
                     checked = settings.hideNavOnScroll,
                     onCheckedChange = viewModel::setHideNavOnScroll,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("Files grid layout", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            GridLayoutModeSelector(selected = settings.gridLayoutMode, onSelect = viewModel::setGridLayoutMode)
+            // The feature-frequency knob only applies to the mosaic layout.
+            if (settings.gridLayoutMode == GridLayoutMode.MOSAIC) {
+                var featureEvery by remember(settings.mosaicFeatureEvery) { mutableStateOf(settings.mosaicFeatureEvery.toFloat()) }
+                LabeledSlider(
+                    label = "Featured tiles",
+                    description = "How often a photo gets a larger tile. Lower is livelier; higher is calmer.",
+                    valueLabel = "every ${featureEvery.roundToInt()} photos",
+                    value = featureEvery,
+                    range = MOSAIC_FEATURE_EVERY_MIN.toFloat()..MOSAIC_FEATURE_EVERY_MAX.toFloat(),
+                    steps = MOSAIC_FEATURE_EVERY_MAX - MOSAIC_FEATURE_EVERY_MIN - 1,
+                    onChange = { featureEvery = it },
+                    onCommit = { viewModel.setMosaicFeatureEvery(featureEvery.roundToInt()) },
                 )
             }
         }
@@ -384,6 +406,30 @@ private fun ThemeModeSelector(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GridLayoutModeSelector(
+    selected: GridLayoutMode,
+    onSelect: (GridLayoutMode) -> Unit,
+) {
+    val options = listOf(
+        GridLayoutMode.MOSAIC to "Mosaic",
+        GridLayoutMode.JUSTIFIED to "Justified",
+        GridLayoutMode.UNIFORM to "Simple",
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
+                onClick = { onSelect(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+            ) {
+                Text(label)
+            }
+        }
+    }
+}
+
 // TEMPORARY / DEV TUNING — live motion controls. Delete along with MotionSpec.kt once tuned.
 @Composable
 private fun MotionDevControls(
@@ -467,6 +513,7 @@ private fun LabeledSlider(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
     onCommit: () -> Unit,
+    steps: Int = 0,
 ) {
     Column(Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -478,6 +525,7 @@ private fun LabeledSlider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
+            steps = steps,
             onValueChangeFinished = onCommit,
         )
     }

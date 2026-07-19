@@ -24,12 +24,15 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
 
 /**
- * A Google-Photos-style gallery tile: a square, edge-to-edge cropped thumbnail with no caption and
- * no corner radius. Non-media files carry a subtle file-type glyph so they read as documents; media
- * tiles stay clean. Overlays (video/type/selection/private badges) sit in the corners.
+ * A Google-Photos-style gallery tile: an edge-to-edge cropped thumbnail with no caption and no
+ * corner radius. Non-media files carry a subtle file-type glyph so they read as documents; media
+ * tiles stay clean. Overlays (video/type/selection/private badges) sit in the corners. The caller
+ * sizes the tile via [modifier] (the justified grid passes an explicit width/height), so this
+ * composable no longer forces a square.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -39,11 +42,11 @@ fun DocumentCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Larger mosaic tiles (2×2, 3×2, …) need a bigger source or the MD thumbnail visibly upscales.
+    thumbnailSize: ThumbnailSize = GRID_THUMBNAIL_SIZE,
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
             .documentSharedBounds(document.id)
             .clip(RectangleShape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -58,7 +61,7 @@ fun DocumentCard(
             filename = document.original_filename,
             blurhash = document.thumbnail_blurhash,
             hasThumbnail = document.hasRenderedThumbnail,
-            size = GRID_THUMBNAIL_SIZE,
+            size = thumbnailSize,
             modifier = Modifier.matchParentSize(),
         )
 
