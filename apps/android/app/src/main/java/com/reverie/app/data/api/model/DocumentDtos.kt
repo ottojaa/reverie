@@ -65,6 +65,14 @@ data class DocumentDto(
     val photo_metadata: DocumentPhotoMetadata? = null,
 )
 
+/** width/height ratio for image/video docs, or null when dimensions are unknown. */
+fun DocumentDto.mediaAspectOrNull(): Float? {
+    val w = width ?: return null
+    val h = height ?: return null
+    if (w <= 0 || h <= 0) return null
+    return w.toFloat() / h.toFloat()
+}
+
 @Serializable
 data class DocumentStatusJob(
     val type: String,

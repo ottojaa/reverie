@@ -59,6 +59,7 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.rememberSkeletonVisible
+import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.upload.UploadActionSheet
@@ -69,7 +70,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
-    onDocumentClick: (String) -> Unit,
+    onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
     modifier: Modifier = Modifier,
     folderId: String? = null,
     onBack: (() -> Unit)? = null,
@@ -183,7 +184,7 @@ fun BrowseScreen(
                             selected = document.id in state.selectedIds,
                             onClick = {
                                 if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                else onDocumentClick(document.id)
+                                else onDocumentClick(document.id, document.mediaAspectOrNull())
                             },
                             onLongClick = {
                                 if (state.inSelectionMode) viewModel.toggleSelect(document.id)

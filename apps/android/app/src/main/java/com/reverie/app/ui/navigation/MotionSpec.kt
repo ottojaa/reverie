@@ -63,7 +63,9 @@ data class MotionSpec(
     val progressThreshold: Float = 0.35f,
     /** Container-transform (document open/close) duration. */
     val diveMs: Int = 300,
-    val diveEasing: EasingPreset = EasingPreset.EMPHASIZED_DECELERATE,
+    // EMPHASIZED (not *_DECELERATE): a front-loaded curve makes the dive snap to full size in ~100ms
+    // so you never see it grow. EMPHASIZED grows visibly across the whole duration (Google-Photos-like).
+    val diveEasing: EasingPreset = EasingPreset.EMPHASIZED,
     /** Bottom-nav re-entrance duration. */
     val barEnterMs: Int = 280,
     /** Viewer toolbar exit (slide-up + fade) duration on back. */

@@ -38,7 +38,7 @@ data class AppSettings(
     val motionSlideFraction: Float = 0.10f,
     val motionPopScale: Float = 0.85f,
     val motionDiveMs: Int = 300,
-    val motionDiveEasing: String = "EMPHASIZED_DECELERATE",
+    val motionDiveEasing: String = "EMPHASIZED",
     val motionBarEnterMs: Int = 280,
     val motionToolbarExitMs: Int = 280,
 ) {

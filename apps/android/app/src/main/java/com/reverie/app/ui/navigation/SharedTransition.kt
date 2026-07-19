@@ -4,6 +4,8 @@ package com.reverie.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SharedTransitionScope.ResizeMode
@@ -43,6 +45,11 @@ fun Modifier.documentSharedBounds(documentId: String): Modifier {
         this@documentSharedBounds.sharedBounds(
             rememberSharedContentState(key = documentBoundsKey(documentId)),
             animatedVisibilityScope = navScope,
+            // No cross-fade: both ends draw the SAME thumbnail (grid tile + dive hero), so fading
+            // them into each other only produced the washed/translucent "flash". The element just
+            // moves + resizes, like a true shared element.
+            enter = EnterTransition.None,
+            exit = ExitTransition.None,
             // Re-measure the shared child against the animating bounds each frame so its own
             // ContentScale applies at the interpolated size — this removes the ScaleToBounds
             // "FillWidth" overshoot that made non-portrait thumbnails balloon past the screen.

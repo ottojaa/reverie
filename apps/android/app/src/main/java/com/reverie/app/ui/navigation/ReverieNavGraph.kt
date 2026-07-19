@@ -37,7 +37,7 @@ fun ReverieNavGraph(
     ) {
         reverieComposable(Screen.Files.route) {
             BrowseScreen(
-                onDocumentClick = { navController.navigate(Routes.document(it)) },
+                onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
             )
         }
 
@@ -80,18 +80,23 @@ fun ReverieNavGraph(
             val folderId = entry.arguments?.getString("folderId")
             BrowseScreen(
                 folderId = folderId,
-                onDocumentClick = { navController.navigate(Routes.document(it)) },
+                onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
                 onBack = { navController.popBackStack() },
             )
         }
 
         reverieComposable(
             route = Routes.DOCUMENT,
-            arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument("id") { type = NavType.StringType },
+                navArgument("ar") { type = NavType.FloatType; defaultValue = -1f },
+            ),
         ) { entry ->
             val documentId = entry.arguments?.getString("id") ?: ""
+            val aspect = (entry.arguments?.getFloat("ar") ?: -1f).takeIf { it > 0f }
             DocumentScreen(
                 documentId = documentId,
+                aspect = aspect,
                 onBackClick = { navController.popBackStack() },
             )
         }
