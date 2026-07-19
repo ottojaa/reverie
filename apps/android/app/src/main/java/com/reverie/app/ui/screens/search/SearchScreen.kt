@@ -315,12 +315,14 @@ private fun ResultsGrid(
     onDocumentClick: (String) -> Unit,
     onLoadMore: () -> Unit,
 ) {
-    androidx.compose.runtime.LaunchedEffect(gridState, state.results.size, state.hasMore) {
+    // The grid renders documents only, so compare the last visible index against the document count —
+    // using state.results.size (which also counts collection hits) would under-trigger and stall paging.
+    val documents = state.results.filterIsInstance<DocumentSearchResult>()
+    androidx.compose.runtime.LaunchedEffect(gridState, documents.size, state.hasMore) {
         androidx.compose.runtime.snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .distinctUntilChanged()
-            .collect { last -> if (state.hasMore && last >= state.results.size - 4) onLoadMore() }
+            .collect { last -> if (state.hasMore && last >= documents.size - 4) onLoadMore() }
     }
-    val documents = state.results.filterIsInstance<DocumentSearchResult>()
 
     LazyVerticalGrid(
         state = gridState,

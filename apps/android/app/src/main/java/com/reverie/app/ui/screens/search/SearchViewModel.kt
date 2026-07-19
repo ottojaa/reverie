@@ -3,6 +3,8 @@ package com.reverie.app.ui.screens.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
+import com.reverie.app.data.api.model.CollectionSearchResult
+import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.api.model.SearchFacets
 import com.reverie.app.data.api.model.SearchHit
@@ -73,8 +75,18 @@ private data class SearchControl(
     val userViewMode: ViewMode? = null,
     val offset: Int = 0,
     val isLoading: Boolean = false,
+    // In-flight guard for pagination: unlike [isLoading] (offset-0 only), this serializes load-more
+    // so concurrent scroll triggers can't refetch and re-append the same page.
+    val isLoadingMore: Boolean = false,
     val error: String? = null,
 )
+
+/** Stable identity for de-duping merged pages; must match the LazyColumn/LazyGrid item keys. */
+private val SearchHit.dedupeKey: String
+    get() = when (this) {
+        is DocumentSearchResult -> "doc:$document_id"
+        is CollectionSearchResult -> "col:$id"
+    }
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
@@ -108,7 +120,9 @@ class SearchViewModel @Inject constructor(
             // current query lands — so the UI shows a loading bar, not a "No results" flash.
             isSearching = q.isNotBlank() && (ctrl.isLoading || ctrl.resultsQuery != q),
             error = ctrl.error,
-            hasMore = ctrl.results.size < ctrl.total,
+            // Track against the server offset, not results.size: de-duping can drop overlapping rows,
+            // and gating on the deduped size would keep re-fetching an already-exhausted result set.
+            hasMore = ctrl.offset < ctrl.total,
             isOffline = !online,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
@@ -144,9 +158,15 @@ class SearchViewModel @Inject constructor(
         runCatching {
             searchRepository.search(q, PAGE_SIZE, offset, sortBy.wire, sortOrder.wire, includeFacets = offset == 0)
         }.onSuccess { response ->
+            // A load-more that resolves after the query moved on would append rows from the old query;
+            // drop it — the fresh offset-0 search now owns the state.
+            if (offset > 0 && q != query.value) return@onSuccess
             control.update {
+                // distinctBy protects the lazy-list item keys: concurrent load-mores or reshuffled
+                // relevance-sorted offset windows can repeat a row, and duplicate keys crash Compose.
+                val merged = if (offset == 0) response.results else it.results + response.results
                 it.copy(
-                    results = if (offset == 0) response.results else it.results + response.results,
+                    results = merged.distinctBy { it.dedupeKey },
                     total = response.total,
                     facets = if (offset == 0) response.facets ?: it.facets else it.facets,
                     resultsQuery = q,
@@ -231,8 +251,17 @@ class SearchViewModel @Inject constructor(
 
     fun loadMore() {
         val ctrl = control.value
-        if (ctrl.isLoading || ctrl.results.size >= ctrl.total) return
-        viewModelScope.launch { runSearch(query.value, ctrl.sortBy, ctrl.sortOrder, ctrl.offset) }
+        if (ctrl.isLoading || ctrl.isLoadingMore || ctrl.offset >= ctrl.total) return
+        // Flip the guard synchronously (loadMore is called from the main-thread scroll collector) so
+        // a burst of scroll triggers can't launch overlapping fetches of the same page.
+        control.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            try {
+                runSearch(query.value, ctrl.sortBy, ctrl.sortOrder, ctrl.offset)
+            } finally {
+                control.update { it.copy(isLoadingMore = false) }
+            }
+        }
     }
 
     private fun isPhotoish(q: String): Boolean {
