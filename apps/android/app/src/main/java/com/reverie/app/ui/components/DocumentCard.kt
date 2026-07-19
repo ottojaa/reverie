@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
 
 /**
@@ -41,6 +42,8 @@ fun DocumentCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Larger mosaic tiles (2×2, 3×2, …) need a bigger source or the MD thumbnail visibly upscales.
+    thumbnailSize: ThumbnailSize = GRID_THUMBNAIL_SIZE,
 ) {
     Box(
         modifier = modifier
@@ -58,7 +61,7 @@ fun DocumentCard(
             filename = document.original_filename,
             blurhash = document.thumbnail_blurhash,
             hasThumbnail = document.hasRenderedThumbnail,
-            size = GRID_THUMBNAIL_SIZE,
+            size = thumbnailSize,
             modifier = Modifier.matchParentSize(),
         )
 

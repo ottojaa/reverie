@@ -12,6 +12,7 @@ import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
+import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
@@ -70,6 +71,11 @@ class BrowseViewModel @Inject constructor(
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
+
+    /** How the Files grid arranges photos (user setting). */
+    val gridLayoutMode: StateFlow<GridLayoutMode> = settingsRepository.settings
+        .map { it.gridLayoutMode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GridLayoutMode.MOSAIC)
 
     /** How often the mosaic grid promotes a photo to a larger tile (user setting). */
     val mosaicFeatureEvery: StateFlow<Int> = settingsRepository.settings

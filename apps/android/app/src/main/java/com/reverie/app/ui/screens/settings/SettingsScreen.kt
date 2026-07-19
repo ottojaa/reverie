@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.BuildConfig
 import com.reverie.app.data.api.model.UserDto
 import com.reverie.app.data.settings.AppSettings
+import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MAX
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MIN
 import com.reverie.app.domain.model.AuthState
@@ -142,18 +143,24 @@ fun SettingsScreen(
                     onCheckedChange = viewModel::setHideNavOnScroll,
                 )
             }
-            Spacer(Modifier.height(4.dp))
-            var featureEvery by remember(settings.mosaicFeatureEvery) { mutableStateOf(settings.mosaicFeatureEvery.toFloat()) }
-            LabeledSlider(
-                label = "Featured tiles in Files",
-                description = "How often a photo gets a larger tile in the grid. Lower is livelier; higher is calmer.",
-                valueLabel = "every ${featureEvery.roundToInt()} photos",
-                value = featureEvery,
-                range = MOSAIC_FEATURE_EVERY_MIN.toFloat()..MOSAIC_FEATURE_EVERY_MAX.toFloat(),
-                steps = MOSAIC_FEATURE_EVERY_MAX - MOSAIC_FEATURE_EVERY_MIN - 1,
-                onChange = { featureEvery = it },
-                onCommit = { viewModel.setMosaicFeatureEvery(featureEvery.roundToInt()) },
-            )
+            Spacer(Modifier.height(16.dp))
+            Text("Files grid layout", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            GridLayoutModeSelector(selected = settings.gridLayoutMode, onSelect = viewModel::setGridLayoutMode)
+            // The feature-frequency knob only applies to the mosaic layout.
+            if (settings.gridLayoutMode == GridLayoutMode.MOSAIC) {
+                var featureEvery by remember(settings.mosaicFeatureEvery) { mutableStateOf(settings.mosaicFeatureEvery.toFloat()) }
+                LabeledSlider(
+                    label = "Featured tiles",
+                    description = "How often a photo gets a larger tile. Lower is livelier; higher is calmer.",
+                    valueLabel = "every ${featureEvery.roundToInt()} photos",
+                    value = featureEvery,
+                    range = MOSAIC_FEATURE_EVERY_MIN.toFloat()..MOSAIC_FEATURE_EVERY_MAX.toFloat(),
+                    steps = MOSAIC_FEATURE_EVERY_MAX - MOSAIC_FEATURE_EVERY_MIN - 1,
+                    onChange = { featureEvery = it },
+                    onCommit = { viewModel.setMosaicFeatureEvery(featureEvery.roundToInt()) },
+                )
+            }
         }
 
         if (vault?.has_password == true) {
@@ -386,6 +393,30 @@ private fun ThemeModeSelector(
     onSelect: (ThemeMode) -> Unit,
 ) {
     val options = listOf(ThemeMode.SYSTEM to "System", ThemeMode.LIGHT to "Light", ThemeMode.DARK to "Dark")
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
+                onClick = { onSelect(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+            ) {
+                Text(label)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GridLayoutModeSelector(
+    selected: GridLayoutMode,
+    onSelect: (GridLayoutMode) -> Unit,
+) {
+    val options = listOf(
+        GridLayoutMode.MOSAIC to "Mosaic",
+        GridLayoutMode.JUSTIFIED to "Justified",
+        GridLayoutMode.UNIFORM to "Simple",
+    )
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (mode, label) ->
             SegmentedButton(

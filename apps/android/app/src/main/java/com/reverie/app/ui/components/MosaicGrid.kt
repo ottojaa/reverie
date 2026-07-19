@@ -19,6 +19,9 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.mediaAspectOrNull
+import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.domain.model.ThumbnailSize
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
 
@@ -41,6 +44,10 @@ const val MOSAIC_GAP = 2f
 
 private const val TARGET_CELL = 125f // dp; yields 3 columns on a typical phone
 private const val PORTRAIT_MAX = 0.9f // aspect below this → portrait → eligible for a tall tile
+private const val JUSTIFIED_ROW_HEIGHT = 120f // dp target; ~3 landscapes per row on a phone
+private const val JUSTIFIED_MIN_ASPECT = 0.5f // clamp so extremes don't wreck a shared row
+private const val JUSTIFIED_MAX_ASPECT = 3.2f
+private const val LARGE_TILE_DP = 175f // a tile bigger than this needs the LG thumbnail, not MD
 
 /** One tile: the document plus its resolved size in dp. */
 data class MosaicTile(val doc: DocumentDto, val width: Float, val height: Float)
@@ -147,6 +154,65 @@ fun computeMosaicSections(
     return sections
 }
 
+private fun DocumentDto.justifiedAspect(): Float =
+    (mediaAspectOrNull() ?: 1f).coerceIn(JUSTIFIED_MIN_ASPECT, JUSTIFIED_MAX_ASPECT)
+
+/**
+ * Flickr-style justified rows: each photo keeps its natural aspect ratio, and each row is scaled to
+ * fill the width at roughly [targetRowHeight]. The trailing partial row keeps the target height (not
+ * stretched). Every full row fills the width, so there are no gaps.
+ */
+fun computeJustifiedSections(
+    docs: List<DocumentDto>,
+    availableWidth: Float,
+    targetRowHeight: Float = JUSTIFIED_ROW_HEIGHT,
+    gap: Float = MOSAIC_GAP,
+): List<MosaicSection> {
+    if (docs.isEmpty() || availableWidth <= 0f || targetRowHeight <= 0f) return emptyList()
+    val sections = mutableListOf<MosaicSection>()
+    var i = 0
+    while (i < docs.size) {
+        val row = mutableListOf<DocumentDto>()
+        var aspectSum = 0f
+        var full = false
+        while (i < docs.size) {
+            row += docs[i]
+            aspectSum += docs[i].justifiedAspect()
+            i++
+            // Close the row once justifying it would drop to (or below) the target height.
+            if ((availableWidth - gap * (row.size - 1)) / aspectSum <= targetRowHeight) {
+                full = true
+                break
+            }
+        }
+        val height = if (full) (availableWidth - gap * (row.size - 1)) / aspectSum else targetRowHeight
+        var used = 0f
+        val tiles = row.mapIndexed { index, doc ->
+            val width = if (full && index == row.lastIndex) {
+                availableWidth - gap * (row.size - 1) - used // absorb rounding so the row fills exactly
+            } else {
+                (height * doc.justifiedAspect()).also { used += it }
+            }
+            MosaicTile(doc, width, height)
+        }
+        sections += MosaicRow(tiles)
+    }
+    return sections
+}
+
+/** A plain uniform grid: every tile the same square, [columns]-wide rows. */
+fun computeUniformSections(
+    docs: List<DocumentDto>,
+    availableWidth: Float,
+    targetCell: Float = TARGET_CELL,
+    gap: Float = MOSAIC_GAP,
+): List<MosaicSection> {
+    if (docs.isEmpty() || availableWidth <= 0f || targetCell <= 0f) return emptyList()
+    val columns = (availableWidth / targetCell).roundToInt().coerceAtLeast(3)
+    val cell = (availableWidth - (columns - 1) * gap) / columns
+    return docs.chunked(columns).map { chunk -> MosaicRow(chunk.map { MosaicTile(it, cell, cell) }) }
+}
+
 /**
  * A quilted Files grid: a [LazyColumn] of packed bands. Owns infinite-scroll paging and the
  * return-transform scroll sync (both keyed on bands, not documents) so [BrowseScreen] stays lean.
@@ -156,6 +222,7 @@ fun MosaicDocumentGrid(
     documents: List<DocumentDto>,
     listState: LazyListState,
     contentPadding: PaddingValues,
+    layoutMode: GridLayoutMode,
     featureEvery: Int,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
@@ -167,8 +234,12 @@ fun MosaicDocumentGrid(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val sections = remember(documents, maxWidth, featureEvery) {
-            computeMosaicSections(documents, maxWidth.value, featureEvery)
+        val sections = remember(documents, maxWidth, layoutMode, featureEvery) {
+            when (layoutMode) {
+                GridLayoutMode.MOSAIC -> computeMosaicSections(documents, maxWidth.value, featureEvery)
+                GridLayoutMode.JUSTIFIED -> computeJustifiedSections(documents, maxWidth.value)
+                GridLayoutMode.UNIFORM -> computeUniformSections(documents, maxWidth.value)
+            }
         }
 
         // Infinite scroll: fetch the next page as the last band approaches.
@@ -238,11 +309,14 @@ private fun MosaicCard(
     onClick: (DocumentDto) -> Unit,
     onLongClick: (DocumentDto) -> Unit,
 ) {
+    // Tiles bigger than one cell would upscale the MD thumbnail visibly — pull the LG source instead.
+    val thumbnailSize = if (maxOf(tile.width, tile.height) > LARGE_TILE_DP) ThumbnailSize.LG else GRID_THUMBNAIL_SIZE
     DocumentCard(
         document = tile.doc,
         selected = selected(tile.doc),
         onClick = { onClick(tile.doc) },
         onLongClick = { onLongClick(tile.doc) },
+        thumbnailSize = thumbnailSize,
         modifier = Modifier.width(tile.width.dp).height(tile.height.dp),
     )
 }

@@ -113,4 +113,43 @@ class MosaicGridTest {
         val stable = prefix.dropLast(1)
         assertEquals(stable, full.subList(0, stable.size))
     }
+
+    @Test
+    fun `uniform layout is plain square rows filling the width`() {
+        val docs = List(7) { landscape("l$it") }
+        val result = computeUniformSections(docs, width, targetCell, gap)
+        assertTrue(result.all { it is MosaicRow })
+        val rows = result.filterIsInstance<MosaicRow>()
+        // 7 docs over 3 columns -> two full rows + a trailing row of one.
+        assertEquals(3, rows.size)
+        rows.dropLast(1).forEach { assertEquals(columns, it.tiles.size) }
+        result.flatMap { it.tiles }.forEach { assertEquals(cell, it.width, eps); assertEquals(cell, it.height, eps) }
+    }
+
+    @Test
+    fun `justified rows keep natural aspect and fill the width`() {
+        val docs = List(12) { landscape("l$it") } // aspect 1.5
+        val result = computeJustifiedSections(docs, width, targetRowHeight = 150f, gap = gap)
+        val rows = result.filterIsInstance<MosaicRow>()
+        assertTrue(rows.isNotEmpty())
+        rows.dropLast(1).forEach { row ->
+            // A full row fills the width exactly.
+            assertEquals(width, row.tiles.sumOf { it.width.toDouble() }.toFloat() + gap * (row.tiles.size - 1), eps)
+            // Every tile in a row shares the row height; widths follow the aspect (≈ height * 1.5).
+            val h = row.tiles.first().height
+            row.tiles.forEach { assertEquals(h, it.height, eps); assertEquals(h * 1.5f, it.width, 2f) }
+            // Landscapes are not square — the row is shorter than one tile is wide.
+            assertTrue(h < row.tiles.first().width)
+        }
+    }
+
+    @Test
+    fun `justified trailing row is not stretched`() {
+        // One landscape can't fill a row, so it keeps the target height rather than ballooning.
+        val docs = listOf(landscape("only"))
+        val row = computeJustifiedSections(docs, width, targetRowHeight = 150f, gap = gap).single() as MosaicRow
+        assertEquals(1, row.tiles.size)
+        assertEquals(150f, row.tiles.first().height, eps)
+        assertEquals(150f * 1.5f, row.tiles.first().width, eps)
+    }
 }
