@@ -114,10 +114,17 @@ export function applyTypesFilter(query: SearchQueryBase, types: readonly string[
 
     if (uniqueCategories.length === 0) return query;
 
-    // Match by document_category, and for "photo" also include has_meaningful_text = false
-    // (some image files may have category='other' but no meaningful text)
+    // Match by document_category, and for "photo" also include uncategorized images that carry no
+    // meaningful text (category='other'). The fallback is guarded by mime_type LIKE 'image/%' so
+    // videos/audio/archives — which the OCR worker also marks has_meaningful_text = false — don't
+    // leak into "Photo" results (or the Photo facet count, which reuses this same predicate).
     if (types.includes('photo')) {
-        return query.where((eb) => eb.or([eb('d.document_category' as any, 'in', uniqueCategories), eb('d.has_meaningful_text' as any, '=', false)]));
+        return query.where((eb) =>
+            eb.or([
+                eb('d.document_category' as any, 'in', uniqueCategories),
+                eb.and([eb('d.has_meaningful_text' as any, '=', false), eb('d.mime_type' as any, 'like', 'image/%')]),
+            ]),
+        );
     }
 
     return query.where('d.document_category' as any, 'in', uniqueCategories);
