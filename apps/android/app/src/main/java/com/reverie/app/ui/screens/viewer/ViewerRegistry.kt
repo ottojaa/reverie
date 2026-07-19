@@ -44,6 +44,10 @@ fun DocumentViewerBody(
     onToggleImmersive: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
+    // Whether this document is the pager's settled page. Non-settled image pages reset their zoom so
+    // a zoomed-in image doesn't restore its transform when swiped back to. Defaults true for callers
+    // outside the pager.
+    isSettledPage: Boolean = true,
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
@@ -52,6 +56,7 @@ fun DocumentViewerBody(
             hasThumbnail = document.thumbnail_status == JobStatus.COMPLETE,
             contentDescription = document.original_filename,
             onTap = onToggleImmersive,
+            isSettledPage = isSettledPage,
             modifier = modifier,
         )
         ViewerType.VIDEO -> VideoViewer(fileUrl = fileUrl, modifier = modifier)

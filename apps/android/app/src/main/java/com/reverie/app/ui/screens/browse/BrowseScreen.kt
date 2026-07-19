@@ -103,6 +103,19 @@ fun BrowseScreen(
             }
     }
 
+    // Return-transform sync: when the viewer has swiped to another document, scroll the grid so that
+    // tile is laid out — so popping back lands the shared-element container transform on the right
+    // tile (it falls back to a plain fade if the tile isn't present).
+    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(focusedId, state.documents) {
+        val id = focusedId ?: return@LaunchedEffect
+        val index = state.documents.indexOfFirst { it.id == id }
+        if (index < 0) return@LaunchedEffect
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) gridState.scrollToItem(index)
+        // Consume it: later list updates (e.g. a thumbnail-complete refetch) must not re-scroll here.
+        viewModel.clearFocusedDocument()
+    }
+
     // Drive the shell's bottom-bar visibility off the same collapsing-top-bar state, so both bars
     // move in lockstep and the bottom bar reappears at the top. Honored only when the setting is on.
     val bottomBarScroll = LocalBottomBarScrollState.current
@@ -187,13 +200,18 @@ fun BrowseScreen(
                             document = document,
                             selected = document.id in state.selectedIds,
                             onClick = {
-                                if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                // Only images size the dive transform to their aspect — for other file
-                                // types the thumbnail aspect would letterbox the full-screen viewer.
-                                else onDocumentClick(
-                                    document.id,
-                                    if (isImageDocument(document)) document.mediaAspectOrNull() else null,
-                                )
+                                if (state.inSelectionMode) {
+                                    viewModel.toggleSelect(document.id)
+                                } else {
+                                    // Publish this grid's order so the viewer can swipe through it.
+                                    viewModel.prepareSequence()
+                                    // Only images size the dive transform to their aspect — for other
+                                    // file types the thumbnail aspect would letterbox the full-screen viewer.
+                                    onDocumentClick(
+                                        document.id,
+                                        if (isImageDocument(document)) document.mediaAspectOrNull() else null,
+                                    )
+                                }
                             },
                             onLongClick = {
                                 if (state.inSelectionMode) viewModel.toggleSelect(document.id)

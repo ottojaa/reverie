@@ -12,6 +12,8 @@ import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
 import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.repository.SearchRepository
+import com.reverie.app.ui.screens.viewer.DocumentSequence
+import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.domain.search.addFilter
 import com.reverie.app.domain.search.getFilterTokens
@@ -93,6 +95,7 @@ private val SearchHit.dedupeKey: String
 class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
     private val connectivity: ConnectivityMonitor,
+    private val sequenceHolder: DocumentSequenceHolder,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -247,6 +250,23 @@ class SearchViewModel @Inject constructor(
 
     fun setViewMode(mode: ViewMode) {
         control.update { it.copy(userViewMode = mode) }
+    }
+
+    /**
+     * Hand the current document results (collections excluded) to the viewer so it can swipe through
+     * them. Call right before opening a result. [ids] stays live so the pager grows as we [loadMore].
+     */
+    fun prepareSequence() {
+        val documentIds: (SearchUiState) -> List<String> = { state ->
+            state.results.filterIsInstance<DocumentSearchResult>().map { it.document_id }
+        }
+        sequenceHolder.set(
+            DocumentSequence(
+                initialIds = documentIds(uiState.value),
+                ids = uiState.map(documentIds).distinctUntilChanged(),
+                loadMore = ::loadMore,
+            ),
+        )
     }
 
     fun loadMore() {
