@@ -19,7 +19,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +41,7 @@ import com.reverie.app.ui.components.CollectionHeaderRow
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderTreeItem
 import com.reverie.app.ui.components.OfflineBanner
-import com.reverie.app.ui.components.StorageMeter
+import com.reverie.app.ui.components.StorageSummary
 
 @Composable
 fun CollectionsScreen(
@@ -65,14 +64,26 @@ fun CollectionsScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            // No sticky storage footer any more — reserve room for the overlaid bottom nav instead.
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomBarInset() + 16.dp),
         ) {
             item {
-                Text(
-                    "Library",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp),
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Library",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // Minimal storage glance up top (the full meter lives in Settings).
+                    if (state.storageQuota > 0) {
+                        StorageSummary(usedBytes = state.storageUsed, quotaBytes = state.storageQuota)
+                    }
+                }
             }
             item { PrimaryRow(icon = Icons.Outlined.GridView, label = "All Documents", onClick = onOpenAllDocuments) }
             item { CollectionsFilterField(value = state.filter, onValueChange = viewModel::setFilter) }
@@ -101,6 +112,8 @@ fun CollectionsScreen(
                                 onEdit = { editTarget = folder },
                                 onTogglePrivate = { viewModel.setPrivate(folder.id, !folder.is_private) },
                                 onDelete = { deleteTarget = folder },
+                                // Extra indent so nested folders read as belonging to the collection.
+                                indent = 44.dp,
                                 modifier = Modifier.animateItem(),
                             )
                         }
@@ -118,19 +131,6 @@ fun CollectionsScreen(
                     }
                 }
             }
-        }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        // Vault reveal/lock/hide lives in Settings › Privacy; the footer here is just storage.
-        Column(
-            Modifier
-                .padding(horizontal = 16.dp)
-                .padding(top = 12.dp, bottom = bottomBarInset() + 12.dp),
-        ) {
-            StorageMeter(
-                usedBytes = state.storageUsed,
-                quotaBytes = state.storageQuota,
-            )
         }
     }
 

@@ -3,6 +3,7 @@ package com.reverie.app.ui.components
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,6 +23,7 @@ fun SelectionTopBar(
     allPrivate: Boolean,
     onClose: () -> Unit,
     onTogglePrivate: () -> Unit,
+    onDownload: () -> Unit,
     onDelete: () -> Unit,
 ) {
     TopAppBar(
@@ -33,6 +35,9 @@ fun SelectionTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onDownload) {
+                Icon(Icons.Outlined.Download, contentDescription = "Download")
+            }
             IconButton(onClick = onTogglePrivate) {
                 Icon(
                     imageVector = if (allPrivate) Icons.Outlined.LockOpen else Icons.Outlined.Lock,

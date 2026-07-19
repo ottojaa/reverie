@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.viewer.viewers
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -35,6 +36,8 @@ fun FallbackViewer(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // Opaque backdrop so the dive-hero thumbnail beneath the viewer doesn't show through.
+            .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

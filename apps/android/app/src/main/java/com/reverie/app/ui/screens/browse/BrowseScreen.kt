@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,6 +66,7 @@ import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
+import com.reverie.app.util.enqueueDownload
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +80,7 @@ fun BrowseScreen(
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val activeUploads by uploadViewModel.activeCount.collectAsStateWithLifecycle()
     val review by uploadViewModel.review.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
@@ -208,6 +211,11 @@ fun BrowseScreen(
                     allPrivate = state.allSelectedPrivate,
                     onClose = viewModel::clearSelection,
                     onTogglePrivate = viewModel::togglePrivateSelected,
+                    onDownload = {
+                        viewModel.downloadSelected { targets ->
+                            targets.forEach { enqueueDownload(context, it.url, it.filename) }
+                        }
+                    },
                     onDelete = { showDeleteConfirm = true },
                 )
             }

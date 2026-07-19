@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderWithChildren
 
@@ -87,7 +88,7 @@ fun CollectionHeaderRow(
     }
 }
 
-/** A folder row nested under a collection. */
+/** A folder row nested under a collection. [indent] controls the leading inset for nesting depth. */
 @Composable
 fun FolderTreeItem(
     folder: FolderWithChildren,
@@ -96,12 +97,13 @@ fun FolderTreeItem(
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    indent: Dp = 32.dp,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen)
-            .padding(start = 32.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = indent, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SectionIcon(emoji = folder.emoji, size = 20.dp)

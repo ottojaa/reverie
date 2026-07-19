@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -63,18 +64,26 @@ class UploadViewModel @Inject constructor(
 
     private var lastUsedFolderId: String? = null
 
-    /** Flat list of all selectable folders, for default selection and name lookup. */
-    val folders: StateFlow<List<FolderOption>> = folderRepository.observeTree()
-        .map { flattenFolders(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     /** Collections with their child folders, for the hierarchical picker. */
     val pickerSections: StateFlow<List<FolderPickerSection>> = folderRepository.observeTree()
         .map { toPickerSections(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** id → folder label, so the review's folder name resolves even when the tree loads late. */
+    private val folderNames: StateFlow<Map<String, String>> = folderRepository.observeTree()
+        .map { tree -> flattenFolders(tree).associate { it.id to it.label } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     private val _review = MutableStateFlow<ReviewState?>(null)
-    val review: StateFlow<ReviewState?> = _review
+
+    /**
+     * The review with its [ReviewState.folderName] resolved reactively from the folder tree. The old
+     * code snapshotted the name from a StateFlow nothing collected, so it was always null — the
+     * preselected folder showed "Choose a folder" and picking one never updated the label.
+     */
+    val review: StateFlow<ReviewState?> = combine(_review, folderNames) { review, names ->
+        review?.let { r -> r.folderId?.let { id -> r.copy(folderName = names[id] ?: r.folderName) } ?: r }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val activeCount: StateFlow<Int> = uploadRepository.observeActiveCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -83,17 +92,18 @@ class UploadViewModel @Inject constructor(
 
     fun beginReview(uris: List<Uri>, defaultFolderId: String?) {
         if (uris.isEmpty()) return
-        val folderId = defaultFolderId ?: lastUsedFolderId ?: folders.value.firstOrNull()?.id
+        // Preselect the folder we're uploading from (or the last used one). The name is resolved
+        // reactively by [review] once the tree is available.
         _review.value = ReviewState(
             uris = uris,
             fileNames = uris.map { displayName(it) },
-            folderId = folderId,
-            folderName = folders.value.firstOrNull { it.id == folderId }?.label,
+            folderId = defaultFolderId ?: lastUsedFolderId,
+            folderName = null,
         )
     }
 
     fun setFolder(id: String) {
-        _review.update { it?.copy(folderId = id, folderName = folders.value.firstOrNull { f -> f.id == id }?.label) }
+        _review.update { it?.copy(folderId = id, folderName = null) }
     }
 
     /** Duplicate pre-check; if collisions, surface them so the UI can offer replace/keep-both. */
