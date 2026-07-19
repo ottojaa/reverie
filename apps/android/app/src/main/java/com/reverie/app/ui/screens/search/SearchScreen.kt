@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.search
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,10 +42,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -89,12 +95,16 @@ fun SearchScreen(
     val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
         dateActive || state.activeValues(FilterKey.SIZE).isNotEmpty() || state.activeValues(FilterKey.HAS).isNotEmpty()
 
+    // Grid density is shared with the Files grid so both views show the same column count.
+    val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
     // Scroll states are hoisted so scrolling the results can collapse the search header + bottom nav,
     // reclaiming vertical space for the results themselves.
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val barScroll = LocalBottomBarScrollState.current
-    var chromeVisible by remember { mutableStateOf(true) }
+    // Saveable so it survives the round-trip into a document and back — otherwise it reset to `true`
+    // and the scroll tracker below immediately re-collapsed it, shifting the results up (the old bug).
+    var chromeVisible by rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(state.hasQuery) { if (!state.hasQuery) chromeVisible = true }
     LaunchedEffect(state.viewMode, state.hasQuery) {
@@ -104,8 +114,10 @@ fun SearchScreen(
         } else {
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
         }
-        var lastIndex = 0
-        var lastOffset = 0
+        // Seed from the CURRENT position, not 0,0: on return the list state is restored to a non-zero
+        // scroll, and a 0,0 seed would read that as a downward scroll and wrongly collapse the chrome.
+        var lastIndex = if (state.viewMode == ViewMode.GRID) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex
+        var lastOffset = if (state.viewMode == ViewMode.GRID) gridState.firstVisibleItemScrollOffset else listState.firstVisibleItemScrollOffset
         positions.collect { (index, offset) ->
             val atTop = index == 0 && offset < 4
             val down = index > lastIndex || (index == lastIndex && offset > lastOffset + 6)
@@ -115,66 +127,91 @@ fun SearchScreen(
             lastOffset = offset
         }
     }
+    // Return-transform sync: when the viewer swiped to another result, scroll the grid so that tile is
+    // laid out, so popping back lands the shared-element container transform on it (else a plain fade).
+    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    LaunchedEffect(focusedId, state.results) {
+        val id = focusedId ?: return@LaunchedEffect
+        if (state.viewMode != ViewMode.GRID) return@LaunchedEffect
+        val index = state.results.filterIsInstance<DocumentSearchResult>().indexOfFirst { it.document_id == id }
+        if (index < 0) return@LaunchedEffect
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) gridState.scrollToItem(index)
+        // Consume it so later result updates (e.g. a thumbnail-complete refetch) don't re-scroll here.
+        viewModel.clearFocusedDocument()
+    }
     // Mirror the header visibility onto the shell's bottom nav (honored when hide-nav-on-scroll is on).
     LaunchedEffect(chromeVisible) { barScroll?.value = chromeVisible }
 
-    Column(modifier = modifier.fillMaxSize().statusBarsPadding()) {
-        AnimatedVisibility(visible = chromeVisible) {
-            Column {
-                SearchField(
-                    value = state.freeText,
-                    onValueChange = viewModel::setFreeText,
-                )
+    Box(modifier = modifier.fillMaxSize().statusBarsPadding()) {
+        val density = LocalDensity.current
+        // The header (search field + filters + meta) is drawn as an OVERLAY on top of the results, not
+        // stacked above them, so showing/hiding it slides+fades it over the content and never reflows
+        // the grid (that reflow was the scroll "jump"). Results reserve `headerDp` of top padding so the
+        // first row starts below the header and scrolls under it.
+        var headerPx by remember { mutableStateOf(0) }
+        val headerDp = with(density) { headerPx.toDp() }
+        val headerOffset by animateFloatAsState(if (chromeVisible) 0f else -headerPx.toFloat(), label = "chromeOffset")
+        val headerAlpha by animateFloatAsState(if (chromeVisible) 1f else 0f, label = "chromeAlpha")
 
-                FilterPillBar(
-                    activeValues = state::activeValues,
-                    dateActive = dateActive,
-                    hasAnyActive = hasAnyActive,
-                    onOpenDimension = { openSheet = OpenSheet.Facet(it); viewModel.ensureBaseFacets() },
-                    onOpenDate = { openSheet = OpenSheet.Date },
-                    onOpenMore = { openSheet = OpenSheet.More },
-                    onClearAll = viewModel::clearFilters,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        }
-
-        if (state.hasQuery) {
-            MetaRow(
-                total = state.total,
-                sortBy = state.sortBy,
-                sortOrder = state.sortOrder,
-                viewMode = state.viewMode,
-                onSort = viewModel::setSort,
-                onViewMode = viewModel::setViewMode,
+        when {
+            state.isOffline && !state.hasQuery ->
+                EmptyState(icon = Icons.Outlined.WifiOff, title = "Search needs a connection", description = "Reconnect to search your library.")
+            !state.hasQuery -> IdleState(
+                topInset = headerDp,
+                quickFilters = state.quickFilters,
+                recents = state.recents,
+                onApplyFilter = { viewModel.applyRawQuery(it.query) },
+                onApplyRecent = { viewModel.setFreeText(it) },
+                onRemoveRecent = viewModel::removeRecent,
             )
+            state.error != null && state.results.isEmpty() ->
+                EmptyState(icon = Icons.Outlined.Search, title = "Search failed", description = state.error)
+            // Only "No results" once the search for the current query has actually returned —
+            // during the debounce, stale results stay visible under the progress bar instead.
+            state.results.isEmpty() && !state.isSearching ->
+                EmptyState(icon = Icons.Outlined.Search, title = "No results", description = "Try different keywords or clear some filters.")
+            state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, columns, headerDp, openDocument, viewModel::loadMore)
+            else -> ResultsList(state, listState, headerDp, openDocument, onOpenFolder, viewModel::loadMore)
         }
 
-        Box(Modifier.fillMaxSize()) {
-            when {
-                state.isOffline && !state.hasQuery ->
-                    EmptyState(icon = Icons.Outlined.WifiOff, title = "Search needs a connection", description = "Reconnect to search your library.")
-                !state.hasQuery -> IdleState(
-                    quickFilters = state.quickFilters,
-                    recents = state.recents,
-                    onApplyFilter = { viewModel.applyRawQuery(it.query) },
-                    onApplyRecent = { viewModel.setFreeText(it) },
-                    onRemoveRecent = viewModel::removeRecent,
+        // Header overlay: measured for its height, slid up + faded out on scroll-down. Opaque background
+        // so results scroll cleanly underneath. It's always composed at full size (we animate via
+        // graphicsLayer, not by removing it), so its height — and thus the results' top padding — is
+        // constant and the results never shift.
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .graphicsLayer { translationY = headerOffset; alpha = headerAlpha }
+                .background(MaterialTheme.colorScheme.background)
+                .onSizeChanged { if (it.height > 0) headerPx = it.height },
+        ) {
+            SearchField(value = state.freeText, onValueChange = viewModel::setFreeText)
+            FilterPillBar(
+                activeValues = state::activeValues,
+                dateActive = dateActive,
+                hasAnyActive = hasAnyActive,
+                onOpenDimension = { openSheet = OpenSheet.Facet(it); viewModel.ensureBaseFacets() },
+                onOpenDate = { openSheet = OpenSheet.Date },
+                onOpenMore = { openSheet = OpenSheet.More },
+                onClearAll = viewModel::clearFilters,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+            if (state.hasQuery) {
+                MetaRow(
+                    total = state.total,
+                    sortBy = state.sortBy,
+                    sortOrder = state.sortOrder,
+                    viewMode = state.viewMode,
+                    onSort = viewModel::setSort,
+                    onViewMode = viewModel::setViewMode,
                 )
-                state.error != null && state.results.isEmpty() ->
-                    EmptyState(icon = Icons.Outlined.Search, title = "Search failed", description = state.error)
-                // Only "No results" once the search for the current query has actually returned —
-                // during the debounce, stale results stay visible under the progress bar instead.
-                state.results.isEmpty() && !state.isSearching ->
-                    EmptyState(icon = Icons.Outlined.Search, title = "No results", description = "Try different keywords or clear some filters.")
-                state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, openDocument, viewModel::loadMore)
-                else -> ResultsList(state, listState, openDocument, onOpenFolder, viewModel::loadMore)
             }
+        }
 
-            // Thin indeterminate bar overlaid at the top while a search is in flight (no layout shift).
-            if (state.isSearching) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
-            }
+        // Thin indeterminate bar pinned above the header while a search is in flight (no layout shift).
+        if (state.isSearching) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
         }
     }
 
@@ -273,6 +310,7 @@ private fun MetaRow(
 private fun ResultsList(
     state: SearchUiState,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    topInset: Dp,
     onDocumentClick: (String) -> Unit,
     onOpenFolder: (String) -> Unit,
     onLoadMore: () -> Unit,
@@ -287,7 +325,7 @@ private fun ResultsList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = bottomBarInset()),
+        contentPadding = PaddingValues(top = topInset, bottom = bottomBarInset()),
     ) {
         var lastBucket: String? = null
         state.results.forEach { hit ->
@@ -314,6 +352,8 @@ private fun ResultsList(
 private fun ResultsGrid(
     state: SearchUiState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    columns: Int,
+    topInset: Dp,
     onDocumentClick: (String) -> Unit,
     onLoadMore: () -> Unit,
 ) {
@@ -326,12 +366,13 @@ private fun ResultsGrid(
             .collect { last -> if (state.hasMore && last >= documents.size - 4) onLoadMore() }
     }
 
+    // Edge-to-edge square grid with the same column count and hairline gaps as the Files grid.
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Adaptive(110.dp),
-        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 12.dp + bottomBarInset()),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        columns = GridCells.Fixed(columns),
+        contentPadding = PaddingValues(top = topInset + 4.dp, bottom = 12.dp + bottomBarInset()),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(documents, key = { it.document_id }) { hit ->
@@ -342,6 +383,7 @@ private fun ResultsGrid(
 
 @Composable
 private fun IdleState(
+    topInset: Dp,
     quickFilters: List<com.reverie.app.data.api.model.QuickFilter>,
     recents: List<String>,
     onApplyFilter: (com.reverie.app.data.api.model.QuickFilter) -> Unit,
@@ -351,7 +393,7 @@ private fun IdleState(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
+            .padding(start = 16.dp, end = 16.dp, top = topInset + 16.dp, bottom = 16.dp + bottomBarInset()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (quickFilters.isNotEmpty()) {

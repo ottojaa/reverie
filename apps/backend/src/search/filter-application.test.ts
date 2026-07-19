@@ -55,6 +55,17 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('pm.country ILIKE');
     });
 
+    it('restricts the photo fallback to images so videos do not leak into Photo', () => {
+        const { sql, parameters } = compile({ types: ['photo'] });
+
+        // photo = document_category in (photo, other) OR (has_meaningful_text = false AND image mime).
+        // The image-mime guard is what keeps videos/audio/archives (also has_meaningful_text = false) out.
+        expect(sql).toContain('"d"."document_category" in');
+        expect(sql).toContain('"d"."has_meaningful_text" =');
+        expect(sql).toContain('"d"."mime_type" like');
+        expect(parameters).toContain('image/%');
+    });
+
     it('omitting types drops the category expansion but keeps other filters', () => {
         const { sql } = compile({ types: ['photo'], sizeMin: 1024 }, ['types']);
 
