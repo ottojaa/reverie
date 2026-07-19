@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
@@ -26,7 +26,7 @@ fun DocumentThumbnail(
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
 ) {
-    val hasThumbnail = document.thumbnail_status == JobStatus.COMPLETE
+    val hasThumbnail = document.hasRenderedThumbnail
 
     Box(
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),

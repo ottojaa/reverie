@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.fileTypeVisual
@@ -48,7 +48,7 @@ fun FallbackViewer(
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val hasThumbnail = document.thumbnail_status == JobStatus.COMPLETE
+    val hasThumbnail = document.hasRenderedThumbnail
 
     Column(
         modifier = modifier

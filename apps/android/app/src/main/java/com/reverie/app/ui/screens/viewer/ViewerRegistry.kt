@@ -3,7 +3,7 @@ package com.reverie.app.ui.screens.viewer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.ui.screens.viewer.viewers.FallbackViewer
 import com.reverie.app.ui.screens.viewer.viewers.ImageViewer
 import com.reverie.app.ui.screens.viewer.viewers.PdfViewer
@@ -53,7 +53,7 @@ fun DocumentViewerBody(
         ViewerType.IMAGE -> ImageViewer(
             fileUrl = fileUrl,
             documentId = document.id,
-            hasThumbnail = document.thumbnail_status == JobStatus.COMPLETE,
+            hasThumbnail = document.hasRenderedThumbnail,
             contentDescription = document.original_filename,
             onTap = onToggleImmersive,
             isSettledPage = isSettledPage,
