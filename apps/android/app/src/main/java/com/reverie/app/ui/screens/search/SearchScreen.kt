@@ -95,8 +95,6 @@ fun SearchScreen(
     val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
         dateActive || state.activeValues(FilterKey.SIZE).isNotEmpty() || state.activeValues(FilterKey.HAS).isNotEmpty()
 
-    // Grid density is shared with the Files grid so both views show the same column count.
-    val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
     // Scroll states are hoisted so scrolling the results can collapse the search header + bottom nav,
     // reclaiming vertical space for the results themselves.
     val gridState = rememberLazyGridState()
@@ -170,7 +168,7 @@ fun SearchScreen(
             // during the debounce, stale results stay visible under the progress bar instead.
             state.results.isEmpty() && !state.isSearching ->
                 EmptyState(icon = Icons.Outlined.Search, title = "No results", description = "Try different keywords or clear some filters.")
-            state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, columns, headerDp, openDocument, viewModel::loadMore)
+            state.viewMode == ViewMode.GRID -> ResultsGrid(state, gridState, headerDp, openDocument, viewModel::loadMore)
             else -> ResultsList(state, listState, headerDp, openDocument, onOpenFolder, viewModel::loadMore)
         }
 
@@ -352,7 +350,6 @@ private fun ResultsList(
 private fun ResultsGrid(
     state: SearchUiState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
-    columns: Int,
     topInset: Dp,
     onDocumentClick: (String) -> Unit,
     onLoadMore: () -> Unit,
@@ -366,10 +363,10 @@ private fun ResultsGrid(
             .collect { last -> if (state.hasMore && last >= documents.size - 4) onLoadMore() }
     }
 
-    // Edge-to-edge square grid with the same column count and hairline gaps as the Files grid.
+    // Edge-to-edge square grid; adaptive column count (mosaic is Files-only) with hairline gaps.
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Adaptive(minSize = 116.dp),
         contentPadding = PaddingValues(top = topInset + 4.dp, bottom = 12.dp + bottomBarInset()),
         verticalArrangement = Arrangement.spacedBy(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),

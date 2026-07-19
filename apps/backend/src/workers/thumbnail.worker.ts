@@ -49,9 +49,11 @@ const VIDEO_MIME_TO_EXT: Record<string, string> = {
 };
 
 /**
- * Extract a single frame from video buffer using ffmpeg (must be on PATH)
+ * Extract a single frame from video buffer using ffmpeg, and probe its duration with ffprobe
+ * (both must be on PATH — they ship together). Duration is a best-effort extra: a probe failure
+ * yields null rather than failing the whole thumbnail job.
  */
-async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<Buffer> {
+async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<{ frame: Buffer; durationSeconds: number | null }> {
     const ext = VIDEO_MIME_TO_EXT[mimeType] ?? '.bin';
     const tmpDir = await mkdtemp(join(tmpdir(), 'reverie-video-'));
     const inputPath = join(tmpDir, `video${ext}`);
@@ -81,12 +83,38 @@ async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<
             throw new NonRetryableJobError('ffmpeg produced no output');
         }
 
-        return out;
+        // Probe while the temp file still exists (before the finally unlink).
+        const durationSeconds = await probeVideoDuration(inputPath);
+
+        return { frame: out, durationSeconds };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new NonRetryableJobError(`ffmpeg not found or failed to extract video frame: ${msg}`);
     } finally {
         await unlink(inputPath).catch(() => {});
+    }
+}
+
+/** Probe a video's duration in seconds with ffprobe; null when it can't be determined. */
+async function probeVideoDuration(inputPath: string): Promise<number | null> {
+    try {
+        const chunks: Buffer[] = [];
+        const ffprobe = spawn('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', inputPath], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+
+        ffprobe.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+        await new Promise<void>((resolve, reject) => {
+            ffprobe.on('error', (err) => reject(err));
+            ffprobe.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffprobe exited ${code}`))));
+        });
+
+        const value = Number.parseFloat(Buffer.concat(chunks).toString('utf8').trim());
+
+        return Number.isFinite(value) && value > 0 ? value : null;
+    } catch {
+        return null;
     }
 }
 
@@ -220,7 +248,11 @@ async function renderTextPreview(text: string, filename: string): Promise<Buffer
  * from, routed by the shared thumbnail strategy. The upload gate only enqueues a job when
  * the strategy is thumbnailable, so `none` should never reach here.
  */
-async function getImageBuffer(fileBuffer: Buffer, mimeType: string, filename: string): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number } }> {
+async function getImageBuffer(
+    fileBuffer: Buffer,
+    mimeType: string,
+    filename: string,
+): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number }; durationSeconds: number | null }> {
     const strategy = getThumbnailStrategy(mimeType, filename);
 
     if (strategy === 'pdf' || strategy === 'office') {
@@ -232,18 +264,18 @@ async function getImageBuffer(fileBuffer: Buffer, mimeType: string, filename: st
             throw new NonRetryableJobError('Could not get PDF page dimensions');
         }
 
-        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
     }
 
     if (strategy === 'video') {
-        const pngBuffer = await renderVideoFrame(fileBuffer, mimeType);
-        const metadata = await sharp(pngBuffer).metadata();
+        const { frame, durationSeconds } = await renderVideoFrame(fileBuffer, mimeType);
+        const metadata = await sharp(frame).metadata();
 
         if (!metadata.width || !metadata.height) {
             throw new NonRetryableJobError('Could not get video frame dimensions');
         }
 
-        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
+        return { imageBuffer: frame, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds };
     }
 
     if (strategy === 'text') {
@@ -254,7 +286,7 @@ async function getImageBuffer(fileBuffer: Buffer, mimeType: string, filename: st
             throw new NonRetryableJobError('Could not render text preview');
         }
 
-        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
     }
 
     // Images: use the original buffer directly.
@@ -264,7 +296,7 @@ async function getImageBuffer(fileBuffer: Buffer, mimeType: string, filename: st
         throw new NonRetryableJobError('Could not read image dimensions');
     }
 
-    return { imageBuffer: fileBuffer, originalDimensions: { width: metadata.width, height: metadata.height } };
+    return { imageBuffer: fileBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
 }
 
 /**
@@ -289,7 +321,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     const fileBuffer = await storageService.readFile(filePath);
 
     // Get image buffer based on file type (renders PDF/office/text as needed)
-    const { imageBuffer, originalDimensions } = await getImageBuffer(fileBuffer, document.mime_type, document.original_filename);
+    const { imageBuffer, originalDimensions, durationSeconds } = await getImageBuffer(fileBuffer, document.mime_type, document.original_filename);
 
     await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
 
@@ -342,6 +374,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
             thumbnail_paths: paths,
             width: originalDimensions.width,
             height: originalDimensions.height,
+            duration_seconds: durationSeconds,
         })
         .where('id', '=', documentId)
         .execute();

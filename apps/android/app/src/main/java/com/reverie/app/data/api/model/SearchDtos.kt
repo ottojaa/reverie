@@ -30,6 +30,8 @@ data class DocumentSearchResult(
     val thumbnail_urls: ThumbnailUrls? = null,
     val blurhash: String? = null,
     val size_bytes: Long,
+    // Video length in seconds; null for non-video hits.
+    val duration_seconds: Double? = null,
     val tags: List<String> = emptyList(),
     val relevance: Double? = null,
 ) : SearchHit

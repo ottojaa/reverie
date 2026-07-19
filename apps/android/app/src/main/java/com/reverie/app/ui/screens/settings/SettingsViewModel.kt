@@ -7,6 +7,7 @@ import com.reverie.app.data.local.FileCacheManager
 import com.reverie.app.data.repository.AuthRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.AppSettings
+import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.data.api.model.VaultStatus
@@ -55,6 +56,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setHideNavOnScroll(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setHideNavOnScroll(enabled) }
+    }
+
+    fun setMosaicFeatureEvery(every: Int) {
+        viewModelScope.launch { settingsRepository.setMosaicFeatureEvery(every) }
+    }
+
+    fun setGridLayoutMode(mode: GridLayoutMode) {
+        viewModelScope.launch { settingsRepository.setGridLayoutMode(mode) }
     }
 
     /** TEMPORARY / DEV TUNING — persist the edited motion spec (whole AppSettings carries it). */

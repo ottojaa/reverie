@@ -27,6 +27,7 @@ class DtoSerializationTest {
               "mime_type": "image/jpeg",
               "size_bytes": 123456,
               "width": 4000, "height": 3000,
+              "duration_seconds": 125.5,
               "thumbnail_blurhash": "L6Pj0^jE",
               "thumbnail_paths": {"sm":"a","md":"b","lg":"c"},
               "document_category": "photo",
@@ -52,6 +53,7 @@ class DtoSerializationTest {
         assertEquals("beach.jpg", doc.original_filename)
         assertEquals(DocumentCategory.PHOTO, doc.document_category)
         assertEquals(JobStatus.COMPLETE, doc.ocr_status)
+        assertEquals(125.5, doc.duration_seconds!!, 0.0001)
         assertEquals(34.0, doc.photo_metadata?.latitude!!, 0.0001)
 
         val meta = LlmMetadata.from(json.parseToJsonElement(payload).jsonObject["llm_metadata"]?.jsonObject)
@@ -70,6 +72,8 @@ class DtoSerializationTest {
     @Test fun `null document category stays null`() {
         val doc = json.decodeFromString(DocumentDto.serializer(), documentJson(category = "null"))
         assertNull(doc.document_category)
+        // duration_seconds is absent from documentJson — it must default to null, not fail decoding.
+        assertNull(doc.duration_seconds)
     }
 
     @Test fun `decodes a paginated document list`() {
@@ -93,7 +97,7 @@ class DtoSerializationTest {
                  "folder_path":"/Finance","folder_id":"f1","uploaded_at":"2024-01-01T00:00:00.000Z",
                  "extracted_date":null,"category":"invoice","mime_type":"application/pdf","format":"pdf",
                  "snippet":"...total...","has_text":true,"thumbnail_urls":null,"blurhash":null,
-                 "size_bytes":9000,"tags":["tax"],"relevance":0.8},
+                 "size_bytes":9000,"duration_seconds":90.0,"tags":["tax"],"relevance":0.8},
                 {"result_type":"collection","id":"c1","name":"Finance","path":"/Finance","description":null,
                  "emoji":"💰","folder_type":"collection","document_count":12,"snippet":null,"relevance":0.5}
               ],
@@ -106,6 +110,7 @@ class DtoSerializationTest {
         assertTrue(res.results[0] is DocumentSearchResult)
         assertTrue(res.results[1] is CollectionSearchResult)
         assertEquals("Invoice", (res.results[0] as DocumentSearchResult).display_name)
+        assertEquals(90.0, (res.results[0] as DocumentSearchResult).duration_seconds!!, 0.0001)
         assertEquals(FolderType.COLLECTION, (res.results[1] as CollectionSearchResult).folder_type)
     }
 

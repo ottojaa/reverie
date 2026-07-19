@@ -37,6 +37,19 @@ fun dateBucket(iso: String?): String {
     }
 }
 
+/** Clock-style video duration: "m:ss", or "h:mm:ss" once it reaches an hour. */
+fun formatDuration(seconds: Double): String {
+    val total = seconds.toLong().coerceAtLeast(0)
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    val secs = total % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, secs)
+    }
+}
+
 /** Human-readable byte size, e.g. 12.4 GB. */
 fun formatBytes(bytes: Long): String {
     if (bytes < 1024) return "$bytes B"

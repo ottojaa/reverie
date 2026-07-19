@@ -21,6 +21,7 @@ data class DocumentEntity(
     val sizeBytes: Long,
     val width: Int?,
     val height: Int?,
+    val durationSeconds: Double?,
     val thumbnailBlurhash: String?,
     val documentCategory: String?,
     val extractedDate: String?,

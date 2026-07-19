@@ -13,15 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,10 +51,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.ui.components.ComingSoonSheet
 import com.reverie.app.ui.components.ConfirmDialog
-import com.reverie.app.ui.components.DocumentCard
 import com.reverie.app.ui.components.DocumentCardSkeleton
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.ErrorState
+import com.reverie.app.ui.components.MosaicDocumentGrid
 import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.ProcessingStatusBadge
 import com.reverie.app.ui.components.ReverieFab
@@ -92,8 +89,8 @@ fun BrowseScreen(
     val review by uploadViewModel.review.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val gridState = rememberLazyGridState()
-    val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
+    // Files grid is a LazyColumn of packed bands, so it uses a list state (not grid).
+    val listState = rememberLazyListState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
@@ -102,27 +99,11 @@ fun BrowseScreen(
     // Collapsing top bar: hides on scroll down, returns on scroll up.
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-    // Infinite scroll: fetch the next page as we approach the end.
-    androidx.compose.runtime.LaunchedEffect(gridState, state.hasMore, state.documents.size) {
-        androidx.compose.runtime.snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
-            .distinctUntilChanged()
-            .collect { lastIndex ->
-                if (state.hasMore && lastIndex >= state.documents.size - 6) viewModel.loadMore()
-            }
-    }
-
-    // Return-transform sync: when the viewer has swiped to another document, scroll the grid so that
-    // tile is laid out — so popping back lands the shared-element container transform on the right
-    // tile (it falls back to a plain fade if the tile isn't present).
+    // Infinite scroll and the return-transform scroll sync live inside MosaicDocumentGrid, which
+    // owns the packed sections those effects key on. We only forward the focused id here.
     val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
-    androidx.compose.runtime.LaunchedEffect(focusedId, state.documents) {
-        val id = focusedId ?: return@LaunchedEffect
-        val index = state.documents.indexOfFirst { it.id == id }
-        if (index < 0) return@LaunchedEffect
-        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) gridState.scrollToItem(index)
-        // Consume it: later list updates (e.g. a thumbnail-complete refetch) must not re-scroll here.
-        viewModel.clearFocusedDocument()
-    }
+    val layoutMode by viewModel.gridLayoutMode.collectAsStateWithLifecycle()
+    val featureEvery by viewModel.mosaicFeatureEvery.collectAsStateWithLifecycle()
 
     // Drive the shell's bottom-bar visibility off the same collapsing-top-bar state, so both bars
     // move in lockstep and the bottom bar reappears at the top. Honored only when the setting is on.
@@ -154,8 +135,6 @@ fun BrowseScreen(
                 folderEmoji = state.folder?.emoji,
                 subtitle = folderSubtitle(state.folder?.description, state.documents.size),
                 processingCount = state.processingCount,
-                columns = columns,
-                onSetColumns = viewModel::setGridColumns,
                 onBack = onBack,
                 onCanvas = { showCanvasSoon = true },
                 scrollBehavior = scrollBehavior,
@@ -181,7 +160,7 @@ fun BrowseScreen(
         )
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                state.isLoading -> LoadingGrid(contentPadding = gridPadding, columns = columns)
+                state.isLoading -> LoadingGrid(contentPadding = gridPadding)
                 state.error != null && state.documents.isEmpty() ->
                     Box(Modifier.padding(innerPadding).fillMaxSize()) {
                         ErrorState(message = state.error!!, onRetry = { viewModel.refresh(initial = true) })
@@ -196,39 +175,38 @@ fun BrowseScreen(
                             onAction = onUploadClick,
                         )
                     }
-                else -> LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(columns),
+                else -> MosaicDocumentGrid(
+                    documents = state.documents,
+                    listState = listState,
                     contentPadding = gridPadding,
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(state.documents, key = { it.id }, contentType = { "document" }) { document ->
-                        DocumentCard(
-                            document = document,
-                            selected = document.id in state.selectedIds,
-                            onClick = {
-                                if (state.inSelectionMode) {
-                                    viewModel.toggleSelect(document.id)
-                                } else {
-                                    // Publish this grid's order so the viewer can swipe through it.
-                                    viewModel.prepareSequence()
-                                    // Only images size the dive transform to their aspect — for other
-                                    // file types the thumbnail aspect would letterbox the full-screen viewer.
-                                    onDocumentClick(
-                                        document.id,
-                                        if (isImageDocument(document)) document.mediaAspectOrNull() else null,
-                                    )
-                                }
-                            },
-                            onLongClick = {
-                                if (state.inSelectionMode) viewModel.toggleSelect(document.id)
-                                else viewModel.enterSelection(document.id)
-                            },
-                        )
-                    }
-                }
+                    layoutMode = layoutMode,
+                    featureEvery = featureEvery,
+                    hasMore = state.hasMore,
+                    onLoadMore = viewModel::loadMore,
+                    focusedId = focusedId,
+                    // Consume the focus signal so later list updates (e.g. a thumbnail-complete
+                    // refetch) don't re-scroll the grid.
+                    onFocusConsumed = viewModel::clearFocusedDocument,
+                    selected = { document -> document.id in state.selectedIds },
+                    onClick = { document ->
+                        if (state.inSelectionMode) {
+                            viewModel.toggleSelect(document.id)
+                        } else {
+                            // Publish this grid's order so the viewer can swipe through it.
+                            viewModel.prepareSequence()
+                            // Only images size the dive transform to their aspect — for other file
+                            // types the thumbnail aspect would letterbox the full-screen viewer.
+                            onDocumentClick(
+                                document.id,
+                                if (isImageDocument(document)) document.mediaAspectOrNull() else null,
+                            )
+                        }
+                    },
+                    onLongClick = { document ->
+                        if (state.inSelectionMode) viewModel.toggleSelect(document.id)
+                        else viewModel.enterSelection(document.id)
+                    },
+                )
             }
 
             // Selection bar overlays the top region (opaque) rather than replacing the top bar, so
@@ -320,14 +298,11 @@ private fun BrowseTopBar(
     folderEmoji: String?,
     subtitle: String,
     processingCount: Int,
-    columns: Int,
-    onSetColumns: (Int) -> Unit,
     onBack: (() -> Unit)?,
     onCanvas: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    var gridMenuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         // A top scrim keeps "My Files" and the actions legible over bright gallery content while the
         // bar container stays transparent (edge-to-edge). Surface-tinted so it adapts to light/dark and
@@ -379,24 +354,6 @@ private fun BrowseTopBar(
         },
         actions = {
             ProcessingStatusBadge(count = processingCount)
-            // Grid density picker (1–4 columns), persisted. Anchored via a Box so the menu opens
-            // under the button.
-            Box {
-                IconButton(onClick = { gridMenuOpen = true }) {
-                    Icon(Icons.Outlined.GridView, contentDescription = "Grid size")
-                }
-                DropdownMenu(expanded = gridMenuOpen, onDismissRequest = { gridMenuOpen = false }) {
-                    (1..4).forEach { count ->
-                        DropdownMenuItem(
-                            text = { Text(if (count == 1) "1 column" else "$count columns") },
-                            leadingIcon = {
-                                if (count == columns) Icon(Icons.Outlined.Check, contentDescription = null)
-                            },
-                            onClick = { gridMenuOpen = false; onSetColumns(count) },
-                        )
-                    }
-                }
-            }
             if (isFolder) {
                 // Wrap button + menu in a Box so the menu anchors to the button.
                 Box {
@@ -417,17 +374,19 @@ private fun BrowseTopBar(
 }
 
 @Composable
-private fun LoadingGrid(contentPadding: PaddingValues, columns: Int) {
+private fun LoadingGrid(contentPadding: PaddingValues) {
     val visible = rememberSkeletonVisible(isLoading = true)
     if (!visible) return
+    // A brief placeholder only — a fixed 3-wide square grid, since the justified layout needs real
+    // document dimensions we don't have yet.
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Fixed(3),
         contentPadding = contentPadding,
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(columns * columns * 2) { DocumentCardSkeleton() }
+        items(12) { DocumentCardSkeleton() }
     }
 }
 

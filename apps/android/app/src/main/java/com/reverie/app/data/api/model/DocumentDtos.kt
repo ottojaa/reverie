@@ -43,6 +43,8 @@ data class DocumentDto(
     val size_bytes: Long,
     val width: Int? = null,
     val height: Int? = null,
+    // Video length in seconds; null for non-video documents.
+    val duration_seconds: Double? = null,
     val thumbnail_blurhash: String? = null,
     val thumbnail_paths: ThumbnailPaths? = null,
     val document_category: DocumentCategory? = null,
