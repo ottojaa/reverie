@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
     val review by viewModel.review.collectAsStateWithLifecycle()
     val sections by viewModel.pickerSections.collectAsStateWithLifecycle()
+    val foldersLoading by viewModel.foldersLoading.collectAsStateWithLifecycle()
     val state = review ?: return
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -93,9 +94,11 @@ fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
     if (showFolderPicker) {
         FolderPickerSheet(
             sections = sections,
+            loading = foldersLoading,
             selectedId = state.folderId,
             onSelect = { viewModel.setFolder(it.id); showFolderPicker = false },
             onCreateFolder = { parentId, form -> viewModel.createFolder(parentId, form); showFolderPicker = false },
+            onCreateCollection = { form -> viewModel.createCollection(form) },
             onDismiss = { showFolderPicker = false },
         )
     }

@@ -3,6 +3,8 @@ package com.reverie.app.ui.screens.upload
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.reverie.app.ui.components.SectionIcon
 import com.reverie.app.ui.screens.collections.CreateEditFolderSheet
@@ -43,8 +48,10 @@ import com.reverie.app.ui.screens.collections.FolderFormData
 @Composable
 fun FolderPickerSheet(
     sections: List<FolderPickerSection>,
+    loading: Boolean,
     onSelect: (FolderOption) -> Unit,
     onCreateFolder: (parentId: String?, form: FolderFormData) -> Unit,
+    onCreateCollection: (FolderFormData) -> Unit,
     onDismiss: () -> Unit,
     selectedId: String? = null,
 ) {
@@ -52,6 +59,7 @@ fun FolderPickerSheet(
     var query by remember { mutableStateOf("") }
     var collapsed by remember { mutableStateOf(emptySet<String>()) }
     var createInSection by remember { mutableStateOf<FolderPickerSection?>(null) }
+    var createCollectionOpen by remember { mutableStateOf(false) }
     val visible = remember(sections, query) { filterSections(sections, query) }
 
     ModalBottomSheet(
@@ -70,18 +78,26 @@ fun FolderPickerSheet(
                 .padding(bottom = 16.dp),
         ) {
             Text("Choose a folder", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("Search folders") },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-            )
-            if (visible.isEmpty()) {
-                Text(
-                    "No folders yet — use the + on a collection to create one.",
+            // Search only helps once there's something to search; hide it while loading/empty.
+            if (sections.isNotEmpty()) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search folders") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                )
+            }
+            when {
+                loading && sections.isEmpty() ->
+                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                    }
+                sections.isEmpty() -> EmptyPickerState(onCreateCollection = { createCollectionOpen = true })
+                visible.isEmpty() -> Text(
+                    "No folders match your search.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -122,6 +138,38 @@ fun FolderPickerSheet(
             },
             onDismiss = { createInSection = null },
         )
+    }
+
+    if (createCollectionOpen) {
+        CreateEditFolderSheet(
+            title = "New collection",
+            initial = null,
+            // Stay in the picker after creating — the new (empty) collection appears with its own
+            // "+" so the user can add the folder they'll actually upload into.
+            onSubmit = { form -> onCreateCollection(form); createCollectionOpen = false },
+            onDismiss = { createCollectionOpen = false },
+        )
+    }
+}
+
+@Composable
+private fun EmptyPickerState(onCreateCollection: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("No collections yet", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Create a collection, then add a folder to upload into.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Button(onClick = onCreateCollection) {
+            Icon(Icons.Outlined.CreateNewFolder, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("New collection", modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }
 

@@ -35,6 +35,8 @@ import java.io.File
 fun TextViewer(
     loadFile: suspend () -> File,
     modifier: Modifier = Modifier,
+    // Disabled while the details pane is open so the text scroll doesn't steal the drag-to-close.
+    scrollEnabled: Boolean = true,
 ) {
     var lines by remember { mutableStateOf<List<String>?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -65,8 +67,8 @@ fun TextViewer(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .verticalScroll(rememberScrollState())
-                            .horizontalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState(), enabled = scrollEnabled)
+                            .horizontalScroll(rememberScrollState(), enabled = scrollEnabled)
                             .padding(start = 12.dp, end = 12.dp, top = topInset, bottom = 12.dp),
                     ) {
                         Text(
