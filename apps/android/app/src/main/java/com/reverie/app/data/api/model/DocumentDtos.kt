@@ -65,6 +65,23 @@ data class DocumentDto(
     val photo_metadata: DocumentPhotoMetadata? = null,
 )
 
+/**
+ * True when the server actually rendered a thumbnail image for this document.
+ *
+ * NOT the same as `thumbnail_status == COMPLETE`: the backend marks non-previewable files
+ * (apk, zip, audio, exe, …) `complete` at upload time with no thumbnail ever produced
+ * (upload.service `canThumbnail ? 'pending' : 'complete'`), so status alone makes those
+ * files look like they have a preview — the viewer/grid then request a thumbnail the server
+ * 404s on and draw an empty box.
+ *
+ * The precise signal is `thumbnail_paths != null`, but the Room cache drops that field
+ * (Mappers.toDto), and both the grid and viewer read through the cache. The blurhash is the
+ * cache-safe proxy: the thumbnail worker writes it together with `thumbnail_paths` only when a
+ * thumbnail is genuinely rendered, and it round-trips through the cache.
+ */
+val DocumentDto.hasRenderedThumbnail: Boolean
+    get() = !thumbnail_blurhash.isNullOrBlank()
+
 /** width/height ratio for image/video docs, or null when dimensions are unknown. */
 fun DocumentDto.mediaAspectOrNull(): Float? {
     val w = width ?: return null
