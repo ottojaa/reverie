@@ -37,6 +37,7 @@ fun DocumentPage(
     isCurrentPage: Boolean,
     isSettledPage: Boolean,
     onToggleImmersive: () -> Unit,
+    onDownloadStarted: () -> Unit,
     viewModel: DocumentViewModel,
     modifier: Modifier = Modifier,
 ) {
@@ -68,7 +69,7 @@ fun DocumentPage(
                     fileUrl = fileUrl,
                     loadFile = { viewModel.originalFile(id) },
                     onToggleImmersive = onToggleImmersive,
-                    onDownload = { downloadDocument(context, fileUrl, doc) },
+                    onDownload = { if (downloadDocument(context, fileUrl, doc)) onDownloadStarted() },
                     isSettledPage = isSettledPage,
                     modifier = Modifier.fillMaxSize(),
                 )

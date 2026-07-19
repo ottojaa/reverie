@@ -27,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -35,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +71,7 @@ import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.util.enqueueDownload
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +87,9 @@ fun BrowseScreen(
     val context = LocalContext.current
     val activeUploads by uploadViewModel.activeCount.collectAsStateWithLifecycle()
     val review by uploadViewModel.review.collectAsStateWithLifecycle()
-    // Justified grid is a LazyColumn of packed rows/hero blocks, so it uses a list state (not grid).
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    // Files grid is a LazyColumn of packed bands, so it uses a list state (not grid).
     val listState = rememberLazyListState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
@@ -141,6 +147,7 @@ fun BrowseScreen(
                 modifier = Modifier.padding(bottom = bottomBarInset()),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         // Top inset lives in the scroll content (grid contentPadding) so it scrolls away with the
         // collapsing bar; the bottom reserves space for the overlaid nav bar.
@@ -218,6 +225,9 @@ fun BrowseScreen(
                     onDownload = {
                         viewModel.downloadSelected { targets ->
                             targets.forEach { enqueueDownload(context, it.url, it.filename) }
+                            if (targets.isNotEmpty()) {
+                                scope.launch { snackbarHostState.showSnackbar(downloadStartedMessage(targets.size)) }
+                            }
                         }
                     },
                     onDelete = { showDeleteConfirm = true },
@@ -386,3 +396,5 @@ private fun folderSubtitle(description: String?, count: Int): String {
 }
 
 private fun plural(n: Int): String = if (n == 1) "file" else "files"
+
+private fun downloadStartedMessage(n: Int): String = "Downloading $n ${plural(n)}"

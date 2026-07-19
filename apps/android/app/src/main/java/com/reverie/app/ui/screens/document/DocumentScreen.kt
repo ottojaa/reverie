@@ -74,6 +74,10 @@ fun DocumentScreen(
     var showDelete by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
 
+    // One place confirms a started download, whichever button triggered it (toolbar or the fallback
+    // viewer's Download button, which routes through DocumentPage) — the SnackbarHost lives here.
+    val onDownloadStarted: () -> Unit = { scope.launch { snackbarHostState.showSnackbar("Download started") } }
+
     // Pop when the sequence empties (e.g. the whole folder was deleted while swiping).
     LaunchedEffect(ids) { if (ids.isEmpty()) onBackClick() }
 
@@ -109,6 +113,7 @@ fun DocumentScreen(
                     isCurrentPage = page == pagerState.currentPage,
                     isSettledPage = page == pagerState.settledPage,
                     onToggleImmersive = { immersive = !immersive },
+                    onDownloadStarted = onDownloadStarted,
                     viewModel = viewModel,
                 )
             }
@@ -132,7 +137,9 @@ fun DocumentScreen(
                         menuOpen = false
                         scope.launch { snackbarHostState.showSnackbar("Editing is coming soon on Android") }
                     },
-                    onDownload = { document?.let { downloadDocument(context, currentFileUrl, it) } },
+                    onDownload = {
+                        document?.let { if (downloadDocument(context, currentFileUrl, it)) onDownloadStarted() }
+                    },
                     onMenuToggle = { menuOpen = it },
                     onRename = { menuOpen = false; showRename = true },
                     onTogglePrivate = {
@@ -181,7 +188,9 @@ fun DocumentScreen(
     }
 }
 
-internal fun downloadDocument(context: android.content.Context, fileUrl: String?, document: DocumentDto) {
-    fileUrl ?: return
+/** Enqueue a download; returns false (no-op) when there's no file URL to download yet. */
+internal fun downloadDocument(context: android.content.Context, fileUrl: String?, document: DocumentDto): Boolean {
+    fileUrl ?: return false
     enqueueDownload(context, fileUrl, document.original_filename)
+    return true
 }
