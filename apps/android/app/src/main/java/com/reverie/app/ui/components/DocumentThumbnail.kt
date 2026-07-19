@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import coil.request.ImageRequest
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
+import com.reverie.app.util.formatDuration
 
 /**
  * The thumbnail fill for a document: a cropped image, or a centered file-type icon when there's no
@@ -87,6 +89,7 @@ fun GalleryThumbnail(
     hasThumbnail: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
+    durationSeconds: Double? = null,
 ) {
     val isVideo = mimeType.startsWith("video/")
     val isImage = mimeType.startsWith("image/")
@@ -105,6 +108,26 @@ fun GalleryThumbnail(
         if (!isImage && !isVideo) {
             FileTypeBadge(mime = mimeType, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
         }
+        // A video's length reads at a glance in the corner, Google-Photos style.
+        if (isVideo && durationSeconds != null) {
+            DurationPill(seconds = durationSeconds, modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp))
+        }
+    }
+}
+
+/** Bottom-corner `m:ss` pill on video tiles. Shares the FileTypeBadge's scrim styling. */
+@Composable
+private fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = formatDuration(seconds),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+        )
     }
 }
 

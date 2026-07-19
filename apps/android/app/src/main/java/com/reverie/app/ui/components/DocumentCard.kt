@@ -62,6 +62,7 @@ fun DocumentCard(
             blurhash = document.thumbnail_blurhash,
             hasThumbnail = document.hasRenderedThumbnail,
             size = thumbnailSize,
+            durationSeconds = document.duration_seconds,
             modifier = Modifier.matchParentSize(),
         )
 

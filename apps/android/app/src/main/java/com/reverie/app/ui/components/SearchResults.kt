@@ -116,6 +116,7 @@ fun PhotoResultTile(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
         blurhash = hit.blurhash,
         hasThumbnail = !hit.blurhash.isNullOrBlank(),
         size = ThumbnailSize.MD,
+        durationSeconds = hit.duration_seconds,
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
