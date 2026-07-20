@@ -27,10 +27,14 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
 /**
- * HTML5-style video playback against the signed URL, with Media3's built-in controls. The view is
- * fully transparent outside the video's content rect — the letterbox fill and the poster stand-in
- * live BEHIND this viewer in DocumentPage ([VideoLetterboxFill] / the dive hero), so the dive
- * morph, the pre-first-frame poster, and the letterbox bars are all handled there.
+ * HTML5-style video playback against the signed URL, with Media3's built-in controls.
+ *
+ * The default SurfaceView PlayerView keeps its OPAQUE shutter (the fill Media3 paints over the video
+ * surface until the first frame decodes). A transparent shutter over a SurfaceView would punch a
+ * hole through to the window and flash, so we leave the opaque default in place; DocumentPage draws
+ * the letterbox fill behind this view and holds a matching fill cover ON TOP until
+ * [onFirstFrameRendered] fires — so neither the shutter nor the surface's pre-first-frame state
+ * (black, or a one-frame stretch) is ever seen.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -41,10 +45,8 @@ fun VideoViewer(
     // controls are showing, so the app's bars never sit over the video controls (and playback stays
     // immersive). Tapping a paused video dismisses the controls → chrome returns.
     onChromeHidden: (Boolean) -> Unit = {},
-    // Fired once the decoder has rendered its first frame into the (now correctly-sized) surface.
-    // DocumentPage keeps the poster stand-in on top of this view until then, so the black surface
-    // (during buffering) and the one-frame full-size stretch (before the aspect layout settles) are
-    // both hidden behind the poster.
+    // Fired once the decoder has rendered its first frame. DocumentPage holds a fill cover over this
+    // player until then, so the black surface (buffering) and any first-frame stretch are hidden.
     onFirstFrameRendered: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -117,11 +119,8 @@ fun VideoViewer(
                     this.player = player
                     setShowNextButton(false)
                     setShowPreviousButton(false)
-                    // Transparent so the letterbox bars reveal the fill drawn behind (in
-                    // DocumentPage), and the poster hero shows through before the first frame
-                    // renders (no black flash).
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    // Opaque default shutter (no transparent hole); the fill cover in DocumentPage
+                    // sits over it until the first frame, so its colour is never seen.
                     // Mirror Media3's control-overlay visibility into the app chrome (see the LaunchedEffect
                     // above), so the app bars hide while the controls are up and return when they dismiss.
                     setControllerVisibilityListener(
