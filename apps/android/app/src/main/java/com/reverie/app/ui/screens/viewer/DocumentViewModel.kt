@@ -112,7 +112,8 @@ class DocumentViewModel @Inject constructor(
         if (index >= ids.value.size - 2) seq.loadMore()
     }
 
-    suspend fun originalFile(id: String): File = fileCacheManager.getOrFetch(id)
+    suspend fun originalFile(id: String, onProgress: ((Float) -> Unit)? = null): File =
+        fileCacheManager.getOrFetch(id, onProgress)
 
     suspend fun ocrResult(id: String): DocumentOcrResult = documentRepository.ocrResult(id)
 

@@ -108,6 +108,7 @@ fun DocumentScreen(
     val currentFileUrl by produceState<String?>(initialValue = null, currentId) { value = viewModel.fileUrl(currentId) }
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val videoBackground by viewModel.videoBackground.collectAsStateWithLifecycle()
+    val currentViewerType = document?.let(::viewerTypeFor)
 
     val details = rememberDocumentDetailsState()
     var immersive by remember { mutableStateOf(false) }
@@ -132,6 +133,14 @@ fun DocumentScreen(
     // A new page starts unzoomed and not-playing; drop any stale hide-chrome state from the previous
     // page (e.g. swiping off a playing video should bring the chrome back on the next page).
     LaunchedEffect(currentId) { mediaZoomed = false; videoHideChrome = false }
+
+    // PDFs open full-screen: hide the chrome on arrival so the page uses the whole screen (a tap
+    // brings it back). Only forces it for PDFs — other types keep whatever immersive state carried
+    // over the swipe. Keyed on the resolved type so it fires once the document lands (and again on
+    // each new page), but never re-fires to fight a manual toggle within the same page.
+    LaunchedEffect(currentId, currentViewerType) {
+        if (currentViewerType == ViewerType.PDF) immersive = true
+    }
 
     // On each settle: move the realtime subscription / mark accessed / sync the origin grid, and
     // pull the origin's next page as we approach the tail.
@@ -174,7 +183,7 @@ fun DocumentScreen(
             // capped so a panorama isn't blown up into a
             // thin, heavily-cropped sliver — past the cap it simply stops short of full height and
             // sits letterboxed in the region. Non-image media keeps the older fit + bottom-align.
-            val viewerType = document?.let(::viewerTypeFor)
+            val viewerType = currentViewerType
             val mediaAspect = document?.mediaAspectOrNull()
             val regionAspect = if (headerBottomPx > 0f) screenWidthPx / headerBottomPx else 1f
             val tuckPx = with(density) { DETAILS_MEDIA_TUCK.toPx() }

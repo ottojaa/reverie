@@ -46,7 +46,7 @@ fun isVideoDocument(document: DocumentDto): Boolean = viewerTypeFor(document) ==
 fun DocumentViewerBody(
     document: DocumentDto,
     fileUrl: String?,
-    loadFile: suspend () -> File,
+    loadFile: suspend (onProgress: (Float) -> Unit) -> File,
     onMediaTap: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
@@ -93,7 +93,12 @@ fun DocumentViewerBody(
             onFirstFrameRendered = onFirstFrameRendered,
             modifier = modifier,
         )
-        ViewerType.PDF -> PdfViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
+        ViewerType.PDF -> PdfViewer(
+            loadFile = loadFile,
+            scrollEnabled = !detailsOpen,
+            onTap = onMediaTap,
+            modifier = modifier,
+        )
         ViewerType.TEXT -> TextViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
         ViewerType.FALLBACK -> FallbackViewer(document = document, onDownload = onDownload, modifier = modifier)
     }
