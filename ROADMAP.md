@@ -65,6 +65,7 @@ password-locked Vault · document-date-vs-photo-date distinction.
 | Full-text + rich filter DSL | basic | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅ |
 | OCR text search | ✅ recent | ✅ ahead (PaddleOCR/Tesseract) | ✅ |
 | LLM summaries / entities / auto-organize | ❌ | ✅ unique | ✅ |
+| Conversational AI assistant (organize + bulk edit + search) | ❌ | ⚠️ organize-only chat | 🛠️ generalize (see below) |
 | Semantic / natural-language search | ✅ CLIP + vectors | ❌ | 🛠️ embeddings + pgvector (hybrid with tsvector) |
 | Near-duplicate detection | ✅ embedding-based | ❌ exact-hash only | 🛠️ after pgvector |
 | Face detection & people | ✅ InsightFace | ❌ | ❌ low ROI for now |
@@ -103,6 +104,8 @@ password-locked Vault · document-date-vs-photo-date distinction.
 | Published client SDK | ✅ TS + Dart | ❌ | 🧊 until traction |
 | Per-user API keys | ✅ | ❌ (JWT only) | 🧊 with SDK |
 | MCP server (expose library to LLM agents) | ❌ | ❌ | 🛠️ new — a natural fit for an LLM-native app |
+| Local / self-hosted AI models | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ pluggable, per-capability |
+| Runtime admin settings (change config without restart) | ✅ admin UI | ❌ env vars only | 🛠️ settings store + admin UI |
 
 ### Auth & security
 
@@ -146,6 +149,17 @@ password-locked Vault · document-date-vs-photo-date distinction.
   photo editing.
 - **MCP server** — expose search / fetch / organize over MCP so Claude and other agents can work
   against a Reverie library directly.
+- **General AI assistant** — evolve the current organize-only chat into one conversational assistant
+  that can organize _and_ run bulk edits (move / rename / tag / delete) and smart searches through the
+  same tool-calling loop. Deprecates the standalone "organize" feature.
+- **Pluggable AI providers** — a provider seam so each capability (summaries, vision, the assistant)
+  can target Claude _or_ a **local self-hosted model** over an OpenAI-compatible endpoint (Ollama,
+  llama.cpp, …), run as a **separate container**. Configured from the **admin UI**, backed by a
+  server-settings store (not only env flags): model / provider / on-off changes apply **live** (read
+  per job — no reload), while the few boot-time settings apply on restart. Per-capability, sensible
+  defaults; run fully local, mixed, or with AI off entirely. Localize the high-volume background jobs
+  (summaries/tags) first; keep the interactive assistant on cloud until local tool-calling is reliable
+  enough (weak in ≤8B models that fit a 10 GB GPU shared with PaddleOCR).
 - **Better auth** — generalize OAuth→OIDC (Google login), add email verification for signup and
   password change/reset.
 
@@ -185,3 +199,9 @@ To keep the 🧊 items cheap later, extend ingest to persist (beyond today's GPS
   (storage) stays separate from "how it's organized" (folders/collections — a DB/query concern).
 - **Don't replace folders with albums.** The hierarchy is a Drive-grade advantage. If albums are
   ever wanted, add them as an optional cross-cutting layer, not a replacement.
+- **One server-settings store, not per-feature configs.** Runtime AI settings and the configurable
+  trash TTL want the same primitive — a typed, DB-backed settings store (admin UI + API, env as the
+  fallback default). Build it once. Classify each setting as **live** (read at use, applies on the
+  next job — models, provider, toggles, TTL) or **boot** (needs a restart — worker concurrency,
+  queues, storage provider); mark boot-only settings in the UI and add an admin restart action for
+  them, rather than building hot-reload machinery.

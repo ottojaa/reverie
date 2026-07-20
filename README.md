@@ -98,6 +98,28 @@ See [.env.example](.env.example) for the full reference. Key variables:
 - `JWT_SECRET`, `FILE_URL_SECRET` (min 32 chars)
 - `GOOGLE_CLIENT_ID` etc. for OAuth
 
+## AI & Model Providers
+
+AI is **optional** — Reverie runs fully without it. Set `LLM_ENABLED=false` (or leave
+`ANTHROPIC_API_KEY` unset) and files are still uploaded, OCR'd, thumbnailed, searched, and organized
+by hand; only the AI summaries/tags and the organize assistant are skipped. Vision is off by default
+(`LLM_VISION_ENABLED=false`).
+
+Each AI capability chooses its model independently, so you can mix per task:
+
+| Capability              | Env var                    | Default           |
+| ----------------------- | -------------------------- | ----------------- |
+| Document summary & tags | `ANTHROPIC_SUMMARY_MODEL`  | `claude-haiku-4-5` |
+| Image vision (opt-in)   | `ANTHROPIC_VISION_MODEL`   | `claude-haiku-4-5` |
+| Organize assistant      | `ANTHROPIC_ORGANIZE_MODEL` | `claude-sonnet-5`  |
+
+The env vars above are today's mechanism (set at boot). **Planned:** these settings move into the
+**admin UI, editable at runtime** — swap models or providers on the fly, no restart. A provider seam
+lets each capability target either Claude or a **local, self-hosted model** over an OpenAI-compatible
+endpoint (Ollama, llama.cpp, …) run as a **separate container** — e.g. a local model for summaries
+with Claude for the assistant, fully local, or fully off — all with sensible defaults. See
+[ROADMAP.md](ROADMAP.md).
+
 ## Deployment
 
 - Docker: `docker compose -f docker-compose.prod.yml` with `.env.production`
