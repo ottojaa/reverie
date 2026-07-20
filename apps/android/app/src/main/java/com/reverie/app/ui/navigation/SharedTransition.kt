@@ -122,7 +122,12 @@ fun Modifier.videoBackdropInOverlay(soft: Boolean = false): Modifier {
     return with(sharedScope) {
         with(navScope) {
             this@videoBackdropInOverlay
-                .renderInSharedTransitionScopeOverlay(zIndexInOverlay = -1f)
+                // -2f, NOT -1f: the overlay sort (SharedTransitionScopeImpl.drawInOverlay,
+                // compose-animation 1.7.6) remaps root shared elements with zIndexInOverlay 0 to
+                // -1f — a backdrop at -1f TIES with the morph box and stable-sort insertion order
+                // decides who wins, which intermittently drew this backdrop over the poster
+                // (black screen for the whole dive). Anything ≤ -2f sorts strictly below.
+                .renderInSharedTransitionScopeOverlay(zIndexInOverlay = -2f)
                 .animateEnterExit(
                     enter = enter,
                     exit = fadeOut(tween(BACKDROP_DIM_OUT_MS, easing = BackdropDimOutEasing)),
