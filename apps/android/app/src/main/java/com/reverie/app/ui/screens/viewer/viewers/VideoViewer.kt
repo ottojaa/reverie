@@ -41,6 +41,11 @@ import androidx.media3.ui.PlayerView
 fun VideoViewer(
     fileUrl: String?,
     modifier: Modifier = Modifier,
+    // The ExoPlayer lives with this composable, so composing it early lets the media fetch/buffer
+    // run through the open dive. The PlayerView surface only attaches while this is true — flipped
+    // on one frame after the dive settles (inflation never hitches the morph) and off the instant
+    // a dive-back starts (the shrink never composes a live surface).
+    mountSurface: Boolean = true,
     // Reports whether the app chrome should be hidden: true while the video plays OR its own Media3
     // controls are showing, so the app's bars never sit over the video controls (and playback stays
     // immersive). Tapping a paused video dismisses the controls → chrome returns.
@@ -113,34 +118,43 @@ fun VideoViewer(
         }
     }
 
+    // Dropping the surface mid-playback (dive-back) keeps this composable alive until the page
+    // unmounts — pause so the audio doesn't keep running over the shrink.
+    LaunchedEffect(mountSurface) { if (!mountSurface) player.pause() }
+
     Box(modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    setShowNextButton(false)
-                    setShowPreviousButton(false)
-                    // No controller auto-show on attach: it flipped the app chrome right back out
-                    // after the open dive faded it in (app bars in → out → Media3 bars in). The
-                    // controls still toggle on tap, so the chrome swaps only when the user asks.
-                    setControllerAutoShow(false)
-                    // Opaque default shutter (no transparent hole); the fill cover in DocumentPage
-                    // sits over it until the first frame, so its colour is never seen.
-                    // Mirror Media3's control-overlay visibility into the app chrome (see the LaunchedEffect
-                    // above), so the app bars hide while the controls are up and return when they dismiss.
-                    setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            controlsVisible = visibility == android.view.View.VISIBLE
-                        },
-                    )
-                    // Enabling the listener surfaces Media3's built-in fullscreen toggle in the controls;
-                    // it reports the requested state, which we drive orientation + immersion from.
-                    setFullscreenButtonClickListener { fullscreen = it }
-                }
-            },
-            update = { view -> view.setFullscreenButtonState(fullscreen) },
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (mountSurface) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        setShowNextButton(false)
+                        setShowPreviousButton(false)
+                        // No controller auto-show on attach: it flipped the app chrome right back
+                        // out after the open dive faded it in (app bars in → out → Media3 bars in).
+                        // The controls still toggle on tap, so the chrome swaps only when the user
+                        // asks.
+                        setControllerAutoShow(false)
+                        // Opaque default shutter (no transparent hole); the fill cover in
+                        // DocumentPage sits over it until the first frame, so its colour is never
+                        // seen. Mirror Media3's control-overlay visibility into the app chrome (see
+                        // the LaunchedEffect above), so the app bars hide while the controls are up
+                        // and return when they dismiss.
+                        setControllerVisibilityListener(
+                            PlayerView.ControllerVisibilityListener { visibility ->
+                                controlsVisible = visibility == android.view.View.VISIBLE
+                            },
+                        )
+                        // Enabling the listener surfaces Media3's built-in fullscreen toggle in the
+                        // controls; it reports the requested state, which we drive orientation +
+                        // immersion from.
+                        setFullscreenButtonClickListener { fullscreen = it }
+                    }
+                },
+                update = { view -> view.setFullscreenButtonState(fullscreen) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

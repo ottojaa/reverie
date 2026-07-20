@@ -3,9 +3,14 @@ package com.reverie.app.ui.screens.document
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
@@ -28,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.data.settings.VideoBackground
-import com.reverie.app.ui.navigation.EasingPreset
 import com.reverie.app.ui.navigation.LocalSharedTransitionScope
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.navigation.videoBackdropInOverlay
@@ -39,15 +43,22 @@ import com.reverie.app.ui.screens.viewer.viewerTypeFor
 import com.reverie.app.ui.screens.viewer.viewers.DocumentDiveHero
 import com.reverie.app.ui.screens.viewer.viewers.DocumentDiveStandIn
 import com.reverie.app.ui.screens.viewer.viewers.VideoLetterboxFill
+import kotlinx.coroutines.delay
 
 // The non-media viewers fade in over the settled dive stand-in once the morph settles. They're
 // dropped instantly (no exit fade) the moment a transition begins, so only the light stand-in
 // morphs — a heavy viewer (e.g. a long text file's giant layout) never re-measures under the
 // dive-back transform.
 private const val VIEWER_FADE_IN_MS = 180
-// Once the player renders its first frame, fade the letterbox-fill cover off it to reveal the video
-// — a soft, decelerating focus-in for BLURRED, a reveal from the solid bg for BLACK/THEME.
-private const val VIDEO_POSTER_FADE_MS = 300
+// Once the player renders its first frame, fade the letterbox-fill cover off it to reveal the
+// video. The solid fills (BLACK/THEME) brighten into the frame quickly; the BLURRED cover melts
+// into the video slowly with a soft landing — fast-start curves there read as an abrupt snap.
+private const val VIDEO_POSTER_FADE_MS = 200
+private const val VIDEO_BLUR_REVEAL_MS = 420
+// Buffering feedback appears only once the first frame has stalled past this hold-back, so an
+// already-buffered open never flashes a spinner.
+private const val BUFFER_SPINNER_DELAY_MS = 250L
+private const val BUFFER_SPINNER_FADE_MS = 150
 
 /**
  * One page of the swipe viewer: a single document's dive stand-in + real viewer, for [id],
@@ -58,9 +69,11 @@ private const val VIDEO_POSTER_FADE_MS = 300
  *     ([videoBackdropInOverlay]) with its own fast dim-in, so the letterbox areas go dark in sync
  *     with the (instantly-opaque) morph box instead of riding the screen's slower fade over the
  *     still-lit grid; after settle it stays as the player's backdrop.
- *  2. For videos, the player itself — a full-screen sibling mounted at settle (its setup can't
- *     stutter the morph), drawn BELOW the morph box so the letterbox-fill cover in the box hides the
- *     player's opaque shutter (and its pre-first-frame surface) until the first frame renders.
+ *  2. For videos, the player itself — a full-screen sibling composed from frame 1 (so ExoPlayer
+ *     fetches + buffers through the dive) whose PlayerView surface attaches one frame after settle
+ *     (its inflation can't stutter the morph), drawn BELOW the morph box so the letterbox-fill
+ *     cover in the box hides the player's opaque shutter (and its pre-first-frame surface) until
+ *     the first frame renders.
  *  3. The morph box carrying the shared element ([documentSharedBounds]). Images morph their own
  *     cropped thumbnail ([DocumentDiveHero]) inside an aspect-matched box — the box IS the content
  *     rect the settled viewer letterboxes into, so Crop fills both ends exactly and the tile grows
@@ -139,13 +152,35 @@ fun DocumentPage(
         // frame, then fades off to reveal the video. It snaps back on (0ms) when a transition begins
         // so the dive-back morph carries the fill, not the player's surface.
         var videoFirstFrame by remember { mutableStateOf(false) }
+        // The PlayerView surface attaches one frame AFTER the dive settles — its inflation never
+        // lands on the morph or the settle frame — and detaches the instant a transition starts,
+        // so the dive-back never composes a live surface. videoFirstFrame resets with it: a
+        // cancelled dive-back gets a fresh surface, and the cover must wait for THAT surface's
+        // first frame.
+        var settleFrameDrawn by remember { mutableStateOf(false) }
+        LaunchedEffect(transitionActive) {
+            settleFrameDrawn = false
+            if (transitionActive) {
+                videoFirstFrame = false
+                return@LaunchedEffect
+            }
+            withFrameNanos { }
+            settleFrameDrawn = true
+        }
+        val mountVideoSurface = !transitionActive && settleFrameDrawn
         val revealVideo = viewerType == ViewerType.VIDEO && !transitionActive && videoFirstFrame
         val posterAlpha by animateFloatAsState(
             targetValue = if (revealVideo) 0f else 1f,
-            animationSpec = if (revealVideo) {
-                tween(VIDEO_POSTER_FADE_MS, easing = EasingPreset.EMPHASIZED_DECELERATE.toEasing())
-            } else {
-                tween(0)
+            animationSpec = when {
+                // Snap the cover back on the instant a transition starts (the morph carries it).
+                !revealVideo -> tween(0)
+                // The blurred cover melts into the video as a long, soft focus-in — a fast-start
+                // curve here read as an abrupt snap to the frame.
+                videoBackground == VideoBackground.BLURRED ->
+                    tween(VIDEO_BLUR_REVEAL_MS, easing = LinearOutSlowInEasing)
+                // Solid fills just brighten into the first frame; keep it quick so an
+                // already-buffered open feels alive.
+                else -> tween(VIDEO_POSTER_FADE_MS, easing = FastOutSlowInEasing)
             },
             label = "videoPoster",
         )
@@ -165,30 +200,24 @@ fun DocumentPage(
                     // Likewise, only the current page's video toggles the chrome.
                     onChromeHidden = { hidden -> if (isCurrentPage) onVideoChromeHidden(hidden) },
                     onFirstFrameRendered = { videoFirstFrame = true },
+                    mountVideoSurface = mountVideoSurface,
                     modifier = mod,
                 )
             }
         }
 
         if (viewerType == ViewerType.VIDEO) {
-            VideoLetterboxFill(videoBackground, id, hasThumbnail, Modifier.fillMaxSize().videoBackdropInOverlay())
+            VideoLetterboxFill(
+                videoBackground, id, hasThumbnail,
+                Modifier.fillMaxSize()
+                    .videoBackdropInOverlay(soft = videoBackground == VideoBackground.BLURRED),
+            )
             // Player below the morph box; the fill cover in the box hides its opaque shutter until
-            // the first frame renders. Mounts one frame AFTER settle so the PlayerView inflation
-            // never lands on (and hitches) the settle frame itself; unmounting stays instant on
-            // transition start so the dive-back never composes a live surface. A cancelled
-            // dive-back remounts through here too — videoFirstFrame resets so the cover waits for
-            // the fresh player's first frame instead of revealing a not-yet-rendered surface.
-            var settleFrameDrawn by remember { mutableStateOf(false) }
-            LaunchedEffect(transitionActive) {
-                settleFrameDrawn = false
-                if (transitionActive) {
-                    videoFirstFrame = false
-                    return@LaunchedEffect
-                }
-                withFrameNanos { }
-                settleFrameDrawn = true
-            }
-            if (!transitionActive && settleFrameDrawn) viewer(Modifier.fillMaxSize())
+            // the first frame renders. The viewer composes from frame 1 so ExoPlayer fetches and
+            // buffers THROUGH the dive (mounting it only at settle left a long dead-black gap
+            // before the first frame); its PlayerView surface still waits for settle via
+            // mountVideoSurface above.
+            viewer(Modifier.fillMaxSize())
         }
 
         Box(bounds) {
@@ -203,6 +232,11 @@ fun DocumentPage(
                             videoBackground, id, hasThumbnail,
                             Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha },
                         )
+                    }
+                    // Buffering feedback once the dive has settled: a bare cover with nothing
+                    // moving read as a hang while the first frame loaded over the network.
+                    if (!transitionActive && !videoFirstFrame) {
+                        VideoBufferingSpinner(Modifier.fillMaxSize())
                     }
                 }
                 seamlessHero -> DocumentDiveHero(id, Modifier.fillMaxSize())
@@ -221,5 +255,24 @@ fun DocumentPage(
         }
         // Images self-gate on the transition (see ImageViewer's placeholder swap).
         if (viewerType == ViewerType.IMAGE) viewer(Modifier.fillMaxSize())
+    }
+}
+
+/**
+ * Centered spinner over the video's fill cover while the player buffers toward its first frame.
+ * Held back [BUFFER_SPINNER_DELAY_MS] so an already-buffered open never flashes it, then eased in.
+ */
+@Composable
+private fun VideoBufferingSpinner(modifier: Modifier = Modifier) {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(BUFFER_SPINNER_DELAY_MS)
+        show = true
+    }
+    if (!show) return
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { alpha.animateTo(1f, tween(BUFFER_SPINNER_FADE_MS)) }
+    Box(modifier.graphicsLayer { this.alpha = alpha.value }, contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
