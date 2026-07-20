@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -26,8 +28,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.data.settings.VideoBackground
+import com.reverie.app.ui.navigation.EasingPreset
 import com.reverie.app.ui.navigation.LocalSharedTransitionScope
 import com.reverie.app.ui.navigation.documentSharedBounds
+import com.reverie.app.ui.navigation.videoBackdropInOverlay
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.DocumentViewerBody
 import com.reverie.app.ui.screens.viewer.ViewerType
@@ -42,16 +46,18 @@ import com.reverie.app.ui.screens.viewer.viewers.VideoLetterboxFill
 // dive-back transform.
 private const val VIEWER_FADE_IN_MS = 180
 // Once the player renders its first frame, fade the letterbox-fill cover off it to reveal the video
-// — a soft focus-in for BLURRED, a reveal from the solid bg for BLACK/THEME.
-private const val VIDEO_POSTER_FADE_MS = 160
+// — a soft, decelerating focus-in for BLURRED, a reveal from the solid bg for BLACK/THEME.
+private const val VIDEO_POSTER_FADE_MS = 300
 
 /**
  * One page of the swipe viewer: a single document's dive stand-in + real viewer, for [id],
  * parameterized so the pager can host many.
  *
  * Layering (bottom → top):
- *  1. For videos, the letterbox fill (per settings) — a plain screen layer, so it fades in with
- *     the screen during the dive and stays as the player's backdrop after settle.
+ *  1. For videos, the letterbox fill (per settings) — lifted into the shared-transition overlay
+ *     ([videoBackdropInOverlay]) with its own fast dim-in, so the letterbox areas go dark in sync
+ *     with the (instantly-opaque) morph box instead of riding the screen's slower fade over the
+ *     still-lit grid; after settle it stays as the player's backdrop.
  *  2. For videos, the player itself — a full-screen sibling mounted at settle (its setup can't
  *     stutter the morph), drawn BELOW the morph box so the letterbox-fill cover in the box hides the
  *     player's opaque shutter (and its pre-first-frame surface) until the first frame renders.
@@ -117,11 +123,14 @@ fun DocumentPage(
             else -> Modifier.fillMaxHeight().aspectRatio(effectiveAspect, matchHeightConstraintsFirst = true)
         }
         // seamless = RemeasureToBounds (no crossfade). Images draw the SAME cropped bitmap at both
-        // ends (tile + hero) so it grows with no fade; video uses the same no-fade mode to hard-cut
-        // the tile to its letterbox-fill cover (see the box below). The type-correct stand-ins
-        // genuinely differ from the tile, so they crossfade instead.
+        // ends (tile + hero) so it grows with no fade; BLACK/THEME video uses the same no-fade mode
+        // to hard-cut the tile to its solid letterbox-fill cover (fading to a flat colour reads
+        // worse than the cut). BLURRED crossfades instead: its fill is the tile's own thumbnail
+        // blurred, so the fade near the tile end reads as the tile going out of focus as it grows.
+        // The type-correct stand-ins genuinely differ from the tile, so they crossfade too.
         val seamlessHero = viewerType == null || viewerType == ViewerType.IMAGE ||
-            (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null)
+            (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null &&
+                videoBackground != VideoBackground.BLURRED)
         val bounds =
             if (isCurrentPage) heroBounds.documentSharedBounds(id, crossfade = !seamlessHero) else heroBounds
         val transitionActive = LocalSharedTransitionScope.current?.isTransitionActive == true
@@ -133,7 +142,11 @@ fun DocumentPage(
         val revealVideo = viewerType == ViewerType.VIDEO && !transitionActive && videoFirstFrame
         val posterAlpha by animateFloatAsState(
             targetValue = if (revealVideo) 0f else 1f,
-            animationSpec = tween(if (revealVideo) VIDEO_POSTER_FADE_MS else 0),
+            animationSpec = if (revealVideo) {
+                tween(VIDEO_POSTER_FADE_MS, easing = EasingPreset.EMPHASIZED_DECELERATE.toEasing())
+            } else {
+                tween(0)
+            },
             label = "videoPoster",
         )
 
@@ -158,10 +171,24 @@ fun DocumentPage(
         }
 
         if (viewerType == ViewerType.VIDEO) {
-            VideoLetterboxFill(videoBackground, id, hasThumbnail, Modifier.fillMaxSize())
+            VideoLetterboxFill(videoBackground, id, hasThumbnail, Modifier.fillMaxSize().videoBackdropInOverlay())
             // Player below the morph box; the fill cover in the box hides its opaque shutter until
-            // the first frame renders. Mounts at settle so its setup can't jank the morph.
-            if (!transitionActive) viewer(Modifier.fillMaxSize())
+            // the first frame renders. Mounts one frame AFTER settle so the PlayerView inflation
+            // never lands on (and hitches) the settle frame itself; unmounting stays instant on
+            // transition start so the dive-back never composes a live surface. A cancelled
+            // dive-back remounts through here too — videoFirstFrame resets so the cover waits for
+            // the fresh player's first frame instead of revealing a not-yet-rendered surface.
+            var settleFrameDrawn by remember { mutableStateOf(false) }
+            LaunchedEffect(transitionActive) {
+                settleFrameDrawn = false
+                if (transitionActive) {
+                    videoFirstFrame = false
+                    return@LaunchedEffect
+                }
+                withFrameNanos { }
+                settleFrameDrawn = true
+            }
+            if (!transitionActive && settleFrameDrawn) viewer(Modifier.fillMaxSize())
         }
 
         Box(bounds) {

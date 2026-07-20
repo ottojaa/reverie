@@ -88,6 +88,36 @@ fun Modifier.aboveSharedElements(): Modifier {
     }
 }
 
+// The video backdrop dims in much faster than the dive, and brightens back on an accelerating
+// curve so it stays dark while the shrinking morph box is still large.
+private const val BACKDROP_DIM_IN_MS = 140
+private const val BACKDROP_DIM_OUT_MS = 260
+
+/**
+ * Renders the video letterbox backdrop in the shared-transition overlay — below the morphing
+ * document box (zIndexInOverlay 0f) and the viewer chrome (1f), above both nav screens — with its
+ * own fast dim-in. Decoupled from the nav fade on purpose: riding the screen's diveMs alpha ramp
+ * left the letterbox areas semi-transparent over the fully-lit grid while the morph box was already
+ * opaque, which read as grid content bleeding in at the top/bottom edges during the dive. A no-op
+ * outside the shared-transition/nav scopes (previews, tests).
+ */
+@Composable
+fun Modifier.videoBackdropInOverlay(): Modifier {
+    val sharedScope = LocalSharedTransitionScope.current ?: return this
+    val navScope = LocalNavAnimatedContentScope.current ?: return this
+
+    return with(sharedScope) {
+        with(navScope) {
+            this@videoBackdropInOverlay
+                .renderInSharedTransitionScopeOverlay(zIndexInOverlay = -1f)
+                .animateEnterExit(
+                    enter = fadeIn(tween(BACKDROP_DIM_IN_MS, easing = EasingPreset.EMPHASIZED_DECELERATE.toEasing())),
+                    exit = fadeOut(tween(BACKDROP_DIM_OUT_MS, easing = EasingPreset.EMPHASIZED_ACCELERATE.toEasing())),
+                )
+        }
+    }
+}
+
 /**
  * Drives a piece of viewer chrome off the nav [AnimatedVisibilityScope] so it slides off + fades on
  * back navigation (the pop), concurrently with the container transform — instead of just fading with

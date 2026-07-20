@@ -55,9 +55,10 @@ fun VideoViewer(
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
     val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
 
-    // Media3 auto-shows its controls on attach; hide the app chrome whenever the controls are up or
-    // the video is playing (report the OR of the two).
-    var controlsVisible by remember { mutableStateOf(true) }
+    // Controller auto-show is disabled (see the factory below), so the controls start hidden and
+    // the app chrome stays put after the open dive; hide the chrome whenever the user brings the
+    // controls up or the video is playing (report the OR of the two).
+    var controlsVisible by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     LaunchedEffect(controlsVisible, isPlaying) { currentOnChromeHidden(controlsVisible || isPlaying) }
 
@@ -119,6 +120,10 @@ fun VideoViewer(
                     this.player = player
                     setShowNextButton(false)
                     setShowPreviousButton(false)
+                    // No controller auto-show on attach: it flipped the app chrome right back out
+                    // after the open dive faded it in (app bars in → out → Media3 bars in). The
+                    // controls still toggle on tap, so the chrome swaps only when the user asks.
+                    setControllerAutoShow(false)
                     // Opaque default shutter (no transparent hole); the fill cover in DocumentPage
                     // sits over it until the first frame, so its colour is never seen.
                     // Mirror Media3's control-overlay visibility into the app chrome (see the LaunchedEffect

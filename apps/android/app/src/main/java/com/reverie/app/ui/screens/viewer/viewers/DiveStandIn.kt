@@ -75,9 +75,10 @@ private fun PlainBackdropStandIn(modifier: Modifier = Modifier) {
 
 /**
  * What fills the letterbox area around a video, outside its content rect. Drawn by DocumentPage
- * as a full-screen layer BEHIND the poster hero and the player, so it's on screen from the first
- * frame of the dive (fading with the screen) and stays as the player's backdrop after settle —
- * it never pops in when the player mounts.
+ * as a full-screen layer BEHIND the poster hero and the player — lifted into the shared-transition
+ * overlay with a fast dim-in (see videoBackdropInOverlay), so it darkens in sync with the morph box
+ * instead of riding the screen fade — and stays as the player's backdrop after settle; it never
+ * pops in when the player mounts.
  */
 @Composable
 fun VideoLetterboxFill(
