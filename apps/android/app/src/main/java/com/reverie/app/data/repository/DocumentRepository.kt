@@ -8,6 +8,10 @@ import com.reverie.app.data.local.toDto
 import com.reverie.app.data.local.toEntity
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
@@ -31,11 +35,22 @@ class DocumentRepository @Inject constructor(
     private val documentsApi: DocumentsApi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    // Signed file URLs are never persisted (Room strips them), so opening a document normally pays a
-    // fresh /documents/:id round-trip. Cache the last-seen URL in memory — app-scoped, so a tap in the
-    // grid can warm it before the viewer's ViewModel even exists — and refresh it on every re-fetch
-    // (which is when a rotated signature arrives). Concurrent-safe: read/written from IO coroutines.
+    // Signed file URLs are never persisted (Room strips them), so opening a document would normally
+    // pay a fresh /documents/:id round-trip. Cache the last-seen URL in memory — app-scoped, so a tap
+    // in the grid can warm it before the viewer's ViewModel even exists — harvested from EVERY fetch
+    // (list pages included: the server signs a file_url per row anyway), and refreshed on every
+    // re-fetch (which is when a rotated signature arrives). With the grid freshly listed, a video
+    // open reaches ExoPlayer.prepare() with zero extra round-trips. Concurrent-safe: read/written
+    // from IO coroutines.
     private val fileUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    // In-flight fileUrl fetches by id: the grid's tap-time prefetch and the viewer's compose-time
+    // fetch race for the same URL — the loser awaits the winner's round-trip instead of issuing a
+    // duplicate GET /documents/:id (which used to serialize the two and delay prepare() by a full
+    // round-trip). Flights run in their own scope so a caller's cancellation (e.g. the viewer
+    // leaving composition) doesn't kill the shared fetch.
+    private val fileUrlFlights = java.util.concurrent.ConcurrentHashMap<String, Deferred<String?>>()
+    private val flightScope = CoroutineScope(SupervisorJob() + io)
     /** Cached documents for the grid. `folderId == null` is the all-documents view. */
     fun observeDocuments(folderId: String?): Flow<List<DocumentDto>> {
         val source = if (folderId == null) documentDao.observeAll() else documentDao.observeByFolder(folderId)
@@ -55,6 +70,8 @@ class DocumentRepository @Inject constructor(
         val page = documentsApi.list(limit = limit, offset = offset, folderId = folderId)
         val now = System.currentTimeMillis()
         documentDao.upsertAll(page.items.map { it.toEntity(now) })
+        // Harvest the per-row signed URLs (see fileUrls above) before Room strips them.
+        page.items.forEach { dto -> dto.file_url?.let { fileUrls[dto.id] = it } }
 
         // If a single page covered the whole folder, drop rows the server no longer returns.
         if (folderId != null && offset == 0 && page.items.size >= page.total) {
@@ -74,10 +91,20 @@ class DocumentRepository @Inject constructor(
 
     /**
      * The signed file URL for [id]: the cached one if we've fetched it this session, else a fresh
-     * fetch. Returned raw (server-relative or absolute) — callers resolve it against the server base.
+     * (single-flight) fetch. Returned raw (server-relative or absolute) — callers resolve it
+     * against the server base.
      */
-    suspend fun fileUrl(id: String): String? =
-        fileUrls[id] ?: runCatching { fetchDocument(id) }.getOrNull()?.file_url
+    suspend fun fileUrl(id: String): String? {
+        fileUrls[id]?.let { return it }
+        val flight = fileUrlFlights.computeIfAbsent(id) {
+            flightScope.async { runCatching { fetchDocument(id) }.getOrNull()?.file_url }
+        }
+        return try {
+            flight.await()
+        } finally {
+            fileUrlFlights.remove(id, flight)
+        }
+    }
 
     suspend fun delete(ids: List<String>) = withContext(io) {
         documentsApi.deleteBatch(ids)

@@ -23,8 +23,19 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.reverie.app.di.AuthedOkHttpEntryPoint
+import dagger.hilt.android.EntryPointAccessors
+
+// Start/resume playback once this little is buffered. The DefaultLoadControl default (2500ms) read
+// as "pressed play, nothing happens" on WAN links — the first frame and play-start need far less
+// runway, and buffering continues behind playback either way.
+private const val BUFFER_FOR_PLAYBACK_MS = 500
+private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1000
 
 /**
  * HTML5-style video playback against the signed URL, with Media3's built-in controls.
@@ -56,7 +67,26 @@ fun VideoViewer(
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val player = remember { ExoPlayer.Builder(context).build() }
+    val player = remember {
+        // Stream through the app's shared OkHttp client (see AuthedOkHttp): the grid's thumbnail
+        // loads keep a warm TLS connection to the same host, so the stream's first byte skips the
+        // cold DNS+TCP+TLS handshake a DefaultHttpDataSource would pay.
+        val okHttpClient = EntryPointAccessors
+            .fromApplication(context.applicationContext, AuthedOkHttpEntryPoint::class.java)
+            .okHttpClient()
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                BUFFER_FOR_PLAYBACK_MS,
+                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            )
+            .build()
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(okHttpClient)))
+            .setLoadControl(loadControl)
+            .build()
+    }
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
     val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
 

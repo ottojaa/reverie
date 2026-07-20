@@ -11,12 +11,31 @@ import com.reverie.app.data.image.AuthImageInterceptor
 import com.reverie.app.data.image.ThumbnailMapper
 import dagger.Module
 import dagger.Provides
+import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/**
+ * The authed OkHttp client shared by Coil thumbnails AND Media3 video streaming. One client = one
+ * connection pool: a video open reuses the warm TLS connection the grid's thumbnail loads just
+ * used, instead of paying a cold DNS+TCP+TLS handshake for the first byte of the stream.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AuthedOkHttp
+
+/** Compose-level access to the shared client — VideoViewer builds its ExoPlayer outside Hilt. */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface AuthedOkHttpEntryPoint {
+    @AuthedOkHttp
+    fun okHttpClient(): OkHttpClient
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,12 +45,9 @@ object ImageModule {
 
     @Provides
     @Singleton
-    fun provideImageLoader(
-        @ApplicationContext context: Context,
-        serverUrlProvider: ServerUrlProvider,
-        authSessionManager: AuthSessionManager,
-    ): ImageLoader {
-        val okHttpClient = OkHttpClient.Builder()
+    @AuthedOkHttp
+    fun provideAuthedOkHttpClient(authSessionManager: AuthSessionManager): OkHttpClient =
+        OkHttpClient.Builder()
             .addInterceptor(AuthImageInterceptor(authSessionManager))
             .authenticator(AuthImageAuthenticator(authSessionManager))
             // Cold start fills the whole grid at once; the default 5 requests/host serialized the
@@ -39,6 +55,13 @@ object ImageModule {
             .dispatcher(Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 })
             .build()
 
+    @Provides
+    @Singleton
+    fun provideImageLoader(
+        @ApplicationContext context: Context,
+        serverUrlProvider: ServerUrlProvider,
+        @AuthedOkHttp okHttpClient: OkHttpClient,
+    ): ImageLoader {
         return ImageLoader.Builder(context)
             .components { add(ThumbnailMapper(serverUrlProvider)) }
             .okHttpClient(okHttpClient)
