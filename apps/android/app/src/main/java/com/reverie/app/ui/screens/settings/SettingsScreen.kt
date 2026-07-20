@@ -54,6 +54,7 @@ import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MAX
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MIN
+import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
@@ -161,6 +162,17 @@ fun SettingsScreen(
                     onCommit = { viewModel.setMosaicFeatureEvery(featureEvery.roundToInt()) },
                 )
             }
+        }
+
+        SettingsCard(title = "Video") {
+            Text("Playback background", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "What fills the area around a video that doesn't match your screen's shape.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            VideoBackgroundSelector(selected = settings.videoBackground, onSelect = viewModel::setVideoBackground)
         }
 
         if (vault?.has_password == true) {
@@ -416,6 +428,30 @@ private fun GridLayoutModeSelector(
         GridLayoutMode.MOSAIC to "Mosaic",
         GridLayoutMode.JUSTIFIED to "Justified",
         GridLayoutMode.UNIFORM to "Simple",
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
+                onClick = { onSelect(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+            ) {
+                Text(label)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoBackgroundSelector(
+    selected: VideoBackground,
+    onSelect: (VideoBackground) -> Unit,
+) {
+    val options = listOf(
+        VideoBackground.BLACK to "Black",
+        VideoBackground.BLURRED to "Blurred",
+        VideoBackground.THEME to "Theme",
     )
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (mode, label) ->

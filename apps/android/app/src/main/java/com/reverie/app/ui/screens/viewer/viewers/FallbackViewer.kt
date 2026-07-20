@@ -32,6 +32,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.fileTypeVisual
@@ -46,6 +48,20 @@ import com.reverie.app.util.formatBytes
 fun FallbackViewer(
     document: DocumentDto,
     onDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FallbackCard(document = document, onDownload = onDownload, modifier = modifier)
+}
+
+/**
+ * The fallback card itself: preview-or-icon + filename + size. Doubles as the dive stand-in for
+ * documents that morph through this look (see DocumentDiveStandIn) — pass [onDownload] = null to
+ * render it action-less for stand-ins whose real viewer (text, thumb-less PDF) replaces it.
+ */
+@Composable
+internal fun FallbackCard(
+    document: DocumentDto,
+    onDownload: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val hasThumbnail = document.hasRenderedThumbnail
@@ -64,6 +80,10 @@ fun FallbackViewer(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(ThumbnailRef(document.id, ThumbnailSize.LG))
+                    .memoryCacheKey(thumbnailMemoryCacheKey(document.id, ThumbnailSize.LG))
+                    // The grid's decoded bitmap fills the preview instantly while LG loads, so the
+                    // card never opens with a blank slot where the page will pop in.
+                    .placeholderMemoryCacheKey(thumbnailMemoryCacheKey(document.id, GRID_THUMBNAIL_SIZE))
                     .build(),
                 contentDescription = document.original_filename,
                 contentScale = ContentScale.Fit,
@@ -97,14 +117,21 @@ fun FallbackViewer(
             modifier = Modifier.padding(top = 20.dp),
         )
         Text(
-            text = "${formatBytes(document.size_bytes)} · ${if (hasThumbnail) "Preview — download to open" else "Preview not available"}",
+            text = when {
+                // Stand-in for a real viewer: no "preview"/download talk, that viewer is coming.
+                onDownload == null -> formatBytes(document.size_bytes)
+                hasThumbnail -> "${formatBytes(document.size_bytes)} · Preview — download to open"
+                else -> "${formatBytes(document.size_bytes)} · Preview not available"
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Button(onClick = onDownload, modifier = Modifier.padding(top = 24.dp)) {
-            Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("  Download")
+        if (onDownload != null) {
+            Button(onClick = onDownload, modifier = Modifier.padding(top = 24.dp)) {
+                Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("  Download")
+            }
         }
     }
 }

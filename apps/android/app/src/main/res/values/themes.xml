@@ -12,11 +12,13 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
-    <!-- Cold-start splash: brand background + white "R" on a teal disc. -->
+    <!-- Cold-start splash: turquoise "R" on the dark charcoal ground. The icon-background colour is
+         the same charcoal so no disc is visible, but its presence makes the system inset the icon to
+         the standard (smaller) size rather than rendering it full-bleed/oversized. -->
     <style name="Theme.Reverie.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/brand_teal</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
         <item name="postSplashScreenTheme">@style/Theme.Reverie</item>
     </style>
 </resources>

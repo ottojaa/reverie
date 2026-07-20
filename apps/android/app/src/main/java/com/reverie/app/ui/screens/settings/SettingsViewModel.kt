@@ -9,6 +9,7 @@ import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
+import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.data.api.model.VaultStatus
 import com.reverie.app.ui.theme.ThemeMode
@@ -64,6 +65,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setGridLayoutMode(mode: GridLayoutMode) {
         viewModelScope.launch { settingsRepository.setGridLayoutMode(mode) }
+    }
+
+    fun setVideoBackground(background: VideoBackground) {
+        viewModelScope.launch { settingsRepository.setVideoBackground(background) }
     }
 
     /** TEMPORARY / DEV TUNING — persist the edited motion spec (whole AppSettings carries it). */

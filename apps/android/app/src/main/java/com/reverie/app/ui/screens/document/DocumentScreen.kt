@@ -90,10 +90,15 @@ fun DocumentScreen(
     val document by viewModel.observeDocument(currentId).collectAsStateWithLifecycle(initialValue = null)
     val currentFileUrl by produceState<String?>(initialValue = null, currentId) { value = viewModel.fileUrl(currentId) }
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val videoBackground by viewModel.videoBackground.collectAsStateWithLifecycle()
 
     val details = rememberDocumentDetailsState()
     var immersive by remember { mutableStateOf(false) }
     var mediaZoomed by remember { mutableStateOf(false) }
+    // The current page's video wants the chrome hidden — it's playing, or its own Media3 controls are
+    // up (so the app bars never overlap them). Kept separate from `immersive` so it never leaks into
+    // image pages' tap-to-toggle behavior.
+    var videoHideChrome by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
@@ -107,8 +112,9 @@ fun DocumentScreen(
     // Pop when the sequence empties (e.g. the whole folder was deleted while swiping).
     LaunchedEffect(ids) { if (ids.isEmpty()) onBackClick() }
 
-    // A new page starts unzoomed; drop any stale zoom-hides-chrome state from the previous page.
-    LaunchedEffect(currentId) { mediaZoomed = false }
+    // A new page starts unzoomed and not-playing; drop any stale hide-chrome state from the previous
+    // page (e.g. swiping off a playing video should bring the chrome back on the next page).
+    LaunchedEffect(currentId) { mediaZoomed = false; videoHideChrome = false }
 
     // On each settle: move the realtime subscription / mark accessed / sync the origin grid, and
     // pull the origin's next page as we approach the tail.
@@ -189,6 +195,8 @@ fun DocumentScreen(
                         onDownloadStarted = onDownloadStarted,
                         detailsOpen = details.isOpenOrOpening,
                         onZoomChanged = { mediaZoomed = it },
+                        onVideoChromeHidden = { videoHideChrome = it },
+                        videoBackground = videoBackground,
                         viewModel = viewModel,
                     )
                 }
@@ -207,10 +215,10 @@ fun DocumentScreen(
                 }
             }
 
-            // Toolbar (top). Hidden in immersive mode and while the image is zoomed; stays visible
-            // over the media while details are open.
+            // Toolbar (top). Hidden in immersive mode, while the image is zoomed, and while a video
+            // plays; stays visible over the media while details are open.
             AnimatedVisibility(
-                visible = !immersive && !mediaZoomed,
+                visible = !immersive && !mediaZoomed && !videoHideChrome,
                 enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it / 3 },
                 exit = slideOutVertically(tween(150)) { -it / 3 } + fadeOut(tween(150)),
                 modifier = Modifier.aboveSharedElements().animateViewerChrome(),
@@ -237,13 +245,14 @@ fun DocumentScreen(
                 )
             }
 
-            // Bottom action bar (Share / Save / Info / Delete). Hidden while zoomed; fades out as the
-            // pane rises.
+            // Bottom action bar (Share / Save / Info / Delete). Hidden while zoomed or a video plays;
+            // fades out as the pane rises. On back-nav it slides DOWN off-screen (fromBottom) so it
+            // leaves symmetrically with the topper (which slides up), instead of just fading.
             AnimatedVisibility(
-                visible = !immersive && !mediaZoomed,
+                visible = !immersive && !mediaZoomed && !videoHideChrome,
                 enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 3 },
                 exit = slideOutVertically(tween(150)) { it / 3 } + fadeOut(tween(150)),
-                modifier = Modifier.align(Alignment.BottomCenter).aboveSharedElements(),
+                modifier = Modifier.align(Alignment.BottomCenter).aboveSharedElements().animateViewerChrome(fromBottom = true),
             ) {
                 ViewerActionBar(
                     modifier = Modifier.graphicsLayer { alpha = 1f - details.fraction },

@@ -1,28 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Bold white "R" wordmark glyph, centred in the 108dp adaptive-icon safe zone. -->
+<!--
+  The Reverie "R" — the actual Geist Bold glyph outline (extracted from res/font/geist.ttf at
+  wght 700), cap-height 54 centred in the 108dp adaptive-icon safe zone. Fill = @color/brand_turquoise;
+  drawn over the dark @color/ic_launcher_background by the launcher icon and the Android-12 splash.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M36,30
-            L58,30
-            C70,30 78,38 78,45
-            C78,52 73,58 64,60
-            L80,78
-            L64,78
-            L50,61
-            L48,61
-            L48,78
-            L36,78
-            Z
-            M48,40
-            L58,40
-            C64,40 67,42 67,45
-            C67,48 64,50 58,50
-            L48,50
-            Z" />
+        android:fillColor="@color/brand_turquoise"
+        android:pathData="M32.23,81.0 V27.0 H55.88 Q61.81,27.0 66.17,28.98 Q70.53,30.95 72.91,34.58 Q75.29,38.2 75.29,43.12 Q75.29,46.87 73.74,49.76 Q72.18,52.66 69.48,54.47 Q66.77,56.28 63.29,56.75 L63.01,56.02 Q68.41,56.02 71.24,58.37 Q74.07,60.72 74.44,65.51 L75.77,81.0 H64.0 L63.0,67.34 Q62.78,64.22 61.08,62.74 Q59.38,61.26 55.3,61.26 H43.79 V81.0 Z M43.79,51.54 H54.57 Q58.78,51.54 61.1,49.6 Q63.42,47.66 63.42,44.11 Q63.42,40.49 61.07,38.61 Q58.72,36.72 54.24,36.72 H43.79 Z" />
 </vector>

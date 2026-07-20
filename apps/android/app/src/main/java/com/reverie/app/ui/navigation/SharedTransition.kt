@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * Scopes for the Google-Photos-style container transform on document open. Provided by
@@ -29,32 +30,45 @@ val LocalNavAnimatedContentScope = staticCompositionLocalOf<AnimatedVisibilitySc
 
 fun documentBoundsKey(documentId: String): String = "document-$documentId"
 
+// Portion of the dive over which mismatched contents crossfade (see documentSharedBounds).
+private const val DIVE_CROSSFADE_FRACTION = 0.4f
+
 /**
  * Marks a composable as the shared container for a document — the grid tile and the viewer share
  * the same key, so the tile expands into the viewer (and shrinks back on return). A no-op when the
  * scopes aren't present (previews, tests, or a screen outside the shared-transition layout).
+ *
+ * [crossfade] = false (media): both ends draw the SAME cropped thumbnail, so there is no fade at
+ * all — fading identical content only produced the washed/translucent "flash" — and the child is
+ * re-measured against the animating bounds each frame so its Crop applies at the interpolated size
+ * (no ScaleToBounds "FillWidth" overshoot ballooning non-portrait thumbnails past the screen).
+ *
+ * [crossfade] = true (type-correct stand-ins whose content genuinely differs from the tile): the
+ * two ends fade through each other near the TILE end of the morph, where the box is small and the
+ * mismatch least visible — the stand-in fades in over the still-opaque tile as the box starts
+ * growing, and on the dive back fades out only over the tail of the shrink. ScaleToBounds lays the
+ * stand-in out ONCE at its full-screen size and scales it into the animating bounds, so its text
+ * never re-wraps mid-morph the way per-frame remeasurement would force.
  */
 @Composable
-fun Modifier.documentSharedBounds(documentId: String): Modifier {
+fun Modifier.documentSharedBounds(documentId: String, crossfade: Boolean = false): Modifier {
     val sharedScope = LocalSharedTransitionScope.current ?: return this
     val navScope = LocalNavAnimatedContentScope.current ?: return this
     val spec = MotionTuning.spec
     val diveEasing = spec.diveEasing.toEasing()
+    val fadeMs = (spec.diveMs * DIVE_CROSSFADE_FRACTION).toInt()
 
     return with(sharedScope) {
         this@documentSharedBounds.sharedBounds(
             rememberSharedContentState(key = documentBoundsKey(documentId)),
             animatedVisibilityScope = navScope,
-            // No cross-fade: both ends draw the SAME thumbnail (grid tile + dive hero), so fading
-            // them into each other only produced the washed/translucent "flash". The element just
-            // moves + resizes, like a true shared element.
-            enter = EnterTransition.None,
-            exit = ExitTransition.None,
-            // Re-measure the shared child against the animating bounds each frame so its own
-            // ContentScale applies at the interpolated size — this removes the ScaleToBounds
-            // "FillWidth" overshoot that made non-portrait thumbnails balloon past the screen.
-            resizeMode = ResizeMode.RemeasureToBounds,
+            enter = if (crossfade) fadeIn(tween(fadeMs)) else EnterTransition.None,
+            exit = if (crossfade) fadeOut(tween(fadeMs, delayMillis = spec.diveMs - fadeMs)) else ExitTransition.None,
+            resizeMode = if (crossfade) ResizeMode.ScaleToBounds(ContentScale.Crop) else ResizeMode.RemeasureToBounds,
             boundsTransform = BoundsTransform { _, _ -> tween(spec.diveMs, easing = diveEasing) },
+            // Above the tile it fades over (both never fade together, so nothing washes out), and
+            // below the viewer toolbar's overlay layer (zIndexInOverlay = 1f).
+            zIndexInOverlay = if (crossfade) 0.5f else 0f,
             // Clip the morphing element to the (square) tile silhouette so it never paints outside.
             clipInOverlayDuringTransition = OverlayClip(RectangleShape),
         )
@@ -75,20 +89,23 @@ fun Modifier.aboveSharedElements(): Modifier {
 }
 
 /**
- * Drives the viewer toolbar off the nav [AnimatedVisibilityScope] so it slides up + fades on back
- * navigation (the pop), concurrently with the container transform — instead of just fading with the
- * screen. Composes cleanly with the toolbar's own immersive-toggle AnimatedVisibility (that one
+ * Drives a piece of viewer chrome off the nav [AnimatedVisibilityScope] so it slides off + fades on
+ * back navigation (the pop), concurrently with the container transform — instead of just fading with
+ * the screen. Composes cleanly with the chrome's own immersive-toggle AnimatedVisibility (that one
  * governs tap-to-hide; this one governs screen enter/exit). A no-op outside the nav scope.
+ *
+ * The top toolbar slides up ([fromBottom] = false); the bottom action bar slides down
+ * ([fromBottom] = true), so both leave symmetrically toward their own screen edge.
  */
 @Composable
-fun Modifier.animateViewerChrome(): Modifier {
+fun Modifier.animateViewerChrome(fromBottom: Boolean = false): Modifier {
     val navScope = LocalNavAnimatedContentScope.current ?: return this
     val exitMs = MotionTuning.spec.toolbarExitMs
 
     return with(navScope) {
         this@animateViewerChrome.animateEnterExit(
             enter = fadeIn(tween(exitMs)),
-            exit = slideOutVertically(tween(exitMs)) { -it } + fadeOut(tween(exitMs)),
+            exit = slideOutVertically(tween(exitMs)) { if (fromBottom) it else -it } + fadeOut(tween(exitMs)),
         )
     }
 }

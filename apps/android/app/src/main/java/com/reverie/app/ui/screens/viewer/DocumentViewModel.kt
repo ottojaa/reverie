@@ -11,6 +11,8 @@ import com.reverie.app.data.api.model.UserRole
 import com.reverie.app.data.local.FileCacheManager
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
+import com.reverie.app.data.settings.SettingsRepository
+import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.domain.model.AuthState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +42,7 @@ class DocumentViewModel @Inject constructor(
     private val serverUrlProvider: ServerUrlProvider,
     private val sequenceHolder: DocumentSequenceHolder,
     authRepository: com.reverie.app.data.repository.AuthRepository,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val initialId: String = checkNotNull(savedStateHandle["id"])
@@ -66,8 +69,10 @@ class DocumentViewModel @Inject constructor(
         .map { (it as? AuthState.Authenticated)?.user?.role == UserRole.ADMIN }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    /** Session cache of the freshly-fetched signed URLs (the Room cache strips them). Main-thread only. */
-    private val fileUrls = mutableMapOf<String, String>()
+    /** What fills the area around a letterboxed video, per the user's setting. */
+    val videoBackground: StateFlow<VideoBackground> = settingsRepository.settings
+        .map { it.videoBackground }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VideoBackground.BLACK)
 
     private var currentSub: AutoCloseable? = null
     private var currentId: String? = null
@@ -88,15 +93,8 @@ class DocumentViewModel @Inject constructor(
 
     fun observeDocument(id: String): Flow<DocumentDto?> = documentRepository.observeDocument(id)
 
-    /** Fresh signed URL for [id], fetched once and cached for the session. */
-    suspend fun fileUrl(id: String): String? {
-        fileUrls[id]?.let { return it }
-        val url = runCatching { documentRepository.fetchDocument(id) }.getOrNull()
-            ?.file_url?.let(::absolute)
-            ?: return null
-        fileUrls[id] = url
-        return url
-    }
+    /** Signed URL for [id] — served from the repository's app-scoped cache (warmed on tap) or fetched. */
+    suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(::absolute)
 
     /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin grid. */
     fun onPageSettled(id: String) {
@@ -145,9 +143,9 @@ class DocumentViewModel @Inject constructor(
         currentSub?.close()
     }
 
-    /** Drop the cached URL and re-pull the record into Room so observers (toolbar/insights) refresh. */
+    /** Re-pull the record into Room so observers (toolbar/insights) refresh; this also refreshes the
+     * repository's cached signed URL (a rotated signature lands on fetch). */
     private fun refresh(id: String) {
-        fileUrls.remove(id)
         viewModelScope.launch { runCatching { documentRepository.fetchDocument(id) } }
     }
 
