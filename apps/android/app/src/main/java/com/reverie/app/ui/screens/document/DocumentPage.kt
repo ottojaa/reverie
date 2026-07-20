@@ -54,6 +54,10 @@ private const val VIEWER_FADE_IN_MS = 180
 // swap read as an abrupt jump. The thumb-less fill cover just brightens through quickly.
 private const val VIDEO_POSTER_CROSSFADE_MS = 300
 private const val VIDEO_FILL_REVEAL_MS = 200
+// The player parks its first frame here so it matches the thumbnail poster; MUST equal the
+// backend's video-thumbnail grab offset (ffmpeg `-ss 0.5` in thumbnail.worker.ts). On first play
+// the viewer rewinds to 0, so the parked offset costs no playback. Keep the two in sync.
+private const val VIDEO_POSTER_FRAME_MS = 500L
 // Buffering feedback appears only once the first frame has stalled past this hold-back — with the
 // poster already on screen it's late feedback for genuinely slow loads, not part of a normal open.
 private const val BUFFER_SPINNER_DELAY_MS = 400L
@@ -139,8 +143,10 @@ fun DocumentPage(
         // SAME cropped bitmap at both ends (tile + hero/poster) so the box grows with no fade at
         // all — fading identical content only produced the washed/translucent "flash". The
         // type-correct stand-ins genuinely differ from the tile, so they crossfade instead.
-        val seamlessHero = viewerType == null || viewerType == ViewerType.IMAGE ||
-            (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null)
+        // A video with a poster + known aspect: the tile morphs its thumbnail as the poster, and the
+        // player parks its first frame at the matching offset (see VIDEO_POSTER_FRAME_MS).
+        val videoPosterBacked = viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null
+        val seamlessHero = viewerType == null || viewerType == ViewerType.IMAGE || videoPosterBacked
         val bounds =
             if (isCurrentPage) heroBounds.documentSharedBounds(id, crossfade = !seamlessHero) else heroBounds
         val transitionActive = LocalSharedTransitionScope.current?.isTransitionActive == true
@@ -171,8 +177,9 @@ fun DocumentPage(
             animationSpec = when {
                 // Snap the cover back on the instant a transition starts (the morph carries it).
                 !revealVideo -> tween(0)
-                // Poster → first frame: the contents genuinely differ, hand off softly.
-                hasThumbnail && effectiveAspect != null ->
+                // Poster → first frame: the player parks its first frame at the poster offset, so
+                // these match closely; a short soft crossfade hides any keyframe-snap difference.
+                videoPosterBacked ->
                     tween(VIDEO_POSTER_CROSSFADE_MS, easing = FastOutSlowInEasing)
                 // Thumb-less fill cover just brightens into the first frame.
                 else -> tween(VIDEO_FILL_REVEAL_MS, easing = FastOutSlowInEasing)
@@ -196,6 +203,7 @@ fun DocumentPage(
                     onChromeHidden = { hidden -> if (isCurrentPage) onVideoChromeHidden(hidden) },
                     onFirstFrameRendered = { videoFirstFrame = true },
                     mountVideoSurface = mountVideoSurface,
+                    videoPosterSeekMs = if (videoPosterBacked) VIDEO_POSTER_FRAME_MS else null,
                     modifier = mod,
                 )
             }
@@ -217,14 +225,14 @@ fun DocumentPage(
 
         Box(bounds) {
             when {
-                // The letterbox fill covers the player — never the ~1s thumbnail, whose mismatch with
-                // the video's first frame read as an abrupt swap. RemeasureToBounds hard-cuts the tile
-                // to it, grows it, and holds it over the player until the first frame; posterAlpha
-                // then fades it to the video. Snaps back to opaque so the dive-back morph carries it.
+                // The cover over the player until its first frame renders, then posterAlpha fades
+                // it off (snapping back to opaque so the dive-back morph carries it). Poster-backed:
+                // the tile's own thumbnail, which the player now parks its first frame to match.
+                // Otherwise (thumb-less): the solid/blur letterbox fill.
                 viewerType == ViewerType.VIDEO -> {
                     if (posterAlpha > 0f) {
                         val coverModifier = Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha }
-                        if (hasThumbnail && effectiveAspect != null) {
+                        if (videoPosterBacked) {
                             // Poster hero: the tile's own bitmap morphs seamlessly into the video's
                             // content rect (this box), stays as the poster over the player, and
                             // crossfades to the video on its first frame — content is on screen for
