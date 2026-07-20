@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -180,9 +181,11 @@ fun LoginScreen(
 
 @Composable
 private fun LogoMark() {
+    // Dark charcoal squircle + teal "R", matching the launcher icon and splash. The "R" is real
+    // Geist now, so it reads cleanly rather than as the old system-font glyph.
     Surface(
-        color = MaterialTheme.colorScheme.primary,
-        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF121212),
+        shape = RoundedCornerShape(18.dp),
         modifier = Modifier.size(64.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -190,7 +193,7 @@ private fun LogoMark() {
                 text = "R",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = Color(0xFF4FD1C5),
             )
         }
     }

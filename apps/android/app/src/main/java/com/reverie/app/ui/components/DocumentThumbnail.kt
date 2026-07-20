@@ -1,16 +1,18 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.InsertDriveFile
-import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,9 +20,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -30,9 +33,11 @@ import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.util.formatDuration
 
 /**
- * The thumbnail fill for a document: a cropped image, or a centered file-type icon when there's no
- * rendered preview. Primitive overload so callers backed by a [DocumentDto] AND by a search result
- * (which is a different DTO) can share one implementation.
+ * The thumbnail fill for a document: a cropped image, or — when there's no rendered preview — a
+ * centered file-type icon over a subtle type-colored wash, with the filename beneath it so files
+ * with no picture (binaries, archives, .apk, …) are still tellable apart at a glance. Primitive
+ * overload so callers backed by a [DocumentDto] AND by a search result (a different DTO) can share
+ * one implementation.
  */
 @Composable
 fun DocumentThumbnail(
@@ -44,12 +49,9 @@ fun DocumentThumbnail(
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
 ) {
-    Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (hasThumbnail) {
-            val placeholder = rememberBlurhashPainter(blurhash)
+    if (hasThumbnail) {
+        val placeholder = rememberBlurhashPainter(blurhash)
+        Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
             AsyncImage(
                 // Explicit memory-cache key so the viewer can reuse this exact decoded bitmap as
                 // its placeholder during the container transform (see thumbnailMemoryCacheKey).
@@ -63,22 +65,44 @@ fun DocumentThumbnail(
                 error = placeholder,
                 modifier = Modifier.matchParentSize(),
             )
-        } else {
-            val visual = fileTypeVisual(mimeType, filename)
-            Icon(
-                imageVector = visual.icon,
-                contentDescription = null,
-                tint = visual.tint,
-                modifier = Modifier.size(40.dp),
-            )
         }
+        return
+    }
+
+    // No picture: a type-colored icon + the filename, on a faint wash of the same accent — mirrors
+    // the web preview page, which tints common types so documents don't all read as blank cards.
+    val visual = fileTypeVisual(mimeType, filename)
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .background(visual.tint.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = visual.icon,
+            contentDescription = null,
+            tint = visual.tint,
+            modifier = Modifier.size(34.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = filename,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
 /**
  * A gallery tile's full visual: the [DocumentThumbnail] fill plus the overlays that let file types
- * read at a glance — a centered play badge on videos and a subtle corner glyph on non-media files.
- * Shared by the Files grid ([DocumentCard]) and the Search grid so both distinguish types identically.
+ * read at a glance — a centered play badge on videos and, for previewable documents, an
+ * extension chip in the corner. Shared by the Files grid ([DocumentCard]) and the Search grid.
  */
 @Composable
 fun GalleryThumbnail(
@@ -104,9 +128,10 @@ fun GalleryThumbnail(
             modifier = Modifier.matchParentSize(),
         )
         if (isVideo) VideoPlayBadge(Modifier.align(Alignment.Center))
-        // Distinguish non-media files without an extension badge on photos/videos.
-        if (!isImage && !isVideo) {
-            FileTypeBadge(mime = mimeType, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+        // A previewable document (a rendered PDF/office page) still needs a type marker; files with
+        // no preview already show their icon + name in the fill, so a corner chip would be redundant.
+        if (!isImage && !isVideo && hasThumbnail) {
+            FileTypeBadge(mime = mimeType, filename = filename, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
         }
         // A video's length reads at a glance in the corner, Google-Photos style.
         if (isVideo && durationSeconds != null) {
@@ -143,26 +168,31 @@ private fun VideoPlayBadge(modifier: Modifier = Modifier) {
     }
 }
 
-/** Subtle corner glyph marking a non-media file's type, so documents stand out in the photo grid. */
+/** Corner chip naming a previewable document's type (e.g. PDF, DOCX) so it stands out in the grid. */
 @Composable
-private fun FileTypeBadge(mime: String, modifier: Modifier = Modifier) {
+private fun FileTypeBadge(mime: String, filename: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-            .padding(4.dp),
+            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = fileTypeIcon(mime),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(14.dp),
+        Text(
+            text = fileTypeLabel(mime, filename),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
         )
     }
 }
 
-private fun fileTypeIcon(mime: String): ImageVector = when {
-    mime == "application/pdf" -> Icons.Outlined.PictureAsPdf
-    mime.startsWith("text/") || mime == "application/json" -> Icons.Outlined.Description
-    else -> Icons.Outlined.InsertDriveFile
+/** Short uppercase label for a file: its extension when short, else a MIME-derived fallback. */
+private fun fileTypeLabel(mime: String, filename: String): String {
+    val ext = filename.substringAfterLast('.', "").uppercase()
+    if (ext.isNotEmpty() && ext.length <= 4) return ext
+    return when {
+        mime == "application/pdf" -> "PDF"
+        mime == "application/json" -> "JSON"
+        mime.startsWith("text/") -> "TXT"
+        else -> "FILE"
+    }
 }

@@ -10,6 +10,7 @@ import coil.request.ImageRequest
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
+import com.reverie.app.domain.model.ThumbnailSize
 
 /**
  * The single visual that carries the document-open container transform: the tapped tile's thumbnail,
@@ -23,15 +24,23 @@ import com.reverie.app.domain.model.ThumbnailRef
  * on top of this once the transform settles (see [ImageViewer]).
  */
 @Composable
-fun DocumentDiveHero(documentId: String, modifier: Modifier = Modifier) {
+fun DocumentDiveHero(
+    documentId: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     val context = LocalContext.current
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(ThumbnailRef(documentId, GRID_THUMBNAIL_SIZE))
             .memoryCacheKey(thumbnailMemoryCacheKey(documentId, GRID_THUMBNAIL_SIZE))
+            // Large mosaic feature tiles decode at LG, not GRID_THUMBNAIL_SIZE (see MosaicGrid), so
+            // a doc tapped there misses the MD memory key — the LG placeholder keeps the hero on
+            // screen from frame 1 while MD loads instead of morphing a blank box.
+            .placeholderMemoryCacheKey(thumbnailMemoryCacheKey(documentId, ThumbnailSize.LG))
             .build(),
         contentDescription = null,
-        contentScale = ContentScale.Crop,
+        contentScale = contentScale,
         modifier = modifier.fillMaxSize(),
     )
 }

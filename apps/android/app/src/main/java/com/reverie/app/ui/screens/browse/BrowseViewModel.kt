@@ -1,8 +1,11 @@
 package com.reverie.app.ui.screens.browse
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coil.ImageLoader
+import coil.request.ImageRequest
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
@@ -17,6 +20,7 @@ import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -67,6 +71,8 @@ class BrowseViewModel @Inject constructor(
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
     private val sequenceHolder: DocumentSequenceHolder,
+    private val imageLoader: ImageLoader,
+    @ApplicationContext private val appContext: Context,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
@@ -99,6 +105,21 @@ class BrowseViewModel @Inject constructor(
             loadMore = ::loadMore,
         ),
     )
+
+    /**
+     * Warm the tapped document ahead of the dive so the viewer opens on the sharp image instead of the
+     * stretched grid thumbnail: resolve (and cache app-wide) the signed URL now, and for images kick
+     * off the full-res download into Coil's cache — both overlap the ~300ms open transition rather
+     * than starting after it.
+     */
+    fun prefetch(document: DocumentDto) {
+        viewModelScope.launch {
+            val raw = documentRepository.fileUrl(document.id) ?: return@launch
+            if (document.mime_type.startsWith("image/")) {
+                imageLoader.enqueue(ImageRequest.Builder(appContext).data(absolute(raw)).build())
+            }
+        }
+    }
 
     private val control = MutableStateFlow(BrowseControl())
 

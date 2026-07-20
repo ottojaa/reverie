@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Reverie brand teal -->
+    <!-- Deep brand teal (light-theme primary). -->
     <color name="brand_teal">#0D9488</color>
-    <!-- Launcher icon background -->
-    <color name="ic_launcher_background">#0D9488</color>
-    <!-- Splash / window background (light). Dark variant in values-night. -->
-    <color name="splash_background">#F8F7F4</color>
+    <!-- Brighter turquoise (dark-theme primary) — the colour of the "R" mark on the dark ground. -->
+    <color name="brand_turquoise">#4FD1C5</color>
+    <!-- Launcher icon + splash: dark charcoal ground, so the turquoise "R" reads as the logo. -->
+    <color name="ic_launcher_background">#121212</color>
+    <!-- Branded splash is always dark (turquoise R on charcoal), matching the launcher icon + login mark. -->
+    <color name="splash_background">#121212</color>
+    <!-- Launch window bg follows the app theme (dark override in values-night) to avoid a flash. -->
     <color name="window_background">#F8F7F4</color>
 </resources>

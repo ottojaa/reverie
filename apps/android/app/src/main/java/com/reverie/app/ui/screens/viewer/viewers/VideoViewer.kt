@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -11,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -19,20 +21,43 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
-/** HTML5-style video playback against the signed URL, with Media3's built-in controls. */
+/**
+ * HTML5-style video playback against the signed URL, with Media3's built-in controls. The view is
+ * fully transparent outside the video's content rect — the letterbox fill and the poster stand-in
+ * live BEHIND this viewer in DocumentPage ([VideoLetterboxFill] / the dive hero), so the dive
+ * morph, the pre-first-frame poster, and the letterbox bars are all handled there.
+ */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun VideoViewer(
     fileUrl: String?,
     modifier: Modifier = Modifier,
+    // Reports whether the app chrome should be hidden: true while the video plays OR its own Media3
+    // controls are showing, so the app's bars never sit over the video controls (and playback stays
+    // immersive). Tapping a paused video dismisses the controls → chrome returns.
+    onChromeHidden: (Boolean) -> Unit = {},
+    // Fired once the decoder has rendered its first frame into the (now correctly-sized) surface.
+    // DocumentPage keeps the poster stand-in on top of this view until then, so the black surface
+    // (during buffering) and the one-frame full-size stretch (before the aspect layout settles) are
+    // both hidden behind the poster.
+    onFirstFrameRendered: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val player = remember { ExoPlayer.Builder(context).build() }
+    val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
+    val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
+
+    // Media3 auto-shows its controls on attach; hide the app chrome whenever the controls are up or
+    // the video is playing (report the OR of the two).
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
+    LaunchedEffect(controlsVisible, isPlaying) { currentOnChromeHidden(controlsVisible || isPlaying) }
 
     // Fullscreen = rotate to landscape + hide the system bars (and, transitively, the app chrome
     // that lives behind them). Persisted across config changes so a rotation doesn't drop us out.
@@ -50,8 +75,18 @@ fun VideoViewer(
         player.playWhenReady = false
     }
 
-    DisposableEffect(Unit) {
-        onDispose { player.release() }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onRenderedFirstFrame() { currentOnFirstFrame() }
+        }
+        player.addListener(listener)
+        onDispose {
+            // Leaving the page (or swapping the player) should never strand the chrome hidden.
+            currentOnChromeHidden(false)
+            player.removeListener(listener)
+            player.release()
+        }
     }
 
     // Drive orientation + immersive bars off the fullscreen flag. The onDispose restores portrait
@@ -75,20 +110,34 @@ fun VideoViewer(
         }
     }
 
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                this.player = player
-                setShowNextButton(false)
-                setShowPreviousButton(false)
-                // Enabling the listener surfaces Media3's built-in fullscreen toggle in the controls;
-                // it reports the requested state, which we drive orientation + immersion from.
-                setFullscreenButtonClickListener { fullscreen = it }
-            }
-        },
-        update = { view -> view.setFullscreenButtonState(fullscreen) },
-        modifier = modifier.fillMaxSize(),
-    )
+    Box(modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    this.player = player
+                    setShowNextButton(false)
+                    setShowPreviousButton(false)
+                    // Transparent so the letterbox bars reveal the fill drawn behind (in
+                    // DocumentPage), and the poster hero shows through before the first frame
+                    // renders (no black flash).
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    // Mirror Media3's control-overlay visibility into the app chrome (see the LaunchedEffect
+                    // above), so the app bars hide while the controls are up and return when they dismiss.
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            controlsVisible = visibility == android.view.View.VISIBLE
+                        },
+                    )
+                    // Enabling the listener surfaces Media3's built-in fullscreen toggle in the controls;
+                    // it reports the requested state, which we drive orientation + immersion from.
+                    setFullscreenButtonClickListener { fullscreen = it }
+                }
+            },
+            update = { view -> view.setFullscreenButtonState(fullscreen) },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 /** Unwrap the (possibly ContextWrapper-wrapped) Compose context to the hosting Activity. */

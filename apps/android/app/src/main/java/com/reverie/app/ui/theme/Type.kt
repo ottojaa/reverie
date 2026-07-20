@@ -1,21 +1,38 @@
+@file:OptIn(ExperimentalTextApi::class)
+
 package com.reverie.app.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.reverie.app.R
 
 /*
- * The brand face is Geist (sans) + Geist Mono. Those are OFL typefaces that ship as .ttf
- * files under res/font. Until the binaries are added, both families alias to the platform
- * defaults — the type *scale* below (sizes, weights, tracking) is what carries the design
- * language and is font-independent, so dropping in the real typeface later is a two-line change.
- *
- * TODO oj: bundle geist_*.ttf / geist_mono_*.ttf into res/font and repoint these two families.
+ * The brand face is Geist (sans) + Geist Mono — the OFL typefaces (see assets/GEIST_OFL.txt),
+ * shipped as single variable .ttf files under res/font. Each design weight binds to the font's
+ * `wght` axis via FontVariation (minSdk 26 supports variable fonts on every target), so the type
+ * scale below renders in the real brand face instead of the platform default.
  */
-val GeistFontFamily = FontFamily.Default
-val GeistMonoFontFamily = FontFamily.Monospace
+private fun geist(resId: Int, weight: FontWeight): Font =
+    Font(resId, weight = weight, variationSettings = FontVariation.Settings(weight, FontStyle.Normal))
+
+val GeistFontFamily = FontFamily(
+    geist(R.font.geist, FontWeight.Normal),
+    geist(R.font.geist, FontWeight.Medium),
+    geist(R.font.geist, FontWeight.SemiBold),
+    geist(R.font.geist, FontWeight.Bold),
+)
+
+val GeistMonoFontFamily = FontFamily(
+    geist(R.font.geist_mono, FontWeight.Normal),
+    geist(R.font.geist_mono, FontWeight.Medium),
+)
 
 val Typography = Typography(
     displayLarge = TextStyle(

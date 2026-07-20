@@ -11,7 +11,7 @@ import com.reverie.app.ui.screens.viewer.viewers.TextViewer
 import com.reverie.app.ui.screens.viewer.viewers.VideoViewer
 import java.io.File
 
-private enum class ViewerType { IMAGE, VIDEO, PDF, TEXT, FALLBACK }
+internal enum class ViewerType { IMAGE, VIDEO, PDF, TEXT, FALLBACK }
 
 private val extensionFallback = mapOf(
     "mov" to ViewerType.VIDEO, "mp4" to ViewerType.VIDEO, "webm" to ViewerType.VIDEO,
@@ -27,13 +27,19 @@ private fun viewerTypeFor(mimeType: String, filename: String): ViewerType = when
     else -> extensionFallback[filename.substringAfterLast('.', "").lowercase()] ?: ViewerType.FALLBACK
 }
 
+/** The viewer this document dispatches to — also drives the dive stand-in (see DocumentPage). */
+internal fun viewerTypeFor(document: DocumentDto): ViewerType =
+    viewerTypeFor(document.mime_type, document.original_filename)
+
+/** Whether this document opens in the zoomable [ImageViewer] (image MIME, or a heic/heif fallback). */
+fun isImageDocument(document: DocumentDto): Boolean = viewerTypeFor(document) == ViewerType.IMAGE
+
 /**
- * Whether this document opens in the zoomable [ImageViewer] (image MIME, or a heic/heif fallback).
- * Only images fit themselves into an aspect-matched box for the dive transform — every other viewer
- * wants the full screen (see DocumentScreen), so callers gate the aspect box on this.
+ * Whether this document plays in the [VideoViewer]. Media (images + videos) size the dive
+ * transform to their aspect — the morph box is the content rect the poster grows into — so the
+ * grid passes their aspect as the nav arg (see BrowseScreen).
  */
-fun isImageDocument(document: DocumentDto): Boolean =
-    viewerTypeFor(document.mime_type, document.original_filename) == ViewerType.IMAGE
+fun isVideoDocument(document: DocumentDto): Boolean = viewerTypeFor(document) == ViewerType.VIDEO
 
 /** Mirrors the web viewer registry: dispatches to the right viewer by MIME (+ extension fallback). */
 @Composable
@@ -53,6 +59,12 @@ fun DocumentViewerBody(
     detailsOpen: Boolean = false,
     // Reports whether the image is pinch-zoomed (image viewer only), so the chrome can hide.
     onZoomChanged: (Boolean) -> Unit = {},
+    // Reports whether the app chrome should hide (video viewer only) — while playing or while the
+    // video's own controls are visible, so the app bars never overlap Media3's controls.
+    onChromeHidden: (Boolean) -> Unit = {},
+    // Fired when the video renders its first frame (video viewer only), so DocumentPage can drop the
+    // poster stand-in it holds over the player during buffering.
+    onFirstFrameRendered: () -> Unit = {},
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
@@ -66,7 +78,12 @@ fun DocumentViewerBody(
             onZoomChanged = onZoomChanged,
             modifier = modifier,
         )
-        ViewerType.VIDEO -> VideoViewer(fileUrl = fileUrl, modifier = modifier)
+        ViewerType.VIDEO -> VideoViewer(
+            fileUrl = fileUrl,
+            onChromeHidden = onChromeHidden,
+            onFirstFrameRendered = onFirstFrameRendered,
+            modifier = modifier,
+        )
         ViewerType.PDF -> PdfViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
         ViewerType.TEXT -> TextViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
         ViewerType.FALLBACK -> FallbackViewer(document = document, onDownload = onDownload, modifier = modifier)

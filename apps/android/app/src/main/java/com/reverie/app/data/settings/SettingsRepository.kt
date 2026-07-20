@@ -29,6 +29,16 @@ enum class GridLayoutMode {
     UNIFORM,
 }
 
+/** What fills the area around a letterboxed video in the viewer (outside the video content). */
+enum class VideoBackground {
+    /** Clean black cinema bars. */
+    BLACK,
+    /** A blurred, zoomed copy of the frame fills the bars. */
+    BLURRED,
+    /** The app's surface colour, so the bars blend into the viewer chrome. */
+    THEME,
+}
+
 /** User-facing app settings persisted across launches. */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -39,6 +49,8 @@ data class AppSettings(
     val gridColumns: Int = 3,
     /** How the Files grid arranges photos. */
     val gridLayoutMode: GridLayoutMode = GridLayoutMode.MOSAIC,
+    /** What fills the area around a letterboxed video in the viewer. */
+    val videoBackground: VideoBackground = VideoBackground.BLACK,
     /** Mosaic Files grid: a larger feature tile appears roughly every N photos (min 2). */
     val mosaicFeatureEvery: Int = 3,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
@@ -74,6 +86,7 @@ class SettingsRepository @Inject constructor(
     private val hideNavKey = booleanPreferencesKey("hide_nav_on_scroll")
     private val gridColumnsKey = intPreferencesKey("grid_columns")
     private val gridLayoutModeKey = stringPreferencesKey("grid_layout_mode")
+    private val videoBackgroundKey = stringPreferencesKey("video_background")
     private val mosaicFeatureEveryKey = intPreferencesKey("mosaic_feature_every")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
@@ -95,6 +108,7 @@ class SettingsRepository @Inject constructor(
             hideNavOnScroll = prefs[hideNavKey] ?: defaults.hideNavOnScroll,
             gridColumns = (prefs[gridColumnsKey] ?: defaults.gridColumns).coerceIn(1, 4),
             gridLayoutMode = prefs[gridLayoutModeKey]?.let { runCatching { GridLayoutMode.valueOf(it) }.getOrNull() } ?: defaults.gridLayoutMode,
+            videoBackground = prefs[videoBackgroundKey]?.let { runCatching { VideoBackground.valueOf(it) }.getOrNull() } ?: defaults.videoBackground,
             mosaicFeatureEvery = (prefs[mosaicFeatureEveryKey] ?: defaults.mosaicFeatureEvery).coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX),
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
@@ -127,6 +141,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setGridLayoutMode(mode: GridLayoutMode) {
         context.settingsDataStore.edit { it[gridLayoutModeKey] = mode.name }
+    }
+
+    suspend fun setVideoBackground(background: VideoBackground) {
+        context.settingsDataStore.edit { it[videoBackgroundKey] = background.name }
     }
 
     suspend fun setMosaicFeatureEvery(every: Int) {

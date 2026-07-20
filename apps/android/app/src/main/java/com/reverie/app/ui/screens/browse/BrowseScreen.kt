@@ -66,6 +66,7 @@ import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.viewer.isImageDocument
+import com.reverie.app.ui.screens.viewer.isVideoDocument
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
@@ -194,11 +195,19 @@ fun BrowseScreen(
                         } else {
                             // Publish this grid's order so the viewer can swipe through it.
                             viewModel.prepareSequence()
-                            // Only images size the dive transform to their aspect — for other file
-                            // types the thumbnail aspect would letterbox the full-screen viewer.
+                            // Warm the signed URL + full-res image now, so it's ready by the time the
+                            // dive transition finishes instead of loading in ~2s later.
+                            viewModel.prefetch(document)
+                            // Media (images + videos) size the dive transform to their aspect —
+                            // the morph box is the content rect the poster grows into. Other file
+                            // types morph a full-screen stand-in instead (see DocumentPage).
                             onDocumentClick(
                                 document.id,
-                                if (isImageDocument(document)) document.mediaAspectOrNull() else null,
+                                if (isImageDocument(document) || isVideoDocument(document)) {
+                                    document.mediaAspectOrNull()
+                                } else {
+                                    null
+                                },
                             )
                         }
                     },

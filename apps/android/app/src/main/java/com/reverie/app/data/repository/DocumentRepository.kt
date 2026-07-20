@@ -30,6 +30,11 @@ class DocumentRepository @Inject constructor(
     private val documentsApi: DocumentsApi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
+    // Signed file URLs are never persisted (Room strips them), so opening a document normally pays a
+    // fresh /documents/:id round-trip. Cache the last-seen URL in memory — app-scoped, so a tap in the
+    // grid can warm it before the viewer's ViewModel even exists — and refresh it on every re-fetch
+    // (which is when a rotated signature arrives). Concurrent-safe: read/written from IO coroutines.
+    private val fileUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
     /** Cached documents for the grid. `folderId == null` is the all-documents view. */
     fun observeDocuments(folderId: String?): Flow<List<DocumentDto>> {
         val source = if (folderId == null) documentDao.observeAll() else documentDao.observeByFolder(folderId)
@@ -58,12 +63,22 @@ class DocumentRepository @Inject constructor(
     suspend fun fetchDocument(id: String): DocumentDto = withContext(io) {
         val dto = documentsApi.get(id)
         documentDao.upsertAll(listOf(dto.toEntity(System.currentTimeMillis())))
+        // Refresh the in-memory signed URL — this is where a rotated signature lands.
+        dto.file_url?.let { fileUrls[id] = it }
         dto
     }
+
+    /**
+     * The signed file URL for [id]: the cached one if we've fetched it this session, else a fresh
+     * fetch. Returned raw (server-relative or absolute) — callers resolve it against the server base.
+     */
+    suspend fun fileUrl(id: String): String? =
+        fileUrls[id] ?: runCatching { fetchDocument(id) }.getOrNull()?.file_url
 
     suspend fun delete(ids: List<String>) = withContext(io) {
         documentsApi.deleteBatch(ids)
         documentDao.deleteByIds(ids)
+        ids.forEach { fileUrls.remove(it) }
     }
 
     suspend fun setPrivacy(ids: List<String>, isPrivate: Boolean) = withContext(io) {
