@@ -78,7 +78,7 @@ fun DocumentDetailsPane(
 
         Surface(
             modifier = Modifier.fillMaxWidth().heightIn(min = contentMinHeight),
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = RoundedCornerShape(topStart = DETAILS_CORNER_RADIUS, topEnd = DETAILS_CORNER_RADIUS),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(Modifier.navigationBarsPadding()) {

@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
@@ -51,11 +52,27 @@ import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.navigation.aboveSharedElements
 import com.reverie.app.ui.navigation.animateViewerChrome
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
+import com.reverie.app.ui.screens.viewer.ViewerType
 import com.reverie.app.ui.screens.viewer.insight.InsightPanelContent
+import com.reverie.app.ui.screens.viewer.viewerTypeFor
 import com.reverie.app.util.enqueueDownload
 import com.reverie.app.util.shareDocumentFile
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/**
+ * Cap on how far a landscape photo scales up to fill the details peek region. 2× shows at least
+ * half the width, so a wide panorama can't be blown up into a thin, over-cropped sliver — past the
+ * cap it stops short of full height and sits letterboxed in the region instead of breaking the UI.
+ */
+private const val MAX_PEEK_SCALE = 2f
+
+/**
+ * How far a landscape photo overshoots below the details drawer line, so its bottom slides under the
+ * panel rather than meeting it flush. Comfortably clears the rounded corners (a flush edge that just
+ * grazed them looked fussy) — a deliberate, generous overlap.
+ */
+private val DETAILS_MEDIA_TUCK = 32.dp
 
 /**
  * The full-screen document viewer. It hosts a [HorizontalPager] over the ordered sequence handed
@@ -148,29 +165,68 @@ fun DocumentScreen(
                     },
                 )
             }
-            // How far the media lifts so it sits nicely in the top region when open. Media WIDER than
-            // the top region is width-limited within it (short → would leave a gap above the drawer),
-            // so it bottom-aligns to the drawer to use that space at full width; taller media centres
-            // in the region and may extend under the drawer.
+            // How the media sits in the top region when details open. Photos fill the region as a
+            // centre-crop: a portrait, fit to the screen, is already taller than the region, so it
+            // only lifts to centre there (its top/bottom crop away) — which already looks great. A
+            // landscape is too short to fill the region that way, so it also scales UP to fill the
+            // region height (and a bit more, so its bottom slides under the drawer); its sides then
+            // overflow the screen and clip, mirroring the portrait's top/bottom. The fill scale is
+            // capped so a panorama isn't blown up into a
+            // thin, heavily-cropped sliver — past the cap it simply stops short of full height and
+            // sits letterboxed in the region. Non-image media keeps the older fit + bottom-align.
+            val viewerType = document?.let(::viewerTypeFor)
             val mediaAspect = document?.mediaAspectOrNull()
             val regionAspect = if (headerBottomPx > 0f) screenWidthPx / headerBottomPx else 1f
-            val peekLiftPx = if (mediaAspect != null && mediaAspect > regionAspect) {
-                (screenHeightPx / 2f + (screenWidthPx / mediaAspect) / 2f - headerBottomPx)
-                    .coerceIn(0f, headerBottomPx)
-            } else {
-                screenHeightPx / 2f - headerBottomPx / 2f
+            val tuckPx = with(density) { DETAILS_MEDIA_TUCK.toPx() }
+            val peekScale: Float
+            val peekLiftPx: Float
+            when {
+                viewerType == ViewerType.IMAGE && mediaAspect != null -> {
+                    val fillScale = mediaAspect / regionAspect
+                    if (fillScale > 1f) {
+                        // Landscape: too short to fill the region via Fit, so scale up until it covers
+                        // the height, capped so a panorama isn't blown up into an over-cropped sliver.
+                        // Then BOTTOM-ALIGN it tuckPx under the drawer (rather than centre it): when
+                        // the cap keeps it from fully filling, the shortfall shows as a gap at the TOP
+                        // (hidden behind the toolbar) instead of a black strip at the panel's rounded
+                        // corners. Its sides overflow the screen and clip. Uncapped, bottom-aligning
+                        // works out to the same centred position as portrait.
+                        peekScale = (fillScale * (headerBottomPx + 2f * tuckPx) / headerBottomPx)
+                            .coerceAtMost(MAX_PEEK_SCALE)
+                        val scaledMediaHeight = (screenWidthPx / mediaAspect) * peekScale
+                        peekLiftPx = screenHeightPx / 2f + scaledMediaHeight / 2f - headerBottomPx - tuckPx
+                    } else {
+                        // Portrait already covers the region via Fit; just centre it there.
+                        peekScale = 1f
+                        peekLiftPx = (screenHeightPx - headerBottomPx) / 2f
+                    }
+                }
+                mediaAspect != null && mediaAspect > regionAspect -> {
+                    // Wider-than-region non-image media (e.g. video): bottom-align at full width.
+                    peekScale = 1f
+                    peekLiftPx = (screenHeightPx / 2f + (screenWidthPx / mediaAspect) / 2f - headerBottomPx)
+                        .coerceIn(0f, headerBottomPx)
+                }
+                else -> {
+                    peekScale = 1f
+                    peekLiftPx = screenHeightPx / 2f - headerBottomPx / 2f
+                }
             }
 
             // Media layer: the whole pager, draggable up to open details. Instead of shrinking, the
-            // media lifts up out of the way (staying full size — landscape photos keep their width);
-            // the drawer's transparent header reveals it, and scrolling the content flows over it.
+            // media lifts (and, for landscape photos, scales up) into the top region; the drawer's
+            // transparent header reveals it, and scrolling the content flows over it.
             Box(
                 Modifier
                     .fillMaxSize()
                     // Blocked while zoomed: a pinched image owns its gestures and the drawer stays put.
                     .anchoredDraggable(details.drag, Orientation.Vertical, enabled = !mediaZoomed)
                     .graphicsLayer {
-                        translationY = -peekLiftPx * details.fraction
+                        val f = details.fraction
+                        val scale = 1f + (peekScale - 1f) * f
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = -peekLiftPx * f
                     },
             ) {
                 HorizontalPager(
