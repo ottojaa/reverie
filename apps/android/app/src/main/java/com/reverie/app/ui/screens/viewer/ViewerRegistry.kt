@@ -65,6 +65,10 @@ fun DocumentViewerBody(
     // Fired when the video renders its first frame (video viewer only), so DocumentPage can fade the
     // fill cover it holds over the player.
     onFirstFrameRendered: () -> Unit = {},
+    // Whether the video's PlayerView surface should be attached (video viewer only). The player
+    // itself lives with the composable so it can buffer through the open dive; the surface waits
+    // for the dive to settle (see DocumentPage).
+    mountVideoSurface: Boolean = true,
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
@@ -80,6 +84,7 @@ fun DocumentViewerBody(
         )
         ViewerType.VIDEO -> VideoViewer(
             fileUrl = fileUrl,
+            mountSurface = mountVideoSurface,
             onChromeHidden = onChromeHidden,
             onFirstFrameRendered = onFirstFrameRendered,
             modifier = modifier,

@@ -23,8 +23,19 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.reverie.app.di.AuthedOkHttpEntryPoint
+import dagger.hilt.android.EntryPointAccessors
+
+// Start/resume playback once this little is buffered. The DefaultLoadControl default (2500ms) read
+// as "pressed play, nothing happens" on WAN links — the first frame and play-start need far less
+// runway, and buffering continues behind playback either way.
+private const val BUFFER_FOR_PLAYBACK_MS = 500
+private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1000
 
 /**
  * HTML5-style video playback against the signed URL, with Media3's built-in controls.
@@ -41,6 +52,11 @@ import androidx.media3.ui.PlayerView
 fun VideoViewer(
     fileUrl: String?,
     modifier: Modifier = Modifier,
+    // The ExoPlayer lives with this composable, so composing it early lets the media fetch/buffer
+    // run through the open dive. The PlayerView surface only attaches while this is true — flipped
+    // on one frame after the dive settles (inflation never hitches the morph) and off the instant
+    // a dive-back starts (the shrink never composes a live surface).
+    mountSurface: Boolean = true,
     // Reports whether the app chrome should be hidden: true while the video plays OR its own Media3
     // controls are showing, so the app's bars never sit over the video controls (and playback stays
     // immersive). Tapping a paused video dismisses the controls → chrome returns.
@@ -51,13 +67,33 @@ fun VideoViewer(
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val player = remember { ExoPlayer.Builder(context).build() }
+    val player = remember {
+        // Stream through the app's shared OkHttp client (see AuthedOkHttp): the grid's thumbnail
+        // loads keep a warm TLS connection to the same host, so the stream's first byte skips the
+        // cold DNS+TCP+TLS handshake a DefaultHttpDataSource would pay.
+        val okHttpClient = EntryPointAccessors
+            .fromApplication(context.applicationContext, AuthedOkHttpEntryPoint::class.java)
+            .okHttpClient()
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                BUFFER_FOR_PLAYBACK_MS,
+                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            )
+            .build()
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(okHttpClient)))
+            .setLoadControl(loadControl)
+            .build()
+    }
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
     val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
 
-    // Media3 auto-shows its controls on attach; hide the app chrome whenever the controls are up or
-    // the video is playing (report the OR of the two).
-    var controlsVisible by remember { mutableStateOf(true) }
+    // Controller auto-show is disabled (see the factory below), so the controls start hidden and
+    // the app chrome stays put after the open dive; hide the chrome whenever the user brings the
+    // controls up or the video is playing (report the OR of the two).
+    var controlsVisible by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     LaunchedEffect(controlsVisible, isPlaying) { currentOnChromeHidden(controlsVisible || isPlaying) }
 
@@ -112,30 +148,43 @@ fun VideoViewer(
         }
     }
 
+    // Dropping the surface mid-playback (dive-back) keeps this composable alive until the page
+    // unmounts — pause so the audio doesn't keep running over the shrink.
+    LaunchedEffect(mountSurface) { if (!mountSurface) player.pause() }
+
     Box(modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    setShowNextButton(false)
-                    setShowPreviousButton(false)
-                    // Opaque default shutter (no transparent hole); the fill cover in DocumentPage
-                    // sits over it until the first frame, so its colour is never seen.
-                    // Mirror Media3's control-overlay visibility into the app chrome (see the LaunchedEffect
-                    // above), so the app bars hide while the controls are up and return when they dismiss.
-                    setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            controlsVisible = visibility == android.view.View.VISIBLE
-                        },
-                    )
-                    // Enabling the listener surfaces Media3's built-in fullscreen toggle in the controls;
-                    // it reports the requested state, which we drive orientation + immersion from.
-                    setFullscreenButtonClickListener { fullscreen = it }
-                }
-            },
-            update = { view -> view.setFullscreenButtonState(fullscreen) },
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (mountSurface) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        setShowNextButton(false)
+                        setShowPreviousButton(false)
+                        // No controller auto-show on attach: it flipped the app chrome right back
+                        // out after the open dive faded it in (app bars in → out → Media3 bars in).
+                        // The controls still toggle on tap, so the chrome swaps only when the user
+                        // asks.
+                        setControllerAutoShow(false)
+                        // Opaque default shutter (no transparent hole); the fill cover in
+                        // DocumentPage sits over it until the first frame, so its colour is never
+                        // seen. Mirror Media3's control-overlay visibility into the app chrome (see
+                        // the LaunchedEffect above), so the app bars hide while the controls are up
+                        // and return when they dismiss.
+                        setControllerVisibilityListener(
+                            PlayerView.ControllerVisibilityListener { visibility ->
+                                controlsVisible = visibility == android.view.View.VISIBLE
+                            },
+                        )
+                        // Enabling the listener surfaces Media3's built-in fullscreen toggle in the
+                        // controls; it reports the requested state, which we drive orientation +
+                        // immersion from.
+                        setFullscreenButtonClickListener { fullscreen = it }
+                    }
+                },
+                update = { view -> view.setFullscreenButtonState(fullscreen) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

@@ -9,6 +9,8 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SharedTransitionScope.ResizeMode
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -85,6 +87,52 @@ fun Modifier.aboveSharedElements(): Modifier {
 
     return with(sharedScope) {
         this@aboveSharedElements.renderInSharedTransitionScopeOverlay(zIndexInOverlay = 1f)
+    }
+}
+
+// The solid (black/theme) backdrop dims in much faster than the dive, in sync with the
+// instantly-opaque morph box; the blurred backdrop is a bright image, so the same pace read as a
+// flash — it eases in over most of the dive instead. The dim-out lingers dark while the shrinking
+// box is still large, then settles into a gentle stop (an accelerate-to-the-end curve read as the
+// backdrop slamming away).
+private const val BACKDROP_DIM_IN_MS = 140
+private const val BACKDROP_SOFT_DIM_IN_MS = 240
+private const val BACKDROP_DIM_OUT_MS = 300
+private val BackdropDimOutEasing = CubicBezierEasing(0.45f, 0f, 0.25f, 1f)
+
+/**
+ * Renders the video letterbox backdrop in the shared-transition overlay — below the morphing
+ * document box (zIndexInOverlay 0f) and the viewer chrome (1f), above both nav screens — with its
+ * own dim-in. Decoupled from the nav fade on purpose: riding the screen's diveMs alpha ramp left
+ * the letterbox areas semi-transparent over the fully-lit grid while the morph box was already
+ * opaque, which read as grid content bleeding in at the top/bottom edges during the dive.
+ * [soft] = true (the blurred fill) trades some of that sync for a gentler materialize. A no-op
+ * outside the shared-transition/nav scopes (previews, tests).
+ */
+@Composable
+fun Modifier.videoBackdropInOverlay(soft: Boolean = false): Modifier {
+    val sharedScope = LocalSharedTransitionScope.current ?: return this
+    val navScope = LocalNavAnimatedContentScope.current ?: return this
+    val enter = if (soft) {
+        fadeIn(tween(BACKDROP_SOFT_DIM_IN_MS, easing = FastOutSlowInEasing))
+    } else {
+        fadeIn(tween(BACKDROP_DIM_IN_MS, easing = EasingPreset.EMPHASIZED_DECELERATE.toEasing()))
+    }
+
+    return with(sharedScope) {
+        with(navScope) {
+            this@videoBackdropInOverlay
+                // -2f, NOT -1f: the overlay sort (SharedTransitionScopeImpl.drawInOverlay,
+                // compose-animation 1.7.6) remaps root shared elements with zIndexInOverlay 0 to
+                // -1f — a backdrop at -1f TIES with the morph box and stable-sort insertion order
+                // decides who wins, which intermittently drew this backdrop over the poster
+                // (black screen for the whole dive). Anything ≤ -2f sorts strictly below.
+                .renderInSharedTransitionScopeOverlay(zIndexInOverlay = -2f)
+                .animateEnterExit(
+                    enter = enter,
+                    exit = fadeOut(tween(BACKDROP_DIM_OUT_MS, easing = BackdropDimOutEasing)),
+                )
+        }
     }
 }
 
