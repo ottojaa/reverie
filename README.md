@@ -1,6 +1,8 @@
 # Reverie
 
-Self-hosted document manager with OCR, AI summaries, and smart organization—like a private Google Drive with built-in intelligence.
+Self-hosted manager for documents, photos, and videos with OCR, AI summaries, and smart organization—like a private Google Drive with built-in intelligence.
+
+See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 
 # This project is a work in progress. Here are some things to note:
 
@@ -10,15 +12,18 @@ Self-hosted document manager with OCR, AI summaries, and smart organization—li
 
 ## Features
 
-- **Document management**: Upload, browse, organize in folder hierarchy (categories → sections)
+- **File management**: Upload, browse, and organize any file type in a two-level hierarchy (collections → folders); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
 - **OCR**: Extract text from images/PDFs via PaddleOCR (default) or Tesseract.js
-- **AI processing**: Claude-powered summaries, tags, categories; optional vision for images without text
+- **AI processing**: Claude-powered summaries, titles, tags, entities, topics, categories, and extracted dates; optional vision for images without text
 - **Smart organize**: Chat-based AI assistant that searches documents and proposes moves; streaming SSE, tool-call loop
-- **Full-text search**: Faceted search (date, category, type, location from EXIF); command palette in web
-- **Document viewer**: PDF, images, video, text with viewer registry
+- **Full-text search**: Filter DSL + faceted search (date, category, type, tags, location from EXIF), autocomplete, and a command palette in web
+- **Document viewer**: PDF, images, video, and text via a viewer registry, with an AI insight panel; in-app image crop editor and video trim editor
+- **Thumbnails**: WebP thumbnails + blurhash for images, PDFs, Office docs (via LibreOffice), video frames, and text/code
+- **Vault**: Password-locked privacy for private collections/folders and documents
+- **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
-- **Auth**: JWT + optional Google OAuth
-- **Admin**: User management for multi-user setups
+- **Auth**: JWT + rotating refresh tokens, optional Google OAuth; multi-user with admin user management
+- **Clients**: Electron/React desktop app + Android (Kotlin, Jetpack Compose)
 
 ## Tech Stack
 
@@ -40,7 +45,8 @@ Self-hosted document manager with OCR, AI summaries, and smart organization—li
 reverie/
 ├── apps/
 │   ├── backend/     # Fastify API + BullMQ workers
-│   └── web/         # Electron + React desktop app
+│   ├── web/         # Electron + React desktop app
+│   └── android/     # Kotlin + Jetpack Compose mobile app
 ├── libs/
 │   └── shared/      # Zod schemas, types, API contracts
 ├── .env.example
@@ -141,7 +147,8 @@ image and prints the speedup.
 
 ## Roadmap
 
-- Android app (Kotlin + Jetpack Compose) — WIP (comes some day [probably])
+See [ROADMAP.md](ROADMAP.md) for the full plan (auto-backup, trash/soft-delete, sharing, semantic
+search, MCP server, and more).
 
 ## License
 
