@@ -9,6 +9,7 @@ import com.reverie.app.data.local.toEntity
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -44,7 +45,10 @@ class DocumentRepository @Inject constructor(
     }
 
     fun observeDocument(id: String): Flow<DocumentDto?> =
-        documentDao.observeById(id).map { it?.toDto() }
+        // distinctUntilChanged (entity-level) drops the re-map on every unrelated Room write to this
+        // row (touchAccessed, the open-time fetch upsert); flowOn(io) keeps toDto's JSON parse off
+        // the main thread, mirroring observeDocuments.
+        documentDao.observeById(id).distinctUntilChanged().map { it?.toDto() }.flowOn(io)
 
     /** Fetch one page from the network into the cache. Throws [com.reverie.app.data.api.ReverieApiException]. */
     suspend fun refresh(folderId: String?, limit: Int, offset: Int): PageResult = withContext(io) {
