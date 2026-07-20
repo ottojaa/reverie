@@ -41,7 +41,8 @@ import com.reverie.app.ui.screens.viewer.viewers.VideoLetterboxFill
 // morphs — a heavy viewer (e.g. a long text file's giant layout) never re-measures under the
 // dive-back transform.
 private const val VIEWER_FADE_IN_MS = 180
-// Once the player renders its first frame, fade the poster stand-in off it to reveal the video.
+// Once the player renders its first frame, fade the letterbox-fill cover off it to reveal the video
+// — a soft focus-in for BLURRED, a reveal from the solid bg for BLACK/THEME.
 private const val VIDEO_POSTER_FADE_MS = 160
 
 /**
@@ -52,18 +53,19 @@ private const val VIDEO_POSTER_FADE_MS = 160
  *  1. For videos, the letterbox fill (per settings) — a plain screen layer, so it fades in with
  *     the screen during the dive and stays as the player's backdrop after settle.
  *  2. For videos, the player itself — a full-screen sibling mounted at settle (its setup can't
- *     stutter the morph), drawn BELOW the morph box so the poster in the box covers the player's
- *     black surface (during buffering) and its one-frame full-size stretch (before the aspect
- *     layout settles) until the first frame renders.
- *  3. The morph box carrying the shared element ([documentSharedBounds]). Media morph their own
+ *     stutter the morph), drawn BELOW the morph box so the letterbox-fill cover in the box hides the
+ *     player's opaque shutter (and its pre-first-frame surface) until the first frame renders.
+ *  3. The morph box carrying the shared element ([documentSharedBounds]). Images morph their own
  *     cropped thumbnail ([DocumentDiveHero]) inside an aspect-matched box — the box IS the content
  *     rect the settled viewer letterboxes into, so Crop fills both ends exactly and the tile grows
- *     seamlessly. For video the poster stays on top of the player until its first frame, then fades
- *     out. Every other type morphs a type-correct [DocumentDiveStandIn] full-screen, with a
- *     crossfade near the tile end since its content differs from the tile's pixels. PDF/text/
- *     fallback viewers ride INSIDE this box — mounted only once the transform settles and faded IN
- *     over the stand-in, then dropped instantly when a transition begins so only the light stand-in
- *     morphs on the dive back (a long text file's giant layout never re-measures mid-transform).
+ *     seamlessly. Video morphs the [VideoLetterboxFill] instead of the thumbnail (the thumbnail is a
+ *     ~1s frame — morphing it, then swapping to the video's first frame, read as an abrupt jump):
+ *     RemeasureToBounds hard-cuts the tile to the fill, grows it, holds it over the player until the
+ *     first frame, then fades to the video. Every other type morphs a type-correct
+ *     [DocumentDiveStandIn] full-screen, with a crossfade near the tile end since its content differs
+ *     from the tile's pixels. PDF/text/fallback viewers ride INSIDE this box — mounted only once the
+ *     transform settles and faded IN over the stand-in, then dropped instantly when a transition
+ *     begins so only the light stand-in morphs on the dive back.
  *  4. The image viewer as a full-screen sibling: a pinch-zoomed image uses the whole screen rather
  *     than being clipped to the letterboxed box. It mounts at settle; its content lands exactly on
  *     the hero rect beneath, and unmounting on the dive back reveals that same hero.
@@ -114,19 +116,21 @@ fun DocumentPage(
             effectiveAspect >= screenAspect -> Modifier.fillMaxWidth().aspectRatio(effectiveAspect)
             else -> Modifier.fillMaxHeight().aspectRatio(effectiveAspect, matchHeightConstraintsFirst = true)
         }
-        // Media draw the SAME cropped bitmap at both ends of the morph (tile + hero) — no fade at
-        // all. The type-correct stand-ins genuinely differ from the tile, so they crossfade.
+        // seamless = RemeasureToBounds (no crossfade). Images draw the SAME cropped bitmap at both
+        // ends (tile + hero) so it grows with no fade; video uses the same no-fade mode to hard-cut
+        // the tile to its letterbox-fill cover (see the box below). The type-correct stand-ins
+        // genuinely differ from the tile, so they crossfade instead.
         val seamlessHero = viewerType == null || viewerType == ViewerType.IMAGE ||
             (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null)
         val bounds =
             if (isCurrentPage) heroBounds.documentSharedBounds(id, crossfade = !seamlessHero) else heroBounds
         val transitionActive = LocalSharedTransitionScope.current?.isTransitionActive == true
 
-        // The player reports its first rendered frame; until then (and during any transition) the
-        // poster in the morph box stays over it, hiding the black surface + first-frame stretch.
+        // The letterbox-fill cover in the morph box hides the player until it renders its first
+        // frame, then fades off to reveal the video. It snaps back on (0ms) when a transition begins
+        // so the dive-back morph carries the fill, not the player's surface.
         var videoFirstFrame by remember { mutableStateOf(false) }
         val revealVideo = viewerType == ViewerType.VIDEO && !transitionActive && videoFirstFrame
-        // Fade the poster off once the frame lands; snap it back on (0ms) for the dive-back morph.
         val posterAlpha by animateFloatAsState(
             targetValue = if (revealVideo) 0f else 1f,
             animationSpec = tween(if (revealVideo) VIDEO_POSTER_FADE_MS else 0),
@@ -155,21 +159,23 @@ fun DocumentPage(
 
         if (viewerType == ViewerType.VIDEO) {
             VideoLetterboxFill(videoBackground, id, hasThumbnail, Modifier.fillMaxSize())
-            // Player below the morph box; the poster in the box covers its black surface + one-frame
-            // stretch until onFirstFrameRendered fires. Mounts at settle so its setup can't jank the
-            // morph.
+            // Player below the morph box; the fill cover in the box hides its opaque shutter until
+            // the first frame renders. Mounts at settle so its setup can't jank the morph.
             if (!transitionActive) viewer(Modifier.fillMaxSize())
         }
 
         Box(bounds) {
             when {
-                // Keep the poster on top of the player until the first frame lands (posterAlpha → 0);
-                // it snaps back to full opacity so the dive-back morph carries the poster, not black.
+                // The letterbox fill covers the player — never the ~1s thumbnail, whose mismatch with
+                // the video's first frame read as an abrupt swap. RemeasureToBounds hard-cuts the tile
+                // to it, grows it, and holds it over the player until the first frame; posterAlpha
+                // then fades it to the video. Snaps back to opaque so the dive-back morph carries it.
                 viewerType == ViewerType.VIDEO -> {
                     if (posterAlpha > 0f) {
-                        val posterMod = Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha }
-                        if (seamlessHero) DocumentDiveHero(id, posterMod)
-                        else document?.let { DocumentDiveStandIn(it, videoBackground, posterMod) }
+                        VideoLetterboxFill(
+                            videoBackground, id, hasThumbnail,
+                            Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha },
+                        )
                     }
                 }
                 seamlessHero -> DocumentDiveHero(id, Modifier.fillMaxSize())

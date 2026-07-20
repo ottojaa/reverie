@@ -62,8 +62,8 @@ fun DocumentViewerBody(
     // Reports whether the app chrome should hide (video viewer only) — while playing or while the
     // video's own controls are visible, so the app bars never overlap Media3's controls.
     onChromeHidden: (Boolean) -> Unit = {},
-    // Fired when the video renders its first frame (video viewer only), so DocumentPage can drop the
-    // poster stand-in it holds over the player during buffering.
+    // Fired when the video renders its first frame (video viewer only), so DocumentPage can fade the
+    // fill cover it holds over the player.
     onFirstFrameRendered: () -> Unit = {},
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
