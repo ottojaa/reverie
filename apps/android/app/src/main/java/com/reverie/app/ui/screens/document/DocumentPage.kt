@@ -5,7 +5,6 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -50,14 +49,14 @@ import kotlinx.coroutines.delay
 // morphs — a heavy viewer (e.g. a long text file's giant layout) never re-measures under the
 // dive-back transform.
 private const val VIEWER_FADE_IN_MS = 180
-// Once the player renders its first frame, fade the letterbox-fill cover off it to reveal the
-// video. The solid fills (BLACK/THEME) brighten into the frame quickly; the BLURRED cover melts
-// into the video slowly with a soft landing — fast-start curves there read as an abrupt snap.
-private const val VIDEO_POSTER_FADE_MS = 200
-private const val VIDEO_BLUR_REVEAL_MS = 420
-// Buffering feedback appears only once the first frame has stalled past this hold-back, so an
-// already-buffered open never flashes a spinner.
-private const val BUFFER_SPINNER_DELAY_MS = 250L
+// Once the player renders its first frame, crossfade the cover off it. The thumbnail poster and
+// the first frame genuinely differ (the thumbnail is a ~1s grab), so the hand-off is soft — a hard
+// swap read as an abrupt jump. The thumb-less fill cover just brightens through quickly.
+private const val VIDEO_POSTER_CROSSFADE_MS = 300
+private const val VIDEO_FILL_REVEAL_MS = 200
+// Buffering feedback appears only once the first frame has stalled past this hold-back — with the
+// poster already on screen it's late feedback for genuinely slow loads, not part of a normal open.
+private const val BUFFER_SPINNER_DELAY_MS = 400L
 private const val BUFFER_SPINNER_FADE_MS = 150
 
 /**
@@ -71,16 +70,17 @@ private const val BUFFER_SPINNER_FADE_MS = 150
  *     still-lit grid; after settle it stays as the player's backdrop.
  *  2. For videos, the player itself — a full-screen sibling composed from frame 1 (so ExoPlayer
  *     fetches + buffers through the dive) whose PlayerView surface attaches one frame after settle
- *     (its inflation can't stutter the morph), drawn BELOW the morph box so the letterbox-fill
+ *     (its inflation can't stutter the morph), drawn BELOW the morph box so the poster/fill
  *     cover in the box hides the player's opaque shutter (and its pre-first-frame surface) until
  *     the first frame renders.
  *  3. The morph box carrying the shared element ([documentSharedBounds]). Images morph their own
  *     cropped thumbnail ([DocumentDiveHero]) inside an aspect-matched box — the box IS the content
  *     rect the settled viewer letterboxes into, so Crop fills both ends exactly and the tile grows
- *     seamlessly. Video morphs the [VideoLetterboxFill] instead of the thumbnail (the thumbnail is a
- *     ~1s frame — morphing it, then swapping to the video's first frame, read as an abrupt jump):
- *     RemeasureToBounds hard-cuts the tile to the fill, grows it, holds it over the player until the
- *     first frame, then fades to the video. Every other type morphs a type-correct
+ *     seamlessly. Video (with a poster + known aspect) morphs its own thumbnail the same way and
+ *     HOLDS it as the poster over the player until the first frame, then crossfades poster→video
+ *     (~300ms): a hard swap to the first frame read as an abrupt jump, and a fill cover meant a
+ *     dead-black open however fast the stream arrived. Thumb-less videos morph the
+ *     [VideoLetterboxFill] instead. Every other type morphs a type-correct
  *     [DocumentDiveStandIn] full-screen, with a crossfade near the tile end since its content differs
  *     from the tile's pixels. PDF/text/fallback viewers ride INSIDE this box — mounted only once the
  *     transform settles and faded IN over the stand-in, then dropped instantly when a transition
@@ -135,15 +135,12 @@ fun DocumentPage(
             effectiveAspect >= screenAspect -> Modifier.fillMaxWidth().aspectRatio(effectiveAspect)
             else -> Modifier.fillMaxHeight().aspectRatio(effectiveAspect, matchHeightConstraintsFirst = true)
         }
-        // seamless = RemeasureToBounds (no crossfade). Images draw the SAME cropped bitmap at both
-        // ends (tile + hero) so it grows with no fade; BLACK/THEME video uses the same no-fade mode
-        // to hard-cut the tile to its solid letterbox-fill cover (fading to a flat colour reads
-        // worse than the cut). BLURRED crossfades instead: its fill is the tile's own thumbnail
-        // blurred, so the fade near the tile end reads as the tile going out of focus as it grows.
-        // The type-correct stand-ins genuinely differ from the tile, so they crossfade too.
+        // seamless = RemeasureToBounds (no crossfade). Images AND poster-backed videos draw the
+        // SAME cropped bitmap at both ends (tile + hero/poster) so the box grows with no fade at
+        // all — fading identical content only produced the washed/translucent "flash". The
+        // type-correct stand-ins genuinely differ from the tile, so they crossfade instead.
         val seamlessHero = viewerType == null || viewerType == ViewerType.IMAGE ||
-            (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null &&
-                videoBackground != VideoBackground.BLURRED)
+            (viewerType == ViewerType.VIDEO && hasThumbnail && effectiveAspect != null)
         val bounds =
             if (isCurrentPage) heroBounds.documentSharedBounds(id, crossfade = !seamlessHero) else heroBounds
         val transitionActive = LocalSharedTransitionScope.current?.isTransitionActive == true
@@ -174,13 +171,11 @@ fun DocumentPage(
             animationSpec = when {
                 // Snap the cover back on the instant a transition starts (the morph carries it).
                 !revealVideo -> tween(0)
-                // The blurred cover melts into the video as a long, soft focus-in — a fast-start
-                // curve here read as an abrupt snap to the frame.
-                videoBackground == VideoBackground.BLURRED ->
-                    tween(VIDEO_BLUR_REVEAL_MS, easing = LinearOutSlowInEasing)
-                // Solid fills just brighten into the first frame; keep it quick so an
-                // already-buffered open feels alive.
-                else -> tween(VIDEO_POSTER_FADE_MS, easing = FastOutSlowInEasing)
+                // Poster → first frame: the contents genuinely differ, hand off softly.
+                hasThumbnail && effectiveAspect != null ->
+                    tween(VIDEO_POSTER_CROSSFADE_MS, easing = FastOutSlowInEasing)
+                // Thumb-less fill cover just brightens into the first frame.
+                else -> tween(VIDEO_FILL_REVEAL_MS, easing = FastOutSlowInEasing)
             },
             label = "videoPoster",
         )
@@ -228,13 +223,20 @@ fun DocumentPage(
                 // then fades it to the video. Snaps back to opaque so the dive-back morph carries it.
                 viewerType == ViewerType.VIDEO -> {
                     if (posterAlpha > 0f) {
-                        VideoLetterboxFill(
-                            videoBackground, id, hasThumbnail,
-                            Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha },
-                        )
+                        val coverModifier = Modifier.fillMaxSize().graphicsLayer { alpha = posterAlpha }
+                        if (hasThumbnail && effectiveAspect != null) {
+                            // Poster hero: the tile's own bitmap morphs seamlessly into the video's
+                            // content rect (this box), stays as the poster over the player, and
+                            // crossfades to the video on its first frame — content is on screen for
+                            // the entire open. A fill cover here meant a black void from tap to
+                            // first frame no matter how fast the stream got.
+                            DocumentDiveHero(id, coverModifier)
+                        } else {
+                            VideoLetterboxFill(videoBackground, id, hasThumbnail, coverModifier)
+                        }
                     }
-                    // Buffering feedback once the dive has settled: a bare cover with nothing
-                    // moving read as a hang while the first frame loaded over the network.
+                    // Buffering feedback once the dive has settled: late reassurance for genuinely
+                    // slow first frames (see BUFFER_SPINNER_DELAY_MS).
                     if (!transitionActive && !videoFirstFrame) {
                         VideoBufferingSpinner(Modifier.fillMaxSize())
                     }
