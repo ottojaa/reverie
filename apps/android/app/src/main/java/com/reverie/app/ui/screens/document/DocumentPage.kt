@@ -194,7 +194,7 @@ fun DocumentPage(
                 DocumentViewerBody(
                     document = doc,
                     fileUrl = fileUrl,
-                    loadFile = { viewModel.originalFile(id) },
+                    loadFile = { onProgress -> viewModel.originalFile(id, onProgress) },
                     onMediaTap = onMediaTap,
                     onDownload = { if (downloadDocument(context, fileUrl, doc)) onDownloadStarted() },
                     isSettledPage = isSettledPage,

@@ -46,7 +46,7 @@ fun isVideoDocument(document: DocumentDto): Boolean = viewerTypeFor(document) ==
 fun DocumentViewerBody(
     document: DocumentDto,
     fileUrl: String?,
-    loadFile: suspend () -> File,
+    loadFile: suspend (onProgress: (Float) -> Unit) -> File,
     onMediaTap: () -> Unit,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
@@ -57,7 +57,8 @@ fun DocumentViewerBody(
     // While the details pane is open the media is lifted out of the way; disable each viewer's own
     // zoom/scroll so it doesn't fight the pane's drag-to-close.
     detailsOpen: Boolean = false,
-    // Reports whether the image is pinch-zoomed (image viewer only), so the chrome can hide.
+    // Reports whether the media is pinch-zoomed (image + PDF viewers), so the chrome can hide and
+    // the details drawer stays put while the viewer owns its gestures.
     onZoomChanged: (Boolean) -> Unit = {},
     // Reports whether the app chrome should hide (video viewer only) — while playing or while the
     // video's own controls are visible, so the app bars never overlap Media3's controls.
@@ -93,7 +94,13 @@ fun DocumentViewerBody(
             onFirstFrameRendered = onFirstFrameRendered,
             modifier = modifier,
         )
-        ViewerType.PDF -> PdfViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
+        ViewerType.PDF -> PdfViewer(
+            loadFile = loadFile,
+            scrollEnabled = !detailsOpen,
+            onTap = onMediaTap,
+            onZoomChanged = onZoomChanged,
+            modifier = modifier,
+        )
         ViewerType.TEXT -> TextViewer(loadFile = loadFile, scrollEnabled = !detailsOpen, modifier = modifier)
         ViewerType.FALLBACK -> FallbackViewer(document = document, onDownload = onDownload, modifier = modifier)
     }

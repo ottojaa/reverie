@@ -36,17 +36,18 @@ import java.io.File
 /** Read-only text/JSON viewer with a line-number gutter. */
 @Composable
 fun TextViewer(
-    loadFile: suspend () -> File,
+    loadFile: suspend (onProgress: (Float) -> Unit) -> File,
     modifier: Modifier = Modifier,
     // Disabled while the details pane is open so the text scroll doesn't steal the drag-to-close.
     scrollEnabled: Boolean = true,
 ) {
     var lines by remember { mutableStateOf<List<String>?>(null) }
     var failed by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(Unit) {
         runCatching {
-            val file = loadFile()
+            val file = loadFile { progress = it }
             // Bounded streaming read: stop after MAX_LINES and clamp each line to MAX_LINE_CHARS so a
             // huge file — or a minified single-line JSON (application/json routes here) — never pulls
             // its full contents into memory or hands one enormous line to the layout.
@@ -56,7 +57,13 @@ fun TextViewer(
         }.onSuccess { lines = it }.onFailure { failed = true }
     }
 
-    ViewerContent(value = lines, failed = failed, failureText = "Couldn't open this file", modifier = modifier) { loaded ->
+    ViewerContent(
+        value = lines,
+        failed = failed,
+        failureText = "Couldn't open this file",
+        progress = progress,
+        modifier = modifier,
+    ) { loaded ->
         TextContent(loaded, scrollEnabled)
     }
 }

@@ -115,9 +115,9 @@ private fun VideoPosterStandIn(
 }
 
 /**
- * Mimics the real PdfViewer's settled layout — the first page drawn FillWidth at the same insets
- * on the theme background — using the rendered thumbnail, so the true first page fades in exactly
- * over it once decoded.
+ * Mimics the real PdfViewer's settled layout — the first page drawn FillWidth edge-to-edge, cleared
+ * by the status bar + floating toolbar at the top — using the rendered thumbnail, so the true first
+ * page fades in exactly over it once decoded, with no layout shift.
  */
 @Composable
 private fun PdfPageStandIn(document: DocumentDto, modifier: Modifier = Modifier) {
@@ -125,7 +125,7 @@ private fun PdfPageStandIn(document: DocumentDto, modifier: Modifier = Modifier)
     Box(
         modifier
             .background(MaterialTheme.colorScheme.background)
-            .padding(start = 12.dp, end = 12.dp, top = topInset),
+            .padding(top = topInset),
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)

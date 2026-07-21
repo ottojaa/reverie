@@ -108,6 +108,7 @@ fun DocumentScreen(
     val currentFileUrl by produceState<String?>(initialValue = null, currentId) { value = viewModel.fileUrl(currentId) }
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val videoBackground by viewModel.videoBackground.collectAsStateWithLifecycle()
+    val currentViewerType = document?.let(::viewerTypeFor)
 
     val details = rememberDocumentDetailsState()
     var immersive by remember { mutableStateOf(false) }
@@ -174,7 +175,7 @@ fun DocumentScreen(
             // capped so a panorama isn't blown up into a
             // thin, heavily-cropped sliver — past the cap it simply stops short of full height and
             // sits letterboxed in the region. Non-image media keeps the older fit + bottom-align.
-            val viewerType = document?.let(::viewerTypeFor)
+            val viewerType = currentViewerType
             val mediaAspect = document?.mediaAspectOrNull()
             val regionAspect = if (headerBottomPx > 0f) screenWidthPx / headerBottomPx else 1f
             val tuckPx = with(density) { DETAILS_MEDIA_TUCK.toPx() }
@@ -219,7 +220,7 @@ fun DocumentScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    // Blocked while zoomed: a pinched image owns its gestures and the drawer stays put.
+                    // Blocked while zoomed: pinched media (image or PDF) owns its gestures and the drawer stays put.
                     .anchoredDraggable(details.drag, Orientation.Vertical, enabled = !mediaZoomed)
                     .graphicsLayer {
                         val f = details.fraction
