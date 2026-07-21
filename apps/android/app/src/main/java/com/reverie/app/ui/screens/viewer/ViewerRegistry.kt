@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.viewer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.ui.screens.viewer.viewers.FallbackViewer
@@ -60,6 +61,9 @@ fun DocumentViewerBody(
     // Reports whether the media is pinch-zoomed (image + PDF viewers), so the chrome can hide and
     // the details drawer stays put while the viewer owns its gestures.
     onZoomChanged: (Boolean) -> Unit = {},
+    // Fired once the image viewer first shows drawable content, so DocumentPage can drop the dive
+    // hero it draws behind an image (else over-zoom-out reveals that static hero). Image only.
+    onImageContentVisible: () -> Unit = {},
     // Reports whether the app chrome should hide (video viewer only) — while playing or while the
     // video's own controls are visible, so the app bars never overlap Media3's controls.
     onChromeHidden: (Boolean) -> Unit = {},
@@ -76,14 +80,18 @@ fun DocumentViewerBody(
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
-            fileUrl = fileUrl,
             documentId = document.id,
+            // Real pixel size lets the zoomable enable gestures on the thumbnail before the original
+            // loads; null when dimensions are unknown (zoom then waits for sub-sampling to size it).
+            contentSize = document.width?.let { w -> document.height?.let { h -> Size(w.toFloat(), h.toFloat()) } },
             hasThumbnail = document.hasRenderedThumbnail,
             contentDescription = document.original_filename,
+            loadFile = loadFile,
             onTap = onMediaTap,
             isSettledPage = isSettledPage,
             gesturesEnabled = !detailsOpen,
             onZoomChanged = onZoomChanged,
+            onContentVisible = onImageContentVisible,
             modifier = modifier,
         )
         ViewerType.VIDEO -> VideoViewer(

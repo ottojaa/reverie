@@ -157,6 +157,10 @@ fun DocumentPage(
         // frame, then fades off to reveal the video. It snaps back on (0ms) when a transition begins
         // so the dive-back morph carries the fill, not the player's surface.
         var videoFirstFrame by remember { mutableStateOf(false) }
+        // True once the image viewer has drawable content on screen. The image hero behind it is
+        // then dropped so an over-zoom-out bounce can't reveal that static (cropped) thumbnail — the
+        // viewer's own base thumbnail lives inside the zoomable and shrinks with the content instead.
+        var imageContentVisible by remember { mutableStateOf(false) }
         // The PlayerView surface attaches one frame AFTER the dive settles — its inflation never
         // lands on the morph or the settle frame — and detaches the instant a transition starts,
         // so the dive-back never composes a live surface. videoFirstFrame resets with it: a
@@ -201,6 +205,7 @@ fun DocumentPage(
                     detailsOpen = detailsOpen,
                     // Only the current page's zoom drives the chrome — neighbors stay reset.
                     onZoomChanged = { zoomed -> if (isCurrentPage) onZoomChanged(zoomed) },
+                    onImageContentVisible = { imageContentVisible = true },
                     // Likewise, only the current page's video toggles the chrome.
                     onChromeHidden = { hidden -> if (isCurrentPage) onVideoChromeHidden(hidden) },
                     onFirstFrameRendered = { videoFirstFrame = true },
@@ -251,7 +256,13 @@ fun DocumentPage(
                         VideoBufferingSpinner(Modifier.fillMaxSize())
                     }
                 }
-                seamlessHero -> DocumentDiveHero(id, Modifier.fillMaxSize())
+                // The image hero carries the dive morph, then hands off to the ImageViewer's own
+                // base thumbnail: drop it once that content is on screen (but always keep it during a
+                // transition, when the viewer draws nothing). Non-image seamless heroes stay put.
+                seamlessHero -> {
+                    val keepImageHero = viewerType != ViewerType.IMAGE || transitionActive || !imageContentVisible
+                    if (keepImageHero) DocumentDiveHero(id, Modifier.fillMaxSize())
+                }
                 else -> document?.let { DocumentDiveStandIn(it, videoBackground, Modifier.fillMaxSize()) }
             }
             if (viewerType != null && viewerType != ViewerType.IMAGE && viewerType != ViewerType.VIDEO) {
