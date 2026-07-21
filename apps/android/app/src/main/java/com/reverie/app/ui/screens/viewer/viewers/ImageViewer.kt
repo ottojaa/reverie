@@ -98,29 +98,6 @@ fun ImageViewer(
     zoomableState.contentScale = ContentScale.Fit
     zoomableState.contentAlignment = Alignment.Center
 
-    // Enable gestures immediately: tell telephoto the content rect from the image's known pixel size
-    // so pinch/pan/double-tap work on the thumbnail before the original loads. Sub-sampling re-sets
-    // this from the decoded size (same rect) when it mounts, so ownership transfers without a jump.
-    LaunchedEffect(contentSize) {
-        if (contentSize != null && !contentSize.isEmpty()) {
-            zoomableState.setContentLocation(ZoomableContentLocation.scaledInsideAndCenterAligned(contentSize))
-        }
-    }
-    LaunchedEffect(isSettledPage) {
-        if (!isSettledPage) zoomableState.resetZoom(snap())
-    }
-    LaunchedEffect(zoomableState) {
-        snapshotFlow { (zoomableState.zoomFraction ?: 0f) > 0.01f }
-            .distinctUntilChanged()
-            .collect { onZoomChanged(it) }
-    }
-    // The transform is specified only once the zoomable has both a content location and a laid-out
-    // viewport — i.e. this viewer is composed, settled, and its base layer is about to draw.
-    LaunchedEffect(zoomableState) {
-        snapshotFlow { zoomableState.contentTransformation.isSpecified }.first { it }
-        onContentVisible()
-    }
-
     // Fetch the original to disk for sub-sampling, but only for the settled page — neighbors must
     // not download originals, and a page swiped away drops its decoder (file → null).
     val file by produceState<File?>(null, documentId, isSettledPage) {
@@ -132,6 +109,36 @@ fun ImageViewer(
         rememberSubSamplingImageState(source, zoomableState)
     } else {
         null
+    }
+
+    // Set the content rect SYNCHRONOUSLY here (NOT in a LaunchedEffect). Deferring it means the
+    // zoomable uses its SameAsLayoutBounds default on the first laid-out frame → base transform
+    // scale ≈ 1, which blows the real-pixel-sized base layer up to fill the screen: the giant
+    // wrong-aspect flash seen mid-dive, then a black recompute frame. In-body, the very first
+    // transform is already the fit. Once sub-sampling mounts it owns the location (from the decoded
+    // size), so we defer to it then. This also enables gestures immediately on the thumbnail.
+    if (subState == null && contentSize != null && !contentSize.isEmpty()) {
+        zoomableState.setContentLocation(ZoomableContentLocation.scaledInsideAndCenterAligned(contentSize))
+    }
+
+    LaunchedEffect(isSettledPage) {
+        if (!isSettledPage) zoomableState.resetZoom(snap())
+    }
+    LaunchedEffect(zoomableState) {
+        snapshotFlow { (zoomableState.zoomFraction ?: 0f) > 0.01f }
+            .distinctUntilChanged()
+            .collect { onZoomChanged(it) }
+    }
+    // Hand off from the dive hero only once the transform is at its resting fit — specified AND not
+    // over-scaled. Firing on bare isSpecified could hide the hero on a transient (pre-fit) frame and
+    // expose the settling base. userZoom ~1 means we're at the initial fit, i.e. the base is landing
+    // exactly where the hero sits.
+    LaunchedEffect(zoomableState) {
+        snapshotFlow {
+            val t = zoomableState.contentTransformation
+            t.isSpecified && t.scaleMetadata.userZoom in 0.99f..1.01f
+        }.first { it }
+        onContentVisible()
     }
 
     // Draw nothing during the dive: the DiveHero behind carries the morph (both on enter and, since
