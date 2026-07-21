@@ -53,7 +53,7 @@ async function main(): Promise<void> {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            await addOcrJob({ documentId, filePath: doc.file_path, forceReprocess: true }, job.id);
+            await addOcrJob({ documentId, userId: doc.user_id, filePath: doc.file_path, forceReprocess: true }, job.id);
             await db.updateTable('documents').set({ ocr_status: 'pending' }).where('id', '=', documentId).execute();
 
             console.log('Enqueued OCR reprocess (chains into LLM on success). job_id: ' + job.id);
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            await addLlmJob({ documentId }, job.id);
+            await addLlmJob({ documentId, userId: doc.user_id }, job.id);
 
             console.log('Enqueued LLM reprocess. job_id: ' + job.id);
         }

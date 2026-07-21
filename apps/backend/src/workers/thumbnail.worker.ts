@@ -319,7 +319,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
         throw new NonRetryableJobError(`Document ${documentId} not found`);
     }
 
-    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId, job.data.userId);
 
     // Read original file from storage
     const fileBuffer = await storageService.readFile(filePath);
@@ -327,7 +327,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     // Get image buffer based on file type (renders PDF/office/text as needed)
     const { imageBuffer, originalDimensions, durationSeconds } = await getImageBuffer(fileBuffer, document.mime_type, document.original_filename);
 
-    await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 30, documentId, job.data.sessionId, job.data.userId);
 
     // Generate thumbnails in parallel
     const thumbnailPromises = Object.entries(THUMBNAIL_SIZES).map(async ([size, width]) => {
@@ -344,14 +344,14 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     const totalThumbnailSize = thumbnails.reduce((sum, t) => sum + t.bytes, 0);
     await storageService.updateStorageUsage(document.user_id, totalThumbnailSize);
 
-    await publishJobProgress(job.id!, 70, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 70, documentId, job.data.sessionId, job.data.userId);
 
     // Generate blurhash from smallest thumbnail
     const smallThumbnailBuffer = await sharp(imageBuffer).resize(32, 32, { fit: 'inside' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
     const blurhash = encode(new Uint8ClampedArray(smallThumbnailBuffer.data), smallThumbnailBuffer.info.width, smallThumbnailBuffer.info.height, 4, 3);
 
-    await publishJobProgress(job.id!, 90, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 90, documentId, job.data.sessionId, job.data.userId);
 
     // Build result
     const paths = thumbnails.reduce(

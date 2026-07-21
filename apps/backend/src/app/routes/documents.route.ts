@@ -797,6 +797,7 @@ export default async function (fastify: FastifyInstance) {
             await addOcrJob(
                 {
                     documentId: request.params.id,
+                    userId,
                     filePath: document.file_path,
                 },
                 createdJob.id,
@@ -894,6 +895,7 @@ export default async function (fastify: FastifyInstance) {
             await addOcrJob(
                 {
                     documentId: request.params.id,
+                    userId,
                     filePath: document.file_path,
                     forceReprocess: true,
                 },
@@ -995,6 +997,7 @@ export default async function (fastify: FastifyInstance) {
             await addLlmJob(
                 {
                     documentId: request.params.id,
+                    userId,
                     type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
                 },
                 createdJob.id,
@@ -1092,6 +1095,7 @@ export default async function (fastify: FastifyInstance) {
             await addLlmJob(
                 {
                     documentId: request.params.id,
+                    userId,
                 },
                 createdJob.id,
             );
@@ -1176,6 +1180,7 @@ export default async function (fastify: FastifyInstance) {
                 await addLlmJob(
                     {
                         documentId,
+                        userId,
                         type: eligibility.processingType === 'skip' ? undefined : eligibility.processingType,
                     },
                     createdJob.id,

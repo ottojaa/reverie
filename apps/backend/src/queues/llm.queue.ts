@@ -6,6 +6,8 @@ import { getRedisConnectionOptions } from './redis';
 
 export interface LlmJobData {
     documentId: string;
+    /** Document owner; used to route job events to the owner's socket room only. */
+    userId: string;
     sessionId?: string | undefined;
     /** Optional - will be determined by eligibility check if not provided */
     type?: LlmProcessingType | undefined;

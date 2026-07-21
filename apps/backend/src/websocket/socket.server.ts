@@ -1,17 +1,47 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+import type { FastifyInstance } from 'fastify';
 import { Server as HttpServer } from 'http';
+import { Server as SocketIOServer, Socket } from 'socket.io';
+import type { JwtPayload } from '../app/plugins/auth';
 import { env } from '../config/env';
+import { db } from '../db/kysely';
 
 let ioInstance: SocketIOServer | null = null;
 
 export interface SocketServerOptions {
     httpServer: HttpServer;
+    /** Used to verify the handshake JWT with the same secret/options as HTTP auth. */
+    fastify: FastifyInstance;
+}
+
+/** Attached to every socket at the handshake once its JWT is verified. */
+interface SocketData {
+    userId: string;
+}
+
+function userRoom(userId: string): string {
+    return `user:${userId}`;
+}
+
+// Namespaced by user so a client can't join another user's upload session by
+// guessing the (client-generated) session id.
+function sessionRoom(userId: string, sessionId: string): string {
+    return `session:${userId}:${sessionId}`;
+}
+
+function documentRoom(documentId: string): string {
+    return `document:${documentId}`;
+}
+
+async function userOwnsDocument(userId: string, documentId: string): Promise<boolean> {
+    const row = await db.selectFrom('documents').select('id').where('id', '=', documentId).where('user_id', '=', userId).executeTakeFirst();
+
+    return row !== undefined;
 }
 
 /**
  * Initialize Socket.IO server
  */
-export function initializeSocketServer({ httpServer }: SocketServerOptions): SocketIOServer {
+export function initializeSocketServer({ httpServer, fastify }: SocketServerOptions): SocketIOServer {
     if (ioInstance) {
         return ioInstance;
     }
@@ -27,43 +57,84 @@ export function initializeSocketServer({ httpServer }: SocketServerOptions): Soc
         transports: ['websocket', 'polling'],
     });
 
+    // Authenticate every connection at the handshake. The client must supply a valid
+    // access token in `auth.token`; we pin the verified user id to the socket and scope
+    // all rooms to it, so a client can never receive another user's job events.
+    ioInstance.use((socket, next) => {
+        const rawToken = (socket.handshake.auth as { token?: unknown } | undefined)?.token;
+        const token = typeof rawToken === 'string' && rawToken.length > 0 ? rawToken : null;
+
+        if (!token) {
+            next(new Error('unauthorized'));
+
+            return;
+        }
+
+        try {
+            const decoded = fastify.jwt.verify<JwtPayload>(token);
+            (socket.data as SocketData).userId = decoded.sub;
+            next();
+        } catch {
+            next(new Error('unauthorized'));
+        }
+    });
+
     // Connection handler
     ioInstance.on('connection', (socket: Socket) => {
-        console.log(`[WebSocket] Client connected: ${socket.id}`);
+        const { userId } = socket.data as SocketData;
+
+        // Every socket joins its own user room — the delivery boundary for events not
+        // tied to a specific document/session subscription (replaces the old global broadcast).
+        socket.join(userRoom(userId));
+        console.log(`[WebSocket] Client connected: ${socket.id} (user ${userId})`);
 
         // Handle session subscription
-        socket.on('subscribe:session', (data: { session_id: string }) => {
-            if (data.session_id) {
-                const room = `session:${data.session_id}`;
-                socket.join(room);
-                console.log(`[WebSocket] Client ${socket.id} joined room ${room}`);
-            }
+        socket.on('subscribe:session', (data: { session_id?: unknown }) => {
+            const sessionId = data?.session_id;
+
+            if (typeof sessionId !== 'string' || !sessionId) return;
+
+            socket.join(sessionRoom(userId, sessionId));
+            console.log(`[WebSocket] Client ${socket.id} joined session ${sessionId}`);
         });
 
         // Handle session unsubscription
-        socket.on('unsubscribe:session', (data: { session_id: string }) => {
-            if (data.session_id) {
-                const room = `session:${data.session_id}`;
-                socket.leave(room);
-                console.log(`[WebSocket] Client ${socket.id} left room ${room}`);
-            }
+        socket.on('unsubscribe:session', (data: { session_id?: unknown }) => {
+            const sessionId = data?.session_id;
+
+            if (typeof sessionId !== 'string' || !sessionId) return;
+
+            socket.leave(sessionRoom(userId, sessionId));
+            console.log(`[WebSocket] Client ${socket.id} left session ${sessionId}`);
         });
 
         // Handle document subscription (for individual document updates)
-        socket.on('subscribe:document', (data: { document_id: string }) => {
-            if (data.document_id) {
-                const room = `document:${data.document_id}`;
-                socket.join(room);
-                console.log(`[WebSocket] Client ${socket.id} joined room ${room}`);
+        socket.on('subscribe:document', async (data: { document_id?: unknown }) => {
+            const documentId = data?.document_id;
+
+            if (typeof documentId !== 'string' || !documentId) return;
+
+            // Only the owner may join a document room, so document-scoped events can be
+            // delivered to that room without leaking across users.
+            const owns = await userOwnsDocument(userId, documentId);
+
+            if (!owns) {
+                console.warn(`[WebSocket] Client ${socket.id} (user ${userId}) denied document ${documentId}`);
+
+                return;
             }
+
+            socket.join(documentRoom(documentId));
+            console.log(`[WebSocket] Client ${socket.id} joined document ${documentId}`);
         });
 
-        socket.on('unsubscribe:document', (data: { document_id: string }) => {
-            if (data.document_id) {
-                const room = `document:${data.document_id}`;
-                socket.leave(room);
-                console.log(`[WebSocket] Client ${socket.id} left room ${room}`);
-            }
+        socket.on('unsubscribe:document', (data: { document_id?: unknown }) => {
+            const documentId = data?.document_id;
+
+            if (typeof documentId !== 'string' || !documentId) return;
+
+            socket.leave(documentRoom(documentId));
+            console.log(`[WebSocket] Client ${socket.id} left document ${documentId}`);
         });
 
         // Handle disconnect
@@ -90,29 +161,29 @@ export function getSocketServer(): SocketIOServer | null {
 }
 
 /**
- * Broadcast event to all connected clients
+ * Send event to a user's own room (all of that user's connected clients).
  */
-export function broadcastEvent(eventType: string, data: unknown): void {
+export function sendToUser(userId: string, eventType: string, data: unknown): void {
     if (ioInstance) {
-        ioInstance.emit(eventType, data);
+        ioInstance.to(userRoom(userId)).emit(eventType, data);
     }
 }
 
 /**
- * Send event to a specific session room
+ * Send event to a specific upload session, scoped to its owner.
  */
-export function sendToSession(sessionId: string, eventType: string, data: unknown): void {
+export function sendToSession(userId: string, sessionId: string, eventType: string, data: unknown): void {
     if (ioInstance) {
-        ioInstance.to(`session:${sessionId}`).emit(eventType, data);
+        ioInstance.to(sessionRoom(userId, sessionId)).emit(eventType, data);
     }
 }
 
 /**
- * Send event to a specific document room
+ * Send event to a specific document room (owner-only; joins are authorized).
  */
 export function sendToDocument(documentId: string, eventType: string, data: unknown): void {
     if (ioInstance) {
-        ioInstance.to(`document:${documentId}`).emit(eventType, data);
+        ioInstance.to(documentRoom(documentId)).emit(eventType, data);
     }
 }
 

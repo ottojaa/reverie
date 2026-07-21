@@ -4,6 +4,8 @@ import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
 
 export interface ThumbnailJobData {
     documentId: string;
+    /** Document owner; used to route job events to the owner's socket room only. */
+    userId: string;
     sessionId?: string;
     filePath: string;
 }

@@ -1,7 +1,7 @@
 export {
     initializeSocketServer,
     getSocketServer,
-    broadcastEvent,
+    sendToUser,
     sendToSession,
     sendToDocument,
     closeSocketServer,

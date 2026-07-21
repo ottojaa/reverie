@@ -24,7 +24,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     }
 
     // Update progress - starting OCR
-    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId, job.data.userId);
 
     // Update document status to processing
     await db.updateTable('documents').set({ ocr_status: 'processing' }).where('id', '=', documentId).execute();
@@ -61,7 +61,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             };
         }
 
-        await publishJobProgress(job.id!, 30, documentId, job.data.sessionId);
+        await publishJobProgress(job.id!, 30, documentId, job.data.sessionId, job.data.userId);
 
         // Run OCR processing (images) or text extraction (PDF/TXT)
         const result = await processDocument(documentId, {
@@ -69,7 +69,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             document,
         });
 
-        await publishJobProgress(job.id!, 80, documentId, job.data.sessionId);
+        await publishJobProgress(job.id!, 80, documentId, job.data.sessionId, job.data.userId);
 
         // Store EXIF metadata if extracted (skip when all fields are null - doUpdateSet
         // with empty object produces invalid SQL: "syntax error at end of input")
@@ -128,6 +128,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
             await addLlmJob(
                 {
                     documentId,
+                    userId: document.user_id,
                     sessionId: job.data.sessionId,
                 },
                 createdJob.id,
@@ -145,7 +146,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Will be rebuilt again after LLM processing if queued.
         await rebuildSearchVector(db, documentId);
 
-        await publishJobProgress(job.id!, 100, documentId, job.data.sessionId);
+        await publishJobProgress(job.id!, 100, documentId, job.data.sessionId, job.data.userId);
 
         logger.info('OCR job completed', {
             documentId,

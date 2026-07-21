@@ -5,6 +5,8 @@ import type { DocumentCategory } from '../ocr/types';
 
 export interface OcrJobData {
     documentId: string;
+    /** Document owner; used to route job events to the owner's socket room only. */
+    userId: string;
     sessionId?: string;
     filePath: string;
     /** Force reprocessing even if already complete */

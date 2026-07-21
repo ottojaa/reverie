@@ -7,6 +7,8 @@ import { getRedisPublisher, JOB_EVENTS_CHANNEL } from '../queues/redis';
 export interface JobEventPayload {
     type: 'job:started' | 'job:progress' | 'job:complete' | 'job:failed';
     job_id: string;
+    // Owner of the target document; the subscriber routes each event to this user's room only.
+    user_id?: string;
     document_id?: string;
     folder_id?: string;
     session_id?: string;
@@ -28,7 +30,7 @@ export async function publishJobEvent(event: JobEventPayload): Promise<void> {
 /**
  * Publish job started event
  */
-export async function publishJobStarted(jobId: string, documentId?: string, sessionId?: string): Promise<void> {
+export async function publishJobStarted(jobId: string, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:started',
         job_id: jobId,
@@ -36,6 +38,8 @@ export async function publishJobStarted(jobId: string, documentId?: string, sess
         progress: 0,
         timestamp: new Date().toISOString(),
     };
+
+    if (userId) event.user_id = userId;
 
     if (documentId) event.document_id = documentId;
 
@@ -47,7 +51,7 @@ export async function publishJobStarted(jobId: string, documentId?: string, sess
 /**
  * Publish job progress event
  */
-export async function publishJobProgress(jobId: string, progress: number, documentId?: string, sessionId?: string): Promise<void> {
+export async function publishJobProgress(jobId: string, progress: number, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:progress',
         job_id: jobId,
@@ -55,6 +59,8 @@ export async function publishJobProgress(jobId: string, progress: number, docume
         progress,
         timestamp: new Date().toISOString(),
     };
+
+    if (userId) event.user_id = userId;
 
     if (documentId) event.document_id = documentId;
 
@@ -66,7 +72,7 @@ export async function publishJobProgress(jobId: string, progress: number, docume
 /**
  * Publish job complete event
  */
-export async function publishJobComplete(jobId: string, result?: unknown, documentId?: string, sessionId?: string): Promise<void> {
+export async function publishJobComplete(jobId: string, result?: unknown, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:complete',
         job_id: jobId,
@@ -74,6 +80,8 @@ export async function publishJobComplete(jobId: string, result?: unknown, docume
         progress: 100,
         timestamp: new Date().toISOString(),
     };
+
+    if (userId) event.user_id = userId;
 
     if (documentId) event.document_id = documentId;
 
@@ -87,7 +95,7 @@ export async function publishJobComplete(jobId: string, result?: unknown, docume
 /**
  * Publish job failed event
  */
-export async function publishJobFailed(jobId: string, errorMessage: string, documentId?: string, sessionId?: string): Promise<void> {
+export async function publishJobFailed(jobId: string, errorMessage: string, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:failed',
         job_id: jobId,
@@ -96,6 +104,8 @@ export async function publishJobFailed(jobId: string, errorMessage: string, docu
         error_message: errorMessage,
         timestamp: new Date().toISOString(),
     };
+
+    if (userId) event.user_id = userId;
 
     if (documentId) event.document_id = documentId;
 
@@ -116,19 +126,19 @@ export interface TrackingOptions {
  * - Handles errors and retries
  * - Measures and stores processing duration
  */
-export async function processJobWithTracking<TData extends { documentId: string; sessionId?: string | undefined }, TResult>(
+export async function processJobWithTracking<TData extends { documentId: string; sessionId?: string | undefined; userId?: string | undefined }, TResult>(
     job: Job<TData>,
     processor: (job: Job<TData>) => Promise<TResult>,
     options?: TrackingOptions,
 ): Promise<TResult> {
     const jobService = getJobService();
-    const { documentId, sessionId } = job.data;
+    const { documentId, sessionId, userId } = job.data;
     const jobId = job.id!;
 
     try {
         // Mark job as started
         await jobService.markJobStarted(jobId);
-        await publishJobStarted(jobId, documentId, sessionId);
+        await publishJobStarted(jobId, documentId, sessionId, userId);
 
         // Process the job with timing
         const startTime = Date.now();
@@ -143,7 +153,7 @@ export async function processJobWithTracking<TData extends { documentId: string;
             await options.storeDuration(documentId, durationMs);
         }
 
-        await publishJobComplete(jobId, result, documentId, sessionId);
+        await publishJobComplete(jobId, result, documentId, sessionId, userId);
 
         return result;
     } catch (error) {
@@ -160,7 +170,7 @@ export async function processJobWithTracking<TData extends { documentId: string;
         if (!shouldRetry) {
             // Mark as failed (no more retries)
             await jobService.markJobFailed(jobId, errorMessage, attempts);
-            await publishJobFailed(jobId, errorMessage, documentId, sessionId);
+            await publishJobFailed(jobId, errorMessage, documentId, sessionId, userId);
         }
 
         // Re-throw to let BullMQ handle retry logic

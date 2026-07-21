@@ -317,6 +317,7 @@ export class UploadService {
         await addOcrJob(
             {
                 documentId: document.id,
+                userId,
                 sessionId,
                 filePath: document.file_path,
             },
@@ -345,6 +346,7 @@ export class UploadService {
             await addThumbnailJob(
                 {
                     documentId: document.id,
+                    userId,
                     sessionId,
                     filePath: document.file_path,
                 },
@@ -427,6 +429,7 @@ export class UploadService {
         await addOcrJob(
             {
                 documentId,
+                userId,
                 sessionId,
                 filePath: updated.file_path,
             },
@@ -451,6 +454,7 @@ export class UploadService {
             await addThumbnailJob(
                 {
                     documentId,
+                    userId,
                     sessionId,
                     filePath: updated.file_path,
                 },
