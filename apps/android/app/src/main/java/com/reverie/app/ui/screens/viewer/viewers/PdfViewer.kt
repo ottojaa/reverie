@@ -66,6 +66,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.min
 
 /** Renders a PDF (from the on-disk cache) as a vertically-scrolling, pinch-zoomable list of pages. */
 @Composable
@@ -116,12 +117,12 @@ fun PdfViewer(
 }
 
 /**
- * The zoomable page list. The vertical axis is the LazyColumn's own scroll at every zoom level, so
- * every page of the document stays reachable while magnified; the zoom itself is a graphicsLayer
- * scale about the top-left corner with a clamped horizontal translation, and [PdfZoomState] keeps
- * the two in sync so a pinch zooms about the fingers and a pan tracks them 1:1 on both axes.
- * Because a layer scale doesn't grow the scroll range, extra bottom padding restores just enough
- * room to reach the document's tail at the current zoom.
+ * The zoomable page list. The vertical axis rides the LazyColumn's own scroll at every zoom level,
+ * so every page of the document stays reachable while magnified; the zoom itself is a graphicsLayer
+ * scale about the top-left corner with clamped translations, and [PdfZoomState] keeps them in sync
+ * so a pinch zooms about the fingers and a pan tracks them 1:1 on both axes. A layer scale doesn't
+ * grow the list's scroll range — a document shorter than the viewport has NO range at any zoom —
+ * so a vertical translation absorbs whatever motion the scroll can't express (see [PdfZoomState]).
  */
 @Composable
 private fun PdfPageList(
@@ -143,10 +144,14 @@ private fun PdfPageList(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         zoom.viewportWidth = constraints.maxWidth
-        val viewportPx = constraints.maxHeight.toFloat()
-        // A graphicsLayer scale magnifies without extending the scroll range, so the tail would clip;
-        // this extra bottom padding restores just enough scroll room to reach it at the current zoom.
-        val extraBottom = with(density) { (viewportPx * (zoom.scale - 1f) / zoom.scale).toDp() }
+        zoom.viewportHeight = constraints.maxHeight
+        // Unscaled height of everything the list lays out, for the vertical pan bounds: a short
+        // document's zoomed pan runs entirely on the layer translation, so the bounds need the true
+        // content height, not the viewport.
+        val gapPx = with(density) { 12.dp.toPx() }
+        zoom.contentHeight = with(density) { topInset.toPx() } +
+            doc.aspects.fold(0f) { acc, aspect -> acc + constraints.maxWidth / aspect } +
+            gapPx * doc.pageCount
 
         // Opaque backdrop so the dive-hero thumbnail (drawn beneath every viewer for the container
         // transform) doesn't bleed through the page gaps/padding once pages render.
@@ -168,12 +173,13 @@ private fun PdfPageList(
                     scaleX = zoom.scale
                     scaleY = zoom.scale
                     translationX = zoom.translationX
+                    translationY = zoom.translationY
                     // Top-left anchor keeps the layer math one-to-one with the list's own scroll;
                     // clip so the magnified page never bleeds onto the pager neighbours.
                     transformOrigin = TransformOrigin(0f, 0f)
                     clip = true
                 },
-            contentPadding = PaddingValues(top = topInset, bottom = 12.dp + extraBottom),
+            contentPadding = PaddingValues(top = topInset, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             userScrollEnabled = scrollEnabled,
         ) {
@@ -241,7 +247,7 @@ private suspend fun PointerInputScope.detectZoomGestures(zoom: PdfZoomState) {
                 velocity.resetTracking()
                 zoom.pinch(event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
                 event.changes.forEach { it.consume() }
-            } else if (zoom.isZoomed) {
+            } else if (zoom.isZoomed || zoom.needsSettle) {
                 if (!claimed) {
                     preSlopDrag += event.calculatePan()
                     claimed = preSlopDrag.getDistance() > viewConfiguration.touchSlop
@@ -253,15 +259,18 @@ private suspend fun PointerInputScope.detectZoomGestures(zoom: PdfZoomState) {
                 }
             }
         }
-        if (claimed && zoom.isZoomed) zoom.fling(velocity.calculateVelocity())
+        if (claimed || zoom.needsSettle) zoom.settle(velocity.calculateVelocity())
     }
 }
 
 /**
- * Zoom/pan state for the PDF page list. The vertical axis rides the LazyColumn's own scroll — in
- * list space, so screen deltas divide by [scale] (the layer magnifies them back) — while the
- * horizontal axis is a clamped layer translation. Both update together from the focal-point math,
- * so the content under the fingers stays under the fingers.
+ * Zoom/pan state for the PDF page list. The horizontal axis is a clamped layer translation. The
+ * vertical axis rides the LazyColumn's own scroll — in list space, so screen deltas divide by
+ * [scale] (the layer magnifies them back) — plus [translationY], which absorbs whatever motion the
+ * scroll can't express: a layer scale doesn't grow the scroll range, so a document shorter than
+ * the viewport has NO range at any zoom (its whole zoomed pan runs on the translation), and a
+ * longer one still can't scroll into its scaled tail. All axes update together from the
+ * focal-point math, so the content under the fingers stays under the fingers.
  */
 private class PdfZoomState(
     private val listState: LazyListState,
@@ -272,13 +281,25 @@ private class PdfZoomState(
         private set
     var translationX by mutableFloatStateOf(0f)
         private set
+
+    // 0 or negative; -x shows content x screen-px further down than the list scroll alone would.
+    var translationY by mutableFloatStateOf(0f)
+        private set
+
     var viewportWidth = 0
+    var viewportHeight = 0
+
+    /** Unscaled height of the list's full content (pages + gaps + padding) — the [translationY] bounds. */
+    var contentHeight = 0f
 
     private var motionJob: Job? = null
 
     val isZoomed: Boolean get() = scale > 1f
 
-    /** Interrupt any fling / double-tap animation — a new touch takes over. */
+    /** A cancelled snap-back can strand [translationY] out of bounds — settle again on release. */
+    val needsSettle: Boolean get() = translationY < restingFloor(scale)
+
+    /** Interrupt any fling / snap-back / double-tap animation — a new touch takes over. */
     fun stopMotion() {
         motionJob?.cancel()
     }
@@ -287,19 +308,30 @@ private class PdfZoomState(
     fun pinch(zoomChange: Float, centroid: Offset, pan: Offset) {
         val newScale = (scale * zoomChange).coerceIn(1f, MAX_SCALE)
         translationX = clampTranslationX(centroid.x + pan.x - (centroid.x - translationX) / scale * newScale, newScale)
-        listState.dispatchRawDelta(centroid.y / scale - (centroid.y + pan.y) / newScale)
+        // Mid-pinch, focal exactness beats the resting bounds: allow up to a screenful of overshoot
+        // (a short page tracks the fingers before its scaled height outgrows the viewport) and let
+        // settle() snap it back on release.
+        shiftVertical(
+            deltaU = centroid.y / scale - (centroid.y + pan.y) / newScale,
+            newScale = newScale,
+            floor = restingFloor(newScale) - viewportHeight,
+        )
         scale = newScale
     }
 
-    /** Pan by a screen-space [delta], 1:1 with the finger on both axes. */
+    /** Pan by a screen-space [delta], 1:1 with the finger; never pushes further out of bounds. */
     fun panBy(delta: Offset) {
         translationX = clampTranslationX(translationX + delta.x, scale)
-        listState.dispatchRawDelta(-delta.y / scale)
+        shiftVertical(-delta.y / scale, scale, floor = min(restingFloor(scale), translationY))
     }
 
-    /** Continue a released pan with a decaying fling. */
-    fun fling(velocity: Velocity) {
+    /** On release: snap a pinch overshoot back into bounds, else continue as a decaying fling. */
+    fun settle(velocity: Velocity) {
         motionJob = scope.launch {
+            if (translationY < restingFloor(scale)) {
+                snapTranslationY()
+                return@launch
+            }
             var last = Offset.Zero
             AnimationState(
                 typeConverter = Offset.VectorConverter,
@@ -319,14 +351,15 @@ private class PdfZoomState(
         val target = if (isZoomed) 1f else DOUBLE_TAP_SCALE
         motionJob = scope.launch {
             val contentX = (at.x - translationX) / fromScale
-            var scrolled = 0f
+            var applied = 0f
             animate(fromScale, target, animationSpec = tween(DOUBLE_TAP_ZOOM_MS)) { s, _ ->
                 translationX = clampTranslationX(at.x - contentX * s, s)
-                val toScroll = at.y / fromScale - at.y / s
-                listState.dispatchRawDelta(toScroll - scrolled)
-                scrolled = toScroll
+                val total = at.y / fromScale - at.y / s
+                shiftVertical(total - applied, s, floor = restingFloor(s) - viewportHeight)
+                applied = total
                 scale = s
             }
+            snapTranslationY()
         }
     }
 
@@ -334,7 +367,39 @@ private class PdfZoomState(
         stopMotion()
         scale = 1f
         translationX = 0f
+        translationY = 0f
     }
+
+    /**
+     * Move the view window down the document by [deltaU] (unscaled content px) at [newScale]:
+     * downward through the list's own scroll first, remainder into [translationY]; upward by
+     * unwinding [translationY] toward zero first, then the list. The split is invisible (both
+     * express the same window), but preferring the list keeps the translation near zero whenever
+     * the scroll has range.
+     */
+    private fun shiftVertical(deltaU: Float, newScale: Float, floor: Float) {
+        // A fixed window position needs its translation rescaled when the zoom changes.
+        val rescaled = translationY / scale * newScale
+        if (deltaU >= 0f) {
+            val leftover = deltaU - listState.dispatchRawDelta(deltaU)
+            translationY = (rescaled - leftover * newScale).coerceIn(floor, 0f)
+            return
+        }
+        val unwound = min(-deltaU, -rescaled / newScale)
+        listState.dispatchRawDelta(deltaU + unwound)
+        translationY = (rescaled + unwound * newScale).coerceIn(floor, 0f)
+    }
+
+    /** Ease an out-of-bounds [translationY] (pinch overshoot) back to its resting floor. */
+    private suspend fun snapTranslationY() {
+        val floor = restingFloor(scale)
+        if (translationY >= floor) return
+        animate(translationY, floor, animationSpec = tween(SNAP_BACK_MS)) { value, _ -> translationY = value }
+    }
+
+    /** Resting lower bound: content bottom sits at the screen bottom (top-anchored while it can't reach it). */
+    private fun restingFloor(scale: Float): Float =
+        min(0f, viewportHeight - min(contentHeight, viewportHeight.toFloat()) * scale)
 
     /** The page (widened past the viewport by scale) pans only until its side edges meet the screen's. */
     private fun clampTranslationX(raw: Float, scale: Float): Float =
@@ -344,3 +409,4 @@ private class PdfZoomState(
 private const val MAX_SCALE = 4f
 private const val DOUBLE_TAP_SCALE = 2.5f
 private const val DOUBLE_TAP_ZOOM_MS = 220
+private const val SNAP_BACK_MS = 180
