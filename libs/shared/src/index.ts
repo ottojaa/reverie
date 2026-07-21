@@ -8,6 +8,7 @@ export * from './events/job-events.js';
 export * from './domain/document.js';
 export * from './domain/folder.js';
 export * from './domain/thumbnails.js';
+export * from './domain/video.js';
 
 // Errors
 export * from './errors.js';

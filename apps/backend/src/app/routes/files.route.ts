@@ -69,15 +69,19 @@ function parseByteRange(header: string | undefined, size: number): ByteRange | '
     if (!header) return null;
 
     const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+
     if (!match) return null;
 
     const [, startRaw = '', endRaw = ''] = match;
+
     if (startRaw === '' && endRaw === '') return 'invalid';
 
     // Suffix form `bytes=-N`: the last N bytes.
     if (startRaw === '') {
         const suffix = parseInt(endRaw, 10);
+
         if (suffix <= 0) return 'invalid';
+
         const start = Math.max(0, size - suffix);
 
         return { start, end: size - 1 };
@@ -85,6 +89,7 @@ function parseByteRange(header: string | undefined, size: number): ByteRange | '
 
     const start = parseInt(startRaw, 10);
     const end = endRaw === '' ? size - 1 : Math.min(parseInt(endRaw, 10), size - 1);
+
     if (start > end || start >= size) return 'invalid';
 
     return { start, end };

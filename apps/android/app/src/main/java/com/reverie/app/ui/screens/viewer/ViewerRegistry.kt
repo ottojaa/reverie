@@ -69,6 +69,9 @@ fun DocumentViewerBody(
     // itself lives with the composable so it can buffer through the open dive; the surface waits
     // for the dive to settle (see DocumentPage).
     mountVideoSurface: Boolean = true,
+    // Poster frame offset (ms) the video should park its first frame at (video viewer only), so it
+    // matches the thumbnail poster — null when there's no poster. See VideoViewer.posterSeekMs.
+    videoPosterSeekMs: Long? = null,
 ) {
     when (viewerTypeFor(document.mime_type, document.original_filename)) {
         ViewerType.IMAGE -> ImageViewer(
@@ -85,6 +88,7 @@ fun DocumentViewerBody(
         ViewerType.VIDEO -> VideoViewer(
             fileUrl = fileUrl,
             mountSurface = mountVideoSurface,
+            posterSeekMs = videoPosterSeekMs,
             onChromeHidden = onChromeHidden,
             onFirstFrameRendered = onFirstFrameRendered,
             modifier = modifier,

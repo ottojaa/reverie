@@ -1,4 +1,4 @@
-import { THUMBNAIL_SIZES } from '@reverie/shared';
+import { THUMBNAIL_SIZES, VIDEO_POSTER_FRAME_SECONDS } from '@reverie/shared';
 import { encode } from 'blurhash';
 import { Job, Worker } from 'bullmq';
 import { spawn } from 'child_process';
@@ -62,7 +62,11 @@ async function renderVideoFrame(videoBuffer: Buffer, mimeType: string): Promise<
         await writeFile(inputPath, videoBuffer);
 
         const chunks: Buffer[] = [];
-        const ffmpeg = spawn('ffmpeg', ['-ss', '0.5', '-i', inputPath, '-vframes', '1', '-f', 'image2', 'pipe:1', '-y'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        // Grab the poster frame at the shared offset so the client's video open can park its first
+        // rendered frame on the same frame (see VIDEO_POSTER_FRAME_MS).
+        const ffmpeg = spawn('ffmpeg', ['-ss', VIDEO_POSTER_FRAME_SECONDS, '-i', inputPath, '-vframes', '1', '-f', 'image2', 'pipe:1', '-y'], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
 
         ffmpeg.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
 
@@ -418,7 +422,9 @@ export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobRe
             .set({ thumbnail_status: 'failed' })
             .where('id', '=', job.data.documentId)
             .execute()
-            .catch((err) => logger.error('Failed to mark thumbnail_status=failed', err instanceof Error ? err : undefined, { documentId: job.data.documentId }));
+            .catch((err) =>
+                logger.error('Failed to mark thumbnail_status=failed', err instanceof Error ? err : undefined, { documentId: job.data.documentId }),
+            );
     });
 
     worker.on('error', (error) => {

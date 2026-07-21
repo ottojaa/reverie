@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -36,6 +37,12 @@ import dagger.hilt.android.EntryPointAccessors
 // runway, and buffering continues behind playback either way.
 private const val BUFFER_FOR_PLAYBACK_MS = 500
 private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1000
+
+// The first-play rewind (see posterSeekMs) only fires while the player is still parked at the
+// poster frame — if the current position has moved more than this from it, the user scrubbed and
+// we leave their position alone. Generous enough to cover keyframe-snap on the initial seek, tight
+// enough that any real scrub lands outside it.
+private const val REWIND_TOLERANCE_MS = 900L
 
 /**
  * HTML5-style video playback against the signed URL, with Media3's built-in controls.
@@ -57,6 +64,12 @@ fun VideoViewer(
     // on one frame after the dive settles (inflation never hitches the morph) and off the instant
     // a dive-back starts (the shrink never composes a live surface).
     mountSurface: Boolean = true,
+    // When set, the player parks its FIRST rendered frame at this position (ms) instead of t=0, so
+    // it matches the thumbnail poster DocumentPage holds over it (the backend grabs the poster at
+    // this same offset) — the poster→video crossfade then reveals an identical frame. On the user's
+    // first play we rewind to 0 so no intro is lost; ExoPlayer holds the parked frame through that
+    // seek, so the rewind isn't visible. Null (thumb-less videos) starts at t=0, no rewind.
+    posterSeekMs: Long? = null,
     // Reports whether the app chrome should be hidden: true while the video plays OR its own Media3
     // controls are showing, so the app's bars never sit over the video controls (and playback stays
     // immersive). Tapping a paused video dismisses the controls → chrome returns.
@@ -89,6 +102,36 @@ fun VideoViewer(
     }
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
     val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
+    val currentPosterSeekMs by rememberUpdatedState(posterSeekMs)
+
+    // What PlayerView's controls drive. Wraps the ExoPlayer so we can intercept the user's FIRST
+    // play and rewind to the start (see posterSeekMs) — but only while still parked at the poster
+    // frame, so a scrub-then-play keeps the user's chosen position. The init seek below runs on the
+    // wrapped player directly, so it never counts as a play.
+    val controllablePlayer = remember(player) {
+        object : ForwardingPlayer(player) {
+            private var rewound = false
+
+            override fun play() {
+                rewindToStartOnce()
+                super.play()
+            }
+
+            override fun setPlayWhenReady(playWhenReady: Boolean) {
+                if (playWhenReady) rewindToStartOnce()
+                super.setPlayWhenReady(playWhenReady)
+            }
+
+            private fun rewindToStartOnce() {
+                if (rewound) return
+                rewound = true
+                val poster = currentPosterSeekMs ?: return
+                if (kotlin.math.abs(currentPosition - poster) <= REWIND_TOLERANCE_MS) {
+                    player.seekTo(0)
+                }
+            }
+        }
+    }
 
     // Controller auto-show is disabled (see the factory below), so the controls start hidden and
     // the app chrome stays put after the open dive; hide the chrome whenever the user brings the
@@ -111,6 +154,9 @@ fun VideoViewer(
         player.setMediaItem(MediaItem.fromUri(fileUrl))
         player.prepare()
         player.playWhenReady = false
+        // Park the first frame at the poster offset so the crossfade reveals a matching frame; the
+        // wrapper rewinds to 0 on first play. Direct on the wrapped player — not a user play.
+        currentPosterSeekMs?.let { player.seekTo(it) }
     }
 
     DisposableEffect(player) {
@@ -157,7 +203,7 @@ fun VideoViewer(
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
-                        this.player = player
+                        this.player = controllablePlayer
                         setShowNextButton(false)
                         setShowPreviousButton(false)
                         // No controller auto-show on attach: it flipped the app chrome right back
