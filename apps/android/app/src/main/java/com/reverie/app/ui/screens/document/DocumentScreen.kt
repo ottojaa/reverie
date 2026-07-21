@@ -134,14 +134,6 @@ fun DocumentScreen(
     // page (e.g. swiping off a playing video should bring the chrome back on the next page).
     LaunchedEffect(currentId) { mediaZoomed = false; videoHideChrome = false }
 
-    // PDFs open full-screen: hide the chrome on arrival so the page uses the whole screen (a tap
-    // brings it back). Only forces it for PDFs — other types keep whatever immersive state carried
-    // over the swipe. Keyed on the resolved type so it fires once the document lands (and again on
-    // each new page), but never re-fires to fight a manual toggle within the same page.
-    LaunchedEffect(currentId, currentViewerType) {
-        if (currentViewerType == ViewerType.PDF) immersive = true
-    }
-
     // On each settle: move the realtime subscription / mark accessed / sync the origin grid, and
     // pull the origin's next page as we approach the tail.
     LaunchedEffect(pagerState) {
@@ -228,7 +220,7 @@ fun DocumentScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    // Blocked while zoomed: a pinched image owns its gestures and the drawer stays put.
+                    // Blocked while zoomed: pinched media (image or PDF) owns its gestures and the drawer stays put.
                     .anchoredDraggable(details.drag, Orientation.Vertical, enabled = !mediaZoomed)
                     .graphicsLayer {
                         val f = details.fraction

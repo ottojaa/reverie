@@ -1,49 +1,71 @@
 package com.reverie.app.ui.screens.viewer.viewers
 
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.AnimationVector
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.splineBasedDecay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.min
 
 /** Renders a PDF (from the on-disk cache) as a vertically-scrolling, pinch-zoomable list of pages. */
 @Composable
@@ -52,156 +74,273 @@ fun PdfViewer(
     modifier: Modifier = Modifier,
     // Disabled while the details pane is open so the page list doesn't steal the drag-to-close.
     scrollEnabled: Boolean = true,
-    // Tap toggles the viewer chrome — PDFs open full-screen (chrome hidden), so this brings it back.
+    // Tap toggles the viewer chrome, mirroring the image viewer.
     onTap: () -> Unit = {},
+    // Reports the zoomed-in state so the chrome hides and the details drawer stays put (see DocumentScreen).
+    onZoomChanged: (Boolean) -> Unit = {},
 ) {
-    var pages by remember { mutableStateOf<List<Bitmap>?>(null) }
+    var doc by remember { mutableStateOf<PdfPages?>(null) }
     var failed by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(Unit) {
-        runCatching {
+        var opened: PdfPages? = null
+        try {
             val file = loadFile { progress = it }
-            withContext(Dispatchers.IO) { renderPdf(file, RENDER_WIDTH) }
-        }.onSuccess { pages = it }.onFailure { failed = true }
+            withContext(Dispatchers.IO) { opened = PdfPages(file) }
+            doc = opened
+        } catch (e: Throwable) {
+            // Cancellation can land after the renderer opened but before it reached state — close
+            // the orphan either way, then let real failures fall through to the error text.
+            opened?.closeAsync()
+            if (e is CancellationException) throw e
+            failed = true
+        }
+    }
+    DisposableEffect(doc) {
+        val current = doc
+        onDispose { current?.closeAsync() }
     }
 
-    // PDFs open full-screen (see DocumentScreen), so pages fill the width edge-to-edge and only clear
-    // the status bar at the top — the toolbar, when tapped back in, floats over the first page. The
-    // dive stand-in (PdfPageStandIn) mirrors these insets so the real pages land on it with no shift.
-    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Clear the status bar + the floating viewer toolbar so the first page isn't hidden beneath them.
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + VIEWER_TOOLBAR_INSET
     ViewerContent(
-        value = pages,
+        value = doc,
         failed = failed,
         failureText = "Couldn't open this PDF",
         progress = progress,
         modifier = modifier,
     ) { loaded ->
-        PdfPageList(pages = loaded, topInset = topInset, scrollEnabled = scrollEnabled, onTap = onTap)
+        PdfPageList(loaded, topInset, scrollEnabled, onTap = onTap, onZoomChanged = onZoomChanged)
     }
 }
 
 /**
- * The page list with pinch-to-zoom. A two-finger pinch zooms up to [MAX_SCALE]; the list keeps its
- * native vertical scroll at every zoom level, so you can scroll through all pages while magnified,
- * and single-finger horizontal drags pan the widened page. Because a graphicsLayer scale doesn't
- * grow the scroll range, extra bottom room is added so the document's tail stays reachable when
- * zoomed. Zoom resets when gestures are handed off — the details pane opening disables [scrollEnabled].
+ * The zoomable page list. The vertical axis is the LazyColumn's own scroll at every zoom level, so
+ * every page of the document stays reachable while magnified; the zoom itself is a graphicsLayer
+ * scale about the top-left corner with a clamped horizontal translation, and [PdfZoomState] keeps
+ * the two in sync so a pinch zooms about the fingers and a pan tracks them 1:1 on both axes.
+ * Because a layer scale doesn't grow the scroll range, extra bottom padding restores just enough
+ * room to reach the document's tail at the current zoom.
  */
 @Composable
-private fun PdfPageList(pages: List<Bitmap>, topInset: Dp, scrollEnabled: Boolean, onTap: () -> Unit) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
+private fun PdfPageList(
+    doc: PdfPages,
+    topInset: Dp,
+    scrollEnabled: Boolean,
+    onTap: () -> Unit,
+    onZoomChanged: (Boolean) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val decay = remember(density) { splineBasedDecay<Offset>(density) }
+    val zoom = remember(listState, decay) { PdfZoomState(listState, scope, decay) }
 
-    LaunchedEffect(scrollEnabled) {
-        if (!scrollEnabled) {
-            scale = 1f
-            offsetX = 0f
-        }
-    }
+    // The details pane taking over (scrollEnabled=false) hands gestures off — drop the zoom with it.
+    LaunchedEffect(scrollEnabled) { if (!scrollEnabled) zoom.reset() }
+    LaunchedEffect(zoom.isZoomed) { onZoomChanged(zoom.isZoomed) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        zoom.viewportWidth = constraints.maxWidth
         val viewportPx = constraints.maxHeight.toFloat()
         // A graphicsLayer scale magnifies without extending the scroll range, so the tail would clip;
         // this extra bottom padding restores just enough scroll room to reach it at the current zoom.
-        val extraBottom = with(LocalDensity.current) { (viewportPx * (scale - 1f) / scale).toDp() }
+        val extraBottom = with(density) { (viewportPx * (zoom.scale - 1f) / zoom.scale).toDp() }
 
         // Opaque backdrop so the dive-hero thumbnail (drawn beneath every viewer for the container
         // transform) doesn't bleed through the page gaps/padding once pages render.
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                // Gestures sit OUTSIDE the graphicsLayer so their deltas are in screen space (1:1 pan),
-                // and the pinch is claimed before the list's own scroll (see detectPinchZoom).
-                // Tap toggles the chrome; only while scroll is live (the details pane owns taps then).
-                .pointerInput(scrollEnabled) { if (scrollEnabled) detectTapGestures { onTap() } }
+                // Gesture handlers sit OUTSIDE the scale layer so they see raw screen-space deltas.
                 .pointerInput(scrollEnabled) {
                     if (!scrollEnabled) return@pointerInput
-                    detectPinchZoom(scale = { scale }, offsetX = { offsetX }) { s, x -> scale = s; offsetX = x }
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onDoubleTap = { zoom.animateDoubleTapZoom(it) },
+                    )
                 }
+                .pointerInput(scrollEnabled) { if (scrollEnabled) detectZoomGestures(zoom) }
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offsetX
-                    // Anchor the top so scrolling still reaches page 1; the extra bottom padding covers
-                    // the tail. Horizontal scale stays centred so left/right pan is symmetric.
-                    transformOrigin = TransformOrigin(0.5f, 0f)
-                    // Clip the widened page to the viewport so it never bleeds onto the pager neighbours.
+                    scaleX = zoom.scale
+                    scaleY = zoom.scale
+                    translationX = zoom.translationX
+                    // Top-left anchor keeps the layer math one-to-one with the list's own scroll;
+                    // clip so the magnified page never bleeds onto the pager neighbours.
+                    transformOrigin = TransformOrigin(0f, 0f)
                     clip = true
                 },
             contentPadding = PaddingValues(top = topInset, bottom = 12.dp + extraBottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             userScrollEnabled = scrollEnabled,
         ) {
-            items(pages) { bitmap ->
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(androidx.compose.ui.graphics.Color.White),
-                )
+            items(count = doc.pageCount, key = { it }) { index -> PdfPageItem(doc, index) }
+            if (doc.isTruncated) {
+                item(key = "truncated") {
+                    Text(
+                        text = "Showing the first ${doc.pageCount} pages",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    )
+                }
             }
+        }
+    }
+}
+
+/** One page: an aspect-true white placeholder that fills with the lazily-rendered bitmap. */
+@Composable
+private fun PdfPageItem(doc: PdfPages, index: Int) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, doc, index) {
+        value = withContext(Dispatchers.IO) { doc.render(index) }
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(doc.aspects[index])
+            .background(Color.White),
+    ) {
+        bitmap?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
 
 /**
- * Pinch-to-zoom / horizontal-pan detector that coexists with the list's native scroll. A two-finger
- * pinch is consumed to drive the zoom (so the list doesn't scroll mid-pinch). A single-finger drag is
- * left UNCONSUMED so vertical movement still reaches the LazyColumn (scroll through pages while
- * zoomed); its horizontal component pans the magnified page, clamped so it can't cross the edges.
+ * Pinch/pan detector that coexists with the list's native scroll. Unzoomed, it only watches for a
+ * second finger, so scrolling, taps and pager swipes stay fully native. A pinch — and, while
+ * zoomed, any single-finger drag past touch slop — is claimed on the Initial pass and consumed
+ * outright. Without that, drags reached the scaled list (whose pointer space divides by the zoom,
+ * so its effective touch slop and fling velocity were scale× worse — the "slow pan") and leaked to
+ * ancestors with unscaled slop that won the race (the details drawer popping open mid-pan).
+ * Claimed pans track the finger 1:1 on both axes and continue with a decay fling on release.
  */
-private suspend fun PointerInputScope.detectPinchZoom(
-    scale: () -> Float,
-    offsetX: () -> Float,
-    onTransform: (Float, Float) -> Unit,
-) {
+private suspend fun PointerInputScope.detectZoomGestures(zoom: PdfZoomState) {
     awaitEachGesture {
-        // Initial pass throughout so a two-finger pinch is claimed before the list's scroll reacts;
-        // single-finger drags are left unconsumed so vertical scrolling still reaches the list.
         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        do {
+        zoom.stopMotion()
+        val velocity = VelocityTracker()
+        var claimed = false
+        var preSlopDrag = Offset.Zero
+        while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
-            val pinch = event.changes.count { it.pressed } >= 2
-            if (pinch) {
-                val newScale = (scale() * event.calculateZoom()).coerceIn(1f, MAX_SCALE)
-                val newX = if (newScale <= 1f) 0f else clampX(offsetX() + event.calculatePan().x, newScale, size.width)
-                onTransform(newScale, newX)
+            val pressed = event.changes.filter { it.pressed }
+            if (pressed.isEmpty()) break
+            if (pressed.size >= 2) {
+                claimed = true
+                velocity.resetTracking()
+                zoom.pinch(event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
                 event.changes.forEach { it.consume() }
-            } else if (scale() > 1f) {
-                val panX = event.calculatePan().x
-                // Pan horizontally; leave the event unconsumed so a vertical drag still scrolls the list.
-                if (panX != 0f) onTransform(scale(), clampX(offsetX() + panX, scale(), size.width))
+            } else if (zoom.isZoomed) {
+                if (!claimed) {
+                    preSlopDrag += event.calculatePan()
+                    claimed = preSlopDrag.getDistance() > viewConfiguration.touchSlop
+                }
+                if (claimed) {
+                    zoom.panBy(event.calculatePan())
+                    velocity.addPosition(pressed.first().uptimeMillis, pressed.first().position)
+                    event.changes.forEach { it.consume() }
+                }
             }
-        } while (event.changes.any { it.pressed })
+        }
+        if (claimed && zoom.isZoomed) zoom.fling(velocity.calculateVelocity())
     }
 }
 
-/** Bound [raw] so the page (widened by [scale] within [width]) can't be panned past its side edges. */
-private fun clampX(raw: Float, scale: Float, width: Int): Float {
-    val maxX = width * (scale - 1f) / 2f
-    return raw.coerceIn(-maxX, maxX)
-}
+/**
+ * Zoom/pan state for the PDF page list. The vertical axis rides the LazyColumn's own scroll — in
+ * list space, so screen deltas divide by [scale] (the layer magnifies them back) — while the
+ * horizontal axis is a clamped layer translation. Both update together from the focal-point math,
+ * so the content under the fingers stays under the fingers.
+ */
+private class PdfZoomState(
+    private val listState: LazyListState,
+    private val scope: CoroutineScope,
+    private val decay: DecayAnimationSpec<Offset>,
+) {
+    var scale by mutableFloatStateOf(1f)
+        private set
+    var translationX by mutableFloatStateOf(0f)
+        private set
+    var viewportWidth = 0
 
-private fun renderPdf(file: File, width: Int): List<Bitmap> {
-    val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-    PdfRenderer(descriptor).use { renderer ->
-        val count = min(renderer.pageCount, MAX_PAGES)
-        return (0 until count).map { index ->
-            renderer.openPage(index).use { page ->
-                val height = (width.toFloat() / page.width * page.height).toInt().coerceAtLeast(1)
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                bitmap.eraseColor(Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                bitmap
+    private var motionJob: Job? = null
+
+    val isZoomed: Boolean get() = scale > 1f
+
+    /** Interrupt any fling / double-tap animation — a new touch takes over. */
+    fun stopMotion() {
+        motionJob?.cancel()
+    }
+
+    /** Rescale about [centroid] and carry the fingers' [pan], keeping the pinched content under them. */
+    fun pinch(zoomChange: Float, centroid: Offset, pan: Offset) {
+        val newScale = (scale * zoomChange).coerceIn(1f, MAX_SCALE)
+        translationX = clampTranslationX(centroid.x + pan.x - (centroid.x - translationX) / scale * newScale, newScale)
+        listState.dispatchRawDelta(centroid.y / scale - (centroid.y + pan.y) / newScale)
+        scale = newScale
+    }
+
+    /** Pan by a screen-space [delta], 1:1 with the finger on both axes. */
+    fun panBy(delta: Offset) {
+        translationX = clampTranslationX(translationX + delta.x, scale)
+        listState.dispatchRawDelta(-delta.y / scale)
+    }
+
+    /** Continue a released pan with a decaying fling. */
+    fun fling(velocity: Velocity) {
+        motionJob = scope.launch {
+            var last = Offset.Zero
+            AnimationState(
+                typeConverter = Offset.VectorConverter,
+                initialValue = Offset.Zero,
+                initialVelocityVector = AnimationVector(velocity.x, velocity.y),
+            ).animateDecay(decay) {
+                panBy(value - last)
+                last = value
             }
         }
     }
+
+    /** Double-tap: animate between 1× and [DOUBLE_TAP_SCALE], zooming about the tapped point. */
+    fun animateDoubleTapZoom(at: Offset) {
+        stopMotion()
+        val fromScale = scale
+        val target = if (isZoomed) 1f else DOUBLE_TAP_SCALE
+        motionJob = scope.launch {
+            val contentX = (at.x - translationX) / fromScale
+            var scrolled = 0f
+            animate(fromScale, target, animationSpec = tween(DOUBLE_TAP_ZOOM_MS)) { s, _ ->
+                translationX = clampTranslationX(at.x - contentX * s, s)
+                val toScroll = at.y / fromScale - at.y / s
+                listState.dispatchRawDelta(toScroll - scrolled)
+                scrolled = toScroll
+                scale = s
+            }
+        }
+    }
+
+    fun reset() {
+        stopMotion()
+        scale = 1f
+        translationX = 0f
+    }
+
+    /** The page (widened past the viewport by scale) pans only until its side edges meet the screen's. */
+    private fun clampTranslationX(raw: Float, scale: Float): Float =
+        raw.coerceIn(-(viewportWidth * (scale - 1f)), 0f)
 }
 
-private const val RENDER_WIDTH = 1240
-private const val MAX_PAGES = 60
 private const val MAX_SCALE = 4f
+private const val DOUBLE_TAP_SCALE = 2.5f
+private const val DOUBLE_TAP_ZOOM_MS = 220

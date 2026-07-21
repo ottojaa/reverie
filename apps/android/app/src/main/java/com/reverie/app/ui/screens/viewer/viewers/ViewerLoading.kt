@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -63,9 +64,14 @@ fun <T> ViewerContent(
                     show = true
                     loaderShown = true
                 }
-                // Pinned to the top of the screen (just below the status bar), not centered — a
-                // download/loading bar reads as page chrome up top, not a mid-screen element.
-                if (show) ViewerLoadingBar(progress, Modifier.align(Alignment.TopCenter).statusBarsPadding())
+                // Pinned just below the floating toolbar, not centered — a download/loading bar
+                // reads as page chrome up top. It overlays the content area, so it never shifts it.
+                if (show) {
+                    ViewerLoadingBar(
+                        progress,
+                        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = VIEWER_TOOLBAR_INSET),
+                    )
+                }
             }
             loaderShown -> {
                 val contentAlpha = remember { Animatable(0f) }
