@@ -104,6 +104,11 @@ class DocumentViewModel @Inject constructor(
         viewModelScope.launch { currentSub = realtimeManager.subscribeDocument(id) }
         viewModelScope.launch { documentRepository.touchAccessed(id) }
         sequenceHolder.setFocused(id)
+        // Pull the detail record into Room so observers get llm_summary/llm_metadata (insights) and
+        // photo_metadata (location map) — the list endpoint serializes all three as null. This used to
+        // happen as a side effect of fileUrl()'s fetch, but list-page URL warming now lets fileUrl()
+        // return without a /documents/:id round-trip, so the detail must be pulled explicitly on open.
+        refresh(id)
     }
 
     /** Near the tail → ask the origin for its next page (guarded/ignored when there is no more). */
