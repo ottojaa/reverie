@@ -54,10 +54,12 @@ private const val VIEWER_FADE_IN_MS = 180
 // swap read as an abrupt jump. The thumb-less fill cover just brightens through quickly.
 private const val VIDEO_POSTER_CROSSFADE_MS = 300
 private const val VIDEO_FILL_REVEAL_MS = 200
-// The player parks its first frame here so it matches the thumbnail poster; MUST equal the
-// backend's video-thumbnail grab offset (ffmpeg `-ss 0.5` in thumbnail.worker.ts). On first play
-// the viewer rewinds to 0, so the parked offset costs no playback. Keep the two in sync.
-private const val VIDEO_POSTER_FRAME_MS = 500L
+// The player parks its first frame here so it matches the thumbnail poster. Kotlin mirror of
+// VIDEO_POSTER_FRAME_MS in @reverie/shared (libs/shared/src/domain/video.ts) — the canonical value
+// the backend grabs the poster frame at; keep the two in sync. Just under 500ms so Media3's
+// position display still reads 0:00 (it rounds to the nearest second). The viewer rewinds to 0 on
+// first play, so the parked offset costs no playback.
+private const val VIDEO_POSTER_FRAME_MS = 490L
 // Buffering feedback appears only once the first frame has stalled past this hold-back — with the
 // poster already on screen it's late feedback for genuinely slow loads, not part of a normal open.
 private const val BUFFER_SPINNER_DELAY_MS = 400L
