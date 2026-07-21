@@ -8,6 +8,8 @@ export type JobEventType = z.infer<typeof JobEventTypeEnum>;
 export const JobEventSchema = z.object({
     type: JobEventTypeEnum,
     job_id: z.string().uuid(),
+    // Owner of the target document; the server routes each event to this user's room only.
+    user_id: z.string().uuid().optional(),
     document_id: z.string().uuid().optional(),
     folder_id: z.string().uuid().optional(),
     session_id: z.string().optional(),

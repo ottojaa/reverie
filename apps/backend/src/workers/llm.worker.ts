@@ -30,12 +30,12 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
         throw new NonRetryableJobError(`Document ${documentId} not found`);
     }
 
-    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 10, documentId, job.data.sessionId, job.data.userId);
 
     // Fetch OCR result if exists
     const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst();
 
-    await publishJobProgress(job.id!, 20, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 20, documentId, job.data.sessionId, job.data.userId);
 
     // Check eligibility
     const eligibility = checkLlmEligibility(document, ocrResult);
@@ -65,7 +65,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
         logger.warn('LLM processing warnings', { documentId, warnings: eligibility.warnings });
     }
 
-    await publishJobProgress(job.id!, 40, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 40, documentId, job.data.sessionId, job.data.userId);
 
     // Process document with LLM
     const llmResult = await processDocument(documentId, {
@@ -74,7 +74,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
         ocrResult,
     });
 
-    await publishJobProgress(job.id!, 90, documentId, job.data.sessionId);
+    await publishJobProgress(job.id!, 90, documentId, job.data.sessionId, job.data.userId);
 
     // Build result
     const metadata = llmResult.enhancedMetadata
@@ -106,11 +106,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
 async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const { documentId } = job.data;
 
-    await db
-        .updateTable('documents')
-        .set({ llm_status: 'processing' })
-        .where('id', '=', documentId)
-        .execute();
+    await db.updateTable('documents').set({ llm_status: 'processing' }).where('id', '=', documentId).execute();
 
     try {
         return await processJobWithTracking(job, processLlmJob, {
@@ -119,11 +115,7 @@ async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResu
             },
         });
     } catch (error) {
-        await db
-            .updateTable('documents')
-            .set({ llm_status: 'failed' })
-            .where('id', '=', documentId)
-            .execute();
+        await db.updateTable('documents').set({ llm_status: 'failed' }).where('id', '=', documentId).execute();
         throw error;
     }
 }

@@ -1,11 +1,12 @@
 import type { JobEvent } from '@reverie/shared';
 import { io, Socket } from 'socket.io-client';
 
-import { API_BASE } from './api/client';
+import { API_BASE, getAccessToken, refreshAccessToken } from './api/client';
 
 let socket: Socket | null = null;
 const subscribedSessions = new Set<string>();
 const subscribedDocuments = new Set<string>();
+let refreshingAuth = false;
 
 /**
  * Get or create the Socket.io client instance
@@ -15,6 +16,24 @@ export function getSocket(): Socket {
         const s = io(API_BASE, {
             transports: ['websocket', 'polling'],
             autoConnect: false,
+            // Function form is re-evaluated on every (re)connect, so the current
+            // access token is always sent on the handshake.
+            auth: (cb) => cb({ token: getAccessToken() ?? '' }),
+        });
+
+        // The handshake middleware rejects an invalid/expired token with this message
+        // and does not auto-retry, so refresh once and reconnect with the new token.
+        s.on('connect_error', (err: Error) => {
+            if (err.message !== 'unauthorized' || refreshingAuth) return;
+
+            refreshingAuth = true;
+            void refreshAccessToken()
+                .then((ok) => {
+                    if (ok) s.connect();
+                })
+                .finally(() => {
+                    refreshingAuth = false;
+                });
         });
 
         // Server-side room membership is per-connection: after a reconnect

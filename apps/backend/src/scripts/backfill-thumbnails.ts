@@ -94,7 +94,7 @@ async function main(): Promise<void> {
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
-                await addThumbnailJob({ documentId: row.id, filePath: row.file_path }, job.id);
+                await addThumbnailJob({ documentId: row.id, userId: row.user_id, filePath: row.file_path }, job.id);
                 await db.updateTable('documents').set({ thumbnail_status: 'pending' }).where('id', '=', row.id).execute();
 
                 enqueued++;
@@ -112,9 +112,15 @@ async function main(): Promise<void> {
 
         const eligible = tally.image + tally.pdf + tally.video + tally.office + tally.text;
         console.log(`\nScanned ${scanned} documents without a thumbnail.`);
-        console.log(`  Eligible (has a render strategy): ${eligible} — office=${tally.office}, text=${tally.text}, image=${tally.image}, pdf=${tally.pdf}, video=${tally.video}`);
+        console.log(
+            `  Eligible (has a render strategy): ${eligible} — office=${tally.office}, text=${tally.text}, image=${tally.image}, pdf=${tally.pdf}, video=${tally.video}`,
+        );
         console.log(`  Skipped (no thumbnail by design): ${tally.none}`);
-        console.log(dryRun ? `\nDry run — nothing enqueued. Re-run without --dry-run to enqueue ${limit ? `up to ${limit}` : eligible} job(s).` : `\nEnqueued ${enqueued} thumbnail job(s). Ensure the thumbnail worker is running to process them.`);
+        console.log(
+            dryRun
+                ? `\nDry run — nothing enqueued. Re-run without --dry-run to enqueue ${limit ? `up to ${limit}` : eligible} job(s).`
+                : `\nEnqueued ${enqueued} thumbnail job(s). Ensure the thumbnail worker is running to process them.`,
+        );
     } finally {
         await db.destroy();
         // BullMQ holds a Redis connection open, which keeps the event loop alive.

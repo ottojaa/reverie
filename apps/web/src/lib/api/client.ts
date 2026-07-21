@@ -44,6 +44,11 @@ export function getAccessToken(): string | null {
     return authStore?.getToken() ?? null;
 }
 
+/** Refresh the access token (for the socket handshake when the token has expired). */
+export function refreshAccessToken(): Promise<boolean> {
+    return authStore?.refresh() ?? Promise.resolve(false);
+}
+
 export const apiClient = axios.create({
     baseURL: API_BASE,
     withCredentials: true,

@@ -1,5 +1,5 @@
 import { getRedisSubscriber, JOB_EVENTS_CHANNEL } from '../queues/redis';
-import { broadcastEvent, sendToSession, sendToDocument } from './socket.server';
+import { sendToUser, sendToSession, sendToDocument } from './socket.server';
 import type { JobEventPayload } from '../workers/worker.utils';
 
 let isSubscribed = false;
@@ -35,24 +35,29 @@ export async function startRedisSubscriber(): Promise<void> {
                 status: event.status,
             });
 
-            // Send to specific rooms based on event metadata
+            // Route only to rooms the owner can be in — never a global broadcast.
             let sent = false;
 
-            // Send to specific session room if session_id is present
-            if (event.session_id) {
-                sendToSession(event.session_id, event.type, event);
-                sent = true;
-            }
-
-            // Send to specific document room if document_id is present
+            // Document room is owner-only (joins are authorized), so it's safe without user_id.
             if (event.document_id) {
                 sendToDocument(event.document_id, event.type, event);
                 sent = true;
             }
 
-            // Broadcast to all clients only if no specific target (for global dashboards)
+            // Session room is namespaced under the owner, so routing needs the user id.
+            if (event.session_id && event.user_id) {
+                sendToSession(event.user_id, event.session_id, event.type, event);
+                sent = true;
+            }
+
+            // Fall back to the owner's user room (replaces the old global broadcast).
+            if (!sent && event.user_id) {
+                sendToUser(event.user_id, event.type, event);
+                sent = true;
+            }
+
             if (!sent) {
-                broadcastEvent(event.type, event);
+                console.warn(`[RedisSubscriber] Dropping event with no routable target: ${event.type} ${event.job_id}`);
             }
         } catch (error) {
             console.error('[RedisSubscriber] Failed to parse message:', error);

@@ -88,7 +88,7 @@ async function main() {
 
         // Initialize WebSocket server if enabled
         if (env.WS_ENABLED) {
-            initializeSocketServer({ httpServer });
+            initializeSocketServer({ httpServer, fastify: server });
             await startRedisSubscriber();
             server.log.info('WebSocket server initialized');
         }
