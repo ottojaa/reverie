@@ -17,8 +17,8 @@ android {
         applicationId = "com.reverie.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.0.23"
+        versionCode = 26
+        versionName = "1.0.25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
