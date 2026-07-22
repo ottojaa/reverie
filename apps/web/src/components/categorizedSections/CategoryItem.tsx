@@ -81,29 +81,35 @@ export function CategoryItem({
                 'group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors',
                 !disableDrag && 'touch-pan-y cursor-grab select-none active:cursor-grabbing',
                 disableDrag && 'cursor-default',
+                isLocked && 'cursor-pointer',
                 'hover:bg-sidebar-accent/50',
             )}
             {...attributes}
             {...listeners}
+            // Locked collection: clicking anywhere on the row prompts to unlock (its folders are
+            // hidden until then) rather than expanding.
+            onClick={isLocked ? () => requestUnlock() : undefined}
         >
-            {/* Collapse chevron */}
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onToggleCollapse();
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                aria-label={collapsed ? 'Expand' : 'Collapse'}
-            >
-                <motion.div initial={false} animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
-                    <ChevronDown className="size-3.5" />
-                </motion.div>
-            </Button>
+            {/* Collapse chevron — a locked collection can't expand (children hidden), so hide it. */}
+            {!isLocked && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleCollapse();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={collapsed ? 'Expand' : 'Collapse'}
+                >
+                    <motion.div initial={false} animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
+                        <ChevronDown className="size-3.5" />
+                    </motion.div>
+                </Button>
+            )}
 
             {/* Category name - uppercase label style */}
             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{category.name}</span>
@@ -126,25 +132,27 @@ export function CategoryItem({
                 isPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
             )}
 
-            {/* Add folder */}
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className={cn(
-                    'h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                    !isMobile && 'opacity-0 transition-opacity group-hover:opacity-100',
-                )}
-                aria-label="Add folder"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onAddSection?.(category);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
-                <Plus className="size-3.5" />
-            </Button>
+            {/* Add folder — hidden while locked (can't add into a collection you can't see). */}
+            {!isLocked && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn(
+                        'h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                        !isMobile && 'opacity-0 transition-opacity group-hover:opacity-100',
+                    )}
+                    aria-label="Add folder"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onAddSection?.(category);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <Plus className="size-3.5" />
+                </Button>
+            )}
             {/* Actions button */}
             {isMobile ? (
                 <DropdownMenu>
@@ -226,9 +234,9 @@ export function CategoryItem({
                 </ContextMenu>
             )}
 
-            {/* Collapsible children area */}
+            {/* Collapsible children area — a locked collection hides its folders until unlocked. */}
             <AnimatePresence initial={false}>
-                {!collapsed && (
+                {!collapsed && !isLocked && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}

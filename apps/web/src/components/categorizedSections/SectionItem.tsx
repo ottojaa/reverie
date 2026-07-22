@@ -45,7 +45,6 @@ export function SectionItem({
     const { requestUnlock } = useVault();
 
     const ownPrivate = section.is_private;
-    const effectivePrivate = ownPrivate || inheritedPrivate;
     const isLocked = section.locked;
 
     // Removing privacy while locked would expose content without the password — unlock first.
@@ -100,6 +99,15 @@ export function SectionItem({
                 draggable={false}
                 onClick={(e) => {
                     e.stopPropagation();
+
+                    // Locked folder: prompt to unlock instead of navigating into it.
+                    if (isLocked) {
+                        e.preventDefault();
+                        requestUnlock();
+
+                        return;
+                    }
+
                     onClose?.();
                 }}
             >
@@ -121,7 +129,9 @@ export function SectionItem({
                     <Lock className="size-3" />
                 </button>
             ) : (
-                effectivePrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
+                // Only a folder made private on its own shows a lock — inherited privacy is
+                // conveyed by the parent collection's lock (the single lock unit).
+                ownPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
             )}
             {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
             {isMobile ? (

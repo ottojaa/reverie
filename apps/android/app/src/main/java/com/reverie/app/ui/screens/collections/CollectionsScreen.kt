@@ -104,7 +104,9 @@ fun CollectionsScreen(
                             collection = node,
                             expanded = state.isExpanded(node.id),
                             aggregateCount = aggregateCount(node),
-                            onToggle = { viewModel.toggleExpand(node.id) },
+                            // Locked collection: tapping prompts to unlock (its folders are hidden
+                            // until then) instead of expanding.
+                            onToggle = { if (node.locked) showVaultUnlock = true else viewModel.toggleExpand(node.id) },
                             onNewFolder = { createFolderParentId = node.id },
                             onEdit = { editTarget = node },
                             onTogglePrivate = { onTogglePrivate(node) },
@@ -113,11 +115,12 @@ fun CollectionsScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
-                    if (state.isExpanded(node.id)) {
+                    // A locked collection hides its folders until unlocked.
+                    if (state.isExpanded(node.id) && !node.locked) {
                         items(node.children, key = { it.id }) { folder ->
                             FolderTreeItem(
                                 folder = folder,
-                                onOpen = { onOpenFolder(folder.id) },
+                                onOpen = { if (folder.locked) showVaultUnlock = true else onOpenFolder(folder.id) },
                                 onEdit = { editTarget = folder },
                                 onTogglePrivate = { onTogglePrivate(folder) },
                                 onDelete = { deleteTarget = folder },
@@ -132,7 +135,7 @@ fun CollectionsScreen(
                     item(key = node.id) {
                         FolderTreeItem(
                             folder = node,
-                            onOpen = { onOpenFolder(node.id) },
+                            onOpen = { if (node.locked) showVaultUnlock = true else onOpenFolder(node.id) },
                             onEdit = { editTarget = node },
                             onTogglePrivate = { onTogglePrivate(node) },
                             onDelete = { deleteTarget = node },
