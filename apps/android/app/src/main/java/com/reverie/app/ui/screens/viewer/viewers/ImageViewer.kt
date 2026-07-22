@@ -122,8 +122,12 @@ fun ImageViewer(
     val file by produceState<File?>(null, documentId, isSettledPage) {
         value = if (isSettledPage) runCatching { loadFile {} }.getOrNull() else null
     }
+    // Keep sub-sampling dormant during the dive: it draws nothing then anyway (the hero carries the
+    // morph), and there is no reason to spin up a tile decoder mid-animation. Gating here also means
+    // its content-location bookkeeping can never perturb the shared transform while the dive is in
+    // flight. The download itself is not gated (above), so the decoder starts the moment the dive ends.
     val currentFile = file
-    val subState = if (currentFile != null) {
+    val subState = if (currentFile != null && !transitionActive) {
         val source = remember(currentFile) {
             // Pass a preview ONLY when there is no base layer (unknown dimensions — see below). With a
             // base layer it is redundant (the base thumbnail is the blur-under) AND harmful: telephoto
