@@ -58,6 +58,10 @@ data class DocumentDto(
     val llm_processed_at: String? = null,
     val llm_token_count: Long? = null,
     val is_private: Boolean,
+    // True when this item is effectively private AND the vault is locked for this session:
+    // the server withholds all content (urls/thumbnails/summary/location) and the UI shows a
+    // lock affordance instead of opening. See VaultRepository.
+    val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
     // Signed, short-lived URLs — never persist these.

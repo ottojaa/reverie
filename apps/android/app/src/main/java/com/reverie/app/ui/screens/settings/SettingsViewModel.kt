@@ -95,24 +95,29 @@ class SettingsViewModel @Inject constructor(
     suspend fun changePassword(current: String, new: String): Result<Unit> =
         authRepository.changePassword(current, new)
 
-    fun setHidePrivate(hide: Boolean) {
-        viewModelScope.launch { vaultRepository.setHidePrivate(hide) }
-    }
-
     fun unlockVault(password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch { onResult(vaultRepository.unlock(password).isSuccess) }
     }
 
     fun lockVault() {
-        viewModelScope.launch { vaultRepository.lock() }
+        viewModelScope.launch {
+            vaultRepository.lock()
+            // Purge cached originals + thumbnails so locked content can't be served from disk.
+            purgeCaches()
+        }
     }
 
     fun clearCache(onDone: () -> Unit) {
         viewModelScope.launch {
-            fileCacheManager.clear()
-            imageLoader.diskCache?.clear()
-            imageLoader.memoryCache?.clear()
+            purgeCaches()
             onDone()
         }
+    }
+
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
+    private suspend fun purgeCaches() {
+        fileCacheManager.clear()
+        imageLoader.diskCache?.clear()
+        imageLoader.memoryCache?.clear()
     }
 }

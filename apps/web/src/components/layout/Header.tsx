@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/lib/theme';
-import { useVault } from '@/lib/vault';
 import { useLocation } from '@tanstack/react-router';
-import { Bell, LockOpen, Menu, Moon, Search, Sparkles, Sun } from 'lucide-react';
+import { Bell, Menu, Moon, Search, Sparkles, Sun } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface HeaderProps {
@@ -20,21 +19,9 @@ const quietHover = 'hover:bg-secondary hover:text-foreground dark:hover:bg-secon
 export function HeaderActions() {
     const { isDark, setIsDark } = useTheme();
     const { openOrganize } = useOrganize();
-    const { unlocked, lockNow } = useVault();
 
     return (
         <div className="flex shrink-0 items-center gap-1 md:gap-2">
-            {unlocked && (
-                <button
-                    type="button"
-                    onClick={lockNow}
-                    className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
-                    title="Private items are visible — click to lock"
-                >
-                    <LockOpen className="size-3.5" />
-                    <span className="hidden sm:inline">Private visible</span>
-                </button>
-            )}
             <Button variant="ghost" className={cn('gap-2 px-2 md:px-3', quietHover)} onClick={openOrganize} aria-label="Organize with AI">
                 <Sparkles className="size-4 shrink-0 text-primary" />
                 <span className="hidden sm:inline">Organize</span>

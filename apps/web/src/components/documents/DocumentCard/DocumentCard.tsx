@@ -29,8 +29,10 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
         isDragging,
         isMobile,
         isPrivate,
+        isLocked,
         handleClick,
         handleDoubleClick,
+        handleOpen,
         handleDelete,
         handleTogglePrivate,
         handleDownload,
@@ -55,13 +57,29 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                         {...longPressHandlers}
                         onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
                     >
-                        {isPrivate && (
-                            <div
-                                className="pointer-events-none absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-accent/90 text-accent-foreground shadow-sm"
-                                aria-label="Private"
+                        {isLocked ? (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleOpen();
+                                }}
+                                className="absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-accent/90 text-accent-foreground shadow-sm transition-transform hover:scale-110"
+                                aria-label="Locked — click to unlock"
+                                title="Locked — click to unlock"
                             >
                                 <Lock className="size-3" />
-                            </div>
+                            </button>
+                        ) : (
+                            isPrivate && (
+                                <div
+                                    className="pointer-events-none absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full bg-accent/90 text-accent-foreground shadow-sm"
+                                    aria-label="Private"
+                                >
+                                    <Lock className="size-3" />
+                                </div>
+                            )
                         )}
                         <Link
                             to="/document/$id"
@@ -70,6 +88,9 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                             onClick={handleClick}
                             onDoubleClick={handleDoubleClick}
                             onMouseEnter={() => {
+                                // Nothing to warm for a locked document (content is withheld).
+                                if (isLocked) return;
+
                                 queryClient.prefetchQuery({
                                     queryKey: ['document', document.id],
                                     queryFn: () => documentsApi.get(document.id),

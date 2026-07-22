@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -68,11 +71,23 @@ class CollectionsViewModel @Inject constructor(
 
     init {
         refresh()
+        observeVaultChanges()
     }
 
     fun refresh() {
         viewModelScope.launch { runCatching { folderRepository.refresh() } }
         viewModelScope.launch { vaultRepository.refresh() }
+    }
+
+    /** Re-fetch the tree whenever the vault unlocks/re-locks so each folder's `locked` flag flips. */
+    private fun observeVaultChanges() {
+        viewModelScope.launch {
+            vaultRepository.status
+                .map { it?.unlocked == true }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { runCatching { folderRepository.refresh() } }
+        }
     }
 
     fun toggleExpand(id: String) = collapsed.update {
@@ -140,9 +155,5 @@ class CollectionsViewModel @Inject constructor(
 
     fun lockVault() {
         viewModelScope.launch { vaultRepository.lock() }
-    }
-
-    fun setHidePrivate(hide: Boolean) {
-        viewModelScope.launch { vaultRepository.setHidePrivate(hide) }
     }
 }

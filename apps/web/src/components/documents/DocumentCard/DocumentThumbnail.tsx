@@ -3,7 +3,7 @@ import { ImageLoader } from '@/components/ui/image-loader';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
-import { Play } from 'lucide-react';
+import { Lock, Play } from 'lucide-react';
 import { memo, useRef } from 'react';
 
 export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: { document: Document }) {
@@ -12,6 +12,23 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
     const extension = getFileExtension(document.original_filename);
     const thumbnailUrl = getThumbnailUrl(document, 'lg');
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
+
+    // While locked the server withholds the thumbnail — show a neutral locked placeholder
+    // (title/type only) so no content leaks.
+    if (document.locked) {
+        return (
+            <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden bg-muted">
+                <div className="flex size-11 items-center justify-center rounded-full bg-accent/15 text-accent">
+                    <Lock className="size-5" />
+                </div>
+                {extension && (
+                    <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white backdrop-blur-sm">
+                        .{extension.toLowerCase()}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="relative aspect-4/3 overflow-hidden bg-muted">

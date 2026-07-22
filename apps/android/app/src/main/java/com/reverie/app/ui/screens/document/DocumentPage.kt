@@ -14,8 +14,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -195,6 +207,10 @@ fun DocumentPage(
 
         val viewer: @Composable (Modifier) -> Unit = { mod ->
             document?.let { doc ->
+                if (doc.locked) {
+                    LockedDocumentPlaceholder(mod)
+                    return@let
+                }
                 DocumentViewerBody(
                     document = doc,
                     fileUrl = fileUrl,
@@ -297,5 +313,32 @@ private fun VideoBufferingSpinner(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) { alpha.animateTo(1f, tween(BUFFER_SPINNER_FADE_MS)) }
     Box(modifier.graphicsLayer { this.alpha = alpha.value }, contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * Shown when the pager swipes onto a locked private document (its content is withheld server-side).
+ * The user unlocks from the grid/tree lock icons; here we just explain why there's nothing to show.
+ */
+@Composable
+private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            Icons.Outlined.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(40.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "This item is locked. Unlock private items to open it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }

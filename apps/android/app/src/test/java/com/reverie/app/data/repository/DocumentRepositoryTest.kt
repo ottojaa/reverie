@@ -111,7 +111,7 @@ class DocumentRepositoryTest {
         width = null, height = null, durationSeconds = null, thumbnailBlurhash = null, documentCategory = "photo", extractedDate = null,
         ocrStatus = "COMPLETE", thumbnailStatus = "COMPLETE", llmStatus = "COMPLETE", llmSummary = null,
         llmMetadataJson = null, llmProcessedAt = null, llmTokenCount = null, photoMetadataJson = null,
-        isPrivate = false, createdAt = "2024-01-01T00:00:00.000Z", updatedAt = "2024-01-01T00:00:00.000Z",
+        isPrivate = false, locked = false, createdAt = "2024-01-01T00:00:00.000Z", updatedAt = "2024-01-01T00:00:00.000Z",
         cachedAt = 0, lastAccessedAt = 0,
     )
 }

@@ -5,14 +5,19 @@ import { db } from '../db/kysely.js';
 /**
  * Vault = the server-enforced lock over private items.
  *
- * When a user turns on "hide private items", list/tree endpoints withhold private
- * folders/documents until a valid vault session cookie is present. The session is a
- * short-lived JWT (scope 'vault') set as an httpOnly cookie after the user re-enters
- * their account password. Search always excludes private items regardless of this.
+ * Private items always appear in listings, but list/detail/thumbnail endpoints withhold
+ * their content (file_url, thumbnails, summaries, location) unless a valid vault session
+ * cookie is present. The session is a JWT (scope 'vault') set as an httpOnly session
+ * cookie after the user re-enters their account password. It has no idle timeout — it
+ * lasts until the app/browser session ends (session cookie), the user logs out (cookie
+ * cleared), or the user explicitly locks. Search always excludes private items regardless.
  */
 
 export const VAULT_COOKIE = 'vault_session';
-export const VAULT_TTL_SECONDS = 15 * 60; // 15 minutes
+
+// JWT lifetime is only a backstop; the real lifecycle is the session cookie (no maxAge)
+// plus explicit lock / logout. Kept long so a session never re-locks mid-use.
+export const VAULT_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 interface VaultTokenPayload {
     sub: string;
@@ -20,7 +25,7 @@ interface VaultTokenPayload {
     exp: number; // seconds since epoch (set by jwt)
 }
 
-/** Sign a short-lived vault-session token for the given user. */
+/** Sign a vault-session token for the given user. */
 export function signVaultToken(fastify: FastifyInstance, userId: string): string {
     // The signing payload type is fixed by the @fastify/jwt augmentation (JwtPayload);
     // the vault token carries a distinct shape, so cast at the boundary.
@@ -28,36 +33,34 @@ export function signVaultToken(fastify: FastifyInstance, userId: string): string
 }
 
 /**
- * Read + verify the vault session from the request cookie. Returns unlocked=false for a
+ * Whether a valid vault session is present on the request. Returns false for a
  * missing/expired/invalid token, a token for a different user, or a non-vault token
  * (so an access token can't be replayed as a vault session).
  */
-export function readVaultSession(fastify: FastifyInstance, request: FastifyRequest, userId: string): { unlocked: boolean; expiresAt: string | null } {
+export function isVaultUnlocked(fastify: FastifyInstance, request: FastifyRequest, userId: string): boolean {
     const token = request.cookies?.[VAULT_COOKIE];
 
-    if (!token) return { unlocked: false, expiresAt: null };
+    if (!token) return false;
 
     try {
         const decoded = fastify.jwt.verify<VaultTokenPayload>(token);
 
-        if (decoded.scope !== 'vault' || decoded.sub !== userId) {
-            return { unlocked: false, expiresAt: null };
-        }
-
-        return { unlocked: true, expiresAt: new Date(decoded.exp * 1000).toISOString() };
+        return decoded.scope === 'vault' && decoded.sub === userId;
     } catch {
-        return { unlocked: false, expiresAt: null };
+        return false;
     }
 }
 
 /**
- * Whether the caller should see private items in list/tree endpoints.
- * Private items are visible unless the user has enabled hiding AND the vault is locked.
+ * Whether private items should be locked (content withheld) for this caller. Locked when
+ * the vault is not unlocked AND the user has an account password to unlock with. Users
+ * without a password cannot unlock, so their private items are never locked (they stay
+ * openable) — otherwise they'd be permanently shut out of their own content.
  */
-export async function resolveShowPrivate(fastify: FastifyInstance, request: FastifyRequest, userId: string): Promise<boolean> {
-    if (readVaultSession(fastify, request, userId).unlocked) return true;
+export async function isVaultLocked(fastify: FastifyInstance, request: FastifyRequest, userId: string): Promise<boolean> {
+    if (isVaultUnlocked(fastify, request, userId)) return false;
 
-    const user = await db.selectFrom('users').select('hide_private').where('id', '=', userId).executeTakeFirst();
+    const user = await db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
 
-    return !user?.hide_private;
+    return !!user?.password_hash;
 }

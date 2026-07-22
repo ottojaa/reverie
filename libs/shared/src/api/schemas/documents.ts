@@ -108,6 +108,11 @@ export const DocumentSchema = z.object({
     // Explicitly-set privacy flag on this document. A document is also effectively
     // private if its folder or that folder's collection is private (query-time cascade).
     is_private: z.boolean(),
+    // True when this item is effectively private AND the caller has no active vault
+    // session (and has an account password to unlock with). While locked, the server
+    // withholds all content-bearing fields (file_url, thumbnails, llm_*, photo_metadata)
+    // and clients show a lock affordance instead of opening. See vault.ts.
+    locked: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     // Signed URLs for secure file access

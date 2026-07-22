@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { useVault } from '@/lib/vault';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -45,9 +46,22 @@ export function CategoryItem({
     children,
 }: CategoryItemProps) {
     const isPrivate = category.is_private;
+    const isLocked = category.locked;
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
+    const { requestUnlock } = useVault();
     const sortableId = categoryIdToSortableId(category.id);
+
+    // Removing privacy while locked would expose content without the password — unlock first.
+    const handleTogglePrivate = () => {
+        if (isLocked) {
+            requestUnlock();
+
+            return;
+        }
+
+        onTogglePrivate?.(category, !isPrivate);
+    };
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: sortableId,
@@ -67,53 +81,79 @@ export function CategoryItem({
                 'group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors',
                 !disableDrag && 'touch-pan-y cursor-grab select-none active:cursor-grabbing',
                 disableDrag && 'cursor-default',
+                isLocked && 'cursor-pointer',
                 'hover:bg-sidebar-accent/50',
             )}
             {...attributes}
             {...listeners}
+            // Locked collection: clicking anywhere on the row prompts to unlock (its folders are
+            // hidden until then) rather than expanding.
+            onClick={isLocked ? () => requestUnlock() : undefined}
         >
-            {/* Collapse chevron */}
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onToggleCollapse();
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                aria-label={collapsed ? 'Expand' : 'Collapse'}
-            >
-                <motion.div initial={false} animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
-                    <ChevronDown className="size-3.5" />
-                </motion.div>
-            </Button>
+            {/* Collapse chevron — a locked collection can't expand (children hidden), so hide it. */}
+            {!isLocked && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleCollapse();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={collapsed ? 'Expand' : 'Collapse'}
+                >
+                    <motion.div initial={false} animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
+                        <ChevronDown className="size-3.5" />
+                    </motion.div>
+                </Button>
+            )}
 
             {/* Category name - uppercase label style */}
             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{category.name}</span>
-            {isPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />}
+            {isLocked ? (
+                <button
+                    type="button"
+                    className="shrink-0 text-accent transition-transform hover:scale-110"
+                    aria-label="Locked — click to unlock"
+                    title="Locked — click to unlock"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        requestUnlock();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <Lock className="size-3" />
+                </button>
+            ) : (
+                // Private but currently unlocked → an open padlock signals it's accessible this session.
+                isPrivate && <LockOpen className="size-3 shrink-0 text-accent" aria-label="Private (unlocked)" />
+            )}
 
-            {/* Add folder */}
-            <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className={cn(
-                    'h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                    !isMobile && 'opacity-0 transition-opacity group-hover:opacity-100',
-                )}
-                aria-label="Add folder"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onAddSection?.(category);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
-                <Plus className="size-3.5" />
-            </Button>
+            {/* Add folder — hidden while locked (can't add into a collection you can't see). */}
+            {!isLocked && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn(
+                        'h-auto w-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                        !isMobile && 'opacity-0 transition-opacity group-hover:opacity-100',
+                    )}
+                    aria-label="Add folder"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onAddSection?.(category);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <Plus className="size-3.5" />
+                </Button>
+            )}
             {/* Actions button */}
             {isMobile ? (
                 <DropdownMenu>
@@ -136,7 +176,7 @@ export function CategoryItem({
                             Rename
                         </DropdownMenuItem>
                         {onTogglePrivate && (
-                            <DropdownMenuItem onSelect={() => onTogglePrivate(category, !isPrivate)}>
+                            <DropdownMenuItem onSelect={handleTogglePrivate}>
                                 {isPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
                                 {isPrivate ? 'Remove from private' : 'Make private'}
                             </DropdownMenuItem>
@@ -181,7 +221,7 @@ export function CategoryItem({
                             Rename
                         </ContextMenuItem>
                         {onTogglePrivate && (
-                            <ContextMenuItem onSelect={() => onTogglePrivate(category, !isPrivate)}>
+                            <ContextMenuItem onSelect={handleTogglePrivate}>
                                 {isPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
                                 {isPrivate ? 'Remove from private' : 'Make private'}
                             </ContextMenuItem>
@@ -195,9 +235,9 @@ export function CategoryItem({
                 </ContextMenu>
             )}
 
-            {/* Collapsible children area */}
+            {/* Collapsible children area — a locked collection hides its folders until unlocked. */}
             <AnimatePresence initial={false}>
-                {!collapsed && (
+                {!collapsed && !isLocked && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}

@@ -19,10 +19,4 @@ export const vaultApi = {
 
         return VaultStatusSchema.parse(data);
     },
-
-    async setHidePrivate(hide_private: boolean): Promise<VaultStatus> {
-        const { data } = await apiClient.patch('/vault/settings', { hide_private });
-
-        return VaultStatusSchema.parse(data);
-    },
 };

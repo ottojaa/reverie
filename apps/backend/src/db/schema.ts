@@ -21,7 +21,6 @@ export interface UsersTable {
     storage_path: string;
     is_active: ColumnType<boolean, boolean | undefined, boolean>;
     role: ColumnType<UserRole, UserRole | undefined, UserRole>;
-    hide_private: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
     last_login_at: Date | null;

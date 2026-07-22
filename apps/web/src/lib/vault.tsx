@@ -10,28 +10,30 @@ import { vaultApi } from './api/vault';
 import { useAuth } from './auth';
 
 interface VaultContextValue {
-    hideEnabled: boolean;
     unlocked: boolean;
     hasPassword: boolean;
-    expiresAt: string | null;
     isLoading: boolean;
-    /** Open the passcode modal to reveal hidden private items. */
-    openReveal: () => void;
-    /** Re-hide private items immediately. */
+    /**
+     * Open the passcode modal to unlock private items. The optional callback runs once
+     * after a successful unlock — pass a navigate-by-id closure to retry opening the item
+     * the user just clicked (content is refetched unlocked by then).
+     */
+    requestUnlock: (onUnlocked?: () => void) => void;
+    /** Re-lock private items immediately. */
     lockNow: () => void;
     isLocking: boolean;
-    /** Enable/disable hiding private items from the sidebar. */
-    setHideEnabled: (value: boolean) => Promise<VaultStatus>;
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null);
 
-const LOCKED_DEFAULT: VaultStatus = { hide_enabled: false, unlocked: false, expires_at: null, has_password: false };
+const LOCKED_DEFAULT: VaultStatus = { unlocked: false, has_password: false };
 
 export function VaultProvider({ children }: { children: ReactNode }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [revealOpen, setRevealOpen] = useState(false);
+    // Action to run after the next successful unlock (e.g. open the clicked item).
+    const pendingActionRef = useRef<(() => void) | null>(null);
 
     const { data: status = LOCKED_DEFAULT, isLoading } = useQuery({
         queryKey: ['vault', 'status'],
@@ -40,67 +42,58 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         staleTime: 30 * 1000,
     });
 
-    // Refetch private-bearing views + the vault state itself.
+    // Refetch private-bearing views so redacted↔full content swaps in after a lock/unlock.
+    // Covers the folder tree (['sections']/['folders']), document lists (['documents']) and
+    // per-document detail (['document', id]) used by the viewer.
     const refetchPrivate = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ['vault', 'status'] });
         queryClient.invalidateQueries({ queryKey: ['sections'] });
         queryClient.invalidateQueries({ queryKey: ['documents'] });
+        queryClient.invalidateQueries({ queryKey: ['document'] });
+        queryClient.invalidateQueries({ queryKey: ['folders'] });
     }, [queryClient]);
 
     const lockMutation = useMutation({
         mutationFn: () => vaultApi.lock(),
         onSuccess: (next) => {
             queryClient.setQueryData(['vault', 'status'], next);
-            queryClient.invalidateQueries({ queryKey: ['sections'] });
-            queryClient.invalidateQueries({ queryKey: ['documents'] });
-        },
-    });
-
-    const setHideMutation = useMutation({
-        mutationFn: (value: boolean) => vaultApi.setHidePrivate(value),
-        onSuccess: (next) => {
-            queryClient.setQueryData(['vault', 'status'], next);
-            queryClient.invalidateQueries({ queryKey: ['sections'] });
-            queryClient.invalidateQueries({ queryKey: ['documents'] });
-        },
-    });
-
-    // Auto-lock: when the vault session expires, flip the UI back to locked and drop
-    // private items from the views. The server cookie has already expired by then.
-    useEffect(() => {
-        if (!status.unlocked || !status.expires_at) return;
-
-        const ms = new Date(status.expires_at).getTime() - Date.now();
-
-        if (ms <= 0) {
             refetchPrivate();
+        },
+    });
 
-            return;
-        }
+    const requestUnlock = useCallback((onUnlocked?: () => void) => {
+        pendingActionRef.current = onUnlocked ?? null;
+        setRevealOpen(true);
+    }, []);
 
-        const timer = setTimeout(refetchPrivate, ms);
-
-        return () => clearTimeout(timer);
-    }, [status.unlocked, status.expires_at, refetchPrivate]);
-
-    const setHideEnabled = useCallback((value: boolean) => setHideMutation.mutateAsync(value), [setHideMutation]);
+    const handleUnlocked = useCallback(() => {
+        refetchPrivate();
+        const action = pendingActionRef.current;
+        pendingActionRef.current = null;
+        action?.();
+    }, [refetchPrivate]);
 
     const value: VaultContextValue = {
-        hideEnabled: status.hide_enabled,
         unlocked: status.unlocked,
         hasPassword: status.has_password,
-        expiresAt: status.expires_at,
         isLoading,
-        openReveal: () => setRevealOpen(true),
+        requestUnlock,
         lockNow: () => lockMutation.mutate(),
         isLocking: lockMutation.isPending,
-        setHideEnabled,
     };
 
     return (
         <VaultContext.Provider value={value}>
             {children}
-            <RevealDialog open={revealOpen} onOpenChange={setRevealOpen} hasPassword={status.has_password} onUnlocked={refetchPrivate} />
+            <RevealDialog
+                open={revealOpen}
+                onOpenChange={(open) => {
+                    if (!open) pendingActionRef.current = null;
+                    setRevealOpen(open);
+                }}
+                hasPassword={status.has_password}
+                onUnlocked={handleUnlocked}
+            />
         </VaultContext.Provider>
     );
 }
@@ -113,7 +106,7 @@ export function useVault(): VaultContextValue {
     return ctx;
 }
 
-/** Passcode modal — reuses the account login password to reveal hidden private items. */
+/** Passcode modal — reuses the account login password to unlock private items for the session. */
 function RevealDialog({
     open,
     onOpenChange,
@@ -170,12 +163,12 @@ function RevealDialog({
                         <span className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent">
                             <LockKeyhole className="size-4" />
                         </span>
-                        <DialogTitle>Reveal private items</DialogTitle>
+                        <DialogTitle>Unlock private items</DialogTitle>
                     </div>
                     <DialogDescription>
                         {hasPassword
-                            ? 'Enter your account password to reveal private folders and files. They stay out of search either way.'
-                            : 'Set an account password in Settings first — private hiding needs a password to unlock with.'}
+                            ? 'Enter your account password to open private folders and files. They stay unlocked until you lock them or quit, and stay out of search either way.'
+                            : 'Set an account password in Settings first — locking private items needs a password to unlock with.'}
                     </DialogDescription>
                 </DialogHeader>
 

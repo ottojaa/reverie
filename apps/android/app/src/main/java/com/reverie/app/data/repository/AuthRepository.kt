@@ -12,6 +12,7 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val session: AuthSessionManager,
+    private val vaultRepository: VaultRepository,
 ) {
     val authState: StateFlow<AuthState> = session.authState
 
@@ -27,8 +28,11 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun logout() {
+        // The backend /auth/logout clears both the refresh and vault_session cookies; also drop
+        // the in-memory vault state so the next user starts locked.
         authApi.logout()
         session.logout()
+        vaultRepository.reset()
     }
 
     suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> = runCatching {

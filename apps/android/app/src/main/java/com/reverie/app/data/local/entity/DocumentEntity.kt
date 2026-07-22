@@ -34,6 +34,9 @@ data class DocumentEntity(
     val llmTokenCount: Long?,
     val photoMetadataJson: String?,
     val isPrivate: Boolean,
+    // Vault lock state at last fetch. Refreshed from the server on unlock/lock; stale-safe
+    // offline (locked content is never cached, so a stale `true` just keeps it locked).
+    val locked: Boolean,
     val createdAt: String,
     val updatedAt: String,
     val cachedAt: Long,

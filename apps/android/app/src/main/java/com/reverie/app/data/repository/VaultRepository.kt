@@ -31,7 +31,8 @@ class VaultRepository @Inject constructor(
         runCatching { vaultApi.lock() }.onSuccess { _status.value = it }
     }
 
-    suspend fun setHidePrivate(hidePrivate: Boolean): Result<VaultStatus> = withContext(io) {
-        runCatching { vaultApi.setHidePrivate(hidePrivate) }.onSuccess { _status.value = it }
+    /** Reset in-memory unlock state (e.g. on logout, when the cookie jar is cleared). */
+    fun reset() {
+        _status.value = null
     }
 }

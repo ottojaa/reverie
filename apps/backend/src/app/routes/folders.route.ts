@@ -11,13 +11,24 @@ import {
     type ReorderFoldersRequest,
     type UpdateFolderRequest,
 } from '@reverie/shared';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getFolderService } from '../../services/folder.service';
 import { getPrivateFolderIds } from '../../services/privacy';
-import { resolveShowPrivate } from '../../services/vault';
+import { isVaultLocked } from '../../services/vault';
 
 const folderService = getFolderService();
+
+/**
+ * The set of folder ids that are locked (content withheld) for this request: the
+ * effectively-private folders when the vault is locked, empty otherwise. Folders always
+ * appear in listings — this drives the per-folder `locked` flag, not their visibility.
+ */
+async function resolveLockedFolderIds(fastify: FastifyInstance, request: FastifyRequest, userId: string): Promise<Set<string>> {
+    if (!(await isVaultLocked(fastify, request, userId))) return new Set();
+
+    return new Set(await getPrivateFolderIds(userId));
+}
 
 export default async function (fastify: FastifyInstance) {
     // List root folders (requires authentication)
@@ -34,11 +45,10 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const showPrivate = await resolveShowPrivate(fastify, request, userId);
-            const excludeIds = showPrivate ? undefined : await getPrivateFolderIds(userId);
-            const folders = await folderService.listChildren(null, userId, excludeIds);
+            const lockedIds = await resolveLockedFolderIds(fastify, request, userId);
+            const folders = await folderService.listChildren(null, userId);
 
-            return folders.map(serializeFolder);
+            return folders.map((folder) => serializeFolder(folder, lockedIds.has(folder.id)));
         },
     );
 
@@ -56,10 +66,10 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const showPrivate = await resolveShowPrivate(fastify, request, userId);
-            const tree = await folderService.getFolderTree(userId, !showPrivate);
+            const lockedIds = await resolveLockedFolderIds(fastify, request, userId);
+            const tree = await folderService.getFolderTree(userId);
 
-            return tree.map((node) => serializeFolderWithChildren(node));
+            return tree.map((node) => serializeFolderWithChildren(node, lockedIds));
         },
     );
 
@@ -109,18 +119,10 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Folder not found');
             }
 
-            // Don't reveal a hidden private folder by direct id while the vault is locked.
-            const showPrivate = await resolveShowPrivate(fastify, request, userId);
+            // The folder is always visible (title only); mark it locked while the vault is.
+            const lockedIds = await resolveLockedFolderIds(fastify, request, userId);
 
-            if (!showPrivate) {
-                const privateIds = await getPrivateFolderIds(userId);
-
-                if (privateIds.includes(folder.id)) {
-                    return reply.notFound('Folder not found');
-                }
-            }
-
-            return serializeFolder(folder);
+            return serializeFolder(folder, lockedIds.has(folder.id));
         },
     );
 
@@ -142,11 +144,10 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const showPrivate = await resolveShowPrivate(fastify, request, userId);
-            const excludeIds = showPrivate ? undefined : await getPrivateFolderIds(userId);
-            const children = await folderService.listChildren(request.params.id, userId, excludeIds);
+            const lockedIds = await resolveLockedFolderIds(fastify, request, userId);
+            const children = await folderService.listChildren(request.params.id, userId);
 
-            return children.map(serializeFolder);
+            return children.map((folder) => serializeFolder(folder, lockedIds.has(folder.id)));
         },
     );
 
@@ -194,8 +195,19 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request) {
+        async function (request, reply) {
             const userId = request.user.id;
+
+            // Removing privacy while the vault is locked would expose content without the
+            // password — refuse it for a currently-locked folder.
+            if (request.body.is_private === false) {
+                const lockedIds = await resolveLockedFolderIds(fastify, request, userId);
+
+                if (lockedIds.has(request.params.id)) {
+                    return reply.forbidden('Unlock to change privacy of a locked folder');
+                }
+            }
+
             const folder = await folderService.updateFolder(request.params.id, userId, request.body);
 
             return serializeFolder(folder);
@@ -225,7 +237,7 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-function serializeFolder(folder: import('../../db/schema').Folder): Folder {
+function serializeFolder(folder: import('../../db/schema').Folder, locked = false): Folder {
     return {
         id: folder.id,
         parent_id: folder.parent_id,
@@ -236,16 +248,20 @@ function serializeFolder(folder: import('../../db/schema').Folder): Folder {
         sort_order: folder.sort_order,
         type: folder.type,
         is_private: folder.is_private,
+        locked,
         created_at: folder.created_at.toISOString(),
         updated_at: folder.updated_at.toISOString(),
     };
 }
 
-function serializeFolderWithChildren(node: import('../../db/schema').Folder & { children: unknown[]; document_count: number }): FolderWithChildren {
+function serializeFolderWithChildren(
+    node: import('../../db/schema').Folder & { children: unknown[]; document_count: number },
+    lockedIds: Set<string>,
+): FolderWithChildren {
     return {
-        ...serializeFolder(node),
+        ...serializeFolder(node, lockedIds.has(node.id)),
         children: (node.children as Array<import('../../db/schema').Folder & { children: unknown[]; document_count: number }>).map((child) =>
-            serializeFolderWithChildren(child),
+            serializeFolderWithChildren(child, lockedIds),
         ),
         document_count: node.document_count,
     };
