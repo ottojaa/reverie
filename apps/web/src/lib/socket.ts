@@ -7,6 +7,11 @@ let socket: Socket | null = null;
 const subscribedSessions = new Set<string>();
 const subscribedDocuments = new Set<string>();
 let refreshingAuth = false;
+// Guards against a refresh storm: attempt at most one token refresh per
+// disconnected episode. Reset on a successful connect so a later expiry can
+// recover again. Without this, a dead refresh token makes socket.io's
+// auto-reconnect fire connect_error repeatedly, each retriggering /auth/refresh.
+let authRefreshAttempted = false;
 
 /**
  * Get or create the Socket.io client instance
@@ -24,9 +29,10 @@ export function getSocket(): Socket {
         // The handshake middleware rejects an invalid/expired token with this message
         // and does not auto-retry, so refresh once and reconnect with the new token.
         s.on('connect_error', (err: Error) => {
-            if (err.message !== 'unauthorized' || refreshingAuth) return;
+            if (err.message !== 'unauthorized' || refreshingAuth || authRefreshAttempted) return;
 
             refreshingAuth = true;
+            authRefreshAttempted = true;
             void refreshAccessToken()
                 .then((ok) => {
                     if (ok) s.connect();
@@ -41,6 +47,9 @@ export function getSocket(): Socket {
         // so replay every subscription we're tracking or job events silently
         // stop arriving until the subscribing components remount.
         s.on('connect', () => {
+            // Connected: allow a fresh refresh attempt if the token expires again later.
+            authRefreshAttempted = false;
+
             for (const sessionId of subscribedSessions) {
                 s.emit('subscribe:session', { session_id: sessionId });
             }
@@ -82,18 +91,36 @@ export function ensureSocketConnected(): Promise<void> {
     }
 
     return new Promise<void>((resolve, reject) => {
-        const onConnect = () => {
+        const cleanup = () => {
+            s.off('connect', onConnect);
             s.off('connect_error', onError);
+            clearTimeout(timer);
+        };
+
+        const onConnect = () => {
+            cleanup();
             resolve();
         };
 
         const onError = (err: Error) => {
-            s.off('connect', onConnect);
+            // 'unauthorized' is recoverable: the connect_error handler above refreshes
+            // the token and reconnects, which fires 'connect'. Rejecting on this first
+            // error would abort the upload before that recovery lands (the caller shows
+            // an "unauthorized" toast). Keep waiting — the timeout below is the backstop
+            // if the refresh itself fails. Other errors (transport, server down) are fatal.
+            if (err.message === 'unauthorized') return;
+
+            cleanup();
             reject(err);
         };
 
-        s.once('connect', onConnect);
-        s.once('connect_error', onError);
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('WebSocket connection timed out'));
+        }, 10_000);
+
+        s.on('connect', onConnect);
+        s.on('connect_error', onError);
         s.connect();
     });
 }
