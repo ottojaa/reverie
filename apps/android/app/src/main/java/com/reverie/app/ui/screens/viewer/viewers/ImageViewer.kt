@@ -71,9 +71,10 @@ private const val DOUBLE_TAP_ZOOM = 2.5f
  *     re-sets the location every composition (from its decoder's size, or the preview's size before
  *     that); we re-assert our known full-res size AFTER it while the decoder hasn't reported, so the
  *     transform is never in a smaller/placeholder space during the decoder-init window.
- *  2. **The thumbnail is the sub-sampler's `preview`:** it paints as the base-tile fallback the moment
- *     the decoder is ready, so `isImageDisplayed` flipping true coincides with visible pixels — the
- *     hero handoff no longer needs a transform heuristic; it just waits for the dive to settle.
+ *  2. **The base layer stays mounted under the crisp layer** as the blur-under, so the pre-decoder and
+ *     tile-decode windows are covered without a `preview` — the hero handoff just waits for the dive to
+ *     settle (no transform heuristic). A sub-sampling `preview` is passed ONLY when there is no base
+ *     layer (unknown dimensions); with a base layer present it would mis-scale (see the source).
  *
  * Double-tap-to-zoom comes for free from `Modifier.zoomable`'s `onDoubleClick`.
  *
@@ -124,14 +125,22 @@ fun ImageViewer(
     val currentFile = file
     val subState = if (currentFile != null) {
         val source = remember(currentFile) {
-            // Reuse the already-decoded grid thumbnail (warm in Coil's memory cache by now) as the
-            // sub-sampler's preview so it paints a blurry base the instant its decoder is ready and
-            // upgrades to crisp tiles in place. Falls back to the LG key large mosaic tiles decode at.
-            val preview = context.imageLoader.memoryCache?.let { cache ->
-                (
-                    cache.get(thumbnailMemoryCacheKey(documentId, GRID_THUMBNAIL_SIZE))
-                        ?: cache.get(thumbnailMemoryCacheKey(documentId, ThumbnailSize.LG))
-                    )?.bitmap?.asImageBitmap()
+            // Pass a preview ONLY when there is no base layer (unknown dimensions — see below). With a
+            // base layer it is redundant (the base thumbnail is the blur-under) AND harmful: telephoto
+            // sizes its tile grid to `imageOrPreviewSize`, which is the PREVIEW's size until the decoder
+            // reports the real one. Our transform is forced into contentSize space, so sub-sampling
+            // would draw its preview base tile (bounds in preview space) at the contentSize-space scale
+            // → a small mis-scaled copy pinned to the top-left for the ~½s the decoder takes. Without a
+            // preview, sub-sampling stays dormant until the decoder sizes it in OUR transform's space.
+            val preview = if (contentSize != null) {
+                null
+            } else {
+                context.imageLoader.memoryCache?.let { cache ->
+                    (
+                        cache.get(thumbnailMemoryCacheKey(documentId, GRID_THUMBNAIL_SIZE))
+                            ?: cache.get(thumbnailMemoryCacheKey(documentId, ThumbnailSize.LG))
+                        )?.bitmap?.asImageBitmap()
+                }
             }
             SubSamplingImageSource.file(currentFile.absolutePath.toPath(), preview = preview)
         }
@@ -161,11 +170,13 @@ fun ImageViewer(
     // show. The base layer at rest is pixel-identical to the hero, so no transform gate is needed
     // (the old userZoom≈1 heuristic is gone). Keyed on subState so the crisp-only path (unknown
     // dimensions → no base thumbnail) fires once sub-sampling actually paints.
-    val baseReady = hasThumbnail && contentSize != null && !contentSize.isEmpty()
-    LaunchedEffect(sharedScope, baseReady, subState) {
+    // Non-null exactly when we can place the base thumbnail layer: a thumbnail + known, non-empty
+    // dimensions to build its fit rect from. Doubles as the "base is drawable" flag for the handoff.
+    val baseSize = contentSize?.takeIf { hasThumbnail && !it.isEmpty() }
+    LaunchedEffect(sharedScope, baseSize != null, subState) {
         snapshotFlow {
             val settled = sharedScope?.isTransitionActive != true
-            settled && (baseReady || subState?.isImageDisplayed == true)
+            settled && (baseSize != null || subState?.isImageDisplayed == true)
         }.first { it }
         withFrameNanos {}
         onContentVisible()
@@ -189,12 +200,11 @@ fun ImageViewer(
         Modifier
     }
 
-    val cs = contentSize
     Box(modifier.fillMaxSize().then(zoomGestures)) {
         // Base layer: instantly zoomable thumbnail, drawn full-screen at Fit and re-projected onto
         // telephoto's raw-pixel transform by [baseLayerTransform]. Kept mounted under the crisp layer
         // as the blur-under; skipped only when dimensions are unknown (no fit rect to place it in).
-        if (baseReady && cs != null) {
+        if (baseSize != null) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -206,8 +216,8 @@ fun ImageViewer(
                             scaleY = t.scale.scaleY,
                             offsetX = t.offset.x,
                             offsetY = t.offset.y,
-                            contentWidth = cs.width,
-                            contentHeight = cs.height,
+                            contentWidth = baseSize.width,
+                            contentHeight = baseSize.height,
                             viewportWidth = size.width,
                             viewportHeight = size.height,
                         )
