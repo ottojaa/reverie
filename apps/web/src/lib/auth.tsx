@@ -187,11 +187,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         initApiAuth({
-            getToken: () => state.accessToken,
+            // Read localStorage, not state.accessToken: refreshToken() writes the new
+            // token to localStorage synchronously, but the React-state closure only
+            // updates after a re-render. The socket's connect_error->refresh->reconnect
+            // path reconnects before that render, so a state read would reuse the stale
+            // (expired) token and loop forever, storming /auth/refresh. localStorage is
+            // the source of truth and is always at least as fresh as state.
+            getToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
             refresh: refreshToken,
             logout,
         });
-    }, [state.accessToken, refreshToken, logout]);
+    }, [refreshToken, logout]);
 
     return (
         <AuthContext.Provider
