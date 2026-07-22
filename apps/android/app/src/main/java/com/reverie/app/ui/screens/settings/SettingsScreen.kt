@@ -81,6 +81,7 @@ fun SettingsScreen(
     var showSignOut by remember { mutableStateOf(false) }
     var showServerDialog by remember { mutableStateOf(false) }
     var showVaultUnlock by remember { mutableStateOf(false) }
+    var showLockConfirm by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -188,7 +189,7 @@ fun SettingsScreen(
                         )
                     }
                     if (vault?.unlocked == true) {
-                        TextButton(onClick = viewModel::lockVault) { Text("Lock now") }
+                        TextButton(onClick = { showLockConfirm = true }) { Text("Lock now") }
                     } else {
                         TextButton(onClick = { showVaultUnlock = true }) { Text("Unlock") }
                     }
@@ -331,6 +332,16 @@ fun SettingsScreen(
         com.reverie.app.ui.components.VaultUnlockSheet(
             onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
             onDismiss = { showVaultUnlock = false },
+        )
+    }
+
+    if (showLockConfirm) {
+        ConfirmDialog(
+            title = "Lock private items?",
+            message = "Private folders and files will be hidden again — you'll need your account password to open them for the rest of this session.",
+            confirmLabel = "Lock",
+            onConfirm = { viewModel.lockVault(); showLockConfirm = false },
+            onDismiss = { showLockConfirm = false },
         )
     }
 }

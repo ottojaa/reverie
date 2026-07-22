@@ -129,7 +129,8 @@ export function CategoryItem({
                     <Lock className="size-3" />
                 </button>
             ) : (
-                isPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
+                // Private but currently unlocked → an open padlock signals it's accessible this session.
+                isPrivate && <LockOpen className="size-3 shrink-0 text-accent" aria-label="Private (unlocked)" />
             )}
 
             {/* Add folder — hidden while locked (can't add into a collection you can't see). */}

@@ -130,8 +130,9 @@ export function SectionItem({
                 </button>
             ) : (
                 // Only a folder made private on its own shows a lock — inherited privacy is
-                // conveyed by the parent collection's lock (the single lock unit).
-                ownPrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
+                // conveyed by the parent collection's lock (the single lock unit). Unlocked →
+                // an open padlock signals it's accessible this session.
+                ownPrivate && <LockOpen className="size-3 shrink-0 text-accent" aria-label="Private (unlocked)" />
             )}
             {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
             {isMobile ? (

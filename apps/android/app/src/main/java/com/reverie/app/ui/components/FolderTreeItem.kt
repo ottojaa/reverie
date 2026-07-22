@@ -75,7 +75,8 @@ fun CollectionHeaderRow(
                 Icon(Icons.Outlined.Lock, contentDescription = "Locked — tap to unlock", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
             }
         } else if (collection.is_private) {
-            Icon(Icons.Outlined.Lock, contentDescription = "Private", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
+            // Private but currently unlocked → an open padlock signals it's accessible this session.
+            Icon(Icons.Outlined.LockOpen, contentDescription = "Private (unlocked)", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
         }
         Text(
             text = "$aggregateCount",
@@ -127,7 +128,8 @@ fun FolderTreeItem(
                 Icon(Icons.Outlined.Lock, contentDescription = "Locked — tap to unlock", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp))
             }
         } else if (folder.is_private) {
-            Icon(Icons.Outlined.Lock, contentDescription = "Private", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp))
+            // Private but currently unlocked → an open padlock signals it's accessible this session.
+            Icon(Icons.Outlined.LockOpen, contentDescription = "Private (unlocked)", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp))
         }
         Text(
             text = "${folder.document_count}",

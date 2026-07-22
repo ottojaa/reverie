@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { authApi } from '../lib/api/auth-api';
 import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
+import { useConfirm } from '../lib/confirm';
 import { useVault } from '../lib/vault';
 
 export const Route = createFileRoute('/settings')({
@@ -16,6 +17,18 @@ export const Route = createFileRoute('/settings')({
 function SettingsPage() {
     const { user, logout } = useAuth();
     const { unlocked, hasPassword, lockNow } = useVault();
+    const confirm = useConfirm();
+
+    const handleLock = async () => {
+        const ok = await confirm({
+            title: 'Lock private items?',
+            description: "Private folders and files will be hidden again — you'll need your account password to open them for the rest of this session.",
+            confirmText: 'Lock',
+            cancelText: 'Cancel',
+        });
+
+        if (ok) lockNow();
+    };
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -184,7 +197,7 @@ function SettingsPage() {
                             <div className="flex items-center gap-3">
                                 {unlocked ? (
                                     <>
-                                        <Button variant="outline" size="sm" onClick={lockNow}>
+                                        <Button variant="outline" size="sm" onClick={handleLock}>
                                             <Lock className="size-4" />
                                             Lock private items
                                         </Button>
