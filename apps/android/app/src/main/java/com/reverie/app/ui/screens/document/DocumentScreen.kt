@@ -235,8 +235,9 @@ fun DocumentScreen(
                     // Preload one neighbor each side so a swipe reveals an already-fetched page.
                     beyondViewportPageCount = 1,
                     // Lock horizontal paging while details are open — the strip is a details-focused
-                    // view of one document.
-                    userScrollEnabled = !details.isOpenOrOpening,
+                    // view of one document — and while media is zoomed, so a pinched-in image can be
+                    // panned freely without swiping to the next document.
+                    userScrollEnabled = !details.isOpenOrOpening && !mediaZoomed,
                     key = { ids.getOrNull(it) ?: it.toString() },
                     modifier = Modifier.fillMaxSize(),
                 ) { page ->

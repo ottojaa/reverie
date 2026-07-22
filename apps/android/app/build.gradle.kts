@@ -17,8 +17,8 @@ android {
         applicationId = "com.reverie.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.0.23"
+        versionCode = 26
+        versionName = "1.0.25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -136,7 +136,9 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
-    implementation(libs.zoomable.image.coil)
+    // telephoto: low-level zoom/pan gesture modifier + sub-sampled tile renderer (see ImageViewer).
+    implementation(libs.telephoto.zoomable)
+    implementation(libs.telephoto.subsampling)
 
     // Lucide icons (vector drawables) — folder/collection section icons, resolved by name at runtime
     implementation(libs.icons.lucide.android)
