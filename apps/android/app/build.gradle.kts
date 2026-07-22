@@ -136,7 +136,9 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
-    implementation(libs.zoomable.image.coil)
+    // telephoto: low-level zoom/pan gesture modifier + sub-sampled tile renderer (see ImageViewer).
+    implementation(libs.telephoto.zoomable)
+    implementation(libs.telephoto.subsampling)
 
     // Lucide icons (vector drawables) — folder/collection section icons, resolved by name at runtime
     implementation(libs.icons.lucide.android)
