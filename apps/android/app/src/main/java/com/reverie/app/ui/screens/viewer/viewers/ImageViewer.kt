@@ -10,13 +10,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalContext
+import coil.imageLoader
+import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.data.image.thumbnailMemoryCacheKey
+import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.LocalSharedTransitionScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -30,7 +36,6 @@ import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.zoomable
 import okio.Path.Companion.toPath
 import java.io.File
-import kotlin.math.roundToInt
 
 /** Pinch ceiling. Sub-sampling keeps the original crisp at this zoom, so it can be generous. */
 private const val MAX_IMAGE_ZOOM = 6f
@@ -45,20 +50,31 @@ private const val DOUBLE_TAP_ZOOM = 2.5f
  * does the grow/shrink; this draws nothing while a transition is in flight so it never covers the
  * hero's dive in/out.
  *
- * ## Why this doesn't use `ZoomableAsyncImage`, and how the "zoom instantly, stay crisp" handoff works
- * telephoto's high-level `ZoomableAsyncImage` keeps zoom & pan DISABLED while its placeholder is
- * showing (it gives the placeholder a *separate* zoomable state that swallows gestures — making
- * placeholders zoomable is telephoto's own open issue #104). So gestures wouldn't work until the
- * whole original had downloaded. We instead compose telephoto's building blocks under ONE shared
- * [zoomableState] and drive the transform ourselves, which sidesteps that lock:
- *  - [zoomableState] has `autoApplyTransformations = false`, so `Modifier.zoomable` only detects
- *    gestures — WE apply `state.contentTransformation` (a public [graphicsLayer] spec) to each layer.
- *  - **Base layer** (instant): the grid thumbnail, laid out at the image's real pixel size and
- *    transformed by `contentTransformation`, so it pans/zooms from frame 1 — no waiting on pixels.
- *  - **Crisp layer**: once the original lands on disk, [SubSamplingImage] draws sub-sampled tiles.
- *    It reads the SAME [zoomableState], so it adopts the live zoom/pan with no reset — a seamless
- *    upgrade — and self-draws its tiles at the transformed positions (that's why the modifier's
- *    transform must stay off; `rememberSubSamplingImageState` also forces `autoApply` false).
+ * ## Zoom instantly, stay crisp, hand off cleanly
+ * telephoto's high-level `ZoomableAsyncImage` keeps zoom & pan DISABLED while its placeholder shows
+ * (its open issue #104), so gestures wouldn't work until the whole original downloaded. We instead
+ * compose telephoto's building blocks under ONE shared [zoomableState] (`autoApplyTransformations =
+ * false` — `Modifier.zoomable` only DETECTS gestures; WE apply the transform per layer):
+ *  - **Base layer** (instant): the grid thumbnail, drawn full-screen at [ContentScale.Fit] and then
+ *    re-projected onto telephoto's transform by [baseLayerTransform]. It pans/zooms from frame 1 —
+ *    no waiting on pixels — and, crucially, is the IDENTITY at the resting fit and on any unspecified
+ *    frame, so it always sits exactly where the dive hero was. There is no state that produces a
+ *    giant or collapsed layer (the failure mode of the earlier real-pixel-sized base).
+ *  - **Crisp layer**: once the original lands on disk, [SubSamplingImage] draws sub-sampled tiles off
+ *    the SAME [zoomableState] → live zoom/pan carries over with no reset, self-drawing tiles at
+ *    `raw*scale + offset` (matching the base layer exactly).
+ *
+ * Two invariants keep the open ("dive") handoff seamless — the giant/black frames it used to flash
+ * are structurally impossible now:
+ *  1. **One coordinate space forever:** [ZoomableContentLocation.unscaledAndTopLeftAligned] of the
+ *     image's real pixel size — the same space [SubSamplingImage] uses. `rememberSubSamplingImageState`
+ *     re-sets the location every composition (from its decoder's size, or the preview's size before
+ *     that); we re-assert our known full-res size AFTER it while the decoder hasn't reported, so the
+ *     transform is never in a smaller/placeholder space during the decoder-init window.
+ *  2. **The thumbnail is the sub-sampler's `preview`:** it paints as the base-tile fallback the moment
+ *     the decoder is ready, so `isImageDisplayed` flipping true coincides with visible pixels — the
+ *     hero handoff no longer needs a transform heuristic; it just waits for the dive to settle.
+ *
  * Double-tap-to-zoom comes for free from `Modifier.zoomable`'s `onDoubleClick`.
  *
  * Inside a HorizontalPager telephoto retains pan/zoom across state restorations, so a page swiped
@@ -82,11 +98,13 @@ fun ImageViewer(
     gesturesEnabled: Boolean = true,
     // Reports true once the image is zoomed past its resting fit — the viewer hides its chrome then.
     onZoomChanged: (Boolean) -> Unit = {},
-    // Fired once this viewer first has drawable content (its base thumbnail is laid out and placed),
-    // so DocumentPage can drop the dive hero behind it without risking a blank frame at the swap.
+    // Fired one frame after the dive settles and there is resting content on screen, so DocumentPage
+    // can drop the dive hero behind this viewer without risking a blank frame at the swap.
     onContentVisible: () -> Unit = {},
 ) {
-    val transitionActive = LocalSharedTransitionScope.current?.isTransitionActive == true
+    val context = LocalContext.current
+    val sharedScope = LocalSharedTransitionScope.current
+    val transitionActive = sharedScope?.isTransitionActive == true
 
     val zoomableState = rememberZoomableState(
         // preventOverOrUnderZoom (default) rubber-bands past the fit/max bounds and snaps back.
@@ -105,20 +123,30 @@ fun ImageViewer(
     }
     val currentFile = file
     val subState = if (currentFile != null) {
-        val source = remember(currentFile) { SubSamplingImageSource.file(currentFile.absolutePath.toPath()) }
+        val source = remember(currentFile) {
+            // Reuse the already-decoded grid thumbnail (warm in Coil's memory cache by now) as the
+            // sub-sampler's preview so it paints a blurry base the instant its decoder is ready and
+            // upgrades to crisp tiles in place. Falls back to the LG key large mosaic tiles decode at.
+            val preview = context.imageLoader.memoryCache?.let { cache ->
+                (
+                    cache.get(thumbnailMemoryCacheKey(documentId, GRID_THUMBNAIL_SIZE))
+                        ?: cache.get(thumbnailMemoryCacheKey(documentId, ThumbnailSize.LG))
+                    )?.bitmap?.asImageBitmap()
+            }
+            SubSamplingImageSource.file(currentFile.absolutePath.toPath(), preview = preview)
+        }
         rememberSubSamplingImageState(source, zoomableState)
     } else {
         null
     }
 
-    // Set the content rect SYNCHRONOUSLY here (NOT in a LaunchedEffect). Deferring it means the
-    // zoomable uses its SameAsLayoutBounds default on the first laid-out frame → base transform
-    // scale ≈ 1, which blows the real-pixel-sized base layer up to fill the screen: the giant
-    // wrong-aspect flash seen mid-dive, then a black recompute frame. In-body, the very first
-    // transform is already the fit. Once sub-sampling mounts it owns the location (from the decoded
-    // size), so we defer to it then. This also enables gestures immediately on the thumbnail.
-    if (subState == null && contentSize != null && !contentSize.isEmpty()) {
-        zoomableState.setContentLocation(ZoomableContentLocation.scaledInsideAndCenterAligned(contentSize))
+    // Hold the ONE coordinate space (raw pixels, top-left aligned — SubSamplingImage's own space).
+    // rememberSubSamplingImageState re-sets the content location every composition; we re-assert our
+    // known full-res size AFTER it while the decoder hasn't reported a size, so the transform is
+    // never in a smaller/placeholder space during the decoder-init window (which is what collapsed
+    // the base to black before). Once imageSize is known, sub-sampling's equal-valued location wins.
+    if (subState?.imageSize == null && contentSize != null && !contentSize.isEmpty()) {
+        zoomableState.setContentLocation(ZoomableContentLocation.unscaledAndTopLeftAligned(contentSize))
     }
 
     LaunchedEffect(isSettledPage) {
@@ -129,20 +157,23 @@ fun ImageViewer(
             .distinctUntilChanged()
             .collect { onZoomChanged(it) }
     }
-    // Hand off from the dive hero only once the transform is at its resting fit — specified AND not
-    // over-scaled. Firing on bare isSpecified could hide the hero on a transient (pre-fit) frame and
-    // expose the settling base. userZoom ~1 means we're at the initial fit, i.e. the base is landing
-    // exactly where the hero sits.
-    LaunchedEffect(zoomableState) {
+    // Hand off from the dive hero one frame after the dive settles and there is resting content to
+    // show. The base layer at rest is pixel-identical to the hero, so no transform gate is needed
+    // (the old userZoom≈1 heuristic is gone). Keyed on subState so the crisp-only path (unknown
+    // dimensions → no base thumbnail) fires once sub-sampling actually paints.
+    val baseReady = hasThumbnail && contentSize != null && !contentSize.isEmpty()
+    LaunchedEffect(sharedScope, baseReady, subState) {
         snapshotFlow {
-            val t = zoomableState.contentTransformation
-            t.isSpecified && t.scaleMetadata.userZoom in 0.99f..1.01f
+            val settled = sharedScope?.isTransitionActive != true
+            settled && (baseReady || subState?.isImageDisplayed == true)
         }.first { it }
+        withFrameNanos {}
         onContentVisible()
     }
 
-    // Draw nothing during the dive: the DiveHero behind carries the morph (both on enter and, since
-    // this is a full-screen sibling, on the dive back).
+    // Draw nothing during the dive: the DiveHero behind carries the morph (enter and, since this is
+    // a full-screen sibling, the dive back). Gestures are off then, so a stray touch can't perturb
+    // the shared element mid-transition.
     if (transitionActive) {
         Box(modifier.fillMaxSize())
         return
@@ -158,41 +189,40 @@ fun ImageViewer(
         Modifier
     }
 
+    val cs = contentSize
     Box(modifier.fillMaxSize().then(zoomGestures)) {
-        // Base layer: the grid thumbnail, instantly zoomable. Laid out at the content's real pixel
-        // size and transformed by the shared contentTransformation, so it occupies the exact rect
-        // sub-sampling will — kept until the crisp tiles cover the frame. Skipped when the image
-        // dimensions are unknown (no rect to place it in) — sub-sampling then shows on its own.
-        if (hasThumbnail && contentSize != null && !contentSize.isEmpty() && subState?.isImageDisplayed != true) {
+        // Base layer: instantly zoomable thumbnail, drawn full-screen at Fit and re-projected onto
+        // telephoto's raw-pixel transform by [baseLayerTransform]. Kept mounted under the crisp layer
+        // as the blur-under; skipped only when dimensions are unknown (no fit rect to place it in).
+        if (baseReady && cs != null) {
             Box(
                 Modifier
-                    .layout { measurable, _ ->
-                        val w = contentSize.width.roundToInt()
-                        val h = contentSize.height.roundToInt()
-                        val placeable = measurable.measure(Constraints.fixed(w, h))
-                        layout(w, h) { placeable.place(0, 0) }
-                    }
+                    .fillMaxSize()
                     .graphicsLayer {
                         val t = zoomableState.contentTransformation
-                        if (t.isSpecified) {
-                            scaleX = t.scale.scaleX
-                            scaleY = t.scale.scaleY
-                            translationX = t.offset.x
-                            translationY = t.offset.y
-                            transformOrigin = t.transformOrigin
-                        } else {
-                            // Not laid out yet: collapse (scale 0) rather than alpha 0, which on this
-                            // real-pixel-sized node could force a large offscreen buffer.
-                            scaleX = 0f
-                            scaleY = 0f
-                        }
+                        val g = baseLayerTransform(
+                            specified = t.isSpecified,
+                            scaleX = t.scale.scaleX,
+                            scaleY = t.scale.scaleY,
+                            offsetX = t.offset.x,
+                            offsetY = t.offset.y,
+                            contentWidth = cs.width,
+                            contentHeight = cs.height,
+                            viewportWidth = size.width,
+                            viewportHeight = size.height,
+                        )
+                        scaleX = g.scaleX
+                        scaleY = g.scaleY
+                        translationX = g.translationX
+                        translationY = g.translationY
+                        transformOrigin = TransformOrigin(0f, 0f)
                     },
             ) {
-                DocumentDiveHero(documentId, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                DocumentDiveHero(documentId, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
         }
         // Crisp sub-sampled original once on disk; reads the SAME zoomableState → live zoom/pan
-        // carries over with no jump, and it self-draws its tiles at the transformed positions.
+        // carries over with no jump, self-drawing tiles at raw*scale+offset (matching the base layer).
         subState?.let {
             SubSamplingImage(
                 state = it,
