@@ -15,6 +15,7 @@ import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
+import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -67,6 +69,7 @@ class BrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val documentRepository: DocumentRepository,
     private val folderRepository: FolderRepository,
+    private val vaultRepository: VaultRepository,
     private val realtimeManager: RealtimeManager,
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
@@ -113,12 +116,19 @@ class BrowseViewModel @Inject constructor(
      * than starting after it.
      */
     fun prefetch(document: DocumentDto) {
+        // Nothing to warm for a locked document — its content is withheld until unlocked.
+        if (document.locked) return
         viewModelScope.launch {
             val raw = documentRepository.fileUrl(document.id) ?: return@launch
             if (document.mime_type.startsWith("image/")) {
                 imageLoader.enqueue(ImageRequest.Builder(appContext).data(absolute(raw)).build())
             }
         }
+    }
+
+    /** Unlock the vault with the account password; on success the list re-fetches (see init). */
+    fun unlockVault(password: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(vaultRepository.unlock(password).isSuccess) }
     }
 
     private val control = MutableStateFlow(BrowseControl())
@@ -152,6 +162,21 @@ class BrowseViewModel @Inject constructor(
         }
         observePendingThumbnails()
         collectThumbnailJobEvents()
+        observeVaultChanges()
+    }
+
+    /**
+     * When the vault is unlocked or re-locked, re-fetch the list so each row's `locked` flag (and
+     * with it the withheld content) flips. Drops the initial emission so we don't double-load.
+     */
+    private fun observeVaultChanges() {
+        viewModelScope.launch {
+            vaultRepository.status
+                .map { it?.unlocked == true }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refresh() }
+        }
     }
 
     /**

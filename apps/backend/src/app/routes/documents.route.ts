@@ -20,7 +20,7 @@ import {
     type MoveDocumentsRequest,
     type SetDocumentPrivacyRequest,
 } from '@reverie/shared';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
 import { type Document as DbDocument, type LlmResult, type PhotoMetadata } from '../../db/schema';
@@ -29,8 +29,8 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
-import { excludePrivateDocuments, getPrivateFolderIds } from '../../services/privacy';
-import { resolveShowPrivate } from '../../services/vault';
+import { getPrivateFolderIds, isDocumentEffectivelyPrivate } from '../../services/privacy';
+import { isVaultLocked } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
@@ -125,14 +125,10 @@ export default async function (fastify: FastifyInstance) {
                 countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
             }
 
-            // Hide private documents from listings when the vault is locked.
-            const showPrivate = await resolveShowPrivate(fastify, request, userId);
-
-            if (!showPrivate) {
-                const privateFolderIds = await getPrivateFolderIds(userId);
-                query = excludePrivateDocuments(query, privateFolderIds, '');
-                countQuery = excludePrivateDocuments(countQuery, privateFolderIds, '');
-            }
+            // Private documents always appear in listings; when the vault is locked their
+            // content is withheld (locked: true) rather than the items being hidden.
+            const vaultLocked = await isVaultLocked(fastify, request, userId);
+            const privateFolderIds = vaultLocked ? await getPrivateFolderIds(userId) : [];
 
             const [documents, countResult] = await Promise.all([
                 query.orderBy('created_at', 'desc').limit(limit).offset(offset).execute(),
@@ -140,7 +136,9 @@ export default async function (fastify: FastifyInstance) {
             ]);
 
             // Serialize documents with signed URLs (parallel for performance)
-            const serializedDocuments = await Promise.all(documents.map((doc) => serializeDocument(doc)));
+            const serializedDocuments = await Promise.all(
+                documents.map((doc) => serializeDocument(doc, undefined, undefined, { locked: vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds) })),
+            );
 
             return {
                 items: serializedDocuments,
@@ -281,9 +279,20 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request) {
+        async function (request, reply) {
             const userId = request.user.id;
             const { document_ids, is_private } = request.body;
+
+            // Removing privacy while the vault is locked would expose content without the
+            // password — refuse it for any currently-locked (effectively-private) document.
+            if (!is_private && (await isVaultLocked(fastify, request, userId))) {
+                const privateFolderIds = await getPrivateFolderIds(userId);
+                const targets = await db.selectFrom('documents').select(['is_private', 'folder_id']).where('user_id', '=', userId).where('id', 'in', document_ids).execute();
+
+                if (targets.some((doc) => isDocumentEffectivelyPrivate(doc, privateFolderIds))) {
+                    return reply.forbidden('Unlock to change privacy of a locked document');
+                }
+            }
 
             const result = await db
                 .updateTable('documents')
@@ -317,6 +326,11 @@ export default async function (fastify: FastifyInstance) {
 
             if (!document) {
                 return reply.notFound('Document not found');
+            }
+
+            // A locked private document's thumbnail would leak its content — refuse it.
+            if (await resolveDocumentLocked(fastify, request, userId, document)) {
+                return reply.forbidden('Document is locked');
             }
 
             if (!document.thumbnail_paths) {
@@ -363,6 +377,12 @@ export default async function (fastify: FastifyInstance) {
 
             if (!document) {
                 return reply.notFound('Document not found');
+            }
+
+            // While locked, return the redacted document (title/type only) without fetching
+            // or exposing its LLM/photo content.
+            if (await resolveDocumentLocked(fastify, request, userId, document)) {
+                return await serializeDocument(document, null, null, { locked: true });
             }
 
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
@@ -1194,14 +1214,39 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
+/**
+ * Whether a document's content must be withheld from this request: the vault is locked
+ * (user has a password + no active session) AND the document is effectively private.
+ */
+async function resolveDocumentLocked(
+    fastify: FastifyInstance,
+    request: FastifyRequest,
+    userId: string,
+    doc: { is_private: boolean; folder_id: string | null },
+): Promise<boolean> {
+    if (!(await isVaultLocked(fastify, request, userId))) return false;
+
+    const privateFolderIds = await getPrivateFolderIds(userId);
+
+    return isDocumentEffectivelyPrivate(doc, privateFolderIds);
+}
+
 // Detail-only (GET /documents/:id): pass `photoMeta ?? null` to include the
 // photo_metadata field (null when no row exists); omit the argument on list
 // endpoints to leave the field absent and avoid per-row joins.
-async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null, photoMeta?: PhotoMetadata | null): Promise<Document> {
-    // Generate signed URLs for file access
-    const fileUrl = await storageService.getFileUrl(doc.file_path);
+// When `opts.locked` is set the document is serialized redacted — every content-bearing
+// field is withheld (no signed URLs are even generated) and only the title/type remain.
+async function serializeDocument(
+    doc: DbDocument,
+    llmResult?: LlmResult | null,
+    photoMeta?: PhotoMetadata | null,
+    opts?: { locked?: boolean },
+): Promise<Document> {
+    const locked = opts?.locked ?? false;
 
-    const thumbnailUrls = await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
+    // Generate signed URLs for file access — skipped entirely while locked.
+    const fileUrl = locked ? null : await storageService.getFileUrl(doc.file_path);
+    const thumbnailUrls = locked ? null : await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
 
     const serialized: Document = {
         id: doc.id,
@@ -1214,18 +1259,19 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null, 
         width: doc.width,
         height: doc.height,
         duration_seconds: doc.duration_seconds,
-        thumbnail_blurhash: doc.thumbnail_blurhash,
-        thumbnail_paths: doc.thumbnail_paths,
+        thumbnail_blurhash: locked ? null : doc.thumbnail_blurhash,
+        thumbnail_paths: locked ? null : doc.thumbnail_paths,
         document_category: doc.document_category as Document['document_category'],
-        extracted_date: formatDateOnly(doc.extracted_date),
+        extracted_date: locked ? null : formatDateOnly(doc.extracted_date),
         ocr_status: doc.ocr_status as Document['ocr_status'],
         thumbnail_status: doc.thumbnail_status as Document['thumbnail_status'],
         llm_status: doc.llm_status,
-        llm_summary: llmResult?.summary ?? null,
-        llm_metadata: (llmResult?.metadata as Document['llm_metadata']) ?? null,
-        llm_processed_at: llmResult?.processed_at?.toISOString() ?? null,
-        llm_token_count: llmResult?.token_count ?? null,
+        llm_summary: locked ? null : (llmResult?.summary ?? null),
+        llm_metadata: locked ? null : ((llmResult?.metadata as Document['llm_metadata']) ?? null),
+        llm_processed_at: locked ? null : (llmResult?.processed_at?.toISOString() ?? null),
+        llm_token_count: locked ? null : (llmResult?.token_count ?? null),
         is_private: doc.is_private,
+        locked,
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
@@ -1236,7 +1282,7 @@ async function serializeDocument(doc: DbDocument, llmResult?: LlmResult | null, 
         return serialized;
     }
 
-    return { ...serialized, photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null };
+    return { ...serialized, photo_metadata: locked || !photoMeta ? null : toDocumentPhotoMetadata(photoMeta) };
 }
 
 function toDocumentPhotoMetadata(photoMeta: PhotoMetadata): DocumentPhotoMetadata {

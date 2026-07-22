@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import type { User } from '../../db/schema.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
+import { VAULT_COOKIE } from '../../services/vault.js';
 
 const TTL_MS = 60_000;
 const oauthCodeStore = new Map<string, { access_token: string; expires_in: number; expiresAt: number }>();
@@ -187,6 +188,8 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (_request, reply) {
             reply.clearCookie('refresh_token', { path: '/auth' });
+            // Re-lock the vault on logout so a returning/other user can't inherit an unlocked session.
+            reply.clearCookie(VAULT_COOKIE, { path: '/' });
 
             return { success: true };
         },

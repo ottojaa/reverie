@@ -40,6 +40,7 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.ui.components.CollectionHeaderRow
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderTreeItem
+import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.StorageSummaryCard
 
@@ -56,6 +57,13 @@ fun CollectionsScreen(
     var createFolderParentId by remember { mutableStateOf<String?>(null) }
     var editTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var deleteTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
+    var showVaultUnlock by remember { mutableStateOf(false) }
+
+    // Toggling privacy off on a locked folder would expose it without the password — prompt to
+    // unlock instead. Otherwise flip its privacy flag.
+    val onTogglePrivate: (FolderWithChildren) -> Unit = { node ->
+        if (node.locked) showVaultUnlock = true else viewModel.setPrivate(node.id, !node.is_private)
+    }
 
     Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         OfflineBanner(visible = state.isOffline)
@@ -99,8 +107,9 @@ fun CollectionsScreen(
                             onToggle = { viewModel.toggleExpand(node.id) },
                             onNewFolder = { createFolderParentId = node.id },
                             onEdit = { editTarget = node },
-                            onTogglePrivate = { viewModel.setPrivate(node.id, !node.is_private) },
+                            onTogglePrivate = { onTogglePrivate(node) },
                             onDelete = { deleteTarget = node },
+                            onUnlock = { showVaultUnlock = true },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -110,8 +119,9 @@ fun CollectionsScreen(
                                 folder = folder,
                                 onOpen = { onOpenFolder(folder.id) },
                                 onEdit = { editTarget = folder },
-                                onTogglePrivate = { viewModel.setPrivate(folder.id, !folder.is_private) },
+                                onTogglePrivate = { onTogglePrivate(folder) },
                                 onDelete = { deleteTarget = folder },
+                                onUnlock = { showVaultUnlock = true },
                                 // Extra indent so nested folders read as belonging to the collection.
                                 indent = 44.dp,
                                 modifier = Modifier.animateItem(),
@@ -124,8 +134,9 @@ fun CollectionsScreen(
                             folder = node,
                             onOpen = { onOpenFolder(node.id) },
                             onEdit = { editTarget = node },
-                            onTogglePrivate = { viewModel.setPrivate(node.id, !node.is_private) },
+                            onTogglePrivate = { onTogglePrivate(node) },
                             onDelete = { deleteTarget = node },
+                            onUnlock = { showVaultUnlock = true },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -181,6 +192,13 @@ fun CollectionsScreen(
             destructive = true,
             onConfirm = { viewModel.delete(target.id); deleteTarget = null },
             onDismiss = { deleteTarget = null },
+        )
+    }
+
+    if (showVaultUnlock) {
+        VaultUnlockSheet(
+            onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
+            onDismiss = { showVaultUnlock = false },
         )
     }
 }

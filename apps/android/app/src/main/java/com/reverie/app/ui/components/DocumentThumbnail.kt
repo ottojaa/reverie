@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,7 +49,31 @@ fun DocumentThumbnail(
     hasThumbnail: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
+    locked: Boolean = false,
 ) {
+    // Locked: the server withholds the thumbnail — show a neutral lock placeholder (never fetch).
+    if (locked) {
+        Box(
+            modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.Lock,
+                    contentDescription = "Locked",
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+        return
+    }
+
     if (hasThumbnail) {
         val placeholder = rememberBlurhashPainter(blurhash)
         Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
@@ -114,6 +139,7 @@ fun GalleryThumbnail(
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     durationSeconds: Double? = null,
+    locked: Boolean = false,
 ) {
     val isVideo = mimeType.startsWith("video/")
     val isImage = mimeType.startsWith("image/")
@@ -125,8 +151,11 @@ fun GalleryThumbnail(
             blurhash = blurhash,
             hasThumbnail = hasThumbnail,
             size = size,
+            locked = locked,
             modifier = Modifier.matchParentSize(),
         )
+        // While locked, suppress the content overlays (play/type/duration) — only a lock shows.
+        if (locked) return@Box
         if (isVideo) VideoPlayBadge(Modifier.align(Alignment.Center))
         // A previewable document (a rendered PDF/office page) still needs a type marker; files with
         // no preview already show their icon + name in the fill, so a corner chip would be redundant.

@@ -1,11 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Lock, LockKeyhole } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Switch } from '../components/ui/switch';
-import { getApiErrorMessage } from '../lib/api/client';
 import { authApi } from '../lib/api/auth-api';
 import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
@@ -17,41 +15,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
     const { user, logout } = useAuth();
-    const { hideEnabled, unlocked, hasPassword, openReveal, lockNow, setHideEnabled } = useVault();
-    const [privacyError, setPrivacyError] = useState<string | null>(null);
-
-    const handleHideToggle = async (next: boolean) => {
-        setPrivacyError(null);
-
-        if (next) {
-            if (!hasPassword) {
-                setPrivacyError('Set an account password first to hide private items.');
-
-                return;
-            }
-
-            try {
-                await setHideEnabled(true);
-            } catch (err) {
-                setPrivacyError(getApiErrorMessage(err, 'Failed to update setting'));
-            }
-
-            return;
-        }
-
-        // Disabling hiding would permanently expose private items — unlock first.
-        if (!unlocked) {
-            openReveal();
-
-            return;
-        }
-
-        try {
-            await setHideEnabled(false);
-        } catch (err) {
-            setPrivacyError(getApiErrorMessage(err, 'Failed to update setting'));
-        }
-    };
+    const { unlocked, hasPassword, lockNow } = useVault();
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -206,40 +170,32 @@ function SettingsPage() {
                     <CardHeader>
                         <CardTitle>Private items</CardTitle>
                         <CardDescription>
-                            Private folders and files are always excluded from search. You can also hide them from the sidebar behind your account password.
+                            Folders and files you mark private stay visible in your library but need your account password to open. They're always excluded from
+                            search. Once unlocked they stay open until you lock them, sign out, or quit.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {privacyError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{privacyError}</div>}
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="space-y-0.5">
-                                <p className="text-sm font-medium">Hide private items from the sidebar</p>
-                                <p className="text-sm text-muted-foreground">
-                                    {hasPassword ? 'Revealing them requires your account password.' : 'Set an account password below to enable this.'}
-                                </p>
+                        {!hasPassword && (
+                            <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                                Set an account password below to lock private items. Without one, private items stay openable.
                             </div>
-                            <Switch
-                                checked={hideEnabled}
-                                onCheckedChange={handleHideToggle}
-                                disabled={!hasPassword && !hideEnabled}
-                                className="data-[state=checked]:bg-accent"
-                                aria-label="Hide private items from the sidebar"
-                            />
-                        </div>
-                        {hideEnabled && (
+                        )}
+                        {hasPassword && (
                             <div className="flex items-center gap-3">
                                 {unlocked ? (
-                                    <Button variant="outline" size="sm" onClick={lockNow}>
-                                        <Lock className="size-4" />
-                                        Lock now
-                                    </Button>
+                                    <>
+                                        <Button variant="outline" size="sm" onClick={lockNow}>
+                                            <Lock className="size-4" />
+                                            Lock private items
+                                        </Button>
+                                        <span className="text-xs text-muted-foreground">Private items are unlocked.</span>
+                                    </>
                                 ) : (
-                                    <Button variant="outline" size="sm" onClick={openReveal}>
-                                        <LockKeyhole className="size-4" />
-                                        Reveal private
-                                    </Button>
+                                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Lock className="size-4" />
+                                        Private items are locked. Click a locked item to unlock.
+                                    </span>
                                 )}
-                                <span className="text-xs text-muted-foreground">{unlocked ? 'Private items are visible.' : 'Private items are hidden.'}</span>
                             </div>
                         )}
                     </CardContent>

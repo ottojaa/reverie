@@ -61,6 +61,7 @@ import com.reverie.app.ui.components.ReverieFab
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.components.UploadStatusPill
+import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.components.rememberSkeletonVisible
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
@@ -95,6 +96,7 @@ fun BrowseScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
+    var showVaultUnlock by remember { mutableStateOf(false) }
 
     val onUploadClick: () -> Unit = { showUploadActions = true }
     // Collapsing top bar: hides on scroll down, returns on scroll up.
@@ -192,6 +194,10 @@ fun BrowseScreen(
                     onClick = { document ->
                         if (state.inSelectionMode) {
                             viewModel.toggleSelect(document.id)
+                        } else if (document.locked) {
+                            // Locked private item — prompt to unlock instead of opening. After a
+                            // successful unlock the grid re-fetches and the item opens on next tap.
+                            showVaultUnlock = true
                         } else {
                             // Publish this grid's order so the viewer can swipe through it.
                             viewModel.prepareSequence()
@@ -295,6 +301,13 @@ fun BrowseScreen(
             title = "Canvas is coming soon",
             description = "Explore your documents in a spatial 3D view — available on desktop today, coming to Android.",
             onDismiss = { showCanvasSoon = false },
+        )
+    }
+
+    if (showVaultUnlock) {
+        VaultUnlockSheet(
+            onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
+            onDismiss = { showVaultUnlock = false },
         )
     }
 }

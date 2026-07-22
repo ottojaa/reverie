@@ -13,6 +13,8 @@ data class FolderDto(
     val sort_order: Int,
     val type: FolderType,
     val is_private: Boolean,
+    // True when effectively private AND the vault is locked for this session. See VaultRepository.
+    val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
 )
@@ -29,6 +31,8 @@ data class FolderWithChildren(
     val sort_order: Int,
     val type: FolderType,
     val is_private: Boolean,
+    // True when effectively private AND the vault is locked for this session. See VaultRepository.
+    val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
     val children: List<FolderWithChildren> = emptyList(),

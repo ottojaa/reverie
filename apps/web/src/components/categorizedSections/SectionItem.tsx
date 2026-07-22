@@ -3,6 +3,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { useVault } from '@/lib/vault';
 import { cn } from '@/lib/utils';
 import type { AnimateLayoutChanges } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -41,9 +42,22 @@ export function SectionItem({
 }: SectionItemProps) {
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
+    const { requestUnlock } = useVault();
 
     const ownPrivate = section.is_private;
     const effectivePrivate = ownPrivate || inheritedPrivate;
+    const isLocked = section.locked;
+
+    // Removing privacy while locked would expose content without the password — unlock first.
+    const handleTogglePrivate = () => {
+        if (isLocked) {
+            requestUnlock();
+
+            return;
+        }
+
+        onTogglePrivate?.(section, !ownPrivate);
+    };
 
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
         id: section.id,
@@ -91,7 +105,24 @@ export function SectionItem({
             >
                 {section.name}
             </Link>
-            {effectivePrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />}
+            {isLocked ? (
+                <button
+                    type="button"
+                    className="shrink-0 text-accent transition-transform hover:scale-110"
+                    aria-label="Locked — click to unlock"
+                    title="Locked — click to unlock"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        requestUnlock();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <Lock className="size-3" />
+                </button>
+            ) : (
+                effectivePrivate && <Lock className="size-3 shrink-0 text-accent" aria-label="Private" />
+            )}
             {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
             {isMobile ? (
                 <DropdownMenu>
@@ -120,7 +151,7 @@ export function SectionItem({
                                     Private (inherited)
                                 </DropdownMenuItem>
                             ) : (
-                                <DropdownMenuItem onSelect={() => onTogglePrivate(section, !ownPrivate)}>
+                                <DropdownMenuItem onSelect={handleTogglePrivate}>
                                     {ownPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
                                     {ownPrivate ? 'Remove from private' : 'Make private'}
                                 </DropdownMenuItem>
@@ -171,7 +202,7 @@ export function SectionItem({
                             Private (inherited)
                         </ContextMenuItem>
                     ) : (
-                        <ContextMenuItem onSelect={() => onTogglePrivate(section, !ownPrivate)}>
+                        <ContextMenuItem onSelect={handleTogglePrivate}>
                             {ownPrivate ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
                             {ownPrivate ? 'Remove from private' : 'Make private'}
                         </ContextMenuItem>

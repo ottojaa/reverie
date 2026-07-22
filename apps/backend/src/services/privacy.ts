@@ -27,6 +27,14 @@ export async function getPrivateFolderIds(userId: string): Promise<string[]> {
     return Array.from(new Set([...rootIds, ...children.map((r) => r.id)]));
 }
 
+/**
+ * Whether a document is effectively private given the user's private-folder set (from
+ * getPrivateFolderIds): its own flag is set, or it lives in an effectively-private folder.
+ */
+export function isDocumentEffectivelyPrivate(doc: { is_private: boolean; folder_id: string | null }, privateFolderIds: string[]): boolean {
+    return doc.is_private || (doc.folder_id !== null && privateFolderIds.includes(doc.folder_id));
+}
+
 // The heterogeneous Kysely query builders across search/facets/suggest don't share a
 // single type, so these helpers stay loosely typed (matching the existing `as any`
 // style in query-builder.ts). They only ever append `.where(...)` clauses.

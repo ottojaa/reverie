@@ -17,6 +17,10 @@ export const FolderSchema = z.object({
     // from an ancestor (a private collection makes its folders private); callers
     // compute inheritance from the tree — see getPrivateFolderIds on the backend.
     is_private: z.boolean(),
+    // True when this folder is effectively private AND the caller has no active vault
+    // session (and has an account password). Clients show a lock affordance and gate
+    // navigation until the vault is unlocked. See vault.ts.
+    locked: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
 });

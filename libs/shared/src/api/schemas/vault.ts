@@ -3,38 +3,30 @@ import { z } from 'zod';
 /**
  * Vault = the server-enforced lock over private items.
  *
- * When a user turns on "hide private items", the backend withholds private
- * folders/documents from the sidebar/browse/list endpoints until the user
- * unlocks by re-entering their account password, which grants a short-lived
- * vault session (httpOnly cookie). Search always excludes private items,
- * regardless of vault state.
+ * Private items (is_private, or effectively private via a private collection/folder)
+ * always appear in listings, but the backend withholds their content — file_url,
+ * thumbnails, summaries, location — until the user unlocks by re-entering their
+ * account password. Each locked item carries `locked: true`; clients show a lock
+ * affordance and prompt to unlock on open. Unlocking grants a session-lived vault
+ * session (httpOnly session cookie) that lasts until app quit, logout, or explicit
+ * lock — there is no idle timeout. Search always excludes private items regardless
+ * of vault state. Users without an account password cannot lock (nothing to unlock
+ * with), so their private items stay openable.
  */
 
-// POST /vault/unlock — re-enter the account login password to reveal private items.
+// POST /vault/unlock — re-enter the account login password to unlock private items.
 export const VaultUnlockRequestSchema = z.object({
     password: z.string().min(1),
 });
 
 export type VaultUnlockRequest = z.infer<typeof VaultUnlockRequestSchema>;
 
-// PATCH /vault/settings — toggle the "hide private items" mode.
-// Turning it OFF requires an unlocked session (enforced server-side).
-export const VaultSettingsRequestSchema = z.object({
-    hide_private: z.boolean(),
-});
-
-export type VaultSettingsRequest = z.infer<typeof VaultSettingsRequestSchema>;
-
-// GET /vault/status — and the response of unlock/lock/settings.
+// GET /vault/status — and the response of unlock/lock.
 export const VaultStatusSchema = z.object({
-    // Whether the user has enabled hiding private items from the sidebar.
-    hide_enabled: z.boolean(),
-    // Whether a valid vault session is currently active (private items revealed).
+    // Whether a valid vault session is currently active (private items unlocked).
     unlocked: z.boolean(),
-    // When the current vault session expires (null when locked).
-    expires_at: z.string().datetime().nullable(),
     // Whether the user has an account password to unlock with. OAuth-only users
-    // (no password_hash) cannot unlock; the UI uses this to explain why.
+    // (no password_hash) cannot lock/unlock; the UI uses this to nudge them to set one.
     has_password: z.boolean(),
 });
 

@@ -46,6 +46,7 @@ fun CollectionHeaderRow(
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    onUnlock: () -> Unit = {},
 ) {
     val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "chevron")
     Row(
@@ -69,7 +70,11 @@ fun CollectionHeaderRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (collection.is_private) {
+        if (collection.locked) {
+            IconButton(onClick = onUnlock, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Lock, contentDescription = "Locked — tap to unlock", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
+            }
+        } else if (collection.is_private) {
             Icon(Icons.Outlined.Lock, contentDescription = "Private", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(15.dp))
         }
         Text(
@@ -98,6 +103,7 @@ fun FolderTreeItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     indent: Dp = 32.dp,
+    onUnlock: () -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -116,7 +122,11 @@ fun FolderTreeItem(
                 .weight(1f)
                 .padding(start = 10.dp),
         )
-        if (folder.is_private) {
+        if (folder.locked) {
+            IconButton(onClick = onUnlock, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Lock, contentDescription = "Locked — tap to unlock", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp))
+            }
+        } else if (folder.is_private) {
             Icon(Icons.Outlined.Lock, contentDescription = "Private", tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp))
         }
         Text(

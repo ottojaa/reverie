@@ -2,7 +2,6 @@ import { ConflictError, NotFoundError } from '@reverie/shared';
 import type { Kysely } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database, Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
-import { getPrivateFolderIds } from './privacy';
 
 type DbOrTrx = Kysely<Database>;
 
@@ -142,16 +141,14 @@ export class FolderService {
 
     /**
      * List children of a folder (scoped to user), ordered by sort_order.
-     * Pass excludePrivateIds to hide (effectively) private folders when the vault is locked.
      */
-    async listChildren(parentId: string | null, userId: string, excludePrivateIds?: string[]): Promise<Folder[]> {
+    async listChildren(parentId: string | null, userId: string): Promise<Folder[]> {
         return db
             .selectFrom('folders')
             .selectAll()
             .where('user_id', '=', userId)
             .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
             .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
-            .$if(!!excludePrivateIds && excludePrivateIds.length > 0, (qb) => qb.where('id', 'not in', excludePrivateIds!))
             .orderBy('sort_order', 'asc')
             .orderBy('name', 'asc')
             .execute();
@@ -159,21 +156,18 @@ export class FolderService {
 
     /**
      * Get full folder tree (root folders with nested children and document_count).
-     * When excludePrivate is true (vault locked + hiding on), effectively-private folders
-     * are omitted and private documents are dropped from the counts.
+     * Private folders/documents are always included (with full counts) — the vault lock is
+     * applied at serialization time (per-folder `locked` flag), not by hiding rows here.
      */
     async getFolderTree(
         userId: string,
-        excludePrivate = false,
     ): Promise<Array<Folder & { children: Array<Folder & { children: unknown[]; document_count: number }>; document_count: number }>> {
-        const privateFolderIds = excludePrivate ? await getPrivateFolderIds(userId) : [];
-
         const buildTree = async (parentId: string | null): Promise<Array<Folder & { children: unknown[]; document_count: number }>> => {
-            const folders = await this.listChildren(parentId, userId, excludePrivate ? privateFolderIds : undefined);
+            const folders = await this.listChildren(parentId, userId);
             const result: Array<Folder & { children: unknown[]; document_count: number }> = [];
 
             for (const folder of folders) {
-                const document_count = await this.getDocumentCount(folder.id, userId, excludePrivate);
+                const document_count = await this.getDocumentCount(folder.id, userId);
                 const children = await buildTree(folder.id);
                 result.push({ ...folder, children, document_count });
             }
@@ -186,13 +180,12 @@ export class FolderService {
         >;
     }
 
-    private async getDocumentCount(folderId: string, userId: string, excludePrivate = false): Promise<number> {
+    private async getDocumentCount(folderId: string, userId: string): Promise<number> {
         const r = await db
             .selectFrom('documents')
             .select(db.fn.countAll().as('count'))
             .where('folder_id', '=', folderId)
             .where('user_id', '=', userId)
-            .$if(excludePrivate, (qb) => qb.where('is_private', '=', false))
             .executeTakeFirst();
 
         return Number(r?.count ?? 0);
