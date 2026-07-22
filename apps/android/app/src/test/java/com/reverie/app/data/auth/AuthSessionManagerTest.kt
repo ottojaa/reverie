@@ -42,14 +42,18 @@ class AuthSessionManagerTest {
         is_active = true, role = UserRole.USER, created_at = "2024-01-01T00:00:00.000Z",
     )
 
-    private fun client(refreshCount: AtomicInteger, fail: Boolean): HttpClient {
+    private fun client(
+        refreshCount: AtomicInteger,
+        fail: Boolean,
+        failStatus: HttpStatusCode = HttpStatusCode.Unauthorized,
+    ): HttpClient {
         val engine = MockEngine { request ->
             if (request.url.encodedPath.endsWith("/auth/refresh")) {
                 refreshCount.incrementAndGet()
                 if (fail) {
                     respond(
                         content = """{"error":"token_invalid","message":"expired"}""",
-                        status = HttpStatusCode.Unauthorized,
+                        status = failStatus,
                         headers = Headers.build { append(HttpHeaders.ContentType, "application/json") },
                     )
                 } else {
@@ -119,10 +123,10 @@ class AuthSessionManagerTest {
         assertEquals(1, count.get())
     }
 
-    @Test fun `a rejected refresh logs the user out`() = runTest {
+    @Test fun `a 401 refresh logs the user out`() = runTest {
         val count = AtomicInteger()
         val store = FakeTokenStore()
-        val session = manager(client(count, fail = true), store)
+        val session = manager(client(count, fail = true, failStatus = HttpStatusCode.Unauthorized), store)
         session.seed()
 
         val ok = session.refresh("acc")
@@ -130,5 +134,31 @@ class AuthSessionManagerTest {
         assertFalse(ok)
         assertTrue(session.authState.value is AuthState.LoggedOut)
         assertTrue(store.cleared)
+    }
+
+    @Test fun `a 503 refresh keeps the session (transient, not a rejection)`() = runTest {
+        val count = AtomicInteger()
+        val store = FakeTokenStore()
+        val session = manager(client(count, fail = true, failStatus = HttpStatusCode.ServiceUnavailable), store)
+        session.seed()
+
+        val ok = session.refresh("acc")
+
+        assertFalse(ok)
+        assertTrue(session.authState.value is AuthState.Authenticated)
+        assertFalse(store.cleared)
+    }
+
+    @Test fun `a 429 rate-limited refresh keeps the session`() = runTest {
+        val count = AtomicInteger()
+        val store = FakeTokenStore()
+        val session = manager(client(count, fail = true, failStatus = HttpStatusCode.TooManyRequests), store)
+        session.seed()
+
+        val ok = session.refresh("acc")
+
+        assertFalse(ok)
+        assertTrue(session.authState.value is AuthState.Authenticated)
+        assertFalse(store.cleared)
     }
 }

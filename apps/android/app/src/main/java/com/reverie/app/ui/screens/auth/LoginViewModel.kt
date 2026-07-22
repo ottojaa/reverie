@@ -43,10 +43,14 @@ class LoginViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             val result = authRepository.login(state.email, state.password)
-            result.onFailure { throwable ->
-                _uiState.update { it.copy(isLoading = false, error = messageFor(throwable)) }
+            // Always clear the spinner. On success the shell (MainActivity) usually swaps this
+            // screen out, but LoginScreen is hosted directly there (not a nav destination), so this
+            // ViewModel is Activity-scoped and survives an Authenticated→LoggedOut flip. If the
+            // session is torn down again right after a successful login, a stale isLoading=true
+            // would strand the button spinning until the app restarts.
+            _uiState.update {
+                it.copy(isLoading = false, error = result.exceptionOrNull()?.let(::messageFor))
             }
-            // On success, AuthState flips and the shell replaces this screen.
         }
     }
 

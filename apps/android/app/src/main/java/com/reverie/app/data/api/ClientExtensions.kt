@@ -1,9 +1,12 @@
 package com.reverie.app.data.api
 
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.cookies.cookies
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.ktor.http.parseServerSetCookieHeader
 
@@ -37,3 +40,11 @@ fun HttpResponse.cookieValue(name: String): String? =
         .map { parseServerSetCookieHeader(it) }
         .firstOrNull { it.name == name }
         ?.value
+
+/**
+ * Value of a cookie by name from the [HttpCookies] plugin's storage for [url], or null. The plugin
+ * fills this jar from the same response on its receive pipeline, so it is a second, independent
+ * read of the rotating refresh token when raw-header parsing ([cookieValue]) comes up empty.
+ */
+suspend fun HttpClient.storedCookieValue(url: Url, name: String): String? =
+    cookies(url).firstOrNull { it.name == name }?.value

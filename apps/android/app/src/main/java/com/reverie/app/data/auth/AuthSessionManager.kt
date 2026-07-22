@@ -2,6 +2,7 @@ package com.reverie.app.data.auth
 
 import com.reverie.app.data.api.cookieValue
 import com.reverie.app.data.api.decode
+import com.reverie.app.data.api.storedCookieValue
 import com.reverie.app.data.api.model.CurrentUserResponse
 import com.reverie.app.data.api.model.LoginResponse
 import com.reverie.app.data.api.model.RefreshTokenRequest
@@ -16,6 +17,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
@@ -133,14 +135,29 @@ class AuthSessionManager @Inject constructor(
             return false
         }
 
-        if (!response.status.isSuccess()) {
-            // The refresh token was rejected (rotation consumed / expired): hard logout.
+        if (response.status == HttpStatusCode.Unauthorized) {
+            // A genuine rejection: /auth/refresh answers 401 for a consumed/expired/invalid token
+            // (see auth.route.ts). Only this means the session is truly dead — hard logout.
             logout()
             return false
         }
 
+        if (!response.status.isSuccess()) {
+            // Any other non-2xx (429 rate limit, 5xx, a gateway 502/504 in front of prod) is a
+            // transient failure, NOT a token rejection. Keep the session and fail this attempt;
+            // the next trigger retries. Logging out here would nuke a perfectly valid session.
+            return false
+        }
+
         val body = response.body<RefreshTokenResponse>()
-        val rotated = response.cookieValue(REFRESH_COOKIE) ?: refresh
+        // The server rotates the refresh token one-time and returns the new one ONLY via
+        // Set-Cookie. Read it from the response header, then from the cookie jar the HttpCookies
+        // plugin fills from the same response. The `?: refresh` last resort keeps the current
+        // token if both are somehow empty — it must never be the primary path, because
+        // re-persisting the just-consumed token guarantees a 401 (→ logout) on the next refresh.
+        val rotated = response.cookieValue(REFRESH_COOKIE)
+            ?: client.storedCookieValue(response.call.request.url, REFRESH_COOKIE)
+            ?: refresh
         updateTokens(body.access_token, rotated, body.expires_in)
         return true
     }
