@@ -1,7 +1,6 @@
 import { Job, Worker } from 'bullmq';
 import { spawn } from 'child_process';
-import { mkdtemp, readFile, unlink, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
+import { mkdir, mkdtemp, rm, stat } from 'fs/promises';
 import { join } from 'path';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
@@ -10,6 +9,7 @@ import { getRedisConnectionOptions } from '../queues/redis';
 import type { TrimJobData, TrimJobResult } from '../queues/trim.queue';
 import { getUploadService } from '../services/upload.service';
 import { getFileCategory, getStorageService } from '../services/storage.service';
+import { getUploadTempDir, hashFile, type UploadedFile } from '../utils/upload-files';
 import { createWorkerLogger, processJobWithTracking } from './worker.utils';
 
 const logger = createWorkerLogger('Trim');
@@ -70,16 +70,27 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
         throw new NonRetryableJobError('Invalid trim range: start must be less than end');
     }
 
-    const videoBuffer = await storageService.readFile(document.file_path);
     const ext = document.original_filename.slice(document.original_filename.lastIndexOf('.'));
-    const tmpDir = await mkdtemp(join(tmpdir(), 'reverie-trim-'));
-    const inputPath = join(tmpDir, `input${ext}`);
+
+    // Work on files, not buffers: videos can be many GB. The output goes in the upload temp dir (same
+    // filesystem as local storage) so storing the trimmed video is a rename rather than a copy.
+    const uploadTempDir = getUploadTempDir();
+    await mkdir(uploadTempDir, { recursive: true });
+    const tmpDir = await mkdtemp(join(uploadTempDir, 'trim-'));
     const outputPath = join(tmpDir, `output${ext}`);
+    let input: Awaited<ReturnType<typeof storageService.getLocalFilePath>> | undefined;
 
     try {
-        await writeFile(inputPath, videoBuffer);
-        await trimVideoWithFfmpeg(inputPath, outputPath, start, end);
-        const trimmedBuffer = await readFile(outputPath);
+        input = await storageService.getLocalFilePath(document.file_path, ext);
+        await trimVideoWithFfmpeg(input.path, outputPath, start, end);
+
+        const trimmed: UploadedFile = {
+            tempPath: outputPath,
+            size: (await stat(outputPath)).size,
+            hash: await hashFile(outputPath),
+            filename: document.original_filename,
+            mimetype: document.mime_type,
+        };
 
         if (saveAsCopy) {
             if (!document.folder_id) {
@@ -87,13 +98,7 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
             }
 
             const result = await uploadService.uploadFiles(
-                [
-                    {
-                        buffer: trimmedBuffer,
-                        filename: document.original_filename,
-                        mimetype: document.mime_type,
-                    },
-                ],
+                [trimmed],
                 userId,
                 document.folder_id,
                 sessionId,
@@ -112,11 +117,7 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
             return { newDocumentId: newDoc.id };
         }
 
-        await uploadService.replaceDocumentFile(documentId, userId, {
-            buffer: trimmedBuffer,
-            filename: document.original_filename,
-            mimetype: document.mime_type,
-        });
+        await uploadService.replaceDocumentFile(documentId, userId, trimmed);
 
         logger.info('Trim job completed (overwrite)', { documentId });
 
@@ -130,8 +131,8 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
 
         throw err;
     } finally {
-        await unlink(inputPath).catch(() => {});
-        await unlink(outputPath).catch(() => {});
+        await input?.cleanup().catch(() => {});
+        await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     }
 }
 

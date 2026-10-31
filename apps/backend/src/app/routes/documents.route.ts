@@ -34,6 +34,7 @@ import { isVaultLocked } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
+import { discardUploadedFiles, receiveUploadedFile } from '../../utils/upload-files';
 import { getJobService } from '../../jobs/job.service';
 import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
@@ -477,26 +478,26 @@ export default async function (fastify: FastifyInstance) {
             const parts = request.parts();
             let file: UploadedFile | null = null;
 
-            for await (const part of parts) {
-                if (part.type === 'file' && part.fieldname === 'file') {
-                    const buffer = await part.toBuffer();
-                    file = {
-                        buffer,
-                        filename: part.filename,
-                        mimetype: part.mimetype,
-                    };
-                    break;
+            try {
+                for await (const part of parts) {
+                    if (part.type === 'file' && part.fieldname === 'file') {
+                        file = await receiveUploadedFile(part);
+                        break;
+                    }
                 }
+
+                if (!file) {
+                    return reply.badRequest('No file provided. Send multipart form with field "file".');
+                }
+
+                const updated = await uploadService.replaceDocumentFile(request.params.id, userId, file);
+                const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
+
+                return await serializeDocument(updated, llmResult);
+            } finally {
+                // The stored file is moved out of the temp dir; this cleans up when something failed before that
+                if (file) await discardUploadedFiles([file]);
             }
-
-            if (!file) {
-                return reply.badRequest('No file provided. Send multipart form with field "file".');
-            }
-
-            const updated = await uploadService.replaceDocumentFile(request.params.id, userId, file);
-            const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
-
-            return await serializeDocument(updated, llmResult);
         },
     );
 

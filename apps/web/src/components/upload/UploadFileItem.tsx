@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { formatFileSize } from '@/lib/commonhelpers';
-import type { UploadFile } from '@/lib/upload';
+import { isFileTooLarge, type UploadFile } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, RefreshCw, X } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -72,7 +72,8 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
         file.status === 'uploading' ? file.uploadProgress : file.status === 'processing' ? file.processingProgress : file.status === 'complete' ? 100 : 0;
 
     const canRemove = file.status === 'queued' || file.status === 'error';
-    const canRetry = file.status === 'error';
+    // A file over the size limit can't succeed on retry, so only offer removing it
+    const canRetry = file.status === 'error' && !isFileTooLarge(file.file);
 
     const isProcessing = file.status === 'processing';
     const isQueued = file.status === 'queued';

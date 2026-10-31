@@ -4,7 +4,7 @@ import { join } from 'path';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
-import { getStorageService } from '../services/storage.service';
+import { assertFitsInMemory, getStorageService, MAX_IN_MEMORY_FILE_BYTES } from '../services/storage.service';
 import { classifyNonTextImage, detectScreenshot } from './category-classifier';
 import { extractExifMetadata } from './exif-extractor';
 import { getImageMetadata, getImageSize, isProcessableImage, preprocessImage, validateImageForOcr } from './image-preprocessor';
@@ -90,6 +90,8 @@ export async function processDocument(documentId: string, options: ProcessDocume
     }
 
     // 3. Load image from storage
+    assertFitsInMemory(document.size_bytes, 'run OCR on');
+
     const readFileStart = Date.now();
     const imageBuffer = await storageService.getFile(document.file_path);
     timings.readFileMs = Date.now() - readFileStart;
@@ -183,6 +185,13 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
     };
 
     if (!isTextExtractable(document.mime_type)) {
+        await saveOcrResult(documentId, baseResult);
+
+        return baseResult;
+    }
+
+    // Text extraction needs the whole file in memory; skip files too big for that
+    if (Number(document.size_bytes) > MAX_IN_MEMORY_FILE_BYTES) {
         await saveOcrResult(documentId, baseResult);
 
         return baseResult;

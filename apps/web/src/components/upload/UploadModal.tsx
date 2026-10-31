@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { documentsApi } from '@/lib/api/documents';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { flattenSectionTree, useSections } from '@/lib/sections';
-import { useUpload } from '@/lib/upload';
+import { isFileTooLarge, useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
@@ -149,6 +149,8 @@ export function UploadModal() {
 
     const hasQueued = stats.queued > 0;
     const hasFailed = stats.error > 0;
+    // Files over the size limit can't be retried
+    const hasRetryable = files.some((f) => f.status === 'error' && !isFileTooLarge(f.file));
     const allComplete = total > 0 && stats.complete === total;
     const allCompleteRef = useRef(allComplete);
     allCompleteRef.current = allComplete;
@@ -311,17 +313,19 @@ export function UploadModal() {
                                     <Button variant="ghost" size="sm" onClick={clearFailed}>
                                         Clear failed
                                     </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            retryFailed();
-                                            setTimeout(() => startUpload(selectedFolderId), 0);
-                                        }}
-                                    >
-                                        <RefreshCw className="mr-2 size-4" />
-                                        Retry all
-                                    </Button>
+                                    {hasRetryable && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                retryFailed();
+                                                setTimeout(() => startUpload(selectedFolderId), 0);
+                                            }}
+                                        >
+                                            <RefreshCw className="mr-2 size-4" />
+                                            Retry all
+                                        </Button>
+                                    )}
                                 </>
                             )}
                         </div>

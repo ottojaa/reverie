@@ -1,7 +1,12 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { StorageError } from '@reverie/shared';
 import { createHash } from 'crypto';
+import { createReadStream } from 'fs';
+import { stat, unlink } from 'fs/promises';
 import type { IStorageProvider, StorageMetadata, StorageResult } from './storage.interface';
+
+const S3_MAX_SINGLE_PUT_BYTES = 5 * 1024 * 1024 * 1024;
 
 export interface S3StorageConfig {
     bucket: string;
@@ -49,6 +54,33 @@ export class S3StorageProvider implements IStorageProvider {
             size: file.length,
             hash,
         };
+    }
+
+    async storeFromFile(sourcePath: string, storagePath: string, hash: string, metadata?: StorageMetadata): Promise<StorageResult> {
+        const { size } = await stat(sourcePath);
+
+        // A single PutObject is limited to 5 GiB. Larger files would need a multipart upload.
+        if (size > S3_MAX_SINGLE_PUT_BYTES) {
+            throw new StorageError('S3 storage supports files up to 5 GB');
+        }
+
+        await this.client.send(
+            new PutObjectCommand({
+                Bucket: this.bucket,
+                Key: storagePath,
+                Body: createReadStream(sourcePath),
+                ContentLength: size,
+                ContentType: metadata?.contentType,
+                Metadata: {
+                    ...metadata?.custom,
+                    'x-file-hash': hash,
+                },
+            }),
+        );
+
+        await unlink(sourcePath).catch(() => {});
+
+        return { path: storagePath, size, hash };
     }
 
     async retrieve(storagePath: string): Promise<Buffer> {

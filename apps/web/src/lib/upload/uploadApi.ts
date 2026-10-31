@@ -1,5 +1,38 @@
 import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { API_BASE, getAccessToken } from '../api/client';
+import { getFileTooLargeMessage, isFileTooLarge } from './limits';
+
+/**
+ * Error message for a failed upload response. Prefers the server's message (JSON from the API);
+ * a 413 without one comes from the reverse proxy (HTML page) and means the file exceeded its size limit.
+ */
+function getUploadErrorMessage(xhr: XMLHttpRequest, files: File[]): string {
+    try {
+        const error = JSON.parse(xhr.responseText);
+
+        if (typeof error.message === 'string' && error.message.length > 0) {
+            return error.message;
+        }
+    } catch {
+        // Not a JSON response
+    }
+
+    if (xhr.status === 413) {
+        return getFileTooLargeMessage(files.length === 1 ? files[0] : undefined);
+    }
+
+    return `Upload failed with status ${xhr.status}`;
+}
+
+/**
+ * Message when the connection fails mid-upload. The server may drop the connection when a file exceeds
+ * the size limit, in which case the browser only reports a network error.
+ */
+function getNetworkErrorMessage(files: File[]): string {
+    const tooLarge = files.find(isFileTooLarge);
+
+    return tooLarge ? getFileTooLargeMessage(tooLarge) : 'Network error during upload';
+}
 
 export type UploadOptions = {
     folderId?: string;
@@ -52,17 +85,12 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
                     reject(new Error('Invalid response from server'));
                 }
             } else {
-                try {
-                    const error = JSON.parse(xhr.responseText);
-                    reject(new Error(error.message || `Upload failed with status ${xhr.status}`));
-                } catch {
-                    reject(new Error(`Upload failed with status ${xhr.status}`));
-                }
+                reject(new Error(getUploadErrorMessage(xhr, [file])));
             }
         });
 
         xhr.addEventListener('error', () => {
-            reject(new Error('Network error during upload'));
+            reject(new Error(getNetworkErrorMessage([file])));
         });
 
         xhr.addEventListener('abort', () => {
@@ -128,17 +156,12 @@ export async function uploadFiles(files: File[], options: UploadOptions): Promis
                     reject(new Error('Invalid response from server'));
                 }
             } else {
-                try {
-                    const error = JSON.parse(xhr.responseText);
-                    reject(new Error(error.message || `Upload failed with status ${xhr.status}`));
-                } catch {
-                    reject(new Error(`Upload failed with status ${xhr.status}`));
-                }
+                reject(new Error(getUploadErrorMessage(xhr, files)));
             }
         });
 
         xhr.addEventListener('error', () => {
-            reject(new Error('Network error during upload'));
+            reject(new Error(getNetworkErrorMessage(files)));
         });
 
         xhr.addEventListener('abort', () => {

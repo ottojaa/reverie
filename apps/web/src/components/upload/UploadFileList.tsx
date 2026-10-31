@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { useUpload } from '@/lib/upload';
+import { isFileTooLarge, useUpload } from '@/lib/upload';
 import { AlertCircle, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { UploadFileItem } from './UploadFileItem';
@@ -18,6 +18,8 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
     const hasQueued = stats.queued > 0;
     const hasCompleted = stats.complete > 0;
     const hasFailed = stats.error > 0;
+    // Files over the size limit can't be retried
+    const hasRetryable = files.some((f) => f.status === 'error' && !isFileTooLarge(f.file));
 
     return (
         <div className="mt-6 space-y-4">
@@ -58,18 +60,20 @@ export function UploadFileList({ folderId }: UploadFileListProps) {
                             <Button variant="ghost" size="sm" onClick={clearFailed}>
                                 Clear failed
                             </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    retryFailed();
-                                    // Automatically start upload after requeueing
-                                    setTimeout(() => startUpload(folderId), 0);
-                                }}
-                            >
-                                <RefreshCw className="mr-2 size-4" />
-                                Retry all
-                            </Button>
+                            {hasRetryable && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        retryFailed();
+                                        // Automatically start upload after requeueing
+                                        setTimeout(() => startUpload(folderId), 0);
+                                    }}
+                                >
+                                    <RefreshCw className="mr-2 size-4" />
+                                    Retry all
+                                </Button>
+                            )}
                         </>
                     )}
 
