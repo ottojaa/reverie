@@ -19,6 +19,13 @@ export interface IStorageProvider {
     store(file: Buffer, path: string, metadata?: StorageMetadata): Promise<StorageResult>;
 
     /**
+     * Store a file that already exists on disk without loading it into memory.
+     * The source file is consumed: it is moved/uploaded and no longer exists at `sourcePath` afterwards.
+     * @param hash - SHA-256 of the content (hex), already computed by the caller
+     */
+    storeFromFile(sourcePath: string, path: string, hash: string, metadata?: StorageMetadata): Promise<StorageResult>;
+
+    /**
      * Retrieve a file's contents
      */
     retrieve(path: string): Promise<Buffer>;

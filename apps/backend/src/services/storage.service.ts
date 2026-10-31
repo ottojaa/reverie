@@ -1,11 +1,13 @@
 import { StorageError } from '@reverie/shared';
 import { encode } from 'blurhash';
-import { createHash } from 'crypto';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import sharp from 'sharp';
 import { db } from '../db/kysely';
 import type { ThumbnailPaths } from '../db/schema';
-import { generateStoragePath, getExtension, getStorage } from '../storage';
+import { generateStoragePath, getExtension, getStorage, LocalStorageProvider } from '../storage';
+import type { UploadedFile } from '../utils/upload-files';
 import { getThumbnailStrategy } from './thumbnail-strategy';
 
 /**
@@ -17,25 +19,12 @@ export type FileCategory = 'image' | 'pdf' | 'video' | 'audio' | 'document' | 'o
  * Result of processing and storing a file
  */
 export interface ProcessedFile {
-    buffer: Buffer;
     hash: string;
     storagePath: string;
     width: number | null; // null for non-visual files
     height: number | null;
     blurhash: string | null; // null for non-images (generated during upload for images)
     fileCategory: FileCategory;
-}
-
-/**
- * @deprecated Use ProcessedFile instead
- */
-export interface ProcessedImage {
-    buffer: Buffer;
-    hash: string;
-    storagePath: string;
-    width: number;
-    height: number;
-    blurhash: string;
 }
 
 export interface ThumbnailResult {
@@ -82,6 +71,22 @@ export interface UserStorageContext {
     storagePath: string; // e.g., "users/abc123"
     storageQuotaBytes: number;
     storageUsedBytes: number;
+}
+
+/**
+ * Largest file the background jobs (thumbnails, OCR, LLM) will load into memory at once.
+ * Uploads can be far bigger than this (they are streamed), so anything that reads a whole file into a
+ * Buffer has to check against this first.
+ */
+export const MAX_IN_MEMORY_FILE_BYTES = 1024 * 1024 * 1024;
+
+/**
+ * Throws if a file of `sizeBytes` is too big to be safely loaded into memory.
+ */
+export function assertFitsInMemory(sizeBytes: number | string, action: string): void {
+    if (Number(sizeBytes) > MAX_IN_MEMORY_FILE_BYTES) {
+        throw new StorageError(`File is too large to ${action} (limit ${MAX_IN_MEMORY_FILE_BYTES / 1024 / 1024 / 1024} GB)`);
+    }
 }
 
 const THUMBNAIL_SIZES = {
@@ -161,22 +166,21 @@ export class StorageService {
     }
 
     /**
-     * Process and store any uploaded file (with user context)
-     * Handles different file types with appropriate strategies
+     * Process and store an uploaded file (with user context).
+     * The file is already on disk (streamed there by the upload handler) and is moved into storage;
+     * only images are opened, via their path, to extract dimensions and a blurhash.
      */
-    async processAndStoreFile(buffer: Buffer, originalFilename: string, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedFile> {
+    async processAndStoreFile(file: UploadedFile, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedFile> {
         // Check quota if user context is provided
         if (userContext) {
-            this.checkStorageQuota(userContext, buffer.length);
+            this.checkStorageQuota(userContext, file.size);
         }
 
         const fileCategory = getFileCategory(mimeType);
-
-        // Calculate hash
-        const hash = createHash('sha256').update(buffer).digest('hex');
+        const { hash } = file;
 
         // Generate storage path (relative to user's storage directory)
-        const extension = getExtension(originalFilename) || mimeType.split('/')[1] || 'bin';
+        const extension = getExtension(file.filename) || mimeType.split('/')[1] || 'bin';
         const relativeStoragePath = generateStoragePath(hash, extension);
 
         // Add user prefix if context provided
@@ -189,51 +193,33 @@ export class StorageService {
         // For images, extract metadata and generate blurhash
         if (fileCategory === 'image') {
             try {
-                const metadata = await sharp(buffer).metadata();
+                const metadata = await sharp(file.tempPath).metadata();
                 width = metadata.width ?? null;
                 height = metadata.height ?? null;
-                blurhash = await this.generateBlurhash(buffer);
+                blurhash = await this.generateBlurhash(file.tempPath);
             } catch {
                 // If sharp fails (e.g., unsupported image format), continue without metadata
-                console.warn(`Could not extract image metadata for ${originalFilename}`);
+                console.warn(`Could not extract image metadata for ${file.filename}`);
             }
         }
 
-        // Store original file
-        await this.storage.store(buffer, storagePath, {
+        // Move the original file into storage
+        await this.storage.storeFromFile(file.tempPath, storagePath, hash, {
             contentType: mimeType,
         });
 
         // Update storage usage if user context provided
         if (userContext) {
-            await this.updateStorageUsage(userContext.userId, buffer.length);
+            await this.updateStorageUsage(userContext.userId, file.size);
         }
 
         return {
-            buffer,
             hash,
             storagePath,
             width,
             height,
             blurhash,
             fileCategory,
-        };
-    }
-
-    /**
-     * Process and store an uploaded image (with user context)
-     * @deprecated Use processAndStoreFile instead
-     */
-    async processAndStoreImage(buffer: Buffer, originalFilename: string, mimeType: string, userContext?: UserStorageContext): Promise<ProcessedImage> {
-        const result = await this.processAndStoreFile(buffer, originalFilename, mimeType, userContext);
-
-        return {
-            buffer: result.buffer,
-            hash: result.hash,
-            storagePath: result.storagePath,
-            width: result.width ?? 0,
-            height: result.height ?? 0,
-            blurhash: result.blurhash ?? '',
         };
     }
 
@@ -293,8 +279,8 @@ export class StorageService {
     /**
      * Generate a blurhash for an image
      */
-    private async generateBlurhash(buffer: Buffer): Promise<string> {
-        const { data, info } = await sharp(buffer).raw().ensureAlpha().resize(32, 32, { fit: 'inside' }).toBuffer({ resolveWithObject: true });
+    private async generateBlurhash(input: Buffer | string): Promise<string> {
+        const { data, info } = await sharp(input).raw().ensureAlpha().resize(32, 32, { fit: 'inside' }).toBuffer({ resolveWithObject: true });
 
         return encode(new Uint8ClampedArray(data), info.width, info.height, 4, 3);
     }
@@ -351,6 +337,29 @@ export class StorageService {
      */
     async readFile(path: string): Promise<Buffer> {
         return this.storage.retrieve(path);
+    }
+
+    /**
+     * Get a file on the local filesystem for tools that need a path (e.g. ffmpeg), without loading it into memory.
+     * With local storage this is the stored file itself (read only; do not modify or delete it).
+     * Otherwise the file is downloaded to a temp dir. Always call `cleanup()` when done.
+     */
+    async getLocalFilePath(storagePath: string, extension = ''): Promise<{ path: string; cleanup: () => Promise<void> }> {
+        if (this.storage instanceof LocalStorageProvider) {
+            return { path: this.storage.getAbsolutePath(storagePath), cleanup: async () => {} };
+        }
+
+        const dir = await mkdtemp(join(tmpdir(), 'reverie-file-'));
+        const path = join(dir, `file${extension}`);
+
+        try {
+            await writeFile(path, await this.storage.retrieve(storagePath));
+        } catch (err) {
+            await rm(dir, { recursive: true, force: true }).catch(() => {});
+            throw err;
+        }
+
+        return { path, cleanup: () => rm(dir, { recursive: true, force: true }) };
     }
 
     /**

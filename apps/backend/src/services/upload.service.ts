@@ -5,6 +5,7 @@ import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { getDeduplicatedFilename } from '../utils/filename';
+import type { UploadedFile } from '../utils/upload-files';
 import { canGenerateThumbnail, getFileCategory, getStorageService, type UserStorageContext } from './storage.service';
 
 export type ConflictStrategy = 'replace' | 'keep_both';
@@ -50,11 +51,7 @@ function correctMimeType(filename: string, reportedMime: string): string {
     return EXTENSION_MIME_MAP[ext] ?? reportedMime;
 }
 
-export interface UploadedFile {
-    buffer: Buffer;
-    filename: string;
-    mimetype: string;
-}
+export type { UploadedFile };
 
 export interface UploadResult {
     sessionId: string;
@@ -126,7 +123,7 @@ export class UploadService {
             );
             documents.push(result.document);
             jobs.push(...result.jobs);
-            userContext.storageUsedBytes += file.buffer.length;
+            userContext.storageUsedBytes += file.size;
         });
 
         await Promise.all(promises);
@@ -224,7 +221,7 @@ export class UploadService {
         // content deduplicates at the STORAGE layer only (content-addressed path)
         // — every upload gets its own document row. Deletion must therefore go
         // through deleteDocumentFiles, which refcounts the shared object.
-        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
+        const processed = await this.storageService.processAndStoreFile(file, mimeType, userContext);
 
         // Determine if we can generate thumbnails for this file type
         const canThumbnail = canGenerateThumbnail(mimeType, displayName);
@@ -237,7 +234,7 @@ export class UploadService {
             file_hash: processed.hash,
             original_filename: displayName,
             mime_type: mimeType,
-            size_bytes: file.buffer.length,
+            size_bytes: file.size,
             width: processed.width,
             height: processed.height,
             thumbnail_blurhash: processed.blurhash,
@@ -374,7 +371,7 @@ export class UploadService {
 
         const userContext = await this.storageService.getUserStorageContext(userId);
         const mimeType = correctMimeType(file.filename, file.mimetype);
-        const processed = await this.storageService.processAndStoreFile(file.buffer, file.filename, mimeType, userContext);
+        const processed = await this.storageService.processAndStoreFile(file, mimeType, userContext);
         const canThumbnail = canGenerateThumbnail(mimeType, file.filename);
 
         // Delete old file and thumbnails from storage (refcount-safe; skip when the
@@ -396,7 +393,7 @@ export class UploadService {
             .set({
                 file_path: processed.storagePath,
                 file_hash: processed.hash,
-                size_bytes: file.buffer.length,
+                size_bytes: file.size,
                 width: processed.width,
                 height: processed.height,
                 thumbnail_blurhash: processed.blurhash,

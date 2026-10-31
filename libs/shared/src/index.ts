@@ -18,4 +18,5 @@ export * from './search/query-tokens.js';
 
 // Helpers
 export * from './helpers/formatting.js';
+export * from './helpers/upload.js';
 export * from './helpers/utils.js';

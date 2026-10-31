@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
-import { access, mkdir, stat, unlink } from 'fs/promises';
+import { access, mkdir, rename, stat, unlink } from 'fs/promises';
 import * as path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
@@ -31,6 +31,26 @@ export class LocalStorageProvider implements IStorageProvider {
             size: file.length,
             hash,
         };
+    }
+
+    async storeFromFile(sourcePath: string, storagePath: string, hash: string, _metadata?: StorageMetadata): Promise<StorageResult> {
+        const absolutePath = this.getAbsolutePath(storagePath);
+        const { size } = await stat(sourcePath);
+
+        await mkdir(path.dirname(absolutePath), { recursive: true });
+
+        try {
+            // Same filesystem (upload temp dir lives in the storage root): instant, no copy
+            await rename(sourcePath, absolutePath);
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+
+            // Different filesystem: stream copy, then drop the source
+            await pipeline(createReadStream(sourcePath), createWriteStream(absolutePath));
+            await unlink(sourcePath);
+        }
+
+        return { path: storagePath, size, hash };
     }
 
     async retrieve(storagePath: string): Promise<Buffer> {
@@ -67,14 +87,10 @@ export class LocalStorageProvider implements IStorageProvider {
         const absolutePath = this.getAbsolutePath(storagePath);
         const stats = await stat(absolutePath);
 
-        // Calculate hash for existing file
-        const fileBuffer = await this.retrieve(storagePath);
-        const hash = createHash('sha256').update(fileBuffer).digest('hex');
-
+        // No content hash here: it would mean reading the entire file (potentially many GB) into memory
         return {
             contentLength: stats.size,
             lastModified: stats.mtime,
-            hash,
         };
     }
 

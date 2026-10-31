@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useUpload } from '@/lib/upload';
+import { MAX_UPLOAD_FILE_SIZE_LABEL, useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { FileUp, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -69,7 +69,7 @@ export function UploadDropzone({ className, disabled }: UploadDropzoneProps) {
                             <Upload className="size-10 text-primary" />
                         </div>
                         <p className="mt-4 text-lg font-medium">Drag and drop files here</p>
-                        <p className="mt-1 text-sm text-muted-foreground">or click the button below to select files</p>
+                        <p className="mt-1 text-sm text-muted-foreground">or click the button below to select files (up to {MAX_UPLOAD_FILE_SIZE_LABEL} each)</p>
                         <Button onClick={open} className="mt-6" disabled={disabled || isUploading}>
                             <Upload className="mr-2 size-4" />
                             Choose Files

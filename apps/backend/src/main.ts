@@ -21,6 +21,12 @@ async function main() {
     // Create HTTP server first (needed for Socket.IO)
     const httpServer = createServer();
 
+    // Node's default requestTimeout (5 min) covers the whole request, including the body, so a large
+    // upload on a slower connection would be cut off. Fastify only applies its own requestTimeout (0 =
+    // disabled) when it creates the server itself, so set it here. Stalled clients are still dropped by
+    // nginx's client_body_timeout (time between two reads of the body).
+    httpServer.requestTimeout = 0;
+
     // Instantiate Fastify with some config
     const envToLogger = {
         development: {

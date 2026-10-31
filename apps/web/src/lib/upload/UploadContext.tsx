@@ -1,6 +1,7 @@
 import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
+import { getFileTooLargeMessage, isFileTooLarge } from './limits';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFile } from './uploadApi';
 
@@ -87,12 +88,15 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
 
             for (const file of action.files) {
                 const id = generateFileId();
+                // Files over the size limit are listed with an error right away instead of being uploaded
+                const tooLarge = isFileTooLarge(file);
                 newFiles.set(id, {
                     id,
                     file,
-                    status: 'queued',
+                    status: tooLarge ? 'error' : 'queued',
                     uploadProgress: 0,
                     processingProgress: 0,
+                    ...(tooLarge && { error: getFileTooLargeMessage(file) }),
                 });
             }
 
@@ -134,7 +138,8 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             const newFiles = new Map(state.files);
 
             for (const [id, file] of newFiles) {
-                if (file.status === 'error') {
+                // Retrying a file that is over the size limit can never succeed
+                if (file.status === 'error' && !isFileTooLarge(file.file)) {
                     const { error: _, ...rest } = file;
                     newFiles.set(id, {
                         ...rest,
@@ -151,7 +156,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             const newFiles = new Map(state.files);
             const file = newFiles.get(action.fileId);
 
-            if (file && file.status === 'error') {
+            if (file && file.status === 'error' && !isFileTooLarge(file.file)) {
                 newFiles.set(action.fileId, {
                     ...file,
                     status: 'queued',

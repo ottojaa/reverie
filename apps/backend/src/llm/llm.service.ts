@@ -13,7 +13,7 @@ import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
 import { rebuildSearchVector } from '../search/search-indexer';
-import { getStorageService } from '../services/storage.service';
+import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
@@ -256,6 +256,8 @@ async function processVisionDocument(document: Document, baseTimings: { fetchMs:
     }
 
     // Load image from storage
+    assertFitsInMemory(document.size_bytes, 'describe');
+
     const storageStart = Date.now();
     const storageService = getStorageService();
     const imageBuffer = await storageService.getFile(document.file_path);
