@@ -132,8 +132,8 @@ const VISION_PROMPT = `Describe this image in 2-3 sentences. Include:
 Be concise and factual.`;
 
 interface BuildPromptContext {
-    document: Document;
-    ocrResult?: OcrResult | null;
+    document: Pick<Document, 'original_filename'>;
+    ocrResult?: Pick<OcrResult, 'confidence_score'> | null;
     preparedText: PreparedText;
 }
 

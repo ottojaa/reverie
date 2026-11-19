@@ -75,3 +75,6 @@ deploy.log
 
 # Local docker-compose overrides (machine-specific port mappings etc.)
 docker-compose.override.yml
+
+# Local model-comparison documents (private; see apps/backend/src/scripts/compare-summary-models.md)
+/comparison-docs/
