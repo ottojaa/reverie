@@ -105,7 +105,7 @@ export const moveDocuments = defineTool({
                     vis,
                     target.id,
                     moving.map((doc) => doc.original_filename),
-                    ids,
+                    moving.map((doc) => doc.id),
                 );
 
                 assertNoNameClash(

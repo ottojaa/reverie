@@ -47,6 +47,16 @@ describeDb('move_documents', () => {
         expect(await loadAudit(db(), alice())).toEqual(before);
     });
 
+    it('refuses a move that would put a second document of the same name next to one already there', async () => {
+        const target = await newSubfolder();
+        const elsewhere = await newSubfolder();
+        const resident = await newDoc({ folderId: target.id, name: 'twin.pdf' });
+        const newcomer = await newDoc({ folderId: elsewhere.id, name: 'twin.pdf' });
+
+        expect(await refusal(alice(), 'move_documents', { document_ids: [resident, newcomer], folder_id: target.id })).toMatch(/would clash/);
+        expect((await db().selectFrom('documents').select('folder_id').where('id', '=', newcomer).executeTakeFirstOrThrow()).folder_id).toBe(elsewhere.id);
+    });
+
     it('undo moves them back; refuses after they moved again', async () => {
         const from = await newSubfolder();
         const to = await newSubfolder();

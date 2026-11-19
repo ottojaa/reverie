@@ -11,7 +11,12 @@ const MAX_PAGE_SIZE = 100;
 
 const searchSchema = z.object({
     query: z.string().max(500).default('').describe('Free text plus filters in the search syntax, e.g. `invoice tag:2024 -category:receipt date:2023-2024`'),
-    types: z.array(z.enum(['photo', 'document', 'receipt', 'screenshot', 'video'])).optional(),
+    types: z
+        .array(z.enum(['photo', 'document', 'receipt', 'screenshot', 'video']))
+        .optional()
+        .describe(
+            "Search's own type filter. 'photo' here is the classifier's label, so it also matches images without camera data; a row's `type` is 'photo' only for camera photos.",
+        ),
     categories: z.array(z.string().min(1).max(60)).optional().describe('Document categories, e.g. receipt'),
     tags: z.array(z.string().min(1).max(60)).optional().describe('Every listed tag must be on the document'),
     formats: z.array(z.string().min(1).max(10)).optional().describe('File formats, e.g. pdf, jpg'),
