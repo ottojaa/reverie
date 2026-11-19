@@ -36,6 +36,7 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 - `yarn lint` — runs both **lint and typecheck** (`nx run-many -t lint typecheck`).
 - `yarn lint:fix` — eslint autofix.
 - `yarn format` / `yarn format:check` — Prettier via `nx format:write` / `nx format:check`.
+- Backend database tests need Postgres: set `TEST_DATABASE_URL` (e.g. the docker compose postgres), or have `initdb` installed (Homebrew `postgresql`), and the harness starts a throwaway cluster. `SKIP_DB_TESTS=1` skips them on purpose; without any of these they fail.
 - Only run tests/typecheck/lint when it's relevant to the change or the user asks — don't run them reflexively after every edit.
 
 ## Code Style

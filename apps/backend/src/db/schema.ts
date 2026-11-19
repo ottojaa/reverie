@@ -208,6 +208,21 @@ export interface ServerSettingsTable {
 
 export type ServerSetting = Selectable<ServerSettingsTable>;
 
+// Audit log of library tool writes (see tools/audit.ts). state_before/state_after are jsonb snapshots; they are
+// written as JSON strings and read back already parsed.
+export interface ToolAuditLogTable {
+    id: Generated<string>;
+    user_id: string;
+    tool: string;
+    input: ColumnType<unknown, string, string>;
+    state_before: ColumnType<unknown, string, string>;
+    state_after: ColumnType<unknown, string, string>;
+    created_at: ColumnType<Date, Date | undefined, never>;
+    undone_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+}
+
+export type ToolAuditLogEntry = Selectable<ToolAuditLogTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -220,4 +235,5 @@ export interface Database {
     document_tags: DocumentTagsTable;
     photo_metadata: PhotoMetadataTable;
     server_settings: ServerSettingsTable;
+    tool_audit_log: ToolAuditLogTable;
 }

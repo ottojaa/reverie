@@ -58,9 +58,9 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Safety & data lifecycle
 
-| Capability          | Immich          | Reverie                                                     | Plan |
-| ------------------- | --------------- | ----------------------------------------------------------- | ---- |
-| Trash / recycle bin | ✅ w/ retention | ✅ restore, empty, retention purge (TTL in server settings) | ✅   |
+| Capability          | Immich          | Reverie                                                     | Plan     |
+| ------------------- | --------------- | ----------------------------------------------------------- | -------- |
+| Trash / recycle bin | ✅ w/ retention | ✅ restore, empty, retention purge (TTL in server settings) | ✅ (#71) |
 
 ### Search & intelligence
 
@@ -133,7 +133,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
    it. Foundation already exists (content-addressable storage, `file_hash`, `check-duplicates`,
    foreground `UploadWorker`). Needs: `PeriodicWorkRequest` + `MediaStore` observer, a
    "back up these albums / Wi-Fi-only" settings surface, and a local backed-up-asset ledger.
-2. ✅ **Trash + soft-delete with configurable TTL.** Deletes set `deleted_at`; trashed items are
+2. ✅ **Trash + soft-delete with configurable TTL** (#71). Deletes set `deleted_at`; trashed items are
    hidden from listings, search and every AI path, and can be restored or deleted forever from the
    Trash view. A retention worker purges them after `trash.retentionDays` (server-settings store).
    Folders keep their meaning: deleting one drops its documents to the root and the folder itself is
@@ -164,12 +164,12 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
       its collection) at processing time, even when it was locked while its job waited.
     - ✅ **Haiku 5.5** (#70) for the background jobs (summaries and image descriptions), on SDK 1.x and
       the current API version, with model, tokens and cost logged per summary.
+    - ✅ **Shared tool registry** (#72) — one set of library tools (search, get, list, overview, tags, move,
+      create/rename folder, rename document) with selections instead of ID lists, locked and trashed
+      items invisible, a dry run on every write, and an audit log that can undo each write. Photos
+      expose details only (name, date, place, tags), never the image. No delete tool.
 
     In progress:
-    - 🚧 **Shared tool registry** — one set of library tools (search, get, list, overview, tags, move,
-      create/rename folder, rename document) with selections instead of ID lists, locked items
-      invisible, a dry run on every write, and an audit log that can undo each write. Photos expose
-      details only (name, date, place, tags), never the image.
     - 🚧 **MCP server** — the registry exposed at `/mcp` over Streamable HTTP, with revocable per-user
       API tokens, so Claude Code and other agents can work against a Reverie library directly.
     - 🚧 **In-app agent** — a chat window onto stock Claude Code, restricted to the same registry via
