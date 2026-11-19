@@ -99,7 +99,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const handleDeleteSection = async (section: FolderWithChildren) => {
         const ok = await confirm({
             title: 'Delete folder?',
-            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a folder. You can restore the collection from Trash.`,
+            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a folder. You can restore the folder from Trash.`,
             confirmText: 'Delete',
             variant: 'destructive',
         });
