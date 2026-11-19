@@ -297,6 +297,30 @@ describeDb('in-app agent, end to end', () => {
         });
     });
 
+    describe('deleting a chat mid-run', () => {
+        it('aborts the run and saves nothing, without logging a failed save', async () => {
+            rmSync(join(stateDir, 'release'), { force: true });
+            rmSync(join(stateDir, 'started'), { force: true });
+
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            try {
+                const before = h.sent.length;
+                const id = (await as(adminJwt, 'POST', '/agent/messages', { prompt: 'hold' })).json().chat_id as string;
+
+                await waitFor(() => readStarted(join(stateDir, 'started')), 'claude to start');
+                expect((await as(adminJwt, 'DELETE', '/agent/chats/' + id)).statusCode).toBe(204);
+                await waitFor(() => h.sent.slice(before).find((e) => e.data.chat_id === id && e.data.type === 'run_finished'), 'run_finished');
+
+                expect(errors).not.toHaveBeenCalled();
+                expect(await dbProxy.db.selectFrom('agent_chats').select('id').where('id', '=', id).execute()).toEqual([]);
+                expect(await dbProxy.db.selectFrom('agent_messages').select('id').where('chat_id', '=', id).execute()).toEqual([]);
+            } finally {
+                errors.mockRestore();
+            }
+        });
+    });
+
     describe('a write tool call', () => {
         it('shows up with an audit id, really writes through /mcp, and Undo reverses it', async () => {
             const world = ctx.world();

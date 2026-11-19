@@ -43,9 +43,15 @@ export async function insertMessage(chatId: string, role: 'user' | 'assistant', 
         .execute();
 }
 
-/** Bumps the chat to the top of the list and remembers the Claude session to `--resume`. */
-export async function touchChat(chatId: string, sessionId: string | null): Promise<void> {
-    await db.updateTable('agent_chats').set({ updated_at: new Date(), claude_session_id: sessionId }).where('id', '=', chatId).execute();
+/** Bumps the chat to the top of the list and remembers the Claude session to `--resume`. False if the chat is gone. */
+export async function touchChat(chatId: string, sessionId: string | null): Promise<boolean> {
+    const result = await db
+        .updateTable('agent_chats')
+        .set({ updated_at: new Date(), claude_session_id: sessionId })
+        .where('id', '=', chatId)
+        .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
 }
 
 export async function deleteChat(userId: string, chatId: string): Promise<boolean> {

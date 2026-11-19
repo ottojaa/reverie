@@ -135,9 +135,10 @@ function toFailure(error: unknown): Failure {
 
 async function saveRun(chatId: string, outcome: RunOutcome): Promise<void> {
     try {
-        if (outcome.items.length > 0 || outcome.failure) await insertMessage(chatId, 'assistant', outcome.items, outcome.failure?.message ?? null);
+        // The chat may have been deleted while the run was going (deleting aborts it): then there is nothing to save to.
+        if (!(await touchChat(chatId, outcome.sessionId))) return;
 
-        await touchChat(chatId, outcome.sessionId);
+        if (outcome.items.length > 0 || outcome.failure) await insertMessage(chatId, 'assistant', outcome.items, outcome.failure?.message ?? null);
     } catch (error) {
         console.error('Failed to save agent run', { chatId, error });
     }
