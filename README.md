@@ -6,7 +6,6 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 
 # This project is a work in progress. Here are some things to note:
 
-- Organize chat assistant needs fine-tuning and prompt work, as well as context management improvements.
 - Performance: PaddleOCR can now run on the GPU — set `OCR_DEVICE=gpu:0` on a CUDA host and build the GPU image (`OCR_GPU=true`, the default). See [Deployment → GPU / OCR](#gpu--ocr). On CPU, 4k images can take 10s+.
 - UI work needed in various areas
 
@@ -15,7 +14,8 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **File management**: Upload, browse, and organize any file type in a two-level hierarchy (collections → folders); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
 - **OCR**: Extract text from images/PDFs via PaddleOCR (default) or Tesseract.js
 - **AI processing**: Claude-powered summaries, titles, tags, entities, topics, categories, and extracted dates; optional vision for images without text
-- **Smart organize**: Chat-based AI assistant that searches documents and proposes moves; streaming SSE, tool-call loop
+- **Library agent**: Admin-only chat in the web app that searches, moves, renames and tags documents through the same tool registry as `/mcp`; every write can be undone ([setup](#in-app-agent))
+- **Manual organize**: Pick a destination and move a selection in one step
 - **Full-text search**: Filter DSL + faceted search (date, category, type, tags, location from EXIF), autocomplete, and a command palette in web
 - **Document viewer**: PDF, images, video, and text via a viewer registry, with an AI insight panel; in-app image crop editor and video trim editor
 - **Thumbnails**: WebP thumbnails + blurhash for images, PDFs, Office docs (via LibreOffice), video frames, and text/code
@@ -102,23 +102,47 @@ See [.env.example](.env.example) for the full reference. Key variables:
 
 AI is **optional** — Reverie runs fully without it. Set `LLM_ENABLED=false` (or leave
 `ANTHROPIC_API_KEY` unset) and files are still uploaded, OCR'd, thumbnailed, searched, and organized
-by hand; only the AI summaries/tags and the organize assistant are skipped. Vision is off by default
+by hand; only the AI summaries/tags are skipped (the library agent runs on a Claude Code sign-in, not on this key). Vision is off by default
 (`LLM_VISION_ENABLED=false`).
 
 Each AI capability chooses its model independently, so you can mix per task:
 
-| Capability              | Env var                    | Default            |
-| ----------------------- | -------------------------- | ------------------ |
-| Document summary & tags | `ANTHROPIC_SUMMARY_MODEL`  | `claude-haiku-4-5` |
-| Image vision (opt-in)   | `ANTHROPIC_VISION_MODEL`   | `claude-haiku-4-5` |
-| Organize assistant      | `ANTHROPIC_ORGANIZE_MODEL` | `claude-sonnet-5`  |
+| Capability              | Env var                   | Default            |
+| ----------------------- | ------------------------- | ------------------ |
+| Document summary & tags | `ANTHROPIC_SUMMARY_MODEL` | `claude-haiku-4-5` |
+| Image vision (opt-in)   | `ANTHROPIC_VISION_MODEL`  | `claude-haiku-4-5` |
 
 The env vars above are today's mechanism (set at boot). **Planned:** these settings move into the
 **admin UI, editable at runtime** — swap models or providers on the fly, no restart. A provider seam
 lets each capability target either Claude or a **local, self-hosted model** over an OpenAI-compatible
 endpoint (Ollama, llama.cpp, …) run as a **separate container** — e.g. a local model for summaries
-with Claude for the assistant, fully local, or fully off — all with sensible defaults. See
+with Claude for the agent, fully local, or fully off — all with sensible defaults. See
 [ROADMAP.md](ROADMAP.md).
+
+## In-app agent
+
+The admin gets an **Agent** page in the web app: a chat with Claude working on their library. It is the
+stock Claude Code binary (`claude -p`) running in its own `reverie-agent` container, and its only tools are
+Reverie's `/mcp` (the same tool registry, with locked and trashed items hidden, photos as details only, no
+delete). Reverie runs no agent loop and uses no Anthropic API key for it: the container signs in once with
+the admin's own Claude plan, so it is meant for a single admin who owns that plan. Other users never see it.
+Every write shows what changed and an **Undo** button.
+
+The container has no library volume, no Docker socket and no database credentials. The backend sends each
+prompt to it over the compose network with a shared secret it generates itself, plus a short-lived `/mcp`
+token minted for that one run.
+
+**One-time sign-in** (after the first deploy, and again if Claude asks for it):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -it reverie-agent claude
+```
+
+Follow the login prompt (open the link in a browser, paste the code back), then exit. The login lives in the
+`agent_claude` volume, so it survives restarts and redeploys.
+
+**Check it is signed in:** the Agent page shows a "not signed in" banner with this command until it is, or run
+`docker compose -f docker-compose.prod.yml exec reverie-agent claude auth status`.
 
 ## Deployment
 

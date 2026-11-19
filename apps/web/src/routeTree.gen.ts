@@ -15,6 +15,7 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as CanvasRouteImport } from './routes/canvas'
 import { Route as BrowseRouteImport } from './routes/browse'
+import { Route as AgentRouteImport } from './routes/agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BrowseIndexRouteImport } from './routes/browse.index'
 import { Route as LoginCallbackRouteImport } from './routes/login.callback'
@@ -51,6 +52,11 @@ const CanvasRoute = CanvasRouteImport.update({
 const BrowseRoute = BrowseRouteImport.update({
   id: '/browse',
   path: '/browse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentRoute = AgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -91,6 +97,7 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agent': typeof AgentRoute
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
   '/login': typeof LoginRouteWithChildren
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agent': typeof AgentRoute
   '/canvas': typeof CanvasRoute
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agent': typeof AgentRoute
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
   '/login': typeof LoginRouteWithChildren
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agent'
     | '/browse'
     | '/canvas'
     | '/login'
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agent'
     | '/canvas'
     | '/login'
     | '/search'
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agent'
     | '/browse'
     | '/canvas'
     | '/login'
@@ -183,6 +195,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentRoute: typeof AgentRoute
   BrowseRoute: typeof BrowseRouteWithChildren
   CanvasRoute: typeof CanvasRoute
   LoginRoute: typeof LoginRouteWithChildren
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       path: '/browse'
       fullPath: '/browse'
       preLoaderRoute: typeof BrowseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent': {
+      id: '/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -315,6 +335,7 @@ const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentRoute: AgentRoute,
   BrowseRoute: BrowseRouteWithChildren,
   CanvasRoute: CanvasRoute,
   LoginRoute: LoginRouteWithChildren,

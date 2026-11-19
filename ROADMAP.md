@@ -71,7 +71,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 | LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
 | Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
 | Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                              |
-| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🚧 in-app agent over the shared tool registry         |
+| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | ✅ in-app agent over the shared tool registry         |
 | Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
 | Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
 | Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                                    |
@@ -172,9 +172,9 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
       API tokens (made and revoked on the settings page), so Claude Code and other agents can work
       against a Reverie library directly.
 
-    In progress:
-    - 🚧 **In-app agent** — a chat window onto stock Claude Code, restricted to the same registry via
-      `/mcp`, for the library's owner only. Replaces the organize-only chat (manual organize stays).
+    - ✅ **In-app agent** — a chat window onto stock Claude Code in its own container, restricted to the
+      same registry via `/mcp`, for the admin only, with an Undo on every write. Replaced the organize-only
+      chat (manual organize stays).
 
 - **Optional: pluggable local LLM providers** — for self-hosters who want no cloud AI at all. A
   provider seam so a capability (summaries, vision) can target a local model over an

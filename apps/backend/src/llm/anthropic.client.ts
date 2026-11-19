@@ -5,8 +5,6 @@
  * processing. This is the single integration seam for all LLM features:
  * - Per-document summarization / metadata extraction (Claude Haiku 5.5)
  * - Image description / vision (Claude Haiku 5.5)
- * - The organize assistant streams via getAnthropicClient() directly
- *   (see services/organize.service.ts) — it needs tools, thinking, and caching.
  */
 
 import Anthropic from '@anthropic-ai/sdk';

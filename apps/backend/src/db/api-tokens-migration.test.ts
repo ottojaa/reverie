@@ -81,10 +81,11 @@ describeDb('migration 014 (api_tokens)', () => {
 
     it('goes down and up through the migrator itself, which keeps its own bookkeeping', async () => {
         const migrator = new Migrator({ db: database.db, provider });
-        const { rows } = await sql<{ name: string }>`SELECT name FROM kysely_migration ORDER BY name DESC LIMIT 1`.execute(database.db);
+        const { rows } = await sql<{ name: string }>`SELECT name FROM kysely_migration WHERE name = '014_api_tokens'`.execute(database.db);
 
-        expect(rows[0]!.name).toBe('014_api_tokens');
-        expect((await migrator.migrateDown()).error).toBeUndefined();
+        expect(rows).toHaveLength(1);
+        // Roll back to just before 014 (undoing any later migration on the way), then forward again.
+        expect((await migrator.migrateTo('013_tool_audit_log')).error).toBeUndefined();
         expect(await tableExists()).toBe(false);
         expect((await migrator.migrateToLatest()).error).toBeUndefined();
         expect(await tableExists()).toBe(true);

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { VaultSidebarControl } from './VaultSidebarControl';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
+import { Bot, LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -52,7 +52,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
     const isMobile = useIsMobile();
 
-    const renderAdminLink = (to: '/admin/users' | '/admin/settings', Icon: LucideIcon, label: string) => (
+    const renderAdminLink = (to: '/agent' | '/admin/users' | '/admin/settings', Icon: LucideIcon, label: string) => (
         <Link
             to={to}
             className={cn(
@@ -293,6 +293,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 </Link>
                 {user?.role === 'admin' && (
                     <>
+                        {renderAdminLink('/agent', Bot, 'Agent')}
                         {renderAdminLink('/admin/users', Users, 'Users')}
                         {renderAdminLink('/admin/settings', SlidersHorizontal, 'Server settings')}
                     </>

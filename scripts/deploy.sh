@@ -48,7 +48,8 @@ fi
 
 # Build backend image (runtime stage = FROM reverie-ocr-base + built app).
 # This is the fast, per-deploy build; it does NOT touch Python/CUDA.
-docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend
+# reverie-agent (stock Claude Code + wrapper) is built here too, or `up -d` would never rebuild it.
+docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend reverie-agent
 
 # Extract web dist from builder stage.
 docker build \

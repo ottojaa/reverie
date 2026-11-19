@@ -2,21 +2,6 @@ import { z } from 'zod';
 import { UuidSchema } from './common.js';
 import { ThumbnailUrlsSchema } from './documents.js';
 
-// ── SSE Event Types ─────────────────────────────────────────────────────────
-
-export const OrganizeSseEventTypeSchema = z.enum(['status', 'delta', 'proposal', 'done', 'error']);
-export type OrganizeSseEventType = z.infer<typeof OrganizeSseEventTypeSchema>;
-
-export const OrganizeStatusEventSchema = z.object({
-    type: z.literal('status'),
-    action: z.string(),
-});
-
-export const OrganizeDeltaEventSchema = z.object({
-    type: z.literal('delta'),
-    content: z.string(),
-});
-
 export const OrganizeDocumentPreviewSchema = z.object({
     id: UuidSchema,
     display_name: z.string(),
@@ -54,32 +39,7 @@ export const OrganizeOperationSchema = z.discriminatedUnion('type', [OrganizeMov
 
 export type OrganizeOperation = z.infer<typeof OrganizeOperationSchema>;
 
-export const OrganizeProposalEventSchema = z.object({
-    type: z.literal('proposal'),
-    summary: z.string(),
-    operations: z.array(OrganizeOperationSchema),
-});
-
-export type OrganizeProposalEvent = z.infer<typeof OrganizeProposalEventSchema>;
-
-export const OrganizeDoneEventSchema = z.object({
-    type: z.literal('done'),
-    response_id: z.string(),
-});
-
-export const OrganizeErrorEventSchema = z.object({
-    type: z.literal('error'),
-    message: z.string(),
-});
-
 // ── Request Schemas ──────────────────────────────────────────────────────────
-
-export const OrganizeChatRequestSchema = z.object({
-    message: z.string().min(1).max(2000),
-    response_id: z.string().optional(),
-});
-
-export type OrganizeChatRequest = z.infer<typeof OrganizeChatRequestSchema>;
 
 export const OrganizeExecuteRequestSchema = z.object({
     operations: z.array(OrganizeOperationSchema).min(1),

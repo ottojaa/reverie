@@ -22,7 +22,7 @@ export function HeaderActions() {
 
     return (
         <div className="flex shrink-0 items-center gap-1 md:gap-2">
-            <Button variant="ghost" className={cn('gap-2 px-2 md:px-3', quietHover)} onClick={openOrganize} aria-label="Organize with AI">
+            <Button variant="ghost" className={cn('gap-2 px-2 md:px-3', quietHover)} onClick={openOrganize} aria-label="Organize">
                 <Sparkles className="size-4 shrink-0 text-primary" />
                 <span className="hidden sm:inline">Organize</span>
                 <kbd className="ml-auto hidden shrink-0 rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] opacity-60 md:inline-block">⌘⇧O</kbd>

@@ -27,8 +27,7 @@ const MAX_QUICK_FILTERS = 8;
 /**
  * Quick filters for a user with live counts. Deliberately uncached: the counts
  * are cheap indexed aggregates and the web client already caches the response.
- * If caching is ever needed, follow the Redis-TTL precedent in
- * services/organize-conversation.store.ts.
+ * If caching is ever needed, use a short Redis TTL.
  */
 export async function getQuickFilters(userId: string): Promise<QuickFilter[]> {
     const privateFolderIds = await getPrivateFolderIds(userId);

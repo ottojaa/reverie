@@ -31,6 +31,24 @@ services:
             timeout: 5s
             retries: 5
 
+    # The in-app agent (stock Claude Code behind apps/agent). In dev the backend runs on the host, so the agent
+    # reaches it through host.docker.internal and the backend reaches the agent on a loopback port.
+    # Dev backend env: AGENT_URL=http://127.0.0.1:8080 and AGENT_SECRET=<any 16+ char string> (also set below).
+    reverie-agent:
+        build:
+            context: apps/agent
+        container_name: reverie-agent
+        environment:
+            - REVERIE_MCP_URL=http://host.docker.internal:3000/mcp
+            - AGENT_SECRET=${AGENT_SECRET:-reverie-dev-agent-secret}
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '127.0.0.1:8080:8080'
+        volumes:
+            - agent_claude:/data/claude
+
 volumes:
+    agent_claude:
     postgres_data:
     redis_data:
