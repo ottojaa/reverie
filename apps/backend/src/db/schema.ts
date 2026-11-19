@@ -242,6 +242,29 @@ export interface ApiTokensTable {
 
 export type ApiToken = Selectable<ApiTokensTable>;
 
+// In-app agent chats
+export interface AgentChatsTable {
+    id: Generated<string>;
+    user_id: string;
+    title: string;
+    claude_session_id: string | null;
+    created_at: ColumnType<Date, Date | undefined, never>;
+    updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+export interface AgentMessagesTable {
+    id: Generated<string>;
+    chat_id: string;
+    role: 'user' | 'assistant';
+    /** AgentItem[]; serialised JSON on write. */
+    items: ColumnType<unknown, string, string>;
+    error: string | null;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type AgentChatRow = Selectable<AgentChatsTable>;
+export type AgentMessageRow = Selectable<AgentMessagesTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -256,4 +279,6 @@ export interface Database {
     server_settings: ServerSettingsTable;
     tool_audit_log: ToolAuditLogTable;
     api_tokens: ApiTokensTable;
+    agent_chats: AgentChatsTable;
+    agent_messages: AgentMessagesTable;
 }

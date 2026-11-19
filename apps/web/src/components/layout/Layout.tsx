@@ -1,4 +1,3 @@
-import { OrganizeChatProvider } from '@/lib/api/OrganizeChatContext';
 import { GlobalDropzone, UploadModal } from '@/components/upload';
 import { OrganizeModal } from '@/components/organize';
 import { ScrollContainerProvider } from '@/lib/ScrollContainerContext';
@@ -41,15 +40,11 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [organizeOpen, setOrganizeOpen] = useState(false);
-    const [organizeMinimized, setOrganizeMinimized] = useState(false);
     const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
     const mainRef = useRef<HTMLElement | null>(null);
     const defaultSensors = useDefaultSensors();
 
-    const openOrganize = useCallback(() => {
-        setOrganizeOpen(true);
-        setOrganizeMinimized(false);
-    }, []);
+    const openOrganize = useCallback(() => setOrganizeOpen(true), []);
 
     // Global keyboard shortcut: Cmd/Ctrl+Shift+O
     useEffect(() => {
@@ -75,53 +70,46 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <OrganizeContext.Provider value={{ openOrganize }}>
-            <OrganizeChatProvider>
-                <SectionEditProvider>
-                    <SelectionProvider>
-                        <DndContext
-                            sensors={defaultSensors}
-                            collisionDetection={pointerWithin}
-                            measuring={dndMeasuring}
-                            accessibility={{
-                                get announcements() {
-                                    return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
-                                },
-                            }}
-                            onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
-                            onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
-                            onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
-                            onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
-                            onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
-                        >
-                            <div className="flex h-dvh overflow-hidden bg-background">
-                                <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
-                                <div className="flex flex-1 flex-col overflow-hidden">
-                                    <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
-                                    <GlobalDropzone>
-                                        <ScrollContainerProvider value={mainRef}>
-                                            <main
-                                                ref={mainRef}
-                                                id="main-scroll-area"
-                                                data-scroll-restoration-id="main-scroll-area"
-                                                className="flex-1 overflow-auto"
-                                            >
-                                                {children}
-                                            </main>
-                                        </ScrollContainerProvider>
-                                    </GlobalDropzone>
-                                </div>
-                                <UploadModal />
-                                <OrganizeModal
-                                    open={organizeOpen}
-                                    onOpenChange={setOrganizeOpen}
-                                    isMinimized={organizeMinimized}
-                                    setIsMinimized={setOrganizeMinimized}
-                                />
+            <SectionEditProvider>
+                <SelectionProvider>
+                    <DndContext
+                        sensors={defaultSensors}
+                        collisionDetection={pointerWithin}
+                        measuring={dndMeasuring}
+                        accessibility={{
+                            get announcements() {
+                                return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
+                            },
+                        }}
+                        onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
+                        onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
+                        onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
+                        onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
+                        onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
+                    >
+                        <div className="flex h-dvh overflow-hidden bg-background">
+                            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
+                            <div className="flex flex-1 flex-col overflow-hidden">
+                                <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
+                                <GlobalDropzone>
+                                    <ScrollContainerProvider value={mainRef}>
+                                        <main
+                                            ref={mainRef}
+                                            id="main-scroll-area"
+                                            data-scroll-restoration-id="main-scroll-area"
+                                            className="flex-1 overflow-auto"
+                                        >
+                                            {children}
+                                        </main>
+                                    </ScrollContainerProvider>
+                                </GlobalDropzone>
                             </div>
-                        </DndContext>
-                    </SelectionProvider>
-                </SectionEditProvider>
-            </OrganizeChatProvider>
+                            <UploadModal />
+                            <OrganizeModal open={organizeOpen} onOpenChange={setOrganizeOpen} />
+                        </div>
+                    </DndContext>
+                </SelectionProvider>
+            </SectionEditProvider>
         </OrganizeContext.Provider>
     );
 }

@@ -13,7 +13,7 @@ vi.mock('../db/kysely', async () => {
 
 import { generateFacets } from '../search/facets';
 import { parseQuery } from '../search/query-parser';
-import { countDocuments, findDocumentsForOrganize, getCategoryOverview, getFolderOverview, search, suggest } from '../search/search.service';
+import { countDocuments, search, suggest } from '../search/search.service';
 import { getFolderService } from './folder.service';
 import { getUploadService } from './upload.service';
 
@@ -73,16 +73,13 @@ describe('trashed rows are excluded from every read path', () => {
         for (const sql of trashableStatements().filter((s) => s.startsWith('select'))) expect(sql).toContain('deleted_at');
     });
 
-    it('search, counts, facets, suggestions, overviews and organize retrieval', async () => {
+    it('search, counts, facets and suggestions', async () => {
         const parsed = parseQuery('beach');
 
         await search({ q: 'beach', limit: 10, offset: 0, sort_by: 'relevance', sort_order: 'desc', include_facets: true }, { userId: USER_ID });
         await search({ q: 'type:pdf', limit: 10, offset: 0, sort_by: 'uploaded', sort_order: 'desc', include_facets: true }, { userId: USER_ID });
         await countDocuments(parsed, USER_ID, []);
         await generateFacets(parsed, USER_ID, []);
-        await getCategoryOverview(USER_ID);
-        await getFolderOverview(USER_ID);
-        await findDocumentsForOrganize('beach', { userId: USER_ID });
 
         for (const type of ['filename', 'folder', 'tag', 'entity', 'category', 'location'] as const) {
             await suggest({ type, q: 'a', limit: 5 }, USER_ID);

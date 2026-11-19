@@ -60,8 +60,6 @@ const envSchema = z.object({
 
     // Anthropic / LLM
     ANTHROPIC_API_KEY: z.string().optional(),
-    // Organize assistant: agentic tool-calling + strict rule-following (Claude Sonnet 5).
-    ANTHROPIC_ORGANIZE_MODEL: z.string().default('claude-sonnet-5'),
     // Per-document summarization: high-volume JSON extraction (Claude Haiku 5.5).
     // claude-haiku-4-5 still works as a rollback: effort is simply not sent to it.
     ANTHROPIC_SUMMARY_MODEL: z.string().default('claude-haiku-5-5'),
@@ -71,8 +69,13 @@ const envSchema = z.object({
     // models that accept it (Haiku 5.x). Low: per-document extraction needs little
     // reasoning; raise it if spelling of proper nouns turns out worse than before.
     ANTHROPIC_SUMMARY_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
-    // Thinking depth (effort) for the organize assistant.
-    ANTHROPIC_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
+
+    // In-app agent: the reverie-agent container (Claude Code, signed in with the admin's own plan).
+    // Unset AGENT_URL = no agent configured; the UI then shows it as unavailable.
+    AGENT_URL: z.string().url().optional(),
+    // The wrapper's shared secret: either inline (dev) or a file the wrapper generated on first start.
+    AGENT_SECRET: z.string().min(16).optional(),
+    AGENT_SECRET_FILE: z.string().optional(),
 
     // LLM Processing
     LLM_ENABLED: z.coerce.boolean().default(true),

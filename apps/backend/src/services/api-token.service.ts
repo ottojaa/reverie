@@ -77,6 +77,20 @@ export async function revokeApiToken(userId: string, tokenId: string): Promise<b
     return Number(result.numUpdatedRows) > 0;
 }
 
+/**
+ * Revoke a short-lived agent token the backend minted for one run. Idempotent. Expired agent rows are
+ * left in the table: one per chat message is nothing at this scale, and they are inert once expired.
+ */
+export async function revokeAgentToken(tokenId: string): Promise<void> {
+    await db
+        .updateTable('api_tokens')
+        .set({ revoked_at: new Date() })
+        .where('id', '=', tokenId)
+        .where('kind', '=', 'agent')
+        .where('revoked_at', 'is', null)
+        .execute();
+}
+
 export interface VerifiedToken {
     tokenId: string;
     user: { id: string; email: string };

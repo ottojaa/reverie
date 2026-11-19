@@ -1,4 +1,4 @@
-import type { JobEvent } from '@reverie/shared';
+import { AgentEventSchema, type AgentEvent, type JobEvent } from '@reverie/shared';
 import { io, Socket } from 'socket.io-client';
 
 import { API_BASE, getAccessToken, refreshAccessToken } from './api/client';
@@ -207,6 +207,36 @@ export function onJobEvents(callback: JobEventCallback): () => void {
         s.off('job:progress', handleEvent);
         s.off('job:complete', handleEvent);
         s.off('job:failed', handleEvent);
+    };
+}
+
+/**
+ * Register a callback for the in-app agent's streamed events (sent to the signed-in user only).
+ * `onReconnect` fires when the socket reconnects after a drop, so the caller can reload what it missed.
+ * Returns a cleanup function.
+ */
+export function onAgentEvents(callback: (event: AgentEvent) => void, onReconnect: () => void): () => void {
+    const s = getSocket();
+    let hasConnected = s.connected;
+
+    const handleEvent = (payload: unknown) => {
+        const parsed = AgentEventSchema.safeParse(payload);
+
+        if (parsed.success) callback(parsed.data);
+    };
+
+    const handleConnect = () => {
+        if (hasConnected) onReconnect();
+
+        hasConnected = true;
+    };
+
+    s.on('agent:event', handleEvent);
+    s.on('connect', handleConnect);
+
+    return () => {
+        s.off('agent:event', handleEvent);
+        s.off('connect', handleConnect);
     };
 }
 
