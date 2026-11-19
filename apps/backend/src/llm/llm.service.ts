@@ -17,12 +17,10 @@ import { isDocumentPrivate } from '../services/privacy';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
-import { describeImage, isLlmAvailable, summarizeDocument } from './anthropic.client';
-import { groundEntities } from './entity-grounding';
-import { buildDocumentPrompt, getVisionPrompt } from './prompt-builder';
-import { buildSpellingCorrector, correctText } from './spelling-corrector';
+import { describeImage, isLlmAvailable } from './anthropic.client';
+import { getVisionPrompt } from './prompt-builder';
 import { sanitizeTags } from './tag-sanitizer';
-import { prepareTextForLlm } from './text-preparer';
+import { analyzeOcrText } from './text-analysis';
 import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
 
 interface ProcessDocumentOptions {
@@ -163,36 +161,18 @@ async function processTextSummary(
         };
     }
 
-    // Prepare text with sampling if needed
-    const prepareStart = Date.now();
-    const prepared = prepareTextForLlm(ocrResult.raw_text);
-
-    // Build prompt
-    const prompt = buildDocumentPrompt({
-        document,
-        ocrResult,
-        preparedText: prepared,
-    });
-    const preparePromptMs = Date.now() - prepareStart;
-
-    // Call the LLM
-    const llmStart = Date.now();
-    const { result, tokenCount } = await summarizeDocument(prompt);
-    const llmMs = Date.now() - llmStart;
-
-    // Ground entity names against the OCR text: accept casing/whitespace tidy and
-    // common OCR-confusion fixes, revert anything else (likely hallucination) to
-    // the document's own spelling. See entity-grounding.ts.
-    const groundedEntities = groundEntities(result.entities, ocrResult.raw_text);
-
-    // Scrub the free-text fields (summary/title/topics/tags) for proper nouns the
-    // model re-typed with a hallucinated spelling, using the grounded entities as
-    // the source of the document's true spellings. See spelling-corrector.ts.
-    const corrector = buildSpellingCorrector(groundedEntities, ocrResult.raw_text);
-    const summary = correctText(result.summary, corrector);
-    const title = result.title ? correctText(result.title, corrector) : result.title;
-    const topics = result.topics.map((topic) => correctText(topic, corrector));
-    const proposedTags = result.tags.map((tag) => correctText(tag, corrector));
+    const {
+        result,
+        prepared,
+        entities: groundedEntities,
+        summary,
+        title,
+        topics,
+        tags: proposedTags,
+        tokenCount,
+        preparePromptMs,
+        llmMs,
+    } = await analyzeOcrText(document, ocrResult);
 
     // Build enhanced metadata
     const enhancedMetadata: EnhancedMetadata = {

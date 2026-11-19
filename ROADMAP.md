@@ -69,8 +69,8 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 | Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                                    |
 | OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                                    |
 | LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
-| Locked items never sent to Anthropic                        | n/a (local ML)     | ⚠️ not enforced in the LLM workers          | 🚧 privacy gate in the LLM path                       |
-| Background AI on Claude Haiku 5.5                           | n/a                | ⚠️ Haiku 4.5                                | 🚧 upgrade                                            |
+| Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
+| Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#69)                                              |
 | Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🚧 in-app agent over the shared tool registry         |
 | Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
 | Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
@@ -159,10 +159,13 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
   photo editing.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude
   **Haiku** call each (summary, entities, tags). **Personal photos and locked items never go to
-  Anthropic.** In progress:
-    - 🚧 **Privacy gate** — the LLM workers refuse any locked item (its own flag, its folder, or its
-      collection) at processing time, even when it was locked while its job waited.
-    - 🚧 **Haiku 5.5** for the background jobs, on the current SDK and API version.
+  Anthropic.**
+    - ✅ **Privacy gate** (#68) — the LLM workers refuse any locked item (its own flag, its folder, or
+      its collection) at processing time, even when it was locked while its job waited.
+    - ✅ **Haiku 5.5** (#69) for the background jobs (summaries and image descriptions), on SDK 1.x and
+      the current API version, with model, tokens and cost logged per summary.
+
+    In progress:
     - 🚧 **Shared tool registry** — one set of library tools (search, get, list, overview, tags, move,
       create/rename folder, rename document) with selections instead of ID lists, locked items
       invisible, a dry run on every write, and an audit log that can undo each write. Photos expose
@@ -171,6 +174,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
       API tokens, so Claude Code and other agents can work against a Reverie library directly.
     - 🚧 **In-app agent** — a chat window onto stock Claude Code, restricted to the same registry via
       `/mcp`, for the library's owner only. Replaces the organize-only chat (manual organize stays).
+
 - **Optional: pluggable local LLM providers** — for self-hosters who want no cloud AI at all. A
   provider seam so a capability (summaries, vision) can target a local model over an
   OpenAI-compatible endpoint (Ollama, llama.cpp, …) in a separate container, configured from the
