@@ -50,10 +50,7 @@ export const OrganizeDeleteFolderOperationSchema = z.object({
     folder_name: z.string(),
 });
 
-export const OrganizeOperationSchema = z.discriminatedUnion('type', [
-    OrganizeMoveOperationSchema,
-    OrganizeDeleteFolderOperationSchema,
-]);
+export const OrganizeOperationSchema = z.discriminatedUnion('type', [OrganizeMoveOperationSchema, OrganizeDeleteFolderOperationSchema]);
 
 export type OrganizeOperation = z.infer<typeof OrganizeOperationSchema>;
 

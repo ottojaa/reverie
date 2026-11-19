@@ -89,11 +89,7 @@ export default fp(async function (fastify) {
     // Decorate fastify with authenticateAdmin - must be used after authenticate in preHandler
     fastify.decorate('authenticateAdmin', async function (request: FastifyRequest, reply: FastifyReply) {
         const { db } = await import('../../db/kysely.js');
-        const user = await db
-            .selectFrom('users')
-            .select('role')
-            .where('id', '=', request.user.id)
-            .executeTakeFirst();
+        const user = await db.selectFrom('users').select('role').where('id', '=', request.user.id).executeTakeFirst();
 
         if (!user || user.role !== 'admin') {
             reply.status(403).send({

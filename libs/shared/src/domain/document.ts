@@ -1,6 +1,6 @@
 // Domain types for documents (not tied to API schemas)
 
-import type { Entity } from "../api/schemas/documents.js";
+import type { Entity } from '../api/schemas/documents.js';
 
 export interface OcrResult {
     raw_text: string;

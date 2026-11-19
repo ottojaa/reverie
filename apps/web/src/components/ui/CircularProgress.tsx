@@ -16,21 +16,9 @@ export function CircularProgress({ value, className }: CircularProgressProps) {
     const strokeDashoffset = CIRCUMFERENCE * (1 - clamped / 100);
 
     return (
-        <motion.svg
-            viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
-            className={cn('size-4 shrink-0 stroke-primary', className)}
-            initial={false}
-            aria-hidden
-        >
+        <motion.svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className={cn('size-4 shrink-0 stroke-primary', className)} initial={false} aria-hidden>
             {/* Track */}
-            <circle
-                cx={CENTER}
-                cy={CENTER}
-                r={RADIUS}
-                fill="none"
-                strokeWidth={4}
-                className="stroke-primary/20"
-            />
+            <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" strokeWidth={4} className="stroke-primary/20" />
             {/* Progress arc */}
             <motion.circle
                 cx={CENTER}

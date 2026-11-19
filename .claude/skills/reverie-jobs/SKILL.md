@@ -5,7 +5,7 @@ description: Operate and debug Reverie's background job pipeline — inspect OCR
 
 # Reverie job pipeline (operate & debug)
 
-Background processing runs on **BullMQ (Redis) queues** with per-type workers. This skill is about *operating* the pipeline (inspect / retry / reprocess); for the code conventions of *adding* a job type, use `workers-conventions`.
+Background processing runs on **BullMQ (Redis) queues** with per-type workers. This skill is about _operating_ the pipeline (inspect / retry / reprocess); for the code conventions of _adding_ a job type, use `workers-conventions`.
 
 ## Model
 
@@ -19,12 +19,12 @@ upload ──> OCR ──(on success & eligible)──> LLM analysis
 
 The **OCR worker chains into LLM** on success (`ocr.worker.ts` → `shouldQueueLlmJob(result)` → `addLlmJob`). So re-running OCR re-runs LLM too; re-running LLM alone reuses the existing OCR text.
 
-| Queue (`QUEUE_NAMES`) | Job name | Enqueue fn | Worker | Data |
-| --- | --- | --- | --- | --- |
-| `ocr-queue` | `process-ocr` | `addOcrJob(data, jobId)` | `workers/ocr.worker.ts` | `{ documentId, filePath, forceReprocess? }` |
-| `llm-queue` | `process-llm` | `addLlmJob(data, jobId)` | `workers/llm.worker.ts` | `{ documentId, type? }` |
-| `thumbnail-queue` | `generate-thumbnail` | `addThumbnailJob` | `workers/thumbnail.worker.ts` | `{ documentId, ... }` |
-| `trim-queue` | `trim-video` | `addTrimJob` | `workers/trim.worker.ts` | `{ ... }` |
+| Queue (`QUEUE_NAMES`) | Job name             | Enqueue fn               | Worker                        | Data                                        |
+| --------------------- | -------------------- | ------------------------ | ----------------------------- | ------------------------------------------- |
+| `ocr-queue`           | `process-ocr`        | `addOcrJob(data, jobId)` | `workers/ocr.worker.ts`       | `{ documentId, filePath, forceReprocess? }` |
+| `llm-queue`           | `process-llm`        | `addLlmJob(data, jobId)` | `workers/llm.worker.ts`       | `{ documentId, type? }`                     |
+| `thumbnail-queue`     | `generate-thumbnail` | `addThumbnailJob`        | `workers/thumbnail.worker.ts` | `{ documentId, ... }`                       |
+| `trim-queue`          | `trim-video`         | `addTrimJob`             | `workers/trim.worker.ts`      | `{ ... }`                                   |
 
 Two places record state:
 

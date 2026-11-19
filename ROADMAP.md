@@ -29,13 +29,13 @@ password-locked Vault · document-date-vs-photo-date distinction.
 
 ## Status legend
 
-| Marker | Meaning |
-| ------ | ------- |
-| ✅ | Shipped |
-| 🔜 | Next up |
-| 🛠️ | Planned |
-| 🧊 | Deferred — but capture the data now (see _Data to start capturing_) |
-| ❌ | Not planned (for now) |
+| Marker | Meaning                                                             |
+| ------ | ------------------------------------------------------------------- |
+| ✅     | Shipped                                                             |
+| 🔜     | Next up                                                             |
+| 🛠️     | Planned                                                             |
+| 🧊     | Deferred — but capture the data now (see _Data to start capturing_) |
+| ❌     | Not planned (for now)                                               |
 
 ---
 
@@ -43,78 +43,78 @@ password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Ingest & backup
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Background camera auto-backup | ✅ core | ❌ manual upload only | 🔜 **next core feature** |
-| Selective/excluded album backup, Wi-Fi-only | ✅ | ❌ | 🛠️ with auto-backup |
-| De-dup on upload | checksum | ⚠️ filename + folder-scoped only | 🛠️ move to content-hash, global (see below) |
-| On-device cleanup after verified backup | ✅ | ❌ | 🛠️ after auto-backup |
-| Server-side external libraries (watch a folder) | ✅ | ❌ | 🧊 |
-| CLI bulk upload | ✅ | ❌ | 🧊 |
+| Capability                                      | Immich   | Reverie                          | Plan                                        |
+| ----------------------------------------------- | -------- | -------------------------------- | ------------------------------------------- |
+| Background camera auto-backup                   | ✅ core  | ❌ manual upload only            | 🔜 **next core feature**                    |
+| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                               | 🛠️ with auto-backup                         |
+| De-dup on upload                                | checksum | ⚠️ filename + folder-scoped only | 🛠️ move to content-hash, global (see below) |
+| On-device cleanup after verified backup         | ✅       | ❌                               | 🛠️ after auto-backup                        |
+| Server-side external libraries (watch a folder) | ✅       | ❌                               | 🧊                                          |
+| CLI bulk upload                                 | ✅       | ❌                               | 🧊                                          |
 
 ### Safety & data lifecycle
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
+| Capability          | Immich          | Reverie             | Plan                                  |
+| ------------------- | --------------- | ------------------- | ------------------------------------- |
 | Trash / recycle bin | ✅ w/ retention | ❌ **hard deletes** | 🔜 soft-delete + **configurable TTL** |
 
 ### Search & intelligence
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Full-text + rich filter DSL | basic | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅ |
-| OCR text search | ✅ recent | ✅ ahead (PaddleOCR/Tesseract) | ✅ |
-| LLM summaries / entities / auto-organize | ❌ | ✅ unique | ✅ |
-| Conversational AI assistant (organize + bulk edit + search) | ❌ | ⚠️ organize-only chat | 🛠️ generalize (see below) |
-| Semantic / natural-language search | ✅ CLIP + vectors | ❌ | 🛠️ embeddings + pgvector (hybrid with tsvector) |
-| Near-duplicate detection | ✅ embedding-based | ❌ exact-hash only | 🛠️ after pgvector |
-| Face detection & people | ✅ InsightFace | ❌ | ❌ low ROI for now |
+| Capability                                                  | Immich             | Reverie                                     | Plan                                            |
+| ----------------------------------------------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------- |
+| Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                              |
+| OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                              |
+| LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                              |
+| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🛠️ generalize (see below)                       |
+| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ embeddings + pgvector (hybrid with tsvector) |
+| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                               |
+| Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                              |
 
 ### Sharing & access control
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Public share links (password/expiry) | ✅ | ❌ | 🛠️ **first sharing feature** |
-| Shared folders (editor/viewer roles) | ✅ | ❌ | 🛠️ after public links |
-| Partner sharing (whole library) | ✅ | ❌ | 🛠️ after shared folders |
+| Capability                           | Immich | Reverie | Plan                         |
+| ------------------------------------ | ------ | ------- | ---------------------------- |
+| Public share links (password/expiry) | ✅     | ❌      | 🛠️ **first sharing feature** |
+| Shared folders (editor/viewer roles) | ✅     | ❌      | 🛠️ after public links        |
+| Partner sharing (whole library)      | ✅     | ❌      | 🛠️ after shared folders      |
 
 ### Organization & browsing
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Collections / folder hierarchy | flat albums | ✅ two-level tree | ✅ |
-| Timeline (scrubbable, date-grouped) | ✅ core | ❌ | 🧊 capture data now, build later |
-| Geographic map / places view | ✅ web + mobile | ⚠️ Android per-doc map card only | 🧊 |
-| Favorites / Archive / Memories | ✅ | ❌ | 🧊 |
+| Capability                          | Immich          | Reverie                          | Plan                             |
+| ----------------------------------- | --------------- | -------------------------------- | -------------------------------- |
+| Collections / folder hierarchy      | flat albums     | ✅ two-level tree                | ✅                               |
+| Timeline (scrubbable, date-grouped) | ✅ core         | ❌                               | 🧊 capture data now, build later |
+| Geographic map / places view        | ✅ web + mobile | ⚠️ Android per-doc map card only | 🧊                               |
+| Favorites / Archive / Memories      | ✅              | ❌                               | 🧊                               |
 
 ### Media handling
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Video transcoding + adaptive streaming | ✅ HW-accel | ❌ stream-copy trim only | 🛠️ "personal Netflix" — **ahead of photo editing** |
-| Rich EXIF capture (camera/lens/exposure) | ✅ | ⚠️ only GPS + `taken_at` | 🧊 capture now |
-| RAW / Live Photos / 360° | ✅ | ❌ | 🧊 |
-| EXIF editing | ✅ | ❌ | 🧊 |
+| Capability                               | Immich      | Reverie                  | Plan                                               |
+| ---------------------------------------- | ----------- | ------------------------ | -------------------------------------------------- |
+| Video transcoding + adaptive streaming   | ✅ HW-accel | ❌ stream-copy trim only | 🛠️ "personal Netflix" — **ahead of photo editing** |
+| Rich EXIF capture (camera/lens/exposure) | ✅          | ⚠️ only GPS + `taken_at` | 🧊 capture now                                     |
+| RAW / Live Photos / 360°                 | ✅          | ❌                       | 🧊                                                 |
+| EXIF editing                             | ✅          | ❌                       | 🧊                                                 |
 
 ### Platform & integrations
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| REST API + OpenAPI spec | ✅ | ✅ (`/docs`) | ✅ |
-| Published client SDK | ✅ TS + Dart | ❌ | 🧊 until traction |
-| Per-user API keys | ✅ | ❌ (JWT only) | 🧊 with SDK |
-| MCP server (expose library to LLM agents) | ❌ | ❌ | 🛠️ new — a natural fit for an LLM-native app |
-| Local / self-hosted AI models | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ pluggable, per-capability |
-| Runtime admin settings (change config without restart) | ✅ admin UI | ❌ env vars only | 🛠️ settings store + admin UI |
+| Capability                                             | Immich              | Reverie                   | Plan                                         |
+| ------------------------------------------------------ | ------------------- | ------------------------- | -------------------------------------------- |
+| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)              | ✅                                           |
+| Published client SDK                                   | ✅ TS + Dart        | ❌                        | 🧊 until traction                            |
+| Per-user API keys                                      | ✅                  | ❌ (JWT only)             | 🧊 with SDK                                  |
+| MCP server (expose library to LLM agents)              | ❌                  | ❌                        | 🛠️ new — a natural fit for an LLM-native app |
+| Local / self-hosted AI models                          | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ pluggable, per-capability                 |
+| Runtime admin settings (change config without restart) | ✅ admin UI         | ❌ env vars only          | 🛠️ settings store + admin UI                 |
 
 ### Auth & security
 
-| Capability | Immich | Reverie | Plan |
-| ---------- | ------ | ------- | ---- |
-| Password + OAuth | OAuth2/OIDC | ⚠️ Google OAuth only | 🛠️ generalize OIDC |
-| Email verification (signup, password change/reset) | ✅ | ❌ | 🛠️ |
-| 2FA / TOTP | ⚠️ recent | ❌ | 🧊 |
-| Authenticated realtime socket | ✅ | ❌ **unauthenticated** | 🔜 security fix |
+| Capability                                         | Immich      | Reverie                | Plan               |
+| -------------------------------------------------- | ----------- | ---------------------- | ------------------ |
+| Password + OAuth                                   | OAuth2/OIDC | ⚠️ Google OAuth only   | 🛠️ generalize OIDC |
+| Email verification (signup, password change/reset) | ✅          | ❌                     | 🛠️                 |
+| 2FA / TOTP                                         | ⚠️ recent   | ❌                     | 🧊                 |
+| Authenticated realtime socket                      | ✅          | ❌ **unauthenticated** | 🔜 security fix    |
 
 ---
 

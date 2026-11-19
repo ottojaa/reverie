@@ -73,7 +73,9 @@ export function IslandStack({ island, previews, theme }: IslandStackProps) {
     const cards: StackCard[] = useMemo(() => {
         return previews.slice(0, STACK_COUNT).map((doc, i) => {
             const slot = stackSlot(doc, island);
-            const placeholder = doc.thumbnail_blurhash ? getBlurhashTexture(doc.thumbnail_blurhash) : getIconTexture(doc.mime_type, doc.original_filename, theme.card);
+            const placeholder = doc.thumbnail_blurhash
+                ? getBlurhashTexture(doc.thumbnail_blurhash)
+                : getIconTexture(doc.mime_type, doc.original_filename, theme.card);
 
             return {
                 doc,

@@ -34,8 +34,7 @@ export function detectTextPresence(ocrOutput: OcrOutput, imageSize: ImageSize): 
     let reason: TextDetectionResult['reason'] = undefined;
 
     const highConfidenceBypass =
-        confidence >= TEXT_DETECTION_THRESHOLDS.highConfidenceBypass &&
-        rawTextLength >= TEXT_DETECTION_THRESHOLDS.highConfidenceMinLength;
+        confidence >= TEXT_DETECTION_THRESHOLDS.highConfidenceBypass && rawTextLength >= TEXT_DETECTION_THRESHOLDS.highConfidenceMinLength;
 
     if (rawTextLength < TEXT_DETECTION_THRESHOLDS.minTextLength) {
         reason = 'short_text';

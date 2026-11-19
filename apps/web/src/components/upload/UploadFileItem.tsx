@@ -105,12 +105,7 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
                 {/* File preview (image) or icon */}
                 <div className={cn('flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted', !previewUrl && iconColor)}>
                     {previewUrl ? (
-                        <img
-                            src={previewUrl}
-                            alt=""
-                            className="size-full object-cover"
-                            onError={() => setPreviewUrl(null)}
-                        />
+                        <img src={previewUrl} alt="" className="size-full object-cover" onError={() => setPreviewUrl(null)} />
                     ) : (
                         <FileIcon className="size-8" />
                     )}

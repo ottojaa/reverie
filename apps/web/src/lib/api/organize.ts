@@ -38,12 +38,7 @@ type SseEventHandler = {
     onError: (message: string) => void;
 };
 
-async function streamOrganizeChat(
-    message: string,
-    responseId: string | undefined,
-    handlers: SseEventHandler,
-    signal: AbortSignal,
-): Promise<void> {
+async function streamOrganizeChat(message: string, responseId: string | undefined, handlers: SseEventHandler, signal: AbortSignal): Promise<void> {
     const response = await authenticatedFetch(`${API_BASE}/organize/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,9 +173,7 @@ export function useOrganizeChat() {
                                 ...prev,
                                 isStreaming: false,
                                 responseId,
-                                messages: prev.messages.map((m) =>
-                                    m.id === assistantMsgId ? { ...m, isStreaming: false, statusAction: undefined } : m,
-                                ),
+                                messages: prev.messages.map((m) => (m.id === assistantMsgId ? { ...m, isStreaming: false, statusAction: undefined } : m)),
                             }));
                         },
                         onError: (message) => {
@@ -211,9 +204,7 @@ export function useOrganizeChat() {
                     ...prev,
                     isStreaming: false,
                     error: message,
-                    messages: prev.messages.map((m) =>
-                        m.id === assistantMsgId ? { ...m, isStreaming: false, statusAction: undefined } : m,
-                    ),
+                    messages: prev.messages.map((m) => (m.id === assistantMsgId ? { ...m, isStreaming: false, statusAction: undefined } : m)),
                 }));
             }
         },

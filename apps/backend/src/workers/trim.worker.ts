@@ -27,12 +27,7 @@ function isVideoDocument(mimeType: string, filename: string): boolean {
 /**
  * Trim video using FFmpeg stream copy (fast, no re-encode)
  */
-async function trimVideoWithFfmpeg(
-    inputPath: string,
-    outputPath: string,
-    startSeconds: number,
-    endSeconds: number,
-): Promise<void> {
+async function trimVideoWithFfmpeg(inputPath: string, outputPath: string, startSeconds: number, endSeconds: number): Promise<void> {
     const args = ['-ss', String(startSeconds), '-i', inputPath, '-to', String(endSeconds - startSeconds), '-c', 'copy', '-y', outputPath];
 
     const ffmpeg = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -97,14 +92,7 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
                 throw new NonRetryableJobError('Document must be in a folder to save as copy');
             }
 
-            const result = await uploadService.uploadFiles(
-                [trimmed],
-                userId,
-                document.folder_id,
-                sessionId,
-                'keep_both',
-                documentId,
-            );
+            const result = await uploadService.uploadFiles([trimmed], userId, document.folder_id, sessionId, 'keep_both', documentId);
 
             const newDoc = result.documents[0];
 

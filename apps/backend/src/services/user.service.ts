@@ -164,11 +164,7 @@ export async function deleteUser(options: DeleteUserOptions): Promise<void> {
 
     if (target.role === 'admin') throw new Error('Cannot delete admin users');
 
-    const documents = await db
-        .selectFrom('documents')
-        .select(['file_path', 'thumbnail_paths'])
-        .where('user_id', '=', targetUserId)
-        .execute();
+    const documents = await db.selectFrom('documents').select(['file_path', 'thumbnail_paths']).where('user_id', '=', targetUserId).execute();
 
     const storageService = getStorageService();
 

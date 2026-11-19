@@ -1,5 +1,19 @@
 import { cn } from '@/lib/utils';
-import { File, FileArchive, FileAudio, FileCode, FileCog, FileImage, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Presentation, type LucideIcon } from 'lucide-react';
+import {
+    File,
+    FileArchive,
+    FileAudio,
+    FileCode,
+    FileCog,
+    FileImage,
+    FileJson,
+    FileSpreadsheet,
+    FileText,
+    FileType,
+    FileVideo,
+    Presentation,
+    type LucideIcon,
+} from 'lucide-react';
 
 /**
  * File type configuration with icon and colors
@@ -37,38 +51,129 @@ const CONFIGS = {
 /** Per-extension icon/color for the ~50 most common file types. Keyed lowercase, no dot. */
 const EXTENSION_CONFIG: Record<string, FileTypeConfig> = {
     // documents
-    doc: CONFIGS.word, docx: CONFIGS.word, odt: CONFIGS.word, rtf: CONFIGS.word, pages: CONFIGS.word,
+    doc: CONFIGS.word,
+    docx: CONFIGS.word,
+    odt: CONFIGS.word,
+    rtf: CONFIGS.word,
+    pages: CONFIGS.word,
     pdf: CONFIGS.pdf,
     // spreadsheets
-    xls: CONFIGS.sheet, xlsx: CONFIGS.sheet, xlsm: CONFIGS.sheet, ods: CONFIGS.sheet, numbers: CONFIGS.sheet, csv: CONFIGS.sheet, tsv: CONFIGS.sheet,
+    xls: CONFIGS.sheet,
+    xlsx: CONFIGS.sheet,
+    xlsm: CONFIGS.sheet,
+    ods: CONFIGS.sheet,
+    numbers: CONFIGS.sheet,
+    csv: CONFIGS.sheet,
+    tsv: CONFIGS.sheet,
     // presentations
-    ppt: CONFIGS.slides, pptx: CONFIGS.slides, odp: CONFIGS.slides, key: CONFIGS.slides,
+    ppt: CONFIGS.slides,
+    pptx: CONFIGS.slides,
+    odp: CONFIGS.slides,
+    key: CONFIGS.slides,
     // text / markdown
-    md: CONFIGS.markdown, markdown: CONFIGS.markdown, mdx: CONFIGS.markdown, rst: CONFIGS.markdown,
-    txt: CONFIGS.text, log: CONFIGS.text,
+    md: CONFIGS.markdown,
+    markdown: CONFIGS.markdown,
+    mdx: CONFIGS.markdown,
+    rst: CONFIGS.markdown,
+    txt: CONFIGS.text,
+    log: CONFIGS.text,
     // data / config
-    json: CONFIGS.json, jsonc: CONFIGS.json, json5: CONFIGS.json, ndjson: CONFIGS.json,
-    yaml: CONFIGS.config, yml: CONFIGS.config, toml: CONFIGS.config, ini: CONFIGS.config, conf: CONFIGS.config, cfg: CONFIGS.config, env: CONFIGS.config, properties: CONFIGS.config,
+    json: CONFIGS.json,
+    jsonc: CONFIGS.json,
+    json5: CONFIGS.json,
+    ndjson: CONFIGS.json,
+    yaml: CONFIGS.config,
+    yml: CONFIGS.config,
+    toml: CONFIGS.config,
+    ini: CONFIGS.config,
+    conf: CONFIGS.config,
+    cfg: CONFIGS.config,
+    env: CONFIGS.config,
+    properties: CONFIGS.config,
     // markup / web / styles
-    xml: CONFIGS.web, html: CONFIGS.web, htm: CONFIGS.web, svg: CONFIGS.web, vue: CONFIGS.web, svelte: CONFIGS.web,
-    css: CONFIGS.style, scss: CONFIGS.style, sass: CONFIGS.style, less: CONFIGS.style,
+    xml: CONFIGS.web,
+    html: CONFIGS.web,
+    htm: CONFIGS.web,
+    svg: CONFIGS.web,
+    vue: CONFIGS.web,
+    svelte: CONFIGS.web,
+    css: CONFIGS.style,
+    scss: CONFIGS.style,
+    sass: CONFIGS.style,
+    less: CONFIGS.style,
     // code
-    js: CONFIGS.code, mjs: CONFIGS.code, cjs: CONFIGS.code, jsx: CONFIGS.code, ts: CONFIGS.code, tsx: CONFIGS.code,
-    py: CONFIGS.code, rb: CONFIGS.code, go: CONFIGS.code, rs: CONFIGS.code, java: CONFIGS.code, kt: CONFIGS.code, kts: CONFIGS.code,
-    c: CONFIGS.code, h: CONFIGS.code, cpp: CONFIGS.code, cc: CONFIGS.code, hpp: CONFIGS.code, cs: CONFIGS.code, php: CONFIGS.code, swift: CONFIGS.code,
-    sh: CONFIGS.code, bash: CONFIGS.code, zsh: CONFIGS.code, sql: CONFIGS.code, graphql: CONFIGS.code, gql: CONFIGS.code,
+    js: CONFIGS.code,
+    mjs: CONFIGS.code,
+    cjs: CONFIGS.code,
+    jsx: CONFIGS.code,
+    ts: CONFIGS.code,
+    tsx: CONFIGS.code,
+    py: CONFIGS.code,
+    rb: CONFIGS.code,
+    go: CONFIGS.code,
+    rs: CONFIGS.code,
+    java: CONFIGS.code,
+    kt: CONFIGS.code,
+    kts: CONFIGS.code,
+    c: CONFIGS.code,
+    h: CONFIGS.code,
+    cpp: CONFIGS.code,
+    cc: CONFIGS.code,
+    hpp: CONFIGS.code,
+    cs: CONFIGS.code,
+    php: CONFIGS.code,
+    swift: CONFIGS.code,
+    sh: CONFIGS.code,
+    bash: CONFIGS.code,
+    zsh: CONFIGS.code,
+    sql: CONFIGS.code,
+    graphql: CONFIGS.code,
+    gql: CONFIGS.code,
     // archives
-    zip: CONFIGS.archive, rar: CONFIGS.archive, '7z': CONFIGS.archive, tar: CONFIGS.archive, gz: CONFIGS.archive, tgz: CONFIGS.archive, bz2: CONFIGS.archive, xz: CONFIGS.archive,
+    zip: CONFIGS.archive,
+    rar: CONFIGS.archive,
+    '7z': CONFIGS.archive,
+    tar: CONFIGS.archive,
+    gz: CONFIGS.archive,
+    tgz: CONFIGS.archive,
+    bz2: CONFIGS.archive,
+    xz: CONFIGS.archive,
     // audio
-    mp3: CONFIGS.audio, wav: CONFIGS.audio, flac: CONFIGS.audio, ogg: CONFIGS.audio, m4a: CONFIGS.audio, aac: CONFIGS.audio,
+    mp3: CONFIGS.audio,
+    wav: CONFIGS.audio,
+    flac: CONFIGS.audio,
+    ogg: CONFIGS.audio,
+    m4a: CONFIGS.audio,
+    aac: CONFIGS.audio,
     // video
-    mp4: CONFIGS.video, mov: CONFIGS.video, webm: CONFIGS.video, avi: CONFIGS.video, mkv: CONFIGS.video, m4v: CONFIGS.video,
+    mp4: CONFIGS.video,
+    mov: CONFIGS.video,
+    webm: CONFIGS.video,
+    avi: CONFIGS.video,
+    mkv: CONFIGS.video,
+    m4v: CONFIGS.video,
     // images
-    jpg: CONFIGS.image, jpeg: CONFIGS.image, png: CONFIGS.image, gif: CONFIGS.image, webp: CONFIGS.image, bmp: CONFIGS.image, tiff: CONFIGS.image, heic: CONFIGS.image, heif: CONFIGS.image, ico: CONFIGS.image,
+    jpg: CONFIGS.image,
+    jpeg: CONFIGS.image,
+    png: CONFIGS.image,
+    gif: CONFIGS.image,
+    webp: CONFIGS.image,
+    bmp: CONFIGS.image,
+    tiff: CONFIGS.image,
+    heic: CONFIGS.image,
+    heif: CONFIGS.image,
+    ico: CONFIGS.image,
     // fonts
-    ttf: CONFIGS.font, otf: CONFIGS.font, woff: CONFIGS.font, woff2: CONFIGS.font,
+    ttf: CONFIGS.font,
+    otf: CONFIGS.font,
+    woff: CONFIGS.font,
+    woff2: CONFIGS.font,
     // binaries
-    exe: CONFIGS.binary, bin: CONFIGS.binary, dmg: CONFIGS.binary, iso: CONFIGS.binary, apk: CONFIGS.binary,
+    exe: CONFIGS.binary,
+    bin: CONFIGS.binary,
+    dmg: CONFIGS.binary,
+    iso: CONFIGS.binary,
+    apk: CONFIGS.binary,
 };
 
 /**
@@ -88,15 +193,25 @@ export function getFileTypeConfig(mimeType: string, filename?: string): FileType
 
     if (mimeType.startsWith('audio/')) return CONFIGS.audio;
 
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'text/csv' || mimeType === 'application/vnd.ms-excel') return CONFIGS.sheet;
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType === 'text/csv' || mimeType === 'application/vnd.ms-excel')
+        return CONFIGS.sheet;
 
     if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return CONFIGS.slides;
 
     if (mimeType.includes('word') || mimeType === 'application/msword' || mimeType.includes('wordprocessingml')) return CONFIGS.word;
 
-    if (mimeType.startsWith('text/') || mimeType.includes('javascript') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('html')) return CONFIGS.code;
+    if (mimeType.startsWith('text/') || mimeType.includes('javascript') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('html'))
+        return CONFIGS.code;
 
-    if (mimeType.includes('zip') || mimeType.includes('archive') || mimeType.includes('tar') || mimeType.includes('rar') || mimeType.includes('7z') || mimeType.includes('gzip')) return CONFIGS.archive;
+    if (
+        mimeType.includes('zip') ||
+        mimeType.includes('archive') ||
+        mimeType.includes('tar') ||
+        mimeType.includes('rar') ||
+        mimeType.includes('7z') ||
+        mimeType.includes('gzip')
+    )
+        return CONFIGS.archive;
 
     return CONFIGS.generic;
 }

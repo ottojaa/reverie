@@ -36,9 +36,7 @@ export const DocumentCardVisual = memo(function DocumentCardVisual({
                     className,
                 )}
             >
-                {isSelected && (
-                    <div className="z-10 pointer-events-none absolute inset-0 rounded-md bg-primary/12 dark:bg-primary/15" aria-hidden />
-                )}
+                {isSelected && <div className="z-10 pointer-events-none absolute inset-0 rounded-md bg-primary/12 dark:bg-primary/15" aria-hidden />}
 
                 <DocumentThumbnail document={document} />
                 <DocumentInfoFooter document={document} />

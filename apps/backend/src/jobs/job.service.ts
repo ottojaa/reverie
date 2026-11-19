@@ -23,12 +23,7 @@ export class JobService {
      * Get a job by ID
      */
     async getJob(jobId: string, userId: string): Promise<ProcessingJob | undefined> {
-        return db
-            .selectFrom('processing_jobs')
-            .selectAll()
-            .where('id', '=', jobId)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
+        return db.selectFrom('processing_jobs').selectAll().where('id', '=', jobId).where('user_id', '=', userId).executeTakeFirst();
     }
 
     /**
@@ -37,12 +32,7 @@ export class JobService {
     async getJobsByIds(jobIds: string[], userId: string): Promise<ProcessingJob[]> {
         if (jobIds.length === 0) return [];
 
-        return db
-            .selectFrom('processing_jobs')
-            .selectAll()
-            .where('id', 'in', jobIds)
-            .where('user_id', '=', userId)
-            .execute();
+        return db.selectFrom('processing_jobs').selectAll().where('id', 'in', jobIds).where('user_id', '=', userId).execute();
     }
 
     /**

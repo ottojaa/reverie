@@ -229,10 +229,7 @@ export function IconSelector({
                                                 variant="outline"
                                                 size="icon"
                                                 title={icon.name}
-                                                className={cn(
-                                                    'size-9 p-2',
-                                                    displayValue === icon.name && 'border-primary bg-primary/10',
-                                                )}
+                                                className={cn('size-9 p-2', displayValue === icon.name && 'border-primary bg-primary/10')}
                                                 onClick={() => handleSelect(icon.name)}
                                             >
                                                 <IconRenderer name={icon.name} />

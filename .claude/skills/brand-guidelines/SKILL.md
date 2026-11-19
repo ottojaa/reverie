@@ -17,30 +17,30 @@ The app uses shadcn-style tokens. CSS vars live in `:root` / `.dark` in `styles.
 
 ### Backgrounds
 
-| Purpose        | Tailwind class   | Light value        | Dark value   |
-|----------------|------------------|--------------------|--------------|
-| App/window     | `bg-background`  | ~#f8f7f4 (warm)    | #121212      |
-| Elevated (cards, popovers) | `bg-card` | #ffffff            | #242424      |
-| Hover/overlay  | `bg-secondary`   | #f0efe9            | #2e2e2e      |
-| Muted areas    | `bg-muted`       | #e8e6e1            | #2a2a2a      |
-| Popover surface | `bg-popover`    | same as card       | same as card |
+| Purpose                    | Tailwind class  | Light value     | Dark value   |
+| -------------------------- | --------------- | --------------- | ------------ |
+| App/window                 | `bg-background` | ~#f8f7f4 (warm) | #121212      |
+| Elevated (cards, popovers) | `bg-card`       | #ffffff         | #242424      |
+| Hover/overlay              | `bg-secondary`  | #f0efe9         | #2e2e2e      |
+| Muted areas                | `bg-muted`      | #e8e6e1         | #2a2a2a      |
+| Popover surface            | `bg-popover`    | same as card    | same as card |
 
 ### Text
 
-| Purpose     | Tailwind class           |
-|------------|--------------------------|
-| Primary    | `text-foreground`        |
-| Secondary/descriptions | `text-muted-foreground` |
-| On primary button | `text-primary-foreground` |
-| On secondary | `text-secondary-foreground` |
+| Purpose                | Tailwind class              |
+| ---------------------- | --------------------------- |
+| Primary                | `text-foreground`           |
+| Secondary/descriptions | `text-muted-foreground`     |
+| On primary button      | `text-primary-foreground`   |
+| On secondary           | `text-secondary-foreground` |
 
 ### Actions & accents
 
-| Purpose       | Tailwind class              |
-|---------------|-----------------------------|
-| Primary (teal)| `bg-primary` / `text-primary` / `ring-primary` |
-| Secondary (indigo) | `bg-accent` / `text-accent-foreground` |
-| Focus ring    | `ring-ring` (teal)          |
+| Purpose            | Tailwind class                                 |
+| ------------------ | ---------------------------------------------- |
+| Primary (teal)     | `bg-primary` / `text-primary` / `ring-primary` |
+| Secondary (indigo) | `bg-accent` / `text-accent-foreground`         |
+| Focus ring         | `ring-ring` (teal)                             |
 
 ### Borders & form
 

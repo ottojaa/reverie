@@ -138,7 +138,9 @@ export default async function (fastify: FastifyInstance) {
 
             // Serialize documents with signed URLs (parallel for performance)
             const serializedDocuments = await Promise.all(
-                documents.map((doc) => serializeDocument(doc, undefined, undefined, { locked: vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds) })),
+                documents.map((doc) =>
+                    serializeDocument(doc, undefined, undefined, { locked: vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds) }),
+                ),
             );
 
             return {
@@ -288,7 +290,12 @@ export default async function (fastify: FastifyInstance) {
             // password — refuse it for any currently-locked (effectively-private) document.
             if (!is_private && (await isVaultLocked(fastify, request, userId))) {
                 const privateFolderIds = await getPrivateFolderIds(userId);
-                const targets = await db.selectFrom('documents').select(['is_private', 'folder_id']).where('user_id', '=', userId).where('id', 'in', document_ids).execute();
+                const targets = await db
+                    .selectFrom('documents')
+                    .select(['is_private', 'folder_id'])
+                    .where('user_id', '=', userId)
+                    .where('id', 'in', document_ids)
+                    .execute();
 
                 if (targets.some((doc) => isDocumentEffectivelyPrivate(doc, privateFolderIds))) {
                     return reply.forbidden('Unlock to change privacy of a locked document');

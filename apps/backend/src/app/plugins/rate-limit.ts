@@ -13,6 +13,7 @@ import { env } from '../../config/env.js';
 export default fp(async function (fastify: FastifyInstance) {
     if (env.NODE_ENV === 'development') {
         fastify.log.info('Rate limiting disabled in development');
+
         return;
     }
 

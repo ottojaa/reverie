@@ -102,19 +102,12 @@ export default function PDFViewer({ fileUrl }: ViewerProps) {
                     <Button variant="ghost" size="icon-sm" onClick={zoomIn} disabled={scale >= ZOOM_MAX}>
                         <Plus className="size-3.5" />
                     </Button>
-                    {isLoaded && (
-                        <span className="border-l border-border/30 pl-2 text-[11px] text-muted-foreground/40">
-                            — {numPages} pp
-                        </span>
-                    )}
+                    {isLoaded && <span className="border-l border-border/30 pl-2 text-[11px] text-muted-foreground/40">— {numPages} pp</span>}
                 </div>
             </motion.div>
 
             {/* PDF document area */}
-            <div
-                ref={containerRef}
-                className={cn('flex flex-1 flex-col items-center overflow-auto p-6', !isLoaded && 'justify-center')}
-            >
+            <div ref={containerRef} className={cn('flex flex-1 flex-col items-center overflow-auto p-6', !isLoaded && 'justify-center')}>
                 {!isLoaded && <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />}
                 <Document
                     file={fileUrl}
