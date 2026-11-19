@@ -1,9 +1,10 @@
 import type { Kysely } from 'kysely';
 import { afterAll, beforeAll, describe } from 'vitest';
 import type { Database } from '../db/schema';
-import { setSelectionPort, type SelectionPort } from '../tools/selection.store';
+import { setSelectionPort } from '../tools/selection.store';
 import { callTool } from '../tools/registry';
 import { dbProxy } from './db-proxy';
+import { createFakeSelectionPort } from './fake-selection-port';
 import { createTestDatabase } from './test-database';
 import { seedDocument, seedFolder, seedUser } from './seed';
 
@@ -40,25 +41,6 @@ export interface World {
 
 /** The documents a user must never see, whatever they ask. */
 export const HIDDEN_DOCS = ['lockedOwn', 'inLockedFolder', 'inVault', 'inVaultInner', 'trashed', 'inTrashedFolder'] as const;
-
-export function createFakeSelectionPort(): SelectionPort & { advance: (seconds: number) => void } {
-    const entries = new Map<string, { value: string; expiresAt: number }>();
-    let now = 0;
-
-    return {
-        advance: (seconds) => {
-            now += seconds * 1000;
-        },
-        get: async (key) => {
-            const entry = entries.get(key);
-
-            return entry && entry.expiresAt > now ? entry.value : null;
-        },
-        set: async (key, value, ttlSeconds) => {
-            entries.set(key, { value, expiresAt: now + ttlSeconds * 1000 });
-        },
-    };
-}
 
 async function seedWorld(db: Kysely<Database>): Promise<World> {
     const alice = await seedUser(db, 'alice');
@@ -206,7 +188,9 @@ export async function refusal(userId: string, name: string, input: Record<string
 }
 
 /** `describe` for suites that need Postgres; `SKIP_DB_TESTS=1` turns them off on purpose. */
-export const describeDb = describe.skipIf(process.env['SKIP_DB_TESTS'] === '1');
+export function describeDb(name: string, body: () => void): void {
+    describe.skipIf(process.env['SKIP_DB_TESTS'] === '1')(name, body);
+}
 
 /** Starts the world before the file's tests and stops it after. Use the getters inside tests. */
 export function useWorld(): { world: () => World; port: () => ReturnType<typeof createFakeSelectionPort> } {

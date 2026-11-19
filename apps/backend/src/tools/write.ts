@@ -91,15 +91,16 @@ export async function runWrite(args: RunWriteArgs): Promise<WriteResult> {
         return await db.transaction().execute(async (trx) => {
             const planned = await args.plan(trx, vis);
 
-            if (planned.changes === 0) return { dry_run: args.dryRun, applied: false, note: 'Nothing to change', ...planned.preview };
+            if (planned.changes === 0) return { ...planned.preview, dry_run: args.dryRun, applied: false, note: 'Nothing to change' };
 
             await planned.apply(trx);
 
-            if (args.dryRun) throw new DryRunRollback({ dry_run: true, applied: false, ...planned.preview });
+            if (args.dryRun) throw new DryRunRollback({ ...planned.preview, dry_run: true, applied: false });
 
             const auditId = await recordWrite(trx, { userId, tool: args.tool, input: args.input, before: planned.before, after: planned.after });
 
-            return { dry_run: false, applied: true, audit_id: auditId, ...planned.preview };
+            // The fixed keys come last so a preview field can never overwrite them.
+            return { ...planned.preview, dry_run: false, applied: true, audit_id: auditId };
         });
     } catch (error) {
         if (error instanceof DryRunRollback) return error.result;

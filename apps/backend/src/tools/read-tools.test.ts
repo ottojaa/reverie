@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
