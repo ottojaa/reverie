@@ -29,7 +29,7 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
-import { getPrivateFolderIds, isDocumentEffectivelyPrivate } from '../../services/privacy';
+import { getPrivateFolderIds, isDocumentEffectivelyPrivate, isDocumentPrivate } from '../../services/privacy';
 import { isVaultLocked } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
@@ -998,7 +998,7 @@ export default async function (fastify: FastifyInstance) {
             // Check eligibility
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            const eligibility = checkLlmEligibility(document, ocrResult);
+            const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: await isDocumentPrivate(document) });
 
             if (!eligibility.eligible) {
                 return {
@@ -1163,6 +1163,7 @@ export default async function (fastify: FastifyInstance) {
 
             const jobIds: string[] = [];
             const skipped: Array<{ document_id: string; reason: string }> = [];
+            const privateFolderIds = await getPrivateFolderIds(userId);
 
             for (const documentId of document_ids) {
                 // Verify document belongs to user
@@ -1184,7 +1185,7 @@ export default async function (fastify: FastifyInstance) {
                 // Check eligibility
                 const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst();
 
-                const eligibility = checkLlmEligibility(document, ocrResult);
+                const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: isDocumentEffectivelyPrivate(document, privateFolderIds) });
 
                 if (!eligibility.eligible) {
                     skipped.push({ document_id: documentId, reason: eligibility.reason ?? 'not_eligible' });

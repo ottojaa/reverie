@@ -78,6 +78,18 @@ export class JobService {
     }
 
     /**
+     * Mark job as skipped: it ran to a deliberate no-op (e.g. a locked document), which is neither a success nor a failure
+     */
+    async markJobSkipped(jobId: string, result: Record<string, unknown>, durationMs?: number): Promise<ProcessingJob | undefined> {
+        return this.updateJobStatus(jobId, {
+            status: 'skipped',
+            result,
+            completed_at: new Date(),
+            ...(durationMs !== undefined && { duration_ms: durationMs }),
+        });
+    }
+
+    /**
      * Mark job as failed
      */
     async markJobFailed(jobId: string, errorMessage: string, attempts: number): Promise<ProcessingJob | undefined> {

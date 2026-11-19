@@ -11,8 +11,10 @@ Reverie and Immich look alike but have different centers of gravity:
 - **Immich is Google Photos** — timeline-first, photos/videos only, local discriminative ML
   (CLIP embeddings, face recognition, OCR).
 - **Reverie is Google Drive + intelligence** — a folder hierarchy over _any_ file type
-  (documents, photos, videos), with generative LLM features (summaries, entities, topics, an
-  agentic organize assistant) layered on top.
+  (documents, photos, videos), with generative LLM features (summaries, entities, topics, a
+  library agent) layered on top. The AI is **hybrid**: the heavy, high-volume work (OCR, layout,
+  embeddings) runs locally; documents and screenshots get one Claude Haiku call each; personal
+  photos and locked items never go to Anthropic.
 
 "Parity" therefore means borrowing the handful of Immich pillars that any everything-app needs
 (reliable backup, sharing, semantic search, safety nets) **without** diluting the document + LLM
@@ -20,7 +22,7 @@ story Immich can't touch.
 
 ### Moat to protect (things Immich does _not_ have)
 
-Per-document LLM summaries/entities/topics · agentic organize assistant · real document-type
+Per-document LLM summaries/entities/topics · a library agent (in-app and over MCP) · real document-type
 support (Office/PDF/text/code with rendered thumbnails) · hierarchical collections→folders ·
 pluggable **S3** storage · Electron desktop app · content-addressable dedup storage · the
 password-locked Vault · document-date-vs-photo-date distinction.
@@ -32,6 +34,7 @@ password-locked Vault · document-date-vs-photo-date distinction.
 | Marker | Meaning                                                             |
 | ------ | ------------------------------------------------------------------- |
 | ✅     | Shipped                                                             |
+| 🚧     | In progress                                                         |
 | 🔜     | Next up                                                             |
 | 🛠️     | Planned                                                             |
 | 🧊     | Deferred — but capture the data now (see _Data to start capturing_) |
@@ -43,32 +46,35 @@ password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Ingest & backup
 
-| Capability                                      | Immich   | Reverie                          | Plan                                        |
-| ----------------------------------------------- | -------- | -------------------------------- | ------------------------------------------- |
-| Background camera auto-backup                   | ✅ core  | ❌ manual upload only            | 🔜 **next core feature**                    |
-| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                               | 🛠️ with auto-backup                         |
-| De-dup on upload                                | checksum | ⚠️ filename + folder-scoped only | 🛠️ move to content-hash, global (see below) |
-| On-device cleanup after verified backup         | ✅       | ❌                               | 🛠️ after auto-backup                        |
-| Server-side external libraries (watch a folder) | ✅       | ❌                               | 🧊                                          |
-| CLI bulk upload                                 | ✅       | ❌                               | 🧊                                          |
+| Capability                                      | Immich   | Reverie                           | Plan                                        |
+| ----------------------------------------------- | -------- | --------------------------------- | ------------------------------------------- |
+| Background camera auto-backup                   | ✅ core  | ❌ manual upload only             | 🔜 **next core feature**                    |
+| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                                | 🛠️ with auto-backup                         |
+| De-dup on upload                                | checksum | ⚠️ filename + folder-scoped only  | 🛠️ move to content-hash, global (see below) |
+| Large uploads                                   | ✅       | ✅ up to 20 GB, clear size errors | ✅ (#66)                                    |
+| On-device cleanup after verified backup         | ✅       | ❌                                | 🛠️ after auto-backup                        |
+| Server-side external libraries (watch a folder) | ✅       | ❌                                | 🧊                                          |
+| CLI bulk upload                                 | ✅       | ❌                                | 🧊                                          |
 
 ### Safety & data lifecycle
 
 | Capability          | Immich          | Reverie             | Plan                                  |
 | ------------------- | --------------- | ------------------- | ------------------------------------- |
-| Trash / recycle bin | ✅ w/ retention | ❌ **hard deletes** | 🔜 soft-delete + **configurable TTL** |
+| Trash / recycle bin | ✅ w/ retention | ❌ **hard deletes** | 🚧 soft-delete + **configurable TTL** |
 
 ### Search & intelligence
 
-| Capability                                                  | Immich             | Reverie                                     | Plan                                            |
-| ----------------------------------------------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------- |
-| Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                              |
-| OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                              |
-| LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                              |
-| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🛠️ generalize (see below)                       |
-| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ embeddings + pgvector (hybrid with tsvector) |
-| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                               |
-| Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                              |
+| Capability                                                  | Immich             | Reverie                                     | Plan                                                  |
+| ----------------------------------------------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------- |
+| Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                                    |
+| OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                                    |
+| LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
+| Locked items never sent to Anthropic                        | n/a (local ML)     | ⚠️ not enforced in the LLM workers          | 🚧 privacy gate in the LLM path                       |
+| Background AI on Claude Haiku 5.5                           | n/a                | ⚠️ Haiku 4.5                                | 🚧 upgrade                                            |
+| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🚧 in-app agent over the shared tool registry         |
+| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
+| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
+| Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                                    |
 
 ### Sharing & access control
 
@@ -98,23 +104,24 @@ password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Platform & integrations
 
-| Capability                                             | Immich              | Reverie                   | Plan                                         |
-| ------------------------------------------------------ | ------------------- | ------------------------- | -------------------------------------------- |
-| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)              | ✅                                           |
-| Published client SDK                                   | ✅ TS + Dart        | ❌                        | 🧊 until traction                            |
-| Per-user API keys                                      | ✅                  | ❌ (JWT only)             | 🧊 with SDK                                  |
-| MCP server (expose library to LLM agents)              | ❌                  | ❌                        | 🛠️ new — a natural fit for an LLM-native app |
-| Local / self-hosted AI models                          | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ pluggable, per-capability                 |
-| Runtime admin settings (change config without restart) | ✅ admin UI         | ❌ env vars only          | 🛠️ settings store + admin UI                 |
+| Capability                                             | Immich              | Reverie                   | Plan                                           |
+| ------------------------------------------------------ | ------------------- | ------------------------- | ---------------------------------------------- |
+| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)              | ✅                                             |
+| Published client SDK                                   | ✅ TS + Dart        | ❌                        | 🧊 until traction                              |
+| Per-user API keys                                      | ✅                  | ❌ (JWT only)             | 🚧 revocable tokens for the MCP server; 🧊 SDK |
+| MCP server (expose library to LLM agents)              | ❌                  | ❌                        | 🚧 `/mcp` over the shared tool registry        |
+| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ optional, per-capability                    |
+| Runtime admin settings (change config without restart) | ✅ admin UI         | ❌ env vars only          | 🚧 settings store + admin UI                   |
 
 ### Auth & security
 
-| Capability                                         | Immich      | Reverie                | Plan               |
-| -------------------------------------------------- | ----------- | ---------------------- | ------------------ |
-| Password + OAuth                                   | OAuth2/OIDC | ⚠️ Google OAuth only   | 🛠️ generalize OIDC |
-| Email verification (signup, password change/reset) | ✅          | ❌                     | 🛠️                 |
-| 2FA / TOTP                                         | ⚠️ recent   | ❌                     | 🧊                 |
-| Authenticated realtime socket                      | ✅          | ❌ **unauthenticated** | 🔜 security fix    |
+| Capability                                         | Immich           | Reverie              | Plan               |
+| -------------------------------------------------- | ---------------- | -------------------- | ------------------ |
+| Password + OAuth                                   | OAuth2/OIDC      | ⚠️ Google OAuth only | 🛠️ generalize OIDC |
+| Email verification (signup, password change/reset) | ✅               | ❌                   | 🛠️                 |
+| 2FA / TOTP                                         | ⚠️ recent        | ❌                   | 🧊                 |
+| Authenticated realtime socket                      | ✅               | ✅ JWT handshake     | ✅ (#60, #65)      |
+| Per-item lock (private items, re-prompt to open)   | ⚠️ locked folder | ✅ per-resource lock | ✅ (#64)           |
 
 ---
 
@@ -126,12 +133,12 @@ password-locked Vault · document-date-vs-photo-date distinction.
    it. Foundation already exists (content-addressable storage, `file_hash`, `check-duplicates`,
    foreground `UploadWorker`). Needs: `PeriodicWorkRequest` + `MediaStore` observer, a
    "back up these albums / Wi-Fi-only" settings surface, and a local backed-up-asset ledger.
-2. **Trash + soft-delete with configurable TTL.** Replace hard deletes with a `deleted_at` column,
-   filter it out of listings/search, and add a retention worker with a user/admin-configurable TTL.
-   Do this before there's more data to lose.
-3. **Authenticate the realtime socket.** Not parity — a real hole the code already flags. Verify the
-   JWT in the socket handshake and scope rooms to the authenticated `user_id` instead of trusting
-   client-supplied `session_id`/`document_id`.
+2. 🚧 **Trash + soft-delete with configurable TTL.** Replace hard deletes with a `deleted_at` column,
+   filter it out of listings/search, and add a retention worker whose TTL comes from the server-settings
+   store. Do this before there's more data to lose, and before an agent can edit the library.
+3. ✅ **Authenticate the realtime socket** (#60, #65). The JWT is verified in the socket handshake and
+   rooms are scoped to the authenticated `user_id`. Shipped alongside the per-item lock for private
+   items (#64) and uploads up to 20 GB (#66).
 4. **Fix duplicate detection.** Today it matches `original_filename` within a single folder. Switch
    to **`file_hash`, globally** (drop the `folder_id` filter; `idx_documents_hash` already exists),
    matching what content-addressable storage already does physically. Keep filename as a secondary
@@ -142,24 +149,31 @@ password-locked Vault · document-date-vs-photo-date distinction.
 - **Public share links** (share token + optional password/expiry; leans on the existing signed-URL
   file-serving scheme) → **shared folders** (editor/viewer roles, needs a grant/ACL table threaded
   through the `user_id`-scoped queries) → **partner sharing**.
-- **Semantic search:** add pgvector + embeddings. Hybrid with tsvector (keep lexical for exact
-  matches). Reverie-specific angle: embed **LLM summaries + OCR text** (semantic doc search Immich
-  can't do), optionally plus CLIP image embeddings. Near-dup detection follows for near-free.
+- **Semantic search:** add pgvector + embeddings, computed **locally** (no per-document API cost,
+  and nothing leaves the machine). Hybrid with tsvector (keep lexical for exact matches).
+  Reverie-specific angle: embed **LLM summaries + OCR text** (semantic doc search Immich can't do),
+  optionally plus CLIP image embeddings. Near-dup detection follows for near-free.
 - **Video transcoding + adaptive streaming** — the "personal Netflix" use case, prioritized ahead of
   photo editing.
-- **MCP server** — expose search / fetch / organize over MCP so Claude and other agents can work
-  against a Reverie library directly.
-- **General AI assistant** — evolve the current organize-only chat into one conversational assistant
-  that can organize _and_ run bulk edits (move / rename / tag / delete) and smart searches through the
-  same tool-calling loop. Deprecates the standalone "organize" feature.
-- **Pluggable AI providers** — a provider seam so each capability (summaries, vision, the assistant)
-  can target Claude _or_ a **local self-hosted model** over an OpenAI-compatible endpoint (Ollama,
-  llama.cpp, …), run as a **separate container**. Configured from the **admin UI**, backed by a
-  server-settings store (not only env flags): model / provider / on-off changes apply **live** (read
-  per job — no reload), while the few boot-time settings apply on restart. Per-capability, sensible
-  defaults; run fully local, mixed, or with AI off entirely. Localize the high-volume background jobs
-  (summaries/tags) first; keep the interactive assistant on cloud until local tool-calling is reliable
-  enough (weak in ≤8B models that fit a 10 GB GPU shared with PaddleOCR).
+- **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude
+  **Haiku** call each (summary, entities, tags). **Personal photos and locked items never go to
+  Anthropic.** In progress:
+    - 🚧 **Privacy gate** — the LLM workers refuse any locked item (its own flag, its folder, or its
+      collection) at processing time, even when it was locked while its job waited.
+    - 🚧 **Haiku 5.5** for the background jobs, on the current SDK and API version.
+    - 🚧 **Shared tool registry** — one set of library tools (search, get, list, overview, tags, move,
+      create/rename folder, rename document) with selections instead of ID lists, locked items
+      invisible, a dry run on every write, and an audit log that can undo each write. Photos expose
+      details only (name, date, place, tags), never the image.
+    - 🚧 **MCP server** — the registry exposed at `/mcp` over Streamable HTTP, with revocable per-user
+      API tokens, so Claude Code and other agents can work against a Reverie library directly.
+    - 🚧 **In-app agent** — a chat window onto stock Claude Code, restricted to the same registry via
+      `/mcp`, for the library's owner only. Replaces the organize-only chat (manual organize stays).
+- **Optional: pluggable local LLM providers** — for self-hosters who want no cloud AI at all. A
+  provider seam so a capability (summaries, vision) can target a local model over an
+  OpenAI-compatible endpoint (Ollama, llama.cpp, …) in a separate container, configured from the
+  admin UI. Not on the critical path: local summaries are weak at the sizes that fit a 10 GB GPU
+  shared with PaddleOCR, so Claude stays the default.
 - **Better auth** — generalize OAuth→OIDC (Google login), add email verification for signup and
   password change/reset.
 
@@ -199,7 +213,7 @@ To keep the 🧊 items cheap later, extend ingest to persist (beyond today's GPS
   (storage) stays separate from "how it's organized" (folders/collections — a DB/query concern).
 - **Don't replace folders with albums.** The hierarchy is a Drive-grade advantage. If albums are
   ever wanted, add them as an optional cross-cutting layer, not a replacement.
-- **One server-settings store, not per-feature configs.** Runtime AI settings and the configurable
+- **One server-settings store, not per-feature configs.** (🚧 in progress.) Runtime AI settings and the configurable
   trash TTL want the same primitive — a typed, DB-backed settings store (admin UI + API, env as the
   fallback default). Build it once. Classify each setting as **live** (read at use, applies on the
   next job — models, provider, toggles, TTL) or **boot** (needs a restart — worker concurrency,
