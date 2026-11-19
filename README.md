@@ -191,6 +191,22 @@ docker exec -it reverie-backend /opt/paddleocr-env/bin/python3 apps/backend/ocr_
 `--check` confirms CUDA is compiled in and the GPU is visible; `--compare` runs CPU vs GPU on a sample
 image and prints the speedup.
 
+### In-app agent: one-time Claude sign-in
+
+The admin-only agent is the stock Claude Code binary in the `reverie-agent` container, signed in with
+the server owner's own Claude account (Pro/Max). Until it is signed in, the agent page says so. Sign in
+once on the server:
+
+```sh
+docker exec -it reverie-agent claude   # follow the sign-in prompts, then /exit
+docker exec reverie-agent claude auth status   # should report you as logged in
+```
+
+The login lives in the container's `/data/claude` volume, so it survives redeploys. Use `docker exec`
+rather than `docker compose exec`: compose parses `docker-compose.prod.yml` first and, without
+`--env-file .env.production`, warns that the `POSTGRES_*` variables aren't set (harmless for `exec`,
+but noisy).
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full plan (auto-backup, trash/soft-delete, sharing, semantic
