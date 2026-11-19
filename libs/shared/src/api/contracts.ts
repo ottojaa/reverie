@@ -8,6 +8,7 @@ export * from './schemas/jobs.js';
 export * from './schemas/organize.js';
 export * from './schemas/search.js';
 export * from './schemas/settings.js';
+export * from './schemas/trash.js';
 export * from './schemas/upload.js';
 export * from './schemas/users.js';
 export * from './schemas/vault.js';

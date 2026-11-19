@@ -17,6 +17,7 @@ export type LlmSkipReason =
     | 'no_text_content' // Empty or no extractable text
     | 'ocr_confidence_too_low' // OCR quality too poor
     | 'private' // Item is locked (own flag, folder or collection): never sent to the LLM
+    | 'trashed' // Item is in the trash: no point spending a call on it
     | 'user_opted_out' // User disabled for this document
     | 'vision_disabled'; // Vision feature is disabled
 

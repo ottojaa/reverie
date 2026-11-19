@@ -7,6 +7,7 @@ import { NonRetryableJobError } from '../jobs/job.types';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
 import type { TrimJobData, TrimJobResult } from '../queues/trim.queue';
+import { excludeTrashed } from '../services/privacy';
 import { getUploadService } from '../services/upload.service';
 import { getFileCategory, getStorageService } from '../services/storage.service';
 import { getUploadTempDir, hashFile, type UploadedFile } from '../utils/upload-files';
@@ -51,7 +52,10 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
 
     logger.info('Processing trim job', { documentId, start, end, saveAsCopy });
 
-    const document = await db.selectFrom('documents').selectAll().where('id', '=', documentId).where('user_id', '=', userId).executeTakeFirst();
+    const document = await excludeTrashed(
+        db.selectFrom('documents').selectAll().where('id', '=', documentId).where('user_id', '=', userId),
+        '',
+    ).executeTakeFirst();
 
     if (!document) {
         throw new NonRetryableJobError(`Document ${documentId} not found`);

@@ -58,9 +58,9 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Safety & data lifecycle
 
-| Capability          | Immich          | Reverie             | Plan                                  |
-| ------------------- | --------------- | ------------------- | ------------------------------------- |
-| Trash / recycle bin | ✅ w/ retention | ❌ **hard deletes** | 🚧 soft-delete + **configurable TTL** |
+| Capability          | Immich          | Reverie                                                     | Plan |
+| ------------------- | --------------- | ----------------------------------------------------------- | ---- |
+| Trash / recycle bin | ✅ w/ retention | ✅ restore, empty, retention purge (TTL in server settings) | ✅   |
 
 ### Search & intelligence
 
@@ -104,14 +104,14 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Platform & integrations
 
-| Capability                                             | Immich              | Reverie                   | Plan                                           |
-| ------------------------------------------------------ | ------------------- | ------------------------- | ---------------------------------------------- |
-| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)              | ✅                                             |
-| Published client SDK                                   | ✅ TS + Dart        | ❌                        | 🧊 until traction                              |
-| Per-user API keys                                      | ✅                  | ❌ (JWT only)             | 🚧 revocable tokens for the MCP server; 🧊 SDK |
-| MCP server (expose library to LLM agents)              | ❌                  | ❌                        | 🚧 `/mcp` over the shared tool registry        |
-| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only | 🛠️ optional, per-capability                    |
-| Runtime admin settings (change config without restart) | ✅ admin UI         | ❌ env vars only          | 🚧 settings store + admin UI                   |
+| Capability                                             | Immich              | Reverie                            | Plan                                           |
+| ------------------------------------------------------ | ------------------- | ---------------------------------- | ---------------------------------------------- |
+| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)                       | ✅                                             |
+| Published client SDK                                   | ✅ TS + Dart        | ❌                                 | 🧊 until traction                              |
+| Per-user API keys                                      | ✅                  | ❌ (JWT only)                      | 🚧 revocable tokens for the MCP server; 🧊 SDK |
+| MCP server (expose library to LLM agents)              | ❌                  | ❌                                 | 🚧 `/mcp` over the shared tool registry        |
+| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only          | 🛠️ optional, per-capability                    |
+| Runtime admin settings (change config without restart) | ✅ admin UI         | ✅ settings store + admin UI (#69) | ✅                                             |
 
 ### Auth & security
 
@@ -133,10 +133,11 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
    it. Foundation already exists (content-addressable storage, `file_hash`, `check-duplicates`,
    foreground `UploadWorker`). Needs: `PeriodicWorkRequest` + `MediaStore` observer, a
    "back up these albums / Wi-Fi-only" settings surface, and a local backed-up-asset ledger.
-2. 🚧 **Trash + soft-delete with configurable TTL.** Replace hard deletes with a `deleted_at` column,
-   filter it out of listings/search, and add a retention worker whose TTL comes from the
-   server-settings store. Do this before there's more data to lose, and before an agent can edit the
-   library.
+2. ✅ **Trash + soft-delete with configurable TTL.** Deletes set `deleted_at`; trashed items are
+   hidden from listings, search and every AI path, and can be restored or deleted forever from the
+   Trash view. A retention worker purges them after `trash.retentionDays` (server-settings store).
+   Folders keep their meaning: deleting one drops its documents to the root and the folder itself is
+   restorable (empty).
 3. ✅ **Authenticate the realtime socket** (#60, #65). The JWT is verified in the socket handshake and
    rooms are scoped to the authenticated `user_id`. Shipped alongside the per-item lock for private
    items (#64) and uploads up to 20 GB (#66).
@@ -214,7 +215,7 @@ To keep the 🧊 items cheap later, extend ingest to persist (beyond today's GPS
   (storage) stays separate from "how it's organized" (folders/collections — a DB/query concern).
 - **Don't replace folders with albums.** The hierarchy is a Drive-grade advantage. If albums are
   ever wanted, add them as an optional cross-cutting layer, not a replacement.
-- **One server-settings store, not per-feature configs** (🚧 in progress). Runtime AI settings and
+- **One server-settings store, not per-feature configs** (✅ shipped in #69). Runtime AI settings and
   the configurable trash TTL want the same primitive — a typed, DB-backed settings store (admin UI +
   API, env as the fallback default). Build it once. Classify each setting as **live** (read at use,
   applies on the next job — models, provider, toggles, TTL) or **boot** (needs a restart — worker

@@ -24,6 +24,15 @@ export function checkLlmEligibility(document: Document, ocrResult: OcrResult | n
         };
     }
 
+    // A trashed document is not worked on, even when a job forces a processing type.
+    if (document.deleted_at) {
+        return {
+            eligible: false,
+            reason: 'trashed',
+            processingType: 'skip',
+        };
+    }
+
     // 1. Check if LLM is enabled globally
     if (!env.LLM_ENABLED) {
         return {

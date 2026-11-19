@@ -2,6 +2,8 @@ import { ConflictError, NotFoundError } from '@reverie/shared';
 import type { Kysely } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database, Folder, FolderType, FolderUpdate, NewFolder } from '../db/schema';
+import { excludeTrashed } from './privacy';
+import { trashFolder } from './trash-folders';
 
 type DbOrTrx = Kysely<Database>;
 
@@ -55,20 +57,25 @@ export class FolderService {
         }
 
         // Check for existing folder with same path (for this user)
-        const existing = await dbToUse.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
+        const existing = await excludeTrashed(
+            dbToUse.selectFrom('folders').select('id').where('path', '=', path).where('user_id', '=', userId),
+            '',
+        ).executeTakeFirst();
 
         if (existing) {
             throw new ConflictError(parentId ? 'A folder with this name already exists in this collection.' : 'A collection with this name already exists.');
         }
 
         // Next sort_order among siblings
-        const maxOrder = await dbToUse
-            .selectFrom('folders')
-            .select(dbToUse.fn.max('sort_order').as('max_order'))
-            .where('user_id', '=', userId)
-            .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
-            .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
-            .executeTakeFirst();
+        const maxOrder = await excludeTrashed(
+            dbToUse
+                .selectFrom('folders')
+                .select(dbToUse.fn.max('sort_order').as('max_order'))
+                .where('user_id', '=', userId)
+                .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
+                .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!)),
+            '',
+        ).executeTakeFirst();
         const sort_order = (Number(maxOrder?.max_order ?? -1) || -1) + 1;
 
         const newFolder: NewFolder = {
@@ -92,7 +99,7 @@ export class FolderService {
     async getFolder(id: string, userId: string, trx?: DbOrTrx): Promise<Folder | undefined> {
         const dbToUse = trx ?? db;
 
-        return dbToUse.selectFrom('folders').selectAll().where('id', '=', id).where('user_id', '=', userId).executeTakeFirst();
+        return excludeTrashed(dbToUse.selectFrom('folders').selectAll().where('id', '=', id).where('user_id', '=', userId), '').executeTakeFirst();
     }
 
     /**
@@ -102,7 +109,7 @@ export class FolderService {
     async getFolderByPath(path: string, userId: string, trx?: DbOrTrx): Promise<Folder | undefined> {
         const dbToUse = trx ?? db;
 
-        return dbToUse.selectFrom('folders').selectAll().where('path', '=', path).where('user_id', '=', userId).executeTakeFirst();
+        return excludeTrashed(dbToUse.selectFrom('folders').selectAll().where('path', '=', path).where('user_id', '=', userId), '').executeTakeFirst();
     }
 
     /**
@@ -143,12 +150,15 @@ export class FolderService {
      * List children of a folder (scoped to user), ordered by sort_order.
      */
     async listChildren(parentId: string | null, userId: string): Promise<Folder[]> {
-        return db
-            .selectFrom('folders')
-            .selectAll()
-            .where('user_id', '=', userId)
-            .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
-            .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
+        return excludeTrashed(
+            db
+                .selectFrom('folders')
+                .selectAll()
+                .where('user_id', '=', userId)
+                .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
+                .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!)),
+            '',
+        )
             .orderBy('sort_order', 'asc')
             .orderBy('name', 'asc')
             .execute();
@@ -181,12 +191,10 @@ export class FolderService {
     }
 
     private async getDocumentCount(folderId: string, userId: string): Promise<number> {
-        const r = await db
-            .selectFrom('documents')
-            .select(db.fn.countAll().as('count'))
-            .where('folder_id', '=', folderId)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
+        const r = await excludeTrashed(
+            db.selectFrom('documents').select(db.fn.countAll().as('count')).where('folder_id', '=', folderId).where('user_id', '=', userId),
+            '',
+        ).executeTakeFirst();
 
         return Number(r?.count ?? 0);
     }
@@ -286,25 +294,24 @@ export class FolderService {
             }
 
             const newPath = newParentId ? `${(await this.getFolder(newParentId, userId))!.path}/${folder.name}` : `/${folder.name}`;
-            const existing = await db
-                .selectFrom('folders')
-                .select('id')
-                .where('path', '=', newPath)
-                .where('user_id', '=', userId)
-                .where('id', '!=', id)
-                .executeTakeFirst();
+            const existing = await excludeTrashed(
+                db.selectFrom('folders').select('id').where('path', '=', newPath).where('user_id', '=', userId).where('id', '!=', id),
+                '',
+            ).executeTakeFirst();
 
             if (existing) {
                 throw new ConflictError('A folder with this name already exists in this collection.');
             }
 
-            const maxOrder = await db
-                .selectFrom('folders')
-                .select(db.fn.max('sort_order').as('max_order'))
-                .where('user_id', '=', userId)
-                .$if(newParentId === null, (qb) => qb.where('parent_id', 'is', null))
-                .$if(newParentId !== null, (qb) => qb.where('parent_id', '=', newParentId!))
-                .executeTakeFirst();
+            const maxOrder = await excludeTrashed(
+                db
+                    .selectFrom('folders')
+                    .select(db.fn.max('sort_order').as('max_order'))
+                    .where('user_id', '=', userId)
+                    .$if(newParentId === null, (qb) => qb.where('parent_id', 'is', null))
+                    .$if(newParentId !== null, (qb) => qb.where('parent_id', '=', newParentId!)),
+                '',
+            ).executeTakeFirst();
             updateData.parent_id = newParentId;
             updateData.path = newPath;
             updateData.sort_order = (Number(maxOrder?.max_order ?? -1) || -1) + 1;
@@ -313,13 +320,10 @@ export class FolderService {
         if (update.name !== undefined && update.name !== folder.name) {
             const parentPath = folder.path.substring(0, folder.path.lastIndexOf('/'));
             const newPath = parentPath ? `${parentPath}/${update.name}` : `/${update.name}`;
-            const existing = await db
-                .selectFrom('folders')
-                .select('id')
-                .where('path', '=', newPath)
-                .where('user_id', '=', userId)
-                .where('id', '!=', id)
-                .executeTakeFirst();
+            const existing = await excludeTrashed(
+                db.selectFrom('folders').select('id').where('path', '=', newPath).where('user_id', '=', userId).where('id', '!=', id),
+                '',
+            ).executeTakeFirst();
 
             if (existing) {
                 throw new ConflictError(
@@ -351,19 +355,12 @@ export class FolderService {
     }
 
     /**
-     * Delete a folder (scoped to user).
+     * Delete a folder (scoped to user): moves it to the trash. Its live documents drop to the
+     * root, as before. The only hard delete of a folder is the trash purge (trash.service).
      * Pass trx for transactional use.
      */
     async deleteFolder(id: string, userId: string, trx?: DbOrTrx): Promise<void> {
-        const dbToUse = trx ?? db;
-        const folder = await this.getFolder(id, userId, trx);
-
-        if (!folder) {
-            throw new NotFoundError('Folder', id);
-        }
-
-        // Cascade delete handled by FK constraint
-        await dbToUse.deleteFrom('folders').where('id', '=', id).where('user_id', '=', userId).execute();
+        await trashFolder(userId, id, trx);
     }
 
     /**
@@ -379,23 +376,19 @@ export class FolderService {
             throw new NotFoundError('Folder', id);
         }
 
-        const docCount = await dbToUse
-            .selectFrom('documents')
-            .select(dbToUse.fn.countAll().as('count'))
-            .where('folder_id', '=', id)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
+        const docCount = await excludeTrashed(
+            dbToUse.selectFrom('documents').select(dbToUse.fn.countAll().as('count')).where('folder_id', '=', id).where('user_id', '=', userId),
+            '',
+        ).executeTakeFirst();
 
         if (Number(docCount?.count ?? 0) > 0) {
             throw new ConflictError('Cannot delete folder: it contains documents');
         }
 
-        const childCount = await dbToUse
-            .selectFrom('folders')
-            .select(dbToUse.fn.countAll().as('count'))
-            .where('parent_id', '=', id)
-            .where('user_id', '=', userId)
-            .executeTakeFirst();
+        const childCount = await excludeTrashed(
+            dbToUse.selectFrom('folders').select(dbToUse.fn.countAll().as('count')).where('parent_id', '=', id).where('user_id', '=', userId),
+            '',
+        ).executeTakeFirst();
 
         if (Number(childCount?.count ?? 0) > 0) {
             throw new ConflictError('Cannot delete folder: it contains subfolders');

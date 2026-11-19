@@ -72,6 +72,13 @@ export async function processDocument(documentId: string, options: ProcessDocume
         return { success: true, skipped: true, reason: 'private' };
     }
 
+    // Same hard stop for the trash: no Anthropic call and no llm_results row for a trashed document.
+    if (document.deleted_at) {
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+
+        return { success: true, skipped: true, reason: 'trashed' };
+    }
+
     // 3. Check eligibility (unless type is explicitly provided)
     const eligibilityStart = Date.now();
     const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });

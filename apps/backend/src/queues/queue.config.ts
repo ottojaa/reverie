@@ -6,6 +6,7 @@ export const QUEUE_NAMES = {
     THUMBNAIL: 'thumbnail-queue',
     LLM: 'llm-queue',
     TRIM: 'trim-queue',
+    TRASH: 'trash-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

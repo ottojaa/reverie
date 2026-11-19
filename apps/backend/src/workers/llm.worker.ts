@@ -44,7 +44,8 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });
     const processingType = type || eligibility.processingType;
 
-    if (!eligibility.eligible && (!type || isPrivate)) {
+    // Private and trashed skips apply even when the job forces a processing type.
+    if (!eligibility.eligible && (!type || isPrivate || eligibility.reason === 'trashed')) {
         // Leave the document in a terminal state; the job itself ends skipped, not failed.
         await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
 

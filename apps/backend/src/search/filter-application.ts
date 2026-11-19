@@ -2,7 +2,7 @@ import { TEXT_DOCUMENT_CATEGORIES, type DateRange, type ParsedQuery } from '@rev
 import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database } from '../db/schema';
-import { excludePrivateDocuments } from '../services/privacy';
+import { excludePrivateDocuments, excludeTrashed } from '../services/privacy';
 import { resolveRelativeDate } from './query-parser';
 
 /**
@@ -241,6 +241,7 @@ export function applySearchFilters(
     // Always filter by user
     query = query.where('d.user_id', '=', userId);
     query = excludePrivateDocuments(query, privateFolderIds, 'd.');
+    query = excludeTrashed(query, 'd.');
 
     // Full-text search
     if (!omit?.has('fullText') && parsed.fullText) {

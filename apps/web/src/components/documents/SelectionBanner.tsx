@@ -39,9 +39,12 @@ export function SelectionBanner({ documents }: { documents: Document[] }) {
 
     const handleDelete = async () => {
         const confirmed = await confirm({
-            title: count === 1 ? 'Delete document?' : `Delete ${count} documents?`,
-            description: 'This action cannot be undone.',
-            confirmText: 'Delete',
+            title: count === 1 ? 'Move document to Trash?' : `Move ${count} documents to Trash?`,
+            description:
+                count === 1
+                    ? 'The document moves to Trash. You can restore it there until it is purged.'
+                    : 'The documents move to Trash. You can restore them there until they are purged.',
+            confirmText: 'Move to Trash',
             cancelText: 'Cancel',
             variant: 'destructive',
         });
