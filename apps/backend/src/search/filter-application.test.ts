@@ -39,6 +39,19 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."is_private" =');
     });
 
+    it('excludes documents in private folders and collections, through the query organize retrieval uses', () => {
+        const compiled = buildSearchQuery(documentJoins(), {}, USER_ID, { limit: 10, offset: 0, sortBy: 'uploaded', sortOrder: 'desc' }, [
+            'private-folder',
+            'private-child',
+        ])
+            .select('d.id')
+            .compile();
+
+        expect(compiled.sql).toContain('"d"."is_private" =');
+        expect(compiled.sql).toContain('"d"."folder_id" not in');
+        expect(compiled.parameters).toEqual(expect.arrayContaining(['private-folder', 'private-child']));
+    });
+
     it('applies every dimension of a full query', () => {
         const { sql } = compile(FULL_QUERY);
 

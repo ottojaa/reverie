@@ -3,6 +3,7 @@ import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { checkLlmEligibility } from '../llm/eligibility';
 import { processDocument } from '../llm/llm.service';
+import { isDocumentPrivate } from '../services/privacy';
 import type { LlmJobData, LlmJobResult } from '../queues/llm.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
@@ -37,11 +38,16 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
 
     await publishJobProgress(job.id!, 20, documentId, job.data.sessionId, job.data.userId);
 
-    // Check eligibility
-    const eligibility = checkLlmEligibility(document, ocrResult);
+    // Check eligibility. The document may have been locked while this job waited, so privacy is
+    // read now, and a private skip applies even when the job forces a processing type.
+    const isPrivate = await isDocumentPrivate(document);
+    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });
     const processingType = type || eligibility.processingType;
 
-    if (!eligibility.eligible && !type) {
+    if (!eligibility.eligible && (!type || isPrivate)) {
+        // Leave the document in a terminal state; the job itself ends skipped, not failed.
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+
         logger.info('LLM processing skipped', {
             documentId,
             reason: eligibility.reason,
@@ -72,6 +78,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
         forceType: processingType,
         document,
         ocrResult,
+        isPrivate,
     });
 
     await publishJobProgress(job.id!, 90, documentId, job.data.sessionId, job.data.userId);

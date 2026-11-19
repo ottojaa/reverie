@@ -13,6 +13,7 @@ import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
 import { rebuildSearchVector } from '../search/search-indexer';
+import { isDocumentPrivate } from '../services/privacy';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
@@ -26,6 +27,8 @@ interface ProcessDocumentOptions {
     forceType?: LlmProcessingType | undefined;
     document?: Document | undefined;
     ocrResult?: OcrResult | null | undefined;
+    /** Effective privacy when the caller already looked it up; otherwise it is looked up here. */
+    isPrivate?: boolean | undefined;
 }
 
 function shouldLogTimings(): boolean {
@@ -57,9 +60,19 @@ export async function processDocument(documentId: string, options: ProcessDocume
     const ocrResult = options.ocrResult ?? (await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst());
     const fetchMs = Date.now() - fetchStart;
 
-    // 2. Check eligibility (unless type is explicitly provided)
+    // 2. Privacy is a hard stop, ahead of any forced type: a locked item never reaches the LLM.
+    // No llm_results row is written, so the document can still be processed after it is unlocked.
+    const isPrivate = options.isPrivate ?? (await isDocumentPrivate(document));
+
+    if (isPrivate) {
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+
+        return { success: true, skipped: true, reason: 'private' };
+    }
+
+    // 3. Check eligibility (unless type is explicitly provided)
     const eligibilityStart = Date.now();
-    const eligibility = checkLlmEligibility(document, ocrResult);
+    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });
     const processingType = options.forceType || eligibility.processingType;
     const eligibilityMs = Date.now() - eligibilityStart;
 
@@ -89,7 +102,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
         };
     }
 
-    // 3. Route to appropriate processor
+    // 4. Route to appropriate processor
     if (processingType === 'vision_describe') {
         return processVisionDocument(document, {
             fetchMs,

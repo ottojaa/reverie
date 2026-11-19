@@ -72,11 +72,18 @@ export async function publishJobProgress(jobId: string, progress: number, docume
 /**
  * Publish job complete event
  */
-export async function publishJobComplete(jobId: string, result?: unknown, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
+export async function publishJobComplete(
+    jobId: string,
+    result?: unknown,
+    documentId?: string,
+    sessionId?: string,
+    userId?: string,
+    status: JobStatus = 'complete',
+): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:complete',
         job_id: jobId,
-        status: 'complete',
+        status,
         progress: 100,
         timestamp: new Date().toISOString(),
     };
@@ -114,6 +121,10 @@ export async function publishJobFailed(jobId: string, errorMessage: string, docu
     await publishJobEvent(event);
 }
 
+function isSkippedResult(result: unknown): boolean {
+    return typeof result === 'object' && result !== null && 'skipped' in result && result.skipped === true;
+}
+
 export interface TrackingOptions {
     /** Callback to store duration in the appropriate result table */
     storeDuration?: (documentId: string, durationMs: number) => Promise<void>;
@@ -145,15 +156,21 @@ export async function processJobWithTracking<TData extends { documentId: string;
         const result = await processor(job);
         const durationMs = Date.now() - startTime;
 
-        // Mark job as complete (with duration)
-        await jobService.markJobComplete(jobId, result as Record<string, unknown>, durationMs);
+        // A processor that deliberately did nothing (e.g. a locked document) ends skipped, not complete.
+        const isSkipped = isSkippedResult(result);
+
+        if (isSkipped) {
+            await jobService.markJobSkipped(jobId, result as Record<string, unknown>, durationMs);
+        } else {
+            await jobService.markJobComplete(jobId, result as Record<string, unknown>, durationMs);
+        }
 
         // Store duration in the result table if callback provided
         if (options?.storeDuration) {
             await options.storeDuration(documentId, durationMs);
         }
 
-        await publishJobComplete(jobId, result, documentId, sessionId, userId);
+        await publishJobComplete(jobId, result, documentId, sessionId, userId, isSkipped ? 'skipped' : 'complete');
 
         return result;
     } catch (error) {
