@@ -104,14 +104,14 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Platform & integrations
 
-| Capability                                             | Immich              | Reverie                            | Plan                                           |
-| ------------------------------------------------------ | ------------------- | ---------------------------------- | ---------------------------------------------- |
-| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)                       | ✅                                             |
-| Published client SDK                                   | ✅ TS + Dart        | ❌                                 | 🧊 until traction                              |
-| Per-user API keys                                      | ✅                  | ❌ (JWT only)                      | 🚧 revocable tokens for the MCP server; 🧊 SDK |
-| MCP server (expose library to LLM agents)              | ❌                  | ❌                                 | 🚧 `/mcp` over the shared tool registry        |
-| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only          | 🛠️ optional, per-capability                    |
-| Runtime admin settings (change config without restart) | ✅ admin UI         | ✅ settings store + admin UI (#69) | ✅                                             |
+| Capability                                             | Immich              | Reverie                            | Plan                        |
+| ------------------------------------------------------ | ------------------- | ---------------------------------- | --------------------------- |
+| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)                       | ✅                          |
+| Published client SDK                                   | ✅ TS + Dart        | ❌                                 | 🧊 until traction           |
+| Per-user API keys                                      | ✅                  | ✅ revocable tokens (#73)          | ✅                          |
+| MCP server (expose library to LLM agents)              | ❌                  | ✅ `/mcp` (#73)                    | ✅                          |
+| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only          | 🛠️ optional, per-capability |
+| Runtime admin settings (change config without restart) | ✅ admin UI         | ✅ settings store + admin UI (#69) | ✅                          |
 
 ### Auth & security
 
@@ -168,10 +168,11 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
       create/rename folder, rename document) with selections instead of ID lists, locked and trashed
       items invisible, a dry run on every write, and an audit log that can undo each write. Photos
       expose details only (name, date, place, tags), never the image. No delete tool.
+    - ✅ **MCP server** (#73) — the registry exposed at `/mcp` over Streamable HTTP, with revocable per-user
+      API tokens (made and revoked on the settings page), so Claude Code and other agents can work
+      against a Reverie library directly.
 
     In progress:
-    - 🚧 **MCP server** — the registry exposed at `/mcp` over Streamable HTTP, with revocable per-user
-      API tokens, so Claude Code and other agents can work against a Reverie library directly.
     - 🚧 **In-app agent** — a chat window onto stock Claude Code, restricted to the same registry via
       `/mcp`, for the library's owner only. Replaces the organize-only chat (manual organize stays).
 
@@ -191,7 +192,7 @@ they don't require a full reprocess later.
 - **Timeline view** (needs reliable capture timestamps — already have `taken_at`/`extracted_date`).
 - **Geographic map/places browsing** (GPS already captured; reverse-geo city/country already stored).
 - **Rich media features** — RAW / Live Photos / 360°, EXIF editing, HEIC original conversion.
-- **API keys + published SDK** — gated on the project gaining traction.
+- **Published SDK** — gated on the project gaining traction (per-user API tokens shipped with the MCP server).
 - **Favorites / Archive / Memories**, server-side external libraries, CLI bulk upload, 2FA.
 
 #### Data to start capturing now

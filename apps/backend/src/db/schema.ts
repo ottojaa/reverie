@@ -223,6 +223,25 @@ export interface ToolAuditLogTable {
 
 export type ToolAuditLogEntry = Selectable<ToolAuditLogTable>;
 
+// API tokens (hash only; the secret is shown once at creation)
+export type ApiTokenKind = 'personal' | 'agent';
+
+export interface ApiTokensTable {
+    id: Generated<string>;
+    user_id: string;
+    name: string;
+    token_hash: string;
+    token_prefix: string;
+    kind: ColumnType<ApiTokenKind, ApiTokenKind | undefined, never>;
+    /** Null for a token that never expires (personal tokens). */
+    expires_at: Date | null;
+    created_at: ColumnType<Date, Date | undefined, never>;
+    last_used_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+    revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+}
+
+export type ApiToken = Selectable<ApiTokensTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -236,4 +255,5 @@ export interface Database {
     photo_metadata: PhotoMetadataTable;
     server_settings: ServerSettingsTable;
     tool_audit_log: ToolAuditLogTable;
+    api_tokens: ApiTokensTable;
 }

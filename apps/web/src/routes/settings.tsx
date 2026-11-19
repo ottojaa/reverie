@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Lock } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { ApiTokensCard } from '../components/settings/ApiTokensCard';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -213,6 +214,8 @@ function SettingsPage() {
                         )}
                     </CardContent>
                 </Card>
+
+                <ApiTokensCard />
 
                 {/* Logout */}
                 <Card>
