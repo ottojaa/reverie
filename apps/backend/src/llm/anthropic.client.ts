@@ -90,7 +90,7 @@ export interface LlmCallUsage {
  * text. Added here, not in env, so an older .env that pins LLM_MAX_OUTPUT_TOKENS
  * still leaves room.
  */
-const THINKING_HEADROOM_TOKENS = 4000;
+const THINKING_HEADROOM_TOKENS = 8000;
 
 /** Output budget for the vision description JSON, before thinking headroom. */
 const VISION_OUTPUT_TOKENS = 1000;

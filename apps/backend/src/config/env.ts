@@ -68,8 +68,9 @@ const envSchema = z.object({
     // Image description (Claude Haiku 5.5 — has vision, cheap/fast).
     ANTHROPIC_VISION_MODEL: z.string().default('claude-haiku-5-5'),
     // Thinking depth (effort) for summaries and image descriptions. Only sent to
-    // models that accept it (Haiku 5.x); medium is the model's own default.
-    ANTHROPIC_SUMMARY_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
+    // models that accept it (Haiku 5.x). Low: per-document extraction needs little
+    // reasoning; raise it if spelling of proper nouns turns out worse than before.
+    ANTHROPIC_SUMMARY_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
     // Thinking depth (effort) for the organize assistant.
     ANTHROPIC_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
 
