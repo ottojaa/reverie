@@ -5,10 +5,11 @@ __metadata:
   version: 10
   cacheKey: 10c0
 
-"@anthropic-ai/sdk@npm:^0.107.0":
-  version: 0.107.0
-  resolution: "@anthropic-ai/sdk@npm:0.107.0"
+"@anthropic-ai/sdk@npm:^1.0.0":
+  version: 1.5.0
+  resolution: "@anthropic-ai/sdk@npm:1.5.0"
   dependencies:
+    "@opentelemetry/api": "npm:^1.4.1"
     json-schema-to-ts: "npm:^3.1.1"
     standardwebhooks: "npm:^1.0.0"
   peerDependencies:
@@ -18,7 +19,7 @@ __metadata:
       optional: true
   bin:
     anthropic-ai-sdk: bin/cli
-  checksum: 10c0/53a21fcdc3dd2ac4e93acf9c118c695285268f2d700567e4cb1a1a52c08a72a992438cd0b39dbec5df9bda36e943ae9eaaacfaa2bc6f576834bae25eed175de3
+  checksum: 10c0/3f6f0ebd71162595cacd577a83a77579bf2b5d0e54c70ba01837122c07a0255d62b2ea5332c15bf1c667aead2ba4996d5f57a77aca56b083b1fa69837773d0e0
   languageName: node
   linkType: hard
 
@@ -4699,6 +4700,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@opentelemetry/api@npm:^1.4.1":
+  version: 1.10.0
+  resolution: "@opentelemetry/api@npm:1.10.0"
+  checksum: 10c0/c666f89d882e2e3ea3780b4e419de3ba7e00a80bf334269c3c8507a5e2b4e453e2bc8368f6230f894d789b206c14dde313ea6f51fa7bc629f0eff8480b5d356b
+  languageName: node
+  linkType: hard
+
 "@peculiar/asn1-schema@npm:^2.7.0":
   version: 2.8.0
   resolution: "@peculiar/asn1-schema@npm:2.8.0"
@@ -6153,7 +6161,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@reverie/backend@workspace:apps/backend"
   dependencies:
-    "@anthropic-ai/sdk": "npm:^0.107.0"
+    "@anthropic-ai/sdk": "npm:^1.0.0"
     "@aws-sdk/client-s3": "npm:^3.700.0"
     "@aws-sdk/s3-request-presigner": "npm:^3.700.0"
     "@fastify/autoload": "npm:~6.0.3"
