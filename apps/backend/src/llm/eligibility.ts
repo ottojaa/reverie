@@ -10,9 +10,20 @@ import type { Document, OcrResult } from '../db/schema';
 import type { FileCategory, LlmEligibility, LlmSkipReason, SkippedMetadata } from './types';
 
 /**
- * Check if a document is eligible for LLM processing
+ * Check if a document is eligible for LLM processing.
+ *
+ * `isPrivate` is the document's effective privacy (see isDocumentPrivate in services/privacy).
+ * It is checked first and is final: a locked item never reaches the LLM, whatever else is true.
  */
-export function checkLlmEligibility(document: Document, ocrResult?: OcrResult | null): LlmEligibility {
+export function checkLlmEligibility(document: Document, ocrResult: OcrResult | null | undefined, { isPrivate }: { isPrivate: boolean }): LlmEligibility {
+    if (isPrivate) {
+        return {
+            eligible: false,
+            reason: 'private',
+            processingType: 'skip',
+        };
+    }
+
     // 1. Check if LLM is enabled globally
     if (!env.LLM_ENABLED) {
         return {
