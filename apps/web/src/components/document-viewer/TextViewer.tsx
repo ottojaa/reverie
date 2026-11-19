@@ -90,10 +90,7 @@ export default function TextViewer({ fileUrl }: ViewerProps) {
                     variant={isEditing ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={toggleEdit}
-                    className={cn(
-                        'text-xs',
-                        isEditing && 'bg-primary/10 text-primary hover:bg-primary/15',
-                    )}
+                    className={cn('text-xs', isEditing && 'bg-primary/10 text-primary hover:bg-primary/15')}
                 >
                     {isEditing ? 'Viewing' : 'Edit'}
                 </Button>

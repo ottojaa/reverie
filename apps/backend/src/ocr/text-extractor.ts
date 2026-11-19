@@ -5,11 +5,7 @@
 
 const MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB
 
-const TEXT_MIME_TYPES = new Set([
-    'text/plain',
-    'text/markdown',
-    'text/csv',
-]);
+const TEXT_MIME_TYPES = new Set(['text/plain', 'text/markdown', 'text/csv']);
 
 /**
  * Check if a MIME type supports text extraction (PDF or plain text).
@@ -24,10 +20,7 @@ export function isTextExtractable(mimeType: string): boolean {
  * Extract text from a buffer (TXT/MD/CSV only).
  * PDF is handled by PaddleOCR.
  */
-export async function extractTextFromBuffer(
-    buffer: Buffer,
-    mimeType: string,
-): Promise<{ text: string }> {
+export async function extractTextFromBuffer(buffer: Buffer, mimeType: string): Promise<{ text: string }> {
     if (!TEXT_MIME_TYPES.has(mimeType)) {
         return { text: '' };
     }

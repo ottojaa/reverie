@@ -3,10 +3,7 @@ import type { StorageService } from '../services/storage.service';
 
 export type ThumbnailUrls = { sm: string; md: string; lg: string } | null;
 
-export async function resolveThumbnailUrls(
-    storageService: StorageService,
-    thumbnailPaths: ThumbnailPaths | null,
-): Promise<ThumbnailUrls> {
+export async function resolveThumbnailUrls(storageService: StorageService, thumbnailPaths: ThumbnailPaths | null): Promise<ThumbnailUrls> {
     if (!thumbnailPaths) return null;
 
     const [sm, md, lg] = await Promise.all([

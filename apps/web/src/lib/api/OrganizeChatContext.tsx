@@ -12,11 +12,7 @@ export function OrganizeChatProvider({ children }: { children: ReactNode }) {
     const chatState = useOrganizeChat();
     const [input, setInput] = useState('');
 
-    return (
-        <OrganizeChatContext.Provider value={{ ...chatState, input, setInput }}>
-            {children}
-        </OrganizeChatContext.Provider>
-    );
+    return <OrganizeChatContext.Provider value={{ ...chatState, input, setInput }}>{children}</OrganizeChatContext.Provider>;
 }
 
 export function useOrganizeChatContext(): OrganizeChatContextValue {

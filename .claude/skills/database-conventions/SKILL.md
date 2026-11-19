@@ -13,17 +13,17 @@ Types in `db/schema.ts` match PostgreSQL tables exactly:
 
 ```typescript
 interface Database {
-  folders: FolderTable
-  documents: DocumentTable
-  ocr_results: OcrResultTable
-  processing_jobs: ProcessingJobTable
+    folders: FolderTable;
+    documents: DocumentTable;
+    ocr_results: OcrResultTable;
+    processing_jobs: ProcessingJobTable;
 }
 
 interface DocumentTable {
-  id: string
-  folder_id: string
-  file_path: string
-  // ... all columns with correct types
+    id: string;
+    folder_id: string;
+    file_path: string;
+    // ... all columns with correct types
 }
 ```
 
@@ -58,17 +58,17 @@ await db.transaction().execute(async (trx) => {
 Located in `db/migrations/`. Use Kysely's migration format:
 
 ```typescript
-import { Kysely, sql } from 'kysely'
+import { Kysely, sql } from 'kysely';
 
 export async function up(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .createTable('table_name')
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .execute()
+    await db.schema
+        .createTable('table_name')
+        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+        .execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema.dropTable('table_name').execute()
+    await db.schema.dropTable('table_name').execute();
 }
 ```
 
@@ -79,7 +79,7 @@ Use PostgreSQL tsvector for search:
 ```typescript
 // Query with tsquery
 const results = await db
-  .selectFrom('ocr_results')
-  .where(sql`text_vector @@ plainto_tsquery('english', ${query})`)
-  .execute()
+    .selectFrom('ocr_results')
+    .where(sql`text_vector @@ plainto_tsquery('english', ${query})`)
+    .execute();
 ```

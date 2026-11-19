@@ -47,11 +47,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /** Pixel size of the image after rotation (before flip), used for crop math. */
-export function computeRotatedDimensions(
-    naturalWidth: number,
-    naturalHeight: number,
-    rotation: number,
-): { width: number; height: number } {
+export function computeRotatedDimensions(naturalWidth: number, naturalHeight: number, rotation: number): { width: number; height: number } {
     const swapDims = rotation === 90 || rotation === 270;
 
     return {

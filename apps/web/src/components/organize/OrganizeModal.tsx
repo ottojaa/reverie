@@ -212,17 +212,9 @@ export function OrganizeModal({ open, onOpenChange, isMinimized, setIsMinimized 
                                             // Desktop: right side panel
                                             'md:relative md:inset-auto md:max-h-none md:w-96 md:shrink-0 md:rounded-none md:border-l md:shadow-none',
                                         )}
-                                        initial={
-                                            isDesktop
-                                                ? { opacity: 0, x: '100%', y: 0 }
-                                                : { opacity: 0, x: 0, y: '100%' }
-                                        }
+                                        initial={isDesktop ? { opacity: 0, x: '100%', y: 0 } : { opacity: 0, x: 0, y: '100%' }}
                                         animate={{ opacity: 1, x: 0, y: 0 }}
-                                        exit={
-                                            isDesktop
-                                                ? { opacity: 0, x: '100%', y: 0 }
-                                                : { opacity: 0, x: 0, y: '100%' }
-                                        }
+                                        exit={isDesktop ? { opacity: 0, x: '100%', y: 0 } : { opacity: 0, x: 0, y: '100%' }}
                                         transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                                     >
                                         <OrganizePreview proposal={proposal} onProposalChange={handleProposalChange} onClose={handleClose} />

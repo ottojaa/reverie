@@ -10,7 +10,10 @@ export type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;
 export const UpdateUserRequestSchema = z.object({
     email: z.string().email().optional(),
     display_name: z.string().min(1).max(100).optional(),
-    quota: z.string().regex(/^\d+(?:\.\d+)?\s*(GB|TB)$/i, 'Use format like 500GB or 1TB').optional(),
+    quota: z
+        .string()
+        .regex(/^\d+(?:\.\d+)?\s*(GB|TB)$/i, 'Use format like 500GB or 1TB')
+        .optional(),
 });
 
 export type UpdateUserRequest = z.infer<typeof UpdateUserRequestSchema>;

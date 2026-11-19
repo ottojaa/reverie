@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 
 /** Touch-first devices (phones, tablets) via (pointer: coarse). */
 export function useIsMobile(): boolean {
-    const [isMobile, setIsMobile] = useState(
-        () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches,
-    );
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
 
     useEffect(() => {
         const mq = window.matchMedia('(pointer: coarse)');

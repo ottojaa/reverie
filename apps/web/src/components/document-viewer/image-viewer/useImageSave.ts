@@ -29,13 +29,7 @@ function validateCrop(percentCrop: PercentCrop | null, displayImageSize: { width
     return true;
 }
 
-async function buildSaveFile(
-    fileUrl: string,
-    percentCrop: PercentCrop,
-    editorState: ImageEditorState,
-    document: Document,
-    mimeType: string,
-): Promise<File> {
+async function buildSaveFile(fileUrl: string, percentCrop: PercentCrop, editorState: ImageEditorState, document: Document, mimeType: string): Promise<File> {
     // Percent crop is resolution-independent; map to full-res rotated output (preview may be downscaled).
     const img = await loadImage(fileUrl);
     const { width: rw, height: rh } = computeRotatedDimensions(img.naturalWidth, img.naturalHeight, editorState.rotation);

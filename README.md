@@ -107,8 +107,8 @@ by hand; only the AI summaries/tags and the organize assistant are skipped. Visi
 
 Each AI capability chooses its model independently, so you can mix per task:
 
-| Capability              | Env var                    | Default           |
-| ----------------------- | -------------------------- | ----------------- |
+| Capability              | Env var                    | Default            |
+| ----------------------- | -------------------------- | ------------------ |
 | Document summary & tags | `ANTHROPIC_SUMMARY_MODEL`  | `claude-haiku-4-5` |
 | Image vision (opt-in)   | `ANTHROPIC_VISION_MODEL`   | `claude-haiku-4-5` |
 | Organize assistant      | `ANTHROPIC_ORGANIZE_MODEL` | `claude-sonnet-5`  |

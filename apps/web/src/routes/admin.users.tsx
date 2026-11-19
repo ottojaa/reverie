@@ -232,7 +232,13 @@ function AdminUsersPage() {
                                     <TableCell className="text-muted-foreground">{u.last_login_at ? formatDateTime(u.last_login_at) : '—'}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1">
-                                            <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(u)} aria-label={`Edit ${u.email}`}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-8"
+                                                onClick={() => openEditDialog(u)}
+                                                aria-label={`Edit ${u.email}`}
+                                            >
                                                 <Pencil className="size-4" />
                                             </Button>
                                             {canDelete(user, u) && (

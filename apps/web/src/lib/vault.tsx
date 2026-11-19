@@ -89,6 +89,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
                 open={revealOpen}
                 onOpenChange={(open) => {
                     if (!open) pendingActionRef.current = null;
+
                     setRevealOpen(open);
                 }}
                 hasPassword={status.has_password}

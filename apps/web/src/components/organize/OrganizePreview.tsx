@@ -147,19 +147,14 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                 </span>
                             </li>
                         ) : (
-                            <li
-                                key={`overview-move-${op.target_folder.name}-${ovIdx}`}
-                                className="flex items-center gap-1.5 py-1.5 text-xs"
-                            >
+                            <li key={`overview-move-${op.target_folder.name}-${ovIdx}`} className="flex items-center gap-1.5 py-1.5 text-xs">
                                 <span className="shrink-0 rounded-md bg-secondary px-1.5 py-0.5 font-medium tabular-nums text-secondary-foreground">
                                     {op.document_ids.length} {op.document_ids.length === 1 ? 'doc' : 'docs'}
                                 </span>
                                 <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
                                 <div className="min-w-0 flex-1">
                                     {op.target_folder.new_parent_name && (
-                                        <p className="truncate text-[10px] leading-tight text-muted-foreground">
-                                            Under {op.target_folder.new_parent_name}
-                                        </p>
+                                        <p className="truncate text-[10px] leading-tight text-muted-foreground">Under {op.target_folder.new_parent_name}</p>
                                     )}
                                     <span className="truncate font-medium text-foreground">{op.target_folder.name}</span>
                                 </div>
@@ -189,9 +184,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                             >
                                 <div className="flex items-center gap-2 bg-card px-2.5 py-2">
                                     <Trash2 className="size-4 shrink-0 text-muted-foreground" />
-                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                                        Remove empty folder: {op.folder_name}
-                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">Remove empty folder: {op.folder_name}</span>
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -222,9 +215,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                     )}
                                     <div className="min-w-0 flex-1">
                                         {op.target_folder.new_parent_name && (
-                                            <p className="truncate text-[10px] text-muted-foreground">
-                                                New collection: {op.target_folder.new_parent_name}
-                                            </p>
+                                            <p className="truncate text-[10px] text-muted-foreground">New collection: {op.target_folder.new_parent_name}</p>
                                         )}
                                         <span className="block truncate text-sm font-medium text-foreground">{op.target_folder.name}</span>
                                     </div>
@@ -256,12 +247,7 @@ export function OrganizePreview({ proposal, onProposalChange, onClose }: Organiz
                                                     className="group relative size-16 shrink-0 overflow-hidden rounded-md bg-secondary"
                                                 >
                                                     {thumbUrl ? (
-                                                        <img
-                                                            src={thumbUrl}
-                                                            alt={doc.display_name}
-                                                            className="size-full object-cover"
-                                                            draggable={false}
-                                                        />
+                                                        <img src={thumbUrl} alt={doc.display_name} className="size-full object-cover" draggable={false} />
                                                     ) : (
                                                         <div className="flex size-full items-center justify-center">
                                                             <span className="text-[10px] font-medium uppercase text-muted-foreground">
