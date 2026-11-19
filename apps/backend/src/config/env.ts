@@ -73,7 +73,7 @@ const envSchema = z.object({
     // In-app agent: the reverie-agent container (Claude Code, signed in with the admin's own plan).
     // Unset AGENT_URL = no agent configured; the UI then shows it as unavailable.
     AGENT_URL: z.string().url().optional(),
-    // The wrapper's shared secret: either inline (dev) or a file the wrapper generated on first start.
+    // The wrapper's shared secret: either inline (dev) or a file the backend creates itself on first use (the wrapper only reads it, from a read-only mount).
     AGENT_SECRET: z.string().min(16).optional(),
     AGENT_SECRET_FILE: z.string().optional(),
 
