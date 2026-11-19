@@ -50,21 +50,23 @@ export class TrashService {
      * trashed. A filename that a live document in the folder has taken since gets the usual " (1)".
      */
     async restoreDocuments(userId: string, ids: string[]): Promise<number> {
+        return db.transaction().execute((trx) => this.restoreDocumentsIn(trx, userId, ids));
+    }
+
+    private async restoreDocumentsIn(trx: Kysely<Database>, userId: string, ids: string[]): Promise<number> {
         if (ids.length === 0) return 0;
 
-        return db.transaction().execute(async (trx) => {
-            const docs = await trx
-                .selectFrom('documents')
-                .selectAll()
-                .where('user_id', '=', userId)
-                .where('id', 'in', ids)
-                .where('deleted_at', 'is not', null)
-                .execute();
+        const docs = await trx
+            .selectFrom('documents')
+            .selectAll()
+            .where('user_id', '=', userId)
+            .where('id', 'in', ids)
+            .where('deleted_at', 'is not', null)
+            .execute();
 
-            for (const doc of docs) await this.restoreDocument(trx, doc);
+        for (const doc of docs) await this.restoreDocument(trx, doc);
 
-            return docs.length;
-        });
+        return docs.length;
     }
 
     private async restoreDocument(trx: Kysely<Database>, doc: Document): Promise<void> {
@@ -83,16 +85,20 @@ export class TrashService {
         await trx.updateTable('documents').set({ deleted_at: null, folder_id: folderId, original_filename: filename }).where('id', '=', doc.id).execute();
     }
 
+    /**
+     * Restore a selection in one transaction, folders first: a document trashed from a folder that
+     * was trashed later then lands back in it. An unknown id rolls the whole restore back.
+     */
     async restore(userId: string, selection: TrashSelection): Promise<TrashResult> {
-        const documents = await this.restoreDocuments(userId, selection.documentIds ?? []);
-        let folders = 0;
+        const folderIds = selection.folderIds ?? [];
 
-        for (const id of selection.folderIds ?? []) {
-            await restoreFolder(userId, id);
-            folders++;
-        }
+        return db.transaction().execute(async (trx) => {
+            for (const id of folderIds) await restoreFolder(userId, id, trx);
 
-        return { documents, folders };
+            const documents = await this.restoreDocumentsIn(trx, userId, selection.documentIds ?? []);
+
+            return { documents, folders: folderIds.length };
+        });
     }
 
     async listTrash(userId: string): Promise<TrashListing> {
@@ -106,11 +112,6 @@ export class TrashService {
         const topLevel = folders.filter((folder) => !folder.parent_id || trashedAt.get(folder.parent_id) !== folder.deleted_at?.getTime());
 
         return { documents, folders: topLevel, retentionDays };
-    }
-
-    /** When a trashed item will be purged: its deletion time plus the retention setting. */
-    async getPurgeAt(deletedAt: Date): Promise<Date> {
-        return new Date(deletedAt.getTime() + (await getSetting('trash.retentionDays')) * DAY_MS);
     }
 
     /** Delete trashed items for good ("Delete forever"). Live items are never touched. */

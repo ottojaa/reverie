@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Document, Folder } from '../../db/schema';
 import { getPrivateFolderIds, isDocumentEffectivelyPrivate } from '../../services/privacy';
 import { getStorageService } from '../../services/storage.service';
-import { getTrashService, type TrashService } from '../../services/trash.service';
+import { getTrashService } from '../../services/trash.service';
 import { isVaultLocked } from '../../services/vault';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
 
@@ -47,8 +47,11 @@ function toTrashFolder(folder: Folder, locked: boolean, purgeAt: Date): TrashFol
     };
 }
 
-async function toPurgeAt(trashService: TrashService, deletedAt: Date | null): Promise<Date> {
-    return trashService.getPurgeAt(deletedAt!);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** When the retention job will purge an item: its deletion time plus the retention setting. */
+function toPurgeAt(deletedAt: Date | null, retentionDays: number): Date {
+    return new Date(deletedAt!.getTime() + retentionDays * DAY_MS);
 }
 
 export default async function (fastify: FastifyInstance) {
@@ -73,14 +76,12 @@ export default async function (fastify: FastifyInstance) {
             return {
                 retention_days: retentionDays,
                 documents: await Promise.all(
-                    documents.map(async (doc) =>
-                        toTrashDocument(doc, vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds), await toPurgeAt(trashService, doc.deleted_at)),
+                    documents.map((doc) =>
+                        toTrashDocument(doc, vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds), toPurgeAt(doc.deleted_at, retentionDays)),
                     ),
                 ),
-                folders: await Promise.all(
-                    folders.map(async (folder) =>
-                        toTrashFolder(folder, vaultLocked && privateFolderIds.includes(folder.id), await toPurgeAt(trashService, folder.deleted_at)),
-                    ),
+                folders: folders.map((folder) =>
+                    toTrashFolder(folder, vaultLocked && privateFolderIds.includes(folder.id), toPurgeAt(folder.deleted_at, retentionDays)),
                 ),
             };
         },

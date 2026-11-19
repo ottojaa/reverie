@@ -17,21 +17,27 @@ import type { Database } from '../db/schema';
 export interface RecordingDb {
     db: Kysely<Database>;
     statements: string[];
+    /** Bound parameters of each statement, same index as `statements`. */
+    parameters: (readonly unknown[])[];
+    /** Set to answer statements with canned rows; unset (or returning undefined) means no rows. */
+    respond?: (sql: string) => unknown[] | undefined;
 }
 
 class RecordingDriver extends DummyDriver {
-    constructor(private readonly statements: string[]) {
+    constructor(private readonly recording: () => RecordingDb) {
         super();
     }
 
     override async acquireConnection(): Promise<DatabaseConnection> {
-        const statements = this.statements;
+        const recording = this.recording;
 
         return {
             async executeQuery<R>(compiled: CompiledQuery): Promise<QueryResult<R>> {
-                statements.push(compiled.sql);
+                const state = recording();
+                state.statements.push(compiled.sql);
+                state.parameters.push(compiled.parameters);
 
-                return { rows: [] };
+                return { rows: (state.respond?.(compiled.sql) ?? []) as R[] };
             },
             // eslint-disable-next-line require-yield
             async *streamQuery() {
@@ -42,15 +48,16 @@ class RecordingDriver extends DummyDriver {
 }
 
 export function createRecordingDb(): RecordingDb {
-    const statements: string[] = [];
-    const db = new Kysely<Database>({
+    const recording: RecordingDb = { db: undefined as unknown as Kysely<Database>, statements: [], parameters: [] };
+
+    recording.db = new Kysely<Database>({
         dialect: {
             createAdapter: () => new PostgresAdapter(),
-            createDriver: () => new RecordingDriver(statements),
+            createDriver: () => new RecordingDriver(() => recording),
             createIntrospector: (kysely) => new PostgresIntrospector(kysely),
             createQueryCompiler: () => new PostgresQueryCompiler(),
         },
     });
 
-    return { db, statements };
+    return recording;
 }

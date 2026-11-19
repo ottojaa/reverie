@@ -78,6 +78,6 @@ export function excludePrivateFolders<T>(query: T, privateFolderIds: string[], i
  * trailing dot ('d.', 'f.') or '' for a bare selectFrom. Not part of the privacy helpers: a trashed
  * item in a private folder is still locked, so getPrivateFolderIds deliberately ignores trash.
  */
-export function excludeTrashed<T>(query: T, prefix: string = 'd.'): T {
+export function excludeTrashed<T>(query: T, prefix: string): T {
     return (query as any).where(`${prefix}deleted_at`, 'is', null) as T;
 }

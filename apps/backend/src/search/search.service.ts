@@ -294,7 +294,7 @@ interface DocumentRow {
 async function fetchDocumentDetails(userId: string, ids: string[], parsed: ParsedQuery): Promise<Map<string, DocumentSearchResult>> {
     if (ids.length === 0) return new Map();
 
-    const base = excludeTrashed(documentJoins().where('d.user_id', '=', userId).where('d.id', 'in', ids)).select([
+    const base = excludeTrashed(documentJoins().where('d.user_id', '=', userId).where('d.id', 'in', ids), 'd.').select([
         'd.id',
         'd.original_filename',
         'd.folder_id',
@@ -688,6 +688,7 @@ export interface FolderOverviewItem {
 export async function getFolderOverview(userId: string): Promise<{ folders: FolderOverviewItem[] }> {
     const privateFolderIds = await getPrivateFolderIds(userId);
 
+    // Trashed documents are filtered in the join condition: a WHERE would also drop folders with no live documents.
     let query = db
         .selectFrom('folders as f')
         .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id').on('d.deleted_at', 'is', null))
