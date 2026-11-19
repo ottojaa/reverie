@@ -22,10 +22,10 @@ story Immich can't touch.
 
 ### Moat to protect (things Immich does _not_ have)
 
-Per-document LLM summaries/entities/topics · a library agent (in-app and over MCP) · real document-type
-support (Office/PDF/text/code with rendered thumbnails) · hierarchical collections→folders ·
-pluggable **S3** storage · Electron desktop app · content-addressable dedup storage · the
-password-locked Vault · document-date-vs-photo-date distinction.
+Per-document LLM summaries/entities/topics · a library agent (in-app and over MCP) · real
+document-type support (Office/PDF/text/code with rendered thumbnails) · hierarchical
+collections→folders · pluggable **S3** storage · Electron desktop app · content-addressable dedup
+storage · the password-locked Vault · document-date-vs-photo-date distinction.
 
 ---
 
@@ -115,13 +115,13 @@ password-locked Vault · document-date-vs-photo-date distinction.
 
 ### Auth & security
 
-| Capability                                         | Immich           | Reverie              | Plan               |
-| -------------------------------------------------- | ---------------- | -------------------- | ------------------ |
-| Password + OAuth                                   | OAuth2/OIDC      | ⚠️ Google OAuth only | 🛠️ generalize OIDC |
-| Email verification (signup, password change/reset) | ✅               | ❌                   | 🛠️                 |
-| 2FA / TOTP                                         | ⚠️ recent        | ❌                   | 🧊                 |
-| Authenticated realtime socket                      | ✅               | ✅ JWT handshake     | ✅ (#60, #65)      |
-| Per-item lock (private items, re-prompt to open)   | ⚠️ locked folder | ✅ per-resource lock | ✅ (#64)           |
+| Capability                                         | Immich      | Reverie              | Plan               |
+| -------------------------------------------------- | ----------- | -------------------- | ------------------ |
+| Password + OAuth                                   | OAuth2/OIDC | ⚠️ Google OAuth only | 🛠️ generalize OIDC |
+| Email verification (signup, password change/reset) | ✅          | ❌                   | 🛠️                 |
+| 2FA / TOTP                                         | ⚠️ recent   | ❌                   | 🧊                 |
+| Authenticated realtime socket                      | ✅          | ✅ JWT handshake     | ✅ (#60, #65)      |
+| Per-item lock (private items, re-prompt to open)   | —           | ✅ per-resource lock | ✅ (#64)           |
 
 ---
 
@@ -134,8 +134,9 @@ password-locked Vault · document-date-vs-photo-date distinction.
    foreground `UploadWorker`). Needs: `PeriodicWorkRequest` + `MediaStore` observer, a
    "back up these albums / Wi-Fi-only" settings surface, and a local backed-up-asset ledger.
 2. 🚧 **Trash + soft-delete with configurable TTL.** Replace hard deletes with a `deleted_at` column,
-   filter it out of listings/search, and add a retention worker whose TTL comes from the server-settings
-   store. Do this before there's more data to lose, and before an agent can edit the library.
+   filter it out of listings/search, and add a retention worker whose TTL comes from the
+   server-settings store. Do this before there's more data to lose, and before an agent can edit the
+   library.
 3. ✅ **Authenticate the realtime socket** (#60, #65). The JWT is verified in the socket handshake and
    rooms are scoped to the authenticated `user_id`. Shipped alongside the per-item lock for private
    items (#64) and uploads up to 20 GB (#66).
@@ -213,9 +214,9 @@ To keep the 🧊 items cheap later, extend ingest to persist (beyond today's GPS
   (storage) stays separate from "how it's organized" (folders/collections — a DB/query concern).
 - **Don't replace folders with albums.** The hierarchy is a Drive-grade advantage. If albums are
   ever wanted, add them as an optional cross-cutting layer, not a replacement.
-- **One server-settings store, not per-feature configs.** (🚧 in progress.) Runtime AI settings and the configurable
-  trash TTL want the same primitive — a typed, DB-backed settings store (admin UI + API, env as the
-  fallback default). Build it once. Classify each setting as **live** (read at use, applies on the
-  next job — models, provider, toggles, TTL) or **boot** (needs a restart — worker concurrency,
-  queues, storage provider); mark boot-only settings in the UI and add an admin restart action for
-  them, rather than building hot-reload machinery.
+- **One server-settings store, not per-feature configs** (🚧 in progress). Runtime AI settings and
+  the configurable trash TTL want the same primitive — a typed, DB-backed settings store (admin UI +
+  API, env as the fallback default). Build it once. Classify each setting as **live** (read at use,
+  applies on the next job — models, provider, toggles, TTL) or **boot** (needs a restart — worker
+  concurrency, queues, storage provider); mark boot-only settings in the UI and add an admin restart
+  action for them, rather than building hot-reload machinery.
