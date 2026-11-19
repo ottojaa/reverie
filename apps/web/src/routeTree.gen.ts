@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrashRouteImport } from './routes/trash'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
@@ -22,6 +23,11 @@ import { Route as BrowseSectionIdRouteImport } from './routes/browse.$sectionId'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 
+const TrashRoute = TrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/trash'
     | '/admin/settings'
     | '/admin/users'
     | '/browse/$sectionId'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/trash'
     | '/admin/settings'
     | '/admin/users'
     | '/browse/$sectionId'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/search'
     | '/settings'
+    | '/trash'
     | '/admin/settings'
     | '/admin/users'
     | '/browse/$sectionId'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRouteWithChildren
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
+  TrashRoute: typeof TrashRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   DocumentIdRoute: typeof DocumentIdRoute
@@ -183,6 +196,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trash': {
+      id: '/trash'
+      path: '/trash'
+      fullPath: '/trash'
+      preLoaderRoute: typeof TrashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -300,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRouteWithChildren,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
+  TrashRoute: TrashRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   DocumentIdRoute: DocumentIdRoute,

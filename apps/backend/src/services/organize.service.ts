@@ -24,6 +24,7 @@ import { TOOLS } from '../llm/tools';
 import { findDocumentsForOrganize, getCategoryOverview, getFolderOverview, type FindDocumentsGroupBy } from '../search/search.service';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { getFolderService } from './folder.service';
+import { excludeTrashed } from './privacy';
 import { createConversationId, loadConversation, newConversationState, saveConversation, type OrganizeConversationState } from './organize-conversation.store';
 import { getStorageService } from './storage.service';
 
@@ -177,12 +178,14 @@ async function resolveOperationDocumentIds(op: ProposeMoveOperationRaw, userId: 
 async function buildDocumentPreviews(documentIds: string[], userId: string): Promise<OrganizeDocumentPreview[]> {
     if (documentIds.length === 0) return [];
 
-    const docs = await db
-        .selectFrom('documents')
-        .select(['id', 'original_filename', 'mime_type', 'thumbnail_paths'])
-        .where('id', 'in', documentIds)
-        .where('user_id', '=', userId)
-        .execute();
+    const docs = await excludeTrashed(
+        db
+            .selectFrom('documents')
+            .select(['id', 'original_filename', 'mime_type', 'thumbnail_paths'])
+            .where('id', 'in', documentIds)
+            .where('user_id', '=', userId),
+        '',
+    ).execute();
 
     return Promise.all(
         docs.map(async (doc) => {
@@ -268,7 +271,10 @@ async function resolveExistingTargetFolderId(canonOp: ProposeMoveOperationRaw, u
 async function loadDocumentFolderIds(documentIds: string[], userId: string): Promise<Map<string, string | null>> {
     if (documentIds.length === 0) return new Map();
 
-    const rows = await db.selectFrom('documents').select(['id', 'folder_id']).where('id', 'in', documentIds).where('user_id', '=', userId).execute();
+    const rows = await excludeTrashed(
+        db.selectFrom('documents').select(['id', 'folder_id']).where('id', 'in', documentIds).where('user_id', '=', userId),
+        '',
+    ).execute();
 
     const m = new Map<string, string | null>();
 
@@ -581,12 +587,14 @@ export async function executeOrganize(options: ExecuteOrganizeOptions): Promise<
 
             if (!folderId || op.document_ids.length === 0) continue;
 
-            const result = await trx
-                .updateTable('documents')
-                .set({ folder_id: folderId, updated_at: new Date() })
-                .where('id', 'in', op.document_ids)
-                .where('user_id', '=', userId)
-                .executeTakeFirst();
+            const result = await excludeTrashed(
+                trx
+                    .updateTable('documents')
+                    .set({ folder_id: folderId, updated_at: new Date() })
+                    .where('id', 'in', op.document_ids)
+                    .where('user_id', '=', userId),
+                '',
+            ).executeTakeFirst();
 
             movedCount += Number(result.numUpdatedRows ?? 0);
         }

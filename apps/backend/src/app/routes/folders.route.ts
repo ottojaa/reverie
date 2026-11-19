@@ -222,7 +222,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Delete a folder',
+                description: 'Move a folder to the trash (its documents move to the root)',
                 params: z.object({ id: UuidSchema }),
                 response: {
                     204: z.null(),

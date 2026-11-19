@@ -1,0 +1,67 @@
+import { z } from 'zod';
+import { UuidSchema } from './common.js';
+import { ThumbnailUrlsSchema } from './documents.js';
+import { FolderTypeSchema } from './folders.js';
+
+/**
+ * Trash: deleted documents and folders stay recoverable until `purge_at`, then a background job
+ * removes them for good. Trashed items never appear in any other listing or search.
+ */
+
+export const TrashDocumentSchema = z.object({
+    id: UuidSchema,
+    original_filename: z.string(),
+    mime_type: z.string(),
+    size_bytes: z.number(),
+    // The folder it came back to if restored; null when it was at the root.
+    folder_id: UuidSchema.nullable(),
+    is_private: z.boolean(),
+    // Same meaning as on /documents: private content is withheld while the vault is locked.
+    locked: z.boolean(),
+    thumbnail_blurhash: z.string().nullable(),
+    thumbnail_urls: ThumbnailUrlsSchema.nullable(),
+    deleted_at: z.string(),
+    purge_at: z.string(),
+});
+
+export type TrashDocument = z.infer<typeof TrashDocumentSchema>;
+
+export const TrashFolderSchema = z.object({
+    id: UuidSchema,
+    name: z.string(),
+    type: FolderTypeSchema,
+    emoji: z.string().nullable(),
+    is_private: z.boolean(),
+    locked: z.boolean(),
+    deleted_at: z.string(),
+    purge_at: z.string(),
+});
+
+export type TrashFolder = z.infer<typeof TrashFolderSchema>;
+
+// GET /trash
+export const TrashListResponseSchema = z.object({
+    documents: z.array(TrashDocumentSchema),
+    folders: z.array(TrashFolderSchema),
+    retention_days: z.number().int(),
+});
+
+export type TrashListResponse = z.infer<typeof TrashListResponseSchema>;
+
+// POST /trash/restore and POST /trash/purge
+export const TrashSelectionSchema = z
+    .object({
+        document_ids: z.array(UuidSchema).max(500).default([]),
+        folder_ids: z.array(UuidSchema).max(500).default([]),
+    })
+    .refine((value) => value.document_ids.length + value.folder_ids.length > 0, { message: 'Select at least one item' });
+
+export type TrashSelection = z.input<typeof TrashSelectionSchema>;
+
+// Response of restore, purge and empty: how many items were affected.
+export const TrashResultSchema = z.object({
+    documents: z.number().int(),
+    folders: z.number().int(),
+});
+
+export type TrashResult = z.infer<typeof TrashResultSchema>;

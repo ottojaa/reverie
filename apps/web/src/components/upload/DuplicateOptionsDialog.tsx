@@ -24,8 +24,8 @@ export function DuplicateOptionsDialog({ title = 'Upload options', open, duplica
     const firstFilename = duplicateFilenames[0] ?? '';
 
     const description = isSingle
-        ? `${firstFilename} already exists in this location. Do you want to replace the existing file with a new version or keep both files?`
-        : 'One or more items already exists in this location. Do you want to replace the existing items with a new version or keep all items?';
+        ? `${firstFilename} already exists in this location. Do you want to replace the existing file with a new version (the old one goes to Trash) or keep both files?`
+        : 'One or more items already exists in this location. Do you want to replace the existing items with a new version (the old ones go to Trash) or keep all items?';
 
     const replaceLabel = isSingle ? 'Replace existing file' : 'Replace existing items';
     const keepLabel = isSingle ? 'Keep both files' : 'Keep all items';

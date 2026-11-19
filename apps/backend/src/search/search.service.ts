@@ -11,7 +11,7 @@ import type {
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { getCategoryDescription } from '../ocr/category-classifier';
-import { excludePrivateDocuments, excludePrivateFolders, getPrivateFolderIds } from '../services/privacy';
+import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { getStorageService } from '../services/storage.service';
 import { formatDateOnly } from '../utils/date';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
@@ -161,11 +161,14 @@ async function searchInterleaved(
         .execute()) as Array<{ id: string; created_at: Date; relevance: number }>;
 
     // Matched folders, excluding any that are private (mirrors document privacy filtering).
-    const folderRows = await db
-        .selectFrom('folders as f')
-        .where('f.user_id', '=', userId)
-        .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
-        .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds))
+    const folderRows = await excludeTrashed(
+        db
+            .selectFrom('folders as f')
+            .where('f.user_id', '=', userId)
+            .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
+            .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds)),
+        'f.',
+    )
         .select([
             'f.id',
             'f.name',
@@ -175,7 +178,14 @@ async function searchInterleaved(
             'f.type',
             'f.created_at',
             sql<number>`COALESCE(ts_rank(f.search_vector, ${tsQuery}), 0)`.as('relevance'),
-            sql<number>`(SELECT count(*)::int FROM documents dd WHERE dd.folder_id = f.id)`.as('document_count'),
+            (eb) =>
+                excludeTrashed(
+                    eb
+                        .selectFrom('documents as dd')
+                        .select(sql<number>`count(*)::int`.as('count'))
+                        .whereRef('dd.folder_id', '=', 'f.id'),
+                    'dd.',
+                ).as('document_count'),
         ])
         .orderBy('relevance', 'desc')
         .limit(window)
@@ -183,11 +193,14 @@ async function searchInterleaved(
 
     const [docTotal, folderTotalRow] = await Promise.all([
         countDocuments(parsed, userId, privateFolderIds),
-        db
-            .selectFrom('folders as f')
-            .where('f.user_id', '=', userId)
-            .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
-            .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds))
+        excludeTrashed(
+            db
+                .selectFrom('folders as f')
+                .where('f.user_id', '=', userId)
+                .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
+                .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds)),
+            'f.',
+        )
             .select(sql<number>`count(*)::int`.as('count'))
             .executeTakeFirst(),
     ]);
@@ -281,31 +294,28 @@ interface DocumentRow {
 async function fetchDocumentDetails(userId: string, ids: string[], parsed: ParsedQuery): Promise<Map<string, DocumentSearchResult>> {
     if (ids.length === 0) return new Map();
 
-    const base = documentJoins()
-        .where('d.user_id', '=', userId)
-        .where('d.id', 'in', ids)
-        .select([
-            'd.id',
-            'd.original_filename',
-            'd.folder_id',
-            'd.created_at',
-            'd.extracted_date',
-            'd.document_category',
-            'd.mime_type',
-            'd.size_bytes',
-            'd.duration_seconds',
-            'd.has_meaningful_text',
-            'd.thumbnail_paths',
-            'd.thumbnail_blurhash',
-            'llm.summary as llm_summary',
-            sql<string | null>`llm.metadata->>'title'`.as('llm_title'),
-            sql<string | null>`llm.metadata->>'type'`.as('llm_processing_type'),
-            'f.path as folder_path',
-            'ocr.raw_text',
-            'pm.city as photo_city',
-            'pm.country as photo_country',
-            'pm.taken_at as photo_taken_at',
-        ]);
+    const base = excludeTrashed(documentJoins().where('d.user_id', '=', userId).where('d.id', 'in', ids), 'd.').select([
+        'd.id',
+        'd.original_filename',
+        'd.folder_id',
+        'd.created_at',
+        'd.extracted_date',
+        'd.document_category',
+        'd.mime_type',
+        'd.size_bytes',
+        'd.duration_seconds',
+        'd.has_meaningful_text',
+        'd.thumbnail_paths',
+        'd.thumbnail_blurhash',
+        'llm.summary as llm_summary',
+        sql<string | null>`llm.metadata->>'title'`.as('llm_title'),
+        sql<string | null>`llm.metadata->>'type'`.as('llm_processing_type'),
+        'f.path as folder_path',
+        'ocr.raw_text',
+        'pm.city as photo_city',
+        'pm.country as photo_country',
+        'pm.taken_at as photo_taken_at',
+    ]);
 
     const tsQuery = parsed.fullText ? buildPrefixTsQuery(parsed.fullText) : null;
     const query = tsQuery ? base.select(sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance')) : base;
@@ -429,7 +439,7 @@ export async function getCategoryOverview(userId: string): Promise<{ categories:
         .groupBy('document_category')
         .orderBy(sql`count(*)`, 'desc');
 
-    const rows = await excludePrivateDocuments(query, privateFolderIds, '').execute();
+    const rows = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, ''), '').execute();
 
     const categories: CategoryOverviewItem[] = rows
         .filter((r) => r.document_category)
@@ -678,15 +688,17 @@ export interface FolderOverviewItem {
 export async function getFolderOverview(userId: string): Promise<{ folders: FolderOverviewItem[] }> {
     const privateFolderIds = await getPrivateFolderIds(userId);
 
+    // Trashed documents are filtered in the join condition: a WHERE would also drop folders with no live documents.
     let query = db
         .selectFrom('folders as f')
-        .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id'))
+        .leftJoin('documents as d', (join) => join.onRef('d.folder_id', '=', 'f.id').onRef('d.user_id', '=', 'f.user_id').on('d.deleted_at', 'is', null))
         .select(['f.id', 'f.path', 'f.parent_id', 'f.type', 'f.sort_order', 'd.id as doc_id', 'd.document_category', 'd.extracted_date'])
         .where('f.user_id', '=', userId)
         .orderBy('f.path', 'asc');
 
     query = excludePrivateFolders(query, privateFolderIds, 'f.id');
     query = excludePrivateDocuments(query, privateFolderIds, 'd.');
+    query = excludeTrashed(query, 'f.');
 
     const rows = await query.execute();
 
@@ -792,7 +804,7 @@ async function suggestFilenames(prefix: string, userId: string, limit: number, p
         .orderBy('original_filename', 'asc')
         .limit(limit);
 
-    const results = await excludePrivateDocuments(query, privateFolderIds, '').execute();
+    const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, ''), '').execute();
 
     return results.map((r) => r.original_filename);
 }
@@ -814,7 +826,7 @@ async function suggestFolders(prefix: string, userId: string, limit: number, pri
         .orderBy('path', 'asc')
         .limit(limit);
 
-    const results = await excludePrivateFolders(query, privateFolderIds, 'id').execute();
+    const results = await excludeTrashed(excludePrivateFolders(query, privateFolderIds, 'id'), '').execute();
 
     return results.map((r) => r.path);
 }
@@ -833,7 +845,7 @@ async function suggestTags(prefix: string, userId: string, limit: number, privat
         .orderBy('dt.tag', 'asc')
         .limit(limit);
 
-    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
+    const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, 'd.'), 'd.').execute();
 
     return results.map((r) => r.tag);
 }
@@ -852,7 +864,7 @@ async function suggestEntities(prefix: string, userId: string, limit: number, pr
         .where(sql<SqlBool>`jsonb_array_elements_text(ocr.metadata->'companies') ILIKE ${prefix + '%'}`)
         .limit(limit);
 
-    const results = await excludePrivateDocuments(query, privateFolderIds, 'd.').execute();
+    const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, 'd.'), 'd.').execute();
 
     return results.map((r) => r.entity);
 }
@@ -870,7 +882,7 @@ async function suggestCategories(prefix: string, userId: string, limit: number, 
         .where('document_category', 'ilike', `${prefix}%`)
         .limit(limit);
 
-    const results = await excludePrivateDocuments(query, privateFolderIds, '').execute();
+    const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, ''), '').execute();
 
     return results.filter((r) => r.document_category).map((r) => r.document_category!);
 }
@@ -904,8 +916,8 @@ async function suggestLocations(prefix: string, userId: string, limit: number, p
         .limit(limit);
 
     const [cities, countries] = await Promise.all([
-        excludePrivateDocuments(citiesQuery, privateFolderIds, 'd.').execute(),
-        excludePrivateDocuments(countriesQuery, privateFolderIds, 'd.').execute(),
+        excludeTrashed(excludePrivateDocuments(citiesQuery, privateFolderIds, 'd.'), 'd.').execute(),
+        excludeTrashed(excludePrivateDocuments(countriesQuery, privateFolderIds, 'd.'), 'd.').execute(),
     ]);
 
     const results = new Set<string>();

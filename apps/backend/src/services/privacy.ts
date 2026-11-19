@@ -72,3 +72,12 @@ export function excludePrivateFolders<T>(query: T, privateFolderIds: string[], i
 
     return (query as any).where(idColumn, 'not in', privateFolderIds) as T;
 }
+
+/**
+ * Hide trashed rows from a documents- or folders-scoped query. `prefix` is the table alias with a
+ * trailing dot ('d.', 'f.') or '' for a bare selectFrom. Not part of the privacy helpers: a trashed
+ * item in a private folder is still locked, so getPrivateFolderIds deliberately ignores trash.
+ */
+export function excludeTrashed<T>(query: T, prefix: string): T {
+    return (query as any).where(`${prefix}deleted_at`, 'is', null) as T;
+}

@@ -289,3 +289,41 @@ describe('checkLlmEligibility', () => {
         expect(checkLlmEligibility(document, null, { isPrivate: false }).reason).not.toBe('private');
     });
 });
+
+describe('trashed documents never reach Anthropic', () => {
+    function seedTrashed(mimeType: string) {
+        seed('public', mimeType);
+        h.tables.documents = [{ ...h.tables.documents![0], deleted_at: new Date() }];
+    }
+
+    for (const { forceType, mimeType, label } of FORCED_TYPES) {
+        it(`processDocument skips a trashed document (${label})`, async () => {
+            seedTrashed(mimeType);
+
+            const result = await processDocument('doc-1', { forceType });
+
+            expect(result).toMatchObject({ success: true, skipped: true, reason: 'trashed' });
+            expectNoAnthropicCall();
+            expect(h.updates).toContainEqual({ table: 'documents', values: { llm_status: 'skipped' } });
+        });
+
+        it(`the worker ends a trashed document's job skipped, not failed (${label})`, async () => {
+            seedTrashed(mimeType);
+            createLlmWorker();
+
+            const job = { id: 'job-1', data: { documentId: 'doc-1', userId: USER, type: forceType }, opts: { attempts: 2 } } as unknown as Job<LlmJobData>;
+            const result = await h.worker.processor!(job);
+
+            expect(result).toMatchObject({ skipped: true, skipReason: 'trashed' });
+            expectNoAnthropicCall();
+            expect(h.jobService.markJobSkipped).toHaveBeenCalledTimes(1);
+            expect(h.jobService.markJobFailed).not.toHaveBeenCalled();
+        });
+    }
+
+    it('checkLlmEligibility reports trashed', () => {
+        const document = { mime_type: 'application/pdf', has_meaningful_text: true, deleted_at: new Date() } as Document;
+
+        expect(checkLlmEligibility(document, null, { isPrivate: false })).toMatchObject({ eligible: false, reason: 'trashed', processingType: 'skip' });
+    });
+});

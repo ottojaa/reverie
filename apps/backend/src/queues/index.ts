@@ -13,6 +13,9 @@ export { getThumbnailQueue, addThumbnailJob, closeThumbnailQueue, type Thumbnail
 // LLM Queue
 export { getLlmQueue, addLlmJob, closeLlmQueue, type LlmJobData, type LlmJobResult } from './llm.queue';
 
+// Trash purge queue
+export { getTrashQueue, scheduleTrashPurge, closeTrashQueue, type TrashPurgeJobResult } from './trash.queue';
+
 // Trim Queue
 export { getTrimQueue, addTrimJob, closeTrimQueue, type TrimJobData, type TrimJobResult } from './trim.queue';
 
@@ -20,9 +23,10 @@ import { closeOcrQueue } from './ocr.queue';
 import { closeThumbnailQueue } from './thumbnail.queue';
 import { closeLlmQueue } from './llm.queue';
 import { closeTrimQueue } from './trim.queue';
+import { closeTrashQueue } from './trash.queue';
 import { closeRedisConnections } from './redis';
 
 // Close all queues
 export async function closeAllQueues(): Promise<void> {
-    await Promise.all([closeOcrQueue(), closeThumbnailQueue(), closeLlmQueue(), closeTrimQueue(), closeRedisConnections()]);
+    await Promise.all([closeOcrQueue(), closeThumbnailQueue(), closeLlmQueue(), closeTrimQueue(), closeTrashQueue(), closeRedisConnections()]);
 }

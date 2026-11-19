@@ -308,6 +308,8 @@ export function useDeleteFolder() {
         mutationFn: (id: string) => foldersApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['trash'] });
         },
         onError: () => toast.error('Failed to delete section'),
     });

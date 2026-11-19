@@ -29,7 +29,8 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
-import { getPrivateFolderIds, isDocumentEffectivelyPrivate, isDocumentPrivate } from '../../services/privacy';
+import { excludeTrashed, getPrivateFolderIds, isDocumentEffectivelyPrivate, isDocumentPrivate } from '../../services/privacy';
+import { getTrashService } from '../../services/trash.service';
 import { isVaultLocked } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
@@ -88,7 +89,7 @@ export default async function (fastify: FastifyInstance) {
             const userId = request.user.id;
             const { limit, offset, folder_id, category, date_from, date_to } = request.query;
 
-            let query = db.selectFrom('documents').selectAll().where('user_id', '=', userId);
+            let query = excludeTrashed(db.selectFrom('documents').selectAll().where('user_id', '=', userId), '');
 
             // Apply filters
             if (folder_id) {
@@ -108,7 +109,7 @@ export default async function (fastify: FastifyInstance) {
             }
 
             // Get total count (must apply same filters)
-            let countQuery = db.selectFrom('documents').select(db.fn.countAll().as('count')).where('user_id', '=', userId);
+            let countQuery = excludeTrashed(db.selectFrom('documents').select(db.fn.countAll().as('count')).where('user_id', '=', userId), '');
 
             if (folder_id) {
                 countQuery = countQuery.where('folder_id', '=', folder_id);
@@ -176,13 +177,15 @@ export default async function (fastify: FastifyInstance) {
                 return { duplicates: [] };
             }
 
-            const existing = await db
-                .selectFrom('documents')
-                .select('original_filename')
-                .where('folder_id', '=', folder_id)
-                .where('user_id', '=', userId)
-                .where('original_filename', 'in', filenames)
-                .execute();
+            const existing = await excludeTrashed(
+                db
+                    .selectFrom('documents')
+                    .select('original_filename')
+                    .where('folder_id', '=', folder_id)
+                    .where('user_id', '=', userId)
+                    .where('original_filename', 'in', filenames),
+                '',
+            ).execute();
 
             const duplicates = [...new Set(existing.map((r) => r.original_filename))];
 
@@ -223,11 +226,10 @@ export default async function (fastify: FastifyInstance) {
                 return reply.status(204).send();
             }
 
-            const docsToMove = await db
-                .selectFrom('documents')
-                .select(['id', 'original_filename'])
-                .where('id', 'in', document_ids)
-                .where('user_id', '=', userId)
+            const docsToMove = await excludeTrashed(
+                db.selectFrom('documents').select(['id', 'original_filename']).where('id', 'in', document_ids).where('user_id', '=', userId),
+                '',
+            )
                 .orderBy('id')
                 .execute();
 
@@ -237,7 +239,7 @@ export default async function (fastify: FastifyInstance) {
 
             if (conflict_strategy === 'replace') {
                 const filenames = docsToMove.map((d) => d.original_filename);
-                await uploadService.deleteDocumentsInFolderByFilenames(userId, folder_id, filenames);
+                await uploadService.trashDocumentsInFolderByFilenames(userId, folder_id, filenames);
             }
 
             if (conflict_strategy === 'keep_both') {
@@ -255,12 +257,10 @@ export default async function (fastify: FastifyInstance) {
                         .execute();
                 }
             } else {
-                await db
-                    .updateTable('documents')
-                    .set({ folder_id, updated_at: new Date() })
-                    .where('id', 'in', document_ids)
-                    .where('user_id', '=', userId)
-                    .execute();
+                await excludeTrashed(
+                    db.updateTable('documents').set({ folder_id, updated_at: new Date() }).where('id', 'in', document_ids).where('user_id', '=', userId),
+                    '',
+                ).execute();
             }
 
             reply.status(204).send();
@@ -290,6 +290,7 @@ export default async function (fastify: FastifyInstance) {
             // password — refuse it for any currently-locked (effectively-private) document.
             if (!is_private && (await isVaultLocked(fastify, request, userId))) {
                 const privateFolderIds = await getPrivateFolderIds(userId);
+                // Trashed documents stay in the check: they are still locked until purged.
                 const targets = await db
                     .selectFrom('documents')
                     .select(['is_private', 'folder_id'])
@@ -429,14 +430,16 @@ export default async function (fastify: FastifyInstance) {
             const { original_filename } = request.body;
 
             if (document.folder_id) {
-                const existing = await db
-                    .selectFrom('documents')
-                    .select('id')
-                    .where('folder_id', '=', document.folder_id)
-                    .where('user_id', '=', userId)
-                    .where('original_filename', '=', original_filename)
-                    .where('id', '!=', request.params.id)
-                    .executeTakeFirst();
+                const existing = await excludeTrashed(
+                    db
+                        .selectFrom('documents')
+                        .select('id')
+                        .where('folder_id', '=', document.folder_id)
+                        .where('user_id', '=', userId)
+                        .where('original_filename', '=', original_filename)
+                        .where('id', '!=', request.params.id),
+                    '',
+                ).executeTakeFirst();
 
                 if (existing) {
                     return reply.conflict('A document with this filename already exists in this folder');
@@ -579,7 +582,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Delete a document',
+                description: 'Move a document to the trash',
                 params: z.object({ id: UuidSchema }),
                 response: {
                     204: z.null(),
@@ -594,16 +597,7 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('Document not found');
             }
 
-            await db.transaction().execute(async (trx) => {
-                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', request.params.id).execute();
-                await trx.deleteFrom('documents').where('id', '=', request.params.id).where('user_id', '=', userId).execute();
-            });
-
-            try {
-                await uploadService.deleteDocumentFiles(document, userId);
-            } catch (err) {
-                console.error('Failed to delete file from storage:', err);
-            }
+            await getTrashService().trashDocuments(userId, [document.id]);
 
             reply.status(204).send();
         },
@@ -617,7 +611,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Delete multiple documents',
+                description: 'Move multiple documents to the trash',
                 body: BatchDeleteDocumentsSchema,
                 response: {
                     204: z.null(),
@@ -635,20 +629,10 @@ export default async function (fastify: FastifyInstance) {
                 return reply.notFound('No documents found');
             }
 
-            const foundIds = new Set(found.map((d) => d.id));
-
-            await db.transaction().execute(async (trx) => {
-                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', 'in', Array.from(foundIds)).execute();
-                await trx.deleteFrom('documents').where('id', 'in', Array.from(foundIds)).where('user_id', '=', userId).execute();
-            });
-
-            for (const document of found) {
-                try {
-                    await uploadService.deleteDocumentFiles(document, userId);
-                } catch (err) {
-                    console.error('Failed to delete file from storage:', err);
-                }
-            }
+            await getTrashService().trashDocuments(
+                userId,
+                found.map((d) => d.id),
+            );
 
             reply.status(204).send();
         },

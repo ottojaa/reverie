@@ -440,7 +440,7 @@ export function useDeleteDocuments() {
             return { previous, previousSections };
         },
         onSuccess: (_, ids) => {
-            toast.success(ids.length === 1 ? 'Document deleted' : `${ids.length} documents deleted`);
+            toast.success(ids.length === 1 ? 'Document moved to Trash' : `${ids.length} documents moved to Trash`);
         },
         onError: (_, __, context) => {
             if (context?.previous) {
@@ -453,11 +453,12 @@ export function useDeleteDocuments() {
                 queryClient.setQueryData(['sections', 'tree'], context.previousSections);
             }
 
-            toast.error('Failed to delete documents');
+            toast.error('Failed to move documents to Trash');
         },
         onSettled: (_, __, ids) => {
             queryClient.invalidateQueries({ queryKey: ['documents'] });
             queryClient.invalidateQueries({ queryKey: ['user'] });
+            queryClient.invalidateQueries({ queryKey: ['trash'] });
             ids.forEach((id) => queryClient.removeQueries({ queryKey: ['document', id] }));
         },
     });

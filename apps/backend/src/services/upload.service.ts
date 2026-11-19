@@ -6,6 +6,7 @@ import { addOcrJob } from '../queues/ocr.queue';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { getDeduplicatedFilename } from '../utils/filename';
 import type { UploadedFile } from '../utils/upload-files';
+import { excludeTrashed } from './privacy';
 import { canGenerateThumbnail, getFileCategory, getStorageService, type UserStorageContext } from './storage.service';
 
 export type ConflictStrategy = 'replace' | 'keep_both';
@@ -85,7 +86,7 @@ export class UploadService {
         const resolvedFolderId = folderId ?? null;
 
         if (conflictStrategy === 'replace' && resolvedFolderId) {
-            await this.deleteDocumentsInFolderByFilenames(
+            await this.trashDocumentsInFolderByFilenames(
                 userId,
                 resolvedFolderId,
                 files.map((f) => f.filename),
@@ -139,14 +140,14 @@ export class UploadService {
      * Get original_filename of all documents in a folder (for duplicate naming).
      */
     async getFilenamesInFolder(userId: string, folderId: string): Promise<string[]> {
-        const rows = await db.selectFrom('documents').select('original_filename').where('user_id', '=', userId).where('folder_id', '=', folderId).execute();
+        const rows = await excludeTrashed(
+            db.selectFrom('documents').select('original_filename').where('user_id', '=', userId).where('folder_id', '=', folderId),
+            '',
+        ).execute();
 
         return rows.map((r) => r.original_filename);
     }
 
-    /**
-     * Delete documents in folder that have one of the given filenames (used for replace strategy).
-     */
     /**
      * Delete a document's stored files. The main file object is content-addressed
      * and may be shared by other document rows (duplicate uploads) — it is only
@@ -172,29 +173,22 @@ export class UploadService {
         }
     }
 
-    async deleteDocumentsInFolderByFilenames(userId: string, folderId: string, filenames: string[]): Promise<void> {
+    /**
+     * Send documents in a folder that have one of the given filenames to the trash (used for the
+     * replace strategy). The files stay until the trash is purged; see trash.service.
+     */
+    async trashDocumentsInFolderByFilenames(userId: string, folderId: string, filenames: string[]): Promise<void> {
         if (filenames.length === 0) return;
 
-        const docs = await db
-            .selectFrom('documents')
-            .selectAll()
-            .where('user_id', '=', userId)
-            .where('folder_id', '=', folderId)
-            .where('original_filename', 'in', filenames)
-            .execute();
-
-        for (const doc of docs) {
-            await db.transaction().execute(async (trx) => {
-                await trx.deleteFrom('processing_jobs').where('target_type', '=', 'document').where('target_id', '=', doc.id).execute();
-                await trx.deleteFrom('documents').where('id', '=', doc.id).where('user_id', '=', userId).execute();
-            });
-
-            try {
-                await this.deleteDocumentFiles(doc, userId);
-            } catch (err) {
-                console.error('Failed to delete file from storage:', err);
-            }
-        }
+        await excludeTrashed(
+            db
+                .updateTable('documents')
+                .set({ deleted_at: new Date() })
+                .where('user_id', '=', userId)
+                .where('folder_id', '=', folderId)
+                .where('original_filename', 'in', filenames),
+            '',
+        ).execute();
     }
 
     /**
@@ -249,6 +243,7 @@ export class UploadService {
 
         // Copy photo_metadata from source document (for save-as-copy from image editor)
         if (copyMetadataFromDocumentId) {
+            // Not excludeTrashed: with the replace strategy the source document was trashed just above.
             const sourceDoc = await db
                 .selectFrom('documents')
                 .select('id')
@@ -466,27 +461,33 @@ export class UploadService {
      * Get document by ID (scoped to user)
      */
     async getDocument(id: string, userId: string): Promise<Document | undefined> {
-        return db.selectFrom('documents').selectAll().where('id', '=', id).where('user_id', '=', userId).executeTakeFirst();
+        return excludeTrashed(db.selectFrom('documents').selectAll().where('id', '=', id).where('user_id', '=', userId), '').executeTakeFirst();
     }
 
     /**
      * Get documents in a folder (scoped to user)
      */
     async getDocumentsInFolder(userId: string, folderId: string | null, limit = 20, offset = 0): Promise<{ documents: Document[]; total: number }> {
-        const query = db
-            .selectFrom('documents')
-            .selectAll()
-            .where('user_id', '=', userId)
-            .$if(folderId === null, (qb) => qb.where('folder_id', 'is', null))
-            .$if(folderId !== null, (qb) => qb.where('folder_id', '=', folderId!));
+        const query = excludeTrashed(
+            db
+                .selectFrom('documents')
+                .selectAll()
+                .where('user_id', '=', userId)
+                .$if(folderId === null, (qb) => qb.where('folder_id', 'is', null))
+                .$if(folderId !== null, (qb) => qb.where('folder_id', '=', folderId!)),
+            '',
+        );
 
         const [documents, countResult] = await Promise.all([
             query.orderBy('created_at', 'desc').limit(limit).offset(offset).execute(),
-            db
-                .selectFrom('documents')
-                .where('user_id', '=', userId)
-                .$if(folderId === null, (qb) => qb.where('folder_id', 'is', null))
-                .$if(folderId !== null, (qb) => qb.where('folder_id', '=', folderId!))
+            excludeTrashed(
+                db
+                    .selectFrom('documents')
+                    .where('user_id', '=', userId)
+                    .$if(folderId === null, (qb) => qb.where('folder_id', 'is', null))
+                    .$if(folderId !== null, (qb) => qb.where('folder_id', '=', folderId!)),
+                '',
+            )
                 .select(db.fn.countAll().as('count'))
                 .executeTakeFirst(),
         ]);

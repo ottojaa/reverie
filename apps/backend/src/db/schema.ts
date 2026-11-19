@@ -44,6 +44,8 @@ export interface FoldersTable {
     sort_order: number;
     type: FolderType;
     is_private: ColumnType<boolean, boolean | undefined, boolean>;
+    /** When the folder went to the trash; null while live. */
+    deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }
@@ -75,6 +77,8 @@ export interface DocumentsTable {
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     search_vector: unknown | null; // tsvector type — unified search index
     is_private: ColumnType<boolean, boolean | undefined, boolean>;
+    /** When the document went to the trash; null while live. */
+    deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
     created_at: ColumnType<Date, Date | undefined, never>;
     updated_at: ColumnType<Date, Date | undefined, Date>;
 }
