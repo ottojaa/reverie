@@ -33,6 +33,17 @@ async function assertMoveTarget(trx: DbOrTrx, vis: Visibility, folderId: string)
     return folder;
 }
 
+/** The folder an undo puts documents back into: a folder or a collection, as long as it is live and visible. The message does not say which of gone, trashed or locked it is. */
+async function assertOriginAvailable(trx: DbOrTrx, vis: Visibility, folderId: string): Promise<void> {
+    try {
+        await assertVisibleFolder(trx, vis, folderId);
+    } catch (error) {
+        if (error instanceof ToolError) throw new ToolError('Cannot undo: the folder the documents came from is no longer available');
+
+        throw error;
+    }
+}
+
 /** Visible documents in `folderId` that already use one of `names`. Locked ones are not counted: that would reveal them. */
 async function findNamesTakenIn(trx: DbOrTrx, vis: Visibility, folderId: string, names: string[], exceptIds: string[]): Promise<string[]> {
     if (names.length === 0) return [];
@@ -149,10 +160,7 @@ export const undoMove: Undoer = async (trx, vis, entry) => {
 
     const origins = Array.from(new Set(moves.map((move) => move.folder_id).filter((id): id is string => id !== null)));
 
-    for (const folderId of origins) {
-        // A returned-to folder that is trashed or locked since is refused like a missing one.
-        await assertMoveTarget(trx, vis, folderId);
-    }
+    for (const folderId of origins) await assertOriginAvailable(trx, vis, folderId);
 
     const filenames = new Map(docs.map((doc) => [doc.id, doc.original_filename]));
 

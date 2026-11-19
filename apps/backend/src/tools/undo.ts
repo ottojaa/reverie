@@ -48,7 +48,7 @@ export const undoWrite = defineTool({
 
                 return {
                     ...planned,
-                    preview: { undoes: entry.tool, audit_id: entry.id, ...planned.preview },
+                    preview: { undoes: entry.tool, undone_audit_id: entry.id, ...planned.preview },
                     apply: async (t) => {
                         await planned.apply(t);
                         await markUndone(t, entry.id);

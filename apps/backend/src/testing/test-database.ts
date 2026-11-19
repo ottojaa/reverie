@@ -15,7 +15,8 @@ import type { Database } from '../db/schema';
  * Where it comes from, first match wins:
  * 1. `TEST_DATABASE_URL`: a server to create a throwaway database on (e.g. `docker compose up postgres`);
  * 2. a throwaway cluster started from an `initdb` on PATH or in a Homebrew/Postgres.app install.
- * With neither, `createTestDatabase` returns null and the suites skip with a printed warning.
+ * With neither, `createTestDatabase` throws: a silently skipped suite would let a privacy regression
+ * through the gate. `SKIP_DB_TESTS=1` turns those suites into no-ops on purpose.
  */
 
 export interface TestDatabase {
@@ -111,15 +112,11 @@ async function createScratchDatabase(adminUrl: string): Promise<{ url: string; d
     };
 }
 
-export async function createTestDatabase(): Promise<TestDatabase | null> {
+export async function createTestDatabase(): Promise<TestDatabase> {
     const adminUrl = process.env['TEST_DATABASE_URL'];
     const binDir = adminUrl ? null : findPostgresBinDir();
 
-    if (!adminUrl && !binDir) {
-        console.warn('No Postgres for the integration tests: set TEST_DATABASE_URL or install Postgres (initdb). Skipping them.');
-
-        return null;
-    }
+    if (!adminUrl && !binDir) throw new Error('No Postgres for the database tests: set TEST_DATABASE_URL, put initdb on PATH, or set SKIP_DB_TESTS=1');
 
     const cluster = binDir ? await startCluster(binDir) : null;
     const scratch = await createScratchDatabase(cluster?.url ?? adminUrl!);
