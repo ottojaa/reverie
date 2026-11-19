@@ -81,6 +81,10 @@ const envSchema = z.object({
     // LLM Vision (optional)
     LLM_VISION_ENABLED: z.coerce.boolean().default(false),
 
+    // Trash: days a deleted item stays restorable. Fallback for the `trash.retentionDays`
+    // server setting (an admin override in the DB wins). Keep the bounds in step with settings/registry.ts.
+    TRASH_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+
     // CORS (HTTP API)
     CORS_ORIGIN: z.string().url().default('http://localhost:4200'),
 
