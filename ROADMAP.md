@@ -70,7 +70,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 | OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                                    |
 | LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
 | Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
-| Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#69)                                              |
+| Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                              |
 | Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | 🚧 in-app agent over the shared tool registry         |
 | Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
 | Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
@@ -162,7 +162,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
   Anthropic.**
     - ✅ **Privacy gate** (#68) — the LLM workers refuse any locked item (its own flag, its folder, or
       its collection) at processing time, even when it was locked while its job waited.
-    - ✅ **Haiku 5.5** (#69) for the background jobs (summaries and image descriptions), on SDK 1.x and
+    - ✅ **Haiku 5.5** (#70) for the background jobs (summaries and image descriptions), on SDK 1.x and
       the current API version, with model, tokens and cost logged per summary.
 
     In progress:
