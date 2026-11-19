@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { VaultSidebarControl } from './VaultSidebarControl';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useParams } from '@tanstack/react-router';
-import { LayoutGrid, Map, Settings, Users, X } from 'lucide-react';
+import { LayoutGrid, Map, Settings, SlidersHorizontal, Users, X, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -51,6 +51,22 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const navRef = useRef<HTMLElement>(null);
 
     const isMobile = useIsMobile();
+
+    const renderAdminLink = (to: '/admin/users' | '/admin/settings', Icon: LucideIcon, label: string) => (
+        <Link
+            to={to}
+            className={cn(
+                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                location.pathname === to
+                    ? 'bg-sidebar-accent text-sidebar-primary'
+                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+            )}
+            onClick={onClose}
+        >
+            <Icon className="size-4" />
+            {label}
+        </Link>
+    );
 
     const openCreateCollection = () => {
         setCreateModalMode('collection');
@@ -260,19 +276,10 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                     Settings
                 </Link>
                 {user?.role === 'admin' && (
-                    <Link
-                        to="/admin/users"
-                        className={cn(
-                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                            location.pathname.startsWith('/admin')
-                                ? 'bg-sidebar-accent text-sidebar-primary'
-                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                        )}
-                        onClick={onClose}
-                    >
-                        <Users className="size-4" />
-                        Users
-                    </Link>
+                    <>
+                        {renderAdminLink('/admin/users', Users, 'Users')}
+                        {renderAdminLink('/admin/settings', SlidersHorizontal, 'Server settings')}
+                    </>
                 )}
             </div>
 

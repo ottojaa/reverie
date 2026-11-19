@@ -193,6 +193,17 @@ export interface RefreshTokensTable {
 export type RefreshToken = Selectable<RefreshTokensTable>;
 export type NewRefreshToken = Insertable<RefreshTokensTable>;
 
+// Server settings table (admin-editable overrides of the defaults in settings/registry.ts)
+export interface ServerSettingsTable {
+    key: string;
+    // Stored as jsonb: written as a JSON string, read back already parsed.
+    value: ColumnType<unknown, string, string>;
+    updated_at: ColumnType<Date, Date | undefined, Date>;
+    updated_by: string | null;
+}
+
+export type ServerSetting = Selectable<ServerSettingsTable>;
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -204,4 +215,5 @@ export interface Database {
     processing_jobs: ProcessingJobsTable;
     document_tags: DocumentTagsTable;
     photo_metadata: PhotoMetadataTable;
+    server_settings: ServerSettingsTable;
 }
