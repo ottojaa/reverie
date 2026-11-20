@@ -12,6 +12,8 @@ export interface SeedDocument {
     category?: string | null;
     extractedDate?: Date | null;
     deleted?: boolean;
+    /** SHA-256 stored as file_hash; random when not given. */
+    hash?: string;
     ocrText?: string;
     summary?: string;
     entities?: string[];
@@ -71,7 +73,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             user_id: doc.userId,
             folder_id: doc.folderId ?? null,
             file_path: '/files/' + doc.name,
-            file_hash: crypto.randomUUID(),
+            file_hash: doc.hash ?? crypto.randomUUID(),
             original_filename: doc.name,
             mime_type: doc.mime ?? 'application/pdf',
             size_bytes: 100,

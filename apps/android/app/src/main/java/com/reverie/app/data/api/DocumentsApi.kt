@@ -1,6 +1,8 @@
 package com.reverie.app.data.api
 
 import com.reverie.app.data.api.model.BatchDeleteDocuments
+import com.reverie.app.data.api.model.CheckContentRequest
+import com.reverie.app.data.api.model.CheckContentResponse
 import com.reverie.app.data.api.model.CheckDuplicatesRequest
 import com.reverie.app.data.api.model.CheckDuplicatesResponse
 import com.reverie.app.data.api.model.ConflictStrategy
@@ -63,6 +65,12 @@ class DocumentsApi @Inject constructor(
         client.post("documents/check-duplicates") {
             contentType(ContentType.Application.Json)
             setBody(CheckDuplicatesRequest(folderId, filenames))
+        }.decode()
+
+    suspend fun checkContent(request: CheckContentRequest): CheckContentResponse =
+        client.post("documents/check-content") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
         }.decode()
 
     suspend fun status(id: String): DocumentStatusResponse = client.get("documents/$id/status").decode()

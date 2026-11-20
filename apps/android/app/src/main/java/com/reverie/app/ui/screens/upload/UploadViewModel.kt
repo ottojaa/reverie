@@ -12,11 +12,19 @@ import com.reverie.app.data.api.model.UpdateFolderRequest
 import com.reverie.app.data.local.entity.UploadItemEntity
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.UploadRepository
+import com.reverie.app.data.api.model.CheckContentFile
+import com.reverie.app.data.upload.HashProgress
 import com.reverie.app.data.upload.MediaAsset
 import com.reverie.app.data.upload.MediaStorePhotoSource
+import com.reverie.app.domain.upload.ContentFinding
+import com.reverie.app.domain.upload.NameStrategy
+import com.reverie.app.domain.upload.keptItems
+import com.reverie.app.domain.upload.needsNameChoice
+import com.reverie.app.domain.upload.toFindings
 import com.reverie.app.ui.screens.collections.FolderFormData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,8 +58,16 @@ data class ReviewState(
     val fileNames: List<String>,
     val folderId: String?,
     val folderName: String?,
-    val duplicates: List<String> = emptyList(),
     val sessionId: String? = null,
+    /** Hashing the files / asking the server about them; null when not checking. */
+    val checking: HashProgress? = null,
+    /** Files whose content or name is already in the library, awaiting a decision. Empty: nothing to ask. */
+    val findings: List<ContentFinding> = emptyList(),
+    /** Indexes (into [uris]) of content matches the person chose to upload anyway; the rest are skipped. */
+    val uploadAnyway: Set<Int> = emptySet(),
+    val nameStrategy: NameStrategy = NameStrategy.REPLACE,
+    /** Files that couldn't be read for hashing, so were compared by name only. */
+    val unhashed: Int = 0,
 )
 
 @HiltViewModel
@@ -142,31 +158,63 @@ class UploadViewModel @Inject constructor(
         _review.update { it?.copy(folderId = id, folderName = null) }
     }
 
-    /** Duplicate pre-check; if collisions, surface them so the UI can offer replace/keep-both. */
+    private var checkJob: Job? = null
+
+    /**
+     * Hashes the picked files from their URIs, asks the server which of them are already in the library,
+     * and either uploads straight away or surfaces [ReviewState.findings] for the person to decide.
+     * Nothing is staged before that. If the check itself fails the upload carries on without it, as the
+     * old same-name check did.
+     */
     fun requestUpload() {
         val state = _review.value ?: return
         val folderId = state.folderId ?: return
-        viewModelScope.launch {
-            val duplicates = uploadRepository.checkDuplicates(folderId, state.fileNames)
-            if (duplicates.isNotEmpty()) {
-                _review.update { it?.copy(duplicates = duplicates) }
-            } else {
-                start(folderId, conflictStrategy = null)
+        if (state.checking != null) return
+        checkJob = viewModelScope.launch {
+            _review.update { it?.copy(checking = HashProgress(0, state.uris.size, 0, 0)) }
+            try {
+                val hashes = uploadRepository.hashContents(state.uris) { progress -> _review.update { it?.copy(checking = progress) } }
+                val files = state.fileNames.mapIndexed { index, name -> CheckContentFile(name, hashes[index]) }
+                val findings = uploadRepository.checkContent(folderId, files)?.let { toFindings(state.fileNames, it) }.orEmpty()
+                if (findings.isEmpty()) {
+                    start(folderId, state.uris, conflictStrategy = null)
+                } else {
+                    _review.update { it?.copy(findings = findings, uploadAnyway = emptySet(), unhashed = hashes.count { h -> h == null }) }
+                }
+            } finally {
+                _review.update { it?.copy(checking = null) }
             }
         }
     }
 
-    fun resolveDuplicates(conflictStrategy: String) {
-        val folderId = _review.value?.folderId ?: return
-        start(folderId, conflictStrategy)
+    fun setUploadAnyway(index: Int, upload: Boolean) {
+        _review.update { state -> state?.copy(uploadAnyway = if (upload) state.uploadAnyway + index else state.uploadAnyway - index) }
     }
 
-    private fun start(folderId: String, conflictStrategy: String?) {
+    fun setNameStrategy(strategy: NameStrategy) {
+        _review.update { it?.copy(nameStrategy = strategy) }
+    }
+
+    /** Back from the findings to the folder choice, nothing uploaded. */
+    fun cancelFindings() {
+        _review.update { it?.copy(findings = emptyList(), uploadAnyway = emptySet()) }
+    }
+
+    /** Stage and upload only the files the person kept; with none left the sheet just closes. */
+    fun confirmFindings() {
         val state = _review.value ?: return
+        val folderId = state.folderId ?: return
+        val kept = keptItems(state.uris, state.findings, state.uploadAnyway)
+        if (kept.isEmpty()) return dismiss()
+        val asksStrategy = state.findings.any { needsNameChoice(it, it.index in state.uploadAnyway) }
+        start(folderId, kept, if (asksStrategy) state.nameStrategy.wire else null)
+    }
+
+    private fun start(folderId: String, uris: List<Uri>, conflictStrategy: String?) {
         lastUsedFolderId = folderId
         viewModelScope.launch {
-            val sessionId = uploadRepository.startUpload(folderId, state.uris, conflictStrategy)
-            _review.update { it?.copy(sessionId = sessionId, duplicates = emptyList()) }
+            val sessionId = uploadRepository.startUpload(folderId, uris, conflictStrategy)
+            _review.update { it?.copy(sessionId = sessionId, findings = emptyList()) }
         }
     }
 
@@ -216,6 +264,7 @@ class UploadViewModel @Inject constructor(
     }
 
     fun dismiss() {
+        checkJob?.cancel()
         _review.value = null
     }
 

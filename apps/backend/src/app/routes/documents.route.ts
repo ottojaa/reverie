@@ -1,5 +1,7 @@
 import {
     BatchDeleteDocumentsSchema,
+    CheckContentRequestSchema,
+    CheckContentResponseSchema,
     CheckDuplicatesRequestSchema,
     CheckDuplicatesResponseSchema,
     DocumentListQuerySchema,
@@ -13,6 +15,7 @@ import {
     TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
     UuidSchema,
+    type CheckContentRequest,
     type Document,
     type DocumentListQuery,
     type DocumentPhotoMetadata,
@@ -27,6 +30,7 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
+import { checkContent } from '../../services/content-check';
 import { loadOpenDocument } from '../../services/document-access';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
 import { excludePrivateDocuments, excludeTrashed } from '../../services/privacy';
@@ -192,6 +196,31 @@ export default async function (fastify: FastifyInstance) {
             const duplicates = [...new Set(existing.map((r) => r.original_filename))];
 
             return { duplicates };
+        },
+    );
+
+    // Check which files' content is already in the library, by SHA-256 (requires authentication)
+    fastify.post<{
+        Body: CheckContentRequest;
+    }>(
+        '/documents/check-content',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: "Check which files' content (SHA-256) is already in the library, and which names are taken in the target folder",
+                body: CheckContentRequestSchema,
+                response: {
+                    200: CheckContentResponseSchema,
+                },
+            },
+        },
+        async function (request) {
+            const userId = request.user.id;
+            const { folder_id } = request.body;
+
+            if (folder_id) (await loadFolderLocks(fastify, request, userId)).assertOpen(folder_id);
+
+            return { results: await checkContent(userId, request.body) };
         },
     );
 

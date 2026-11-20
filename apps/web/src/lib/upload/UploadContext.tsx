@@ -326,7 +326,8 @@ interface UploadContextType {
     /** Retry a specific file */
     retryFile: (fileId: string) => void;
     /** Start uploading queued files (optionally with conflict strategy when duplicates were detected) */
-    startUpload: (folderId?: string, conflictStrategy?: 'replace' | 'keep_both') => Promise<void>;
+    /** `onlyFileIds` limits the batch to those queued files (a caller that just removed others can't rely on this render's state). */
+    startUpload: (folderId?: string, conflictStrategy?: 'replace' | 'keep_both', onlyFileIds?: ReadonlySet<string>) => Promise<void>;
     /** Reset all state */
     reset: () => void;
     /** Computed stats */
@@ -417,8 +418,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const startUpload = useCallback(
-        async (folderId?: string, conflictStrategy?: 'replace' | 'keep_both') => {
-            const queuedFiles = Array.from(state.files.values()).filter((f) => f.status === 'queued');
+        async (folderId?: string, conflictStrategy?: 'replace' | 'keep_both', onlyFileIds?: ReadonlySet<string>) => {
+            const queuedFiles = Array.from(state.files.values()).filter((f) => f.status === 'queued' && (!onlyFileIds || onlyFileIds.has(f.id)));
 
             if (queuedFiles.length === 0) {
                 return;

@@ -2,8 +2,6 @@ package com.reverie.app.data.upload
 
 import android.content.Context
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.reverie.app.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,8 +23,8 @@ data class StagedFile(
 /**
  * Byte-copies `content://` streams into `filesDir/upload_staging/<sessionId>/` so the upload
  * survives process death (URI grants don't). For image URIs it reads via
- * [MediaStore.setRequireOriginal] so EXIF GPS survives — the reason we don't use the system
- * Photo Picker, which unconditionally redacts location.
+ * [openOriginal] (`MediaStore.setRequireOriginal`) so EXIF GPS survives — the reason we don't use the
+ * system Photo Picker, which unconditionally redacts location.
  */
 @Singleton
 class UploadStager @Inject constructor(
@@ -45,17 +43,8 @@ class UploadStager @Inject constructor(
         val meta = queryMeta(uri)
         val mime = resolver.getType(uri) ?: "application/octet-stream"
 
-        // setRequireOriginal (EXIF-preserving) is API 29+; on older devices fall back to the plain uri.
-        val readUri = if (mime.startsWith("image/") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            runCatching { MediaStore.setRequireOriginal(uri) }.getOrDefault(uri)
-        } else {
-            uri
-        }
-
         val target = File(dir, "${UUID.randomUUID()}_${meta.name}")
-        val stream = runCatching { resolver.openInputStream(readUri) }.getOrNull()
-            ?: resolver.openInputStream(uri)
-            ?: return@runCatching null
+        val stream = resolver.openOriginal(uri, mime) ?: return@runCatching null
         stream.use { input -> target.outputStream().use { input.copyTo(it) } }
 
         StagedFile(

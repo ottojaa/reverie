@@ -1,7 +1,10 @@
 package com.reverie.app.data.api.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonClassDiscriminator
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
@@ -122,6 +125,57 @@ data class CheckDuplicatesRequest(
 
 @Serializable
 data class CheckDuplicatesResponse(val duplicates: List<String>)
+
+@Serializable
+data class CheckContentRequest(
+    val folder_id: String? = null,
+    val files: List<CheckContentFile>,
+)
+
+@Serializable
+data class CheckContentFile(
+    val name: String,
+    /** Null when the file couldn't be read: the server then only checks its name. */
+    val sha256: String? = null,
+)
+
+/**
+ * Where the same content already is. A match inside a private folder or collection is only ever
+ * [PrivateContent] (no id, name or path); one that is only in the trash is [TrashContent].
+ */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+@JsonClassDiscriminator("where")
+sealed interface ContentLocation
+
+@Serializable
+@SerialName("folder")
+data class FolderContent(
+    /** Names from the collection down, e.g. `["Work", "Invoices"]`; null for a document that isn't in a folder. */
+    val folder_path: List<String>? = null,
+    val filename: String,
+) : ContentLocation
+
+@Serializable
+@SerialName("private")
+data object PrivateContent : ContentLocation
+
+@Serializable
+@SerialName("trash")
+data object TrashContent : ContentLocation
+
+@Serializable
+data class CheckContentResult(
+    val name: String,
+    val sha256: String? = null,
+    /** Null when the content is nowhere in the library. */
+    val content: ContentLocation? = null,
+    /** A document with this filename is already in the target folder, whatever its content. */
+    val name_conflict: Boolean = false,
+)
+
+@Serializable
+data class CheckContentResponse(val results: List<CheckContentResult>)
 
 @Serializable
 data class MoveDocumentsRequest(
