@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns
 import com.reverie.app.data.api.DocumentsApi
+import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.api.model.CheckContentFile
 import com.reverie.app.data.api.model.CheckContentResult
@@ -17,6 +18,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStream
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -73,24 +76,62 @@ class MediaStoreBackupTransport @Inject constructor(
     private val uploadApi: UploadApi,
 ) : BackupTransport {
 
-    override suspend fun hash(media: BackupMedia): String? = hasher.hash(media.toUri())
+    override suspend fun hash(media: BackupMedia): String? = hasher.hash(media.toUri(), mimeType = media.mimeType)
 
-    override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> =
+    override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> = try {
         documentsApi.checkContentInBatches(folderId = null, files = files)
+    } catch (e: IOException) {
+        // The HTTP client reports a lost connection, an unknown host or a timeout as a plain IOException.
+        throw ReverieApiException.Network(e)
+    }
 
     override suspend fun upload(media: BackupMedia, folderId: String): String? {
         val uri = media.toUri()
-        val response = uploadApi.uploadStream(
-            sessionId = UUID.randomUUID().toString(),
-            folderId = folderId,
-            filename = media.displayName,
-            mimeType = media.mimeType,
-            // Two files with the same name must never overwrite each other.
-            conflictStrategy = "keep_both",
-            size = media.sizeBytes.takeIf { it > 0 },
-            // Same opener as the hash, so what is uploaded is what was checked (original, GPS included).
-            openStream = { context.contentResolver.openOriginal(uri, media.mimeType) ?: throw FileNotFoundException() },
-        )
+        val response = try {
+            uploadApi.uploadStream(
+                sessionId = UUID.randomUUID().toString(),
+                folderId = folderId,
+                filename = media.displayName,
+                mimeType = media.mimeType,
+                // Two files with the same name must never overwrite each other.
+                conflictStrategy = "keep_both",
+                size = media.sizeBytes.takeIf { it > 0 },
+                // Same opener as the hash, so what is uploaded is what was checked (original, GPS included).
+                openStream = { openForUpload(uri, media.mimeType) },
+            )
+        } catch (e: IOException) {
+            // A failure reading the file is that file's problem; any other I/O failure is the network's.
+            if (e.hasCause<MediaReadException>()) throw e
+            throw ReverieApiException.Network(e)
+        }
         return response.documents.firstOrNull()?.id
     }
+
+    private fun openForUpload(uri: Uri, mimeType: String): InputStream {
+        val stream = try {
+            context.contentResolver.openOriginal(uri, mimeType) ?: throw FileNotFoundException()
+        } catch (e: IOException) {
+            throw MediaReadException(e)
+        }
+        return MediaReadStream(stream)
+    }
 }
+
+/** An I/O failure from the device file itself, as opposed to the connection to the server. */
+internal class MediaReadException(cause: IOException) : IOException("Couldn't read the file", cause)
+
+/** Tags every read failure of [inner] as a [MediaReadException]. */
+private class MediaReadStream(private val inner: InputStream) : InputStream() {
+    override fun read(): Int = tagged { inner.read() }
+    override fun read(b: ByteArray, off: Int, len: Int): Int = tagged { inner.read(b, off, len) }
+    override fun close() = inner.close()
+
+    private inline fun <T> tagged(block: () -> T): T = try {
+        block()
+    } catch (e: IOException) {
+        throw MediaReadException(e)
+    }
+}
+
+private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =
+    generateSequence(this) { it.cause }.any { it is T }

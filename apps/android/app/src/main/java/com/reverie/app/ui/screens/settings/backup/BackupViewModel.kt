@@ -127,9 +127,12 @@ class BackupViewModel @Inject constructor(
 
     fun toggleAlbum(bucketId: Long) {
         viewModelScope.launch {
-            val current = settingsRepository.current().bucketIds.orEmpty()
+            val before = settingsRepository.current()
+            val current = before.bucketIds.orEmpty()
             settingsRepository.setBuckets(if (bucketId in current) current - bucketId else current + bucketId)
-            // The works already match the settings; just start a run so the new album is picked up.
+            // With no album the works were cancelled, so ticking one has to arm them again. Otherwise they
+            // already match the settings (re-applying would restart a running pass); a run picks up the new album.
+            if (before.toConfig() == null) reapply()
             scheduler.scheduleContinuation(settingsRepository.current())
         }
     }

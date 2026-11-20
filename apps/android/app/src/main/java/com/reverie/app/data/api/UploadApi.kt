@@ -2,7 +2,9 @@ package com.reverie.app.data.api
 
 import com.reverie.app.data.api.model.UploadResponse
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.onUpload
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.forms.ChannelProvider
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
@@ -66,6 +68,8 @@ class UploadApi @Inject constructor(
         size = size,
         body = { openStream().toByteReadChannel() },
         onProgress = { _, _ -> },
+        // A big video can take far longer than the client's 60 s request limit; the socket limit still catches a stalled transfer.
+        unlimitedRequestTime = true,
     )
 
     private suspend fun submit(
@@ -77,6 +81,7 @@ class UploadApi @Inject constructor(
         size: Long?,
         body: () -> ByteReadChannel,
         onProgress: suspend (sent: Long, total: Long) -> Unit,
+        unlimitedRequestTime: Boolean = false,
     ): UploadResponse {
         val response = client.submitFormWithBinaryData(
             url = "upload",
@@ -95,6 +100,7 @@ class UploadApi @Inject constructor(
             },
         ) {
             onUpload { sent, total -> onProgress(sent, total ?: size ?: 0L) }
+            if (unlimitedRequestTime) timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
         }
         return response.decode()
     }

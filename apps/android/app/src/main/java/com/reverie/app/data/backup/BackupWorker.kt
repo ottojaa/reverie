@@ -20,6 +20,8 @@ import com.reverie.app.domain.model.AuthState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** How long a background run keeps starting new work. WorkManager stops any run after about 10 minutes. */
 internal const val BACKGROUND_BUDGET_MS = 8 * 60_000L
@@ -58,7 +60,10 @@ class BackupWorker @AssistedInject constructor(
             runPass(trigger)
         } finally {
             // Re-arm even when the run was cancelled, or the next new photo would never start a run.
-            if (trigger == BackupTrigger.NewMedia) scheduler.rearmNewMediaTrigger(settingsRepository.current())
+            // NonCancellable: reading the settings would throw at once in a coroutine that is already cancelled.
+            if (trigger == BackupTrigger.NewMedia) {
+                withContext(NonCancellable) { scheduler.rearmNewMediaTrigger(settingsRepository.current()) }
+            }
         }
         return Result.success()
     }
@@ -86,6 +91,9 @@ class BackupWorker @AssistedInject constructor(
         } catch (e: SecurityException) {
             // The user revoked access while the pass was running.
             return settingsRepository.recordError("Photo access was turned off. Allow it in Settings to resume backup.")
+        } catch (e: Exception) {
+            // Whatever else goes wrong, say so on the status line instead of leaving it stale.
+            return settingsRepository.recordError("Backup stopped unexpectedly and will try again later.")
         }
         report(result, settings)
     }
