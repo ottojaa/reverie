@@ -171,6 +171,63 @@ export const CheckDuplicatesResponseSchema = z.object({
 });
 export type CheckDuplicatesResponse = z.infer<typeof CheckDuplicatesResponseSchema>;
 
+/** Most files one `POST /documents/check-content` call accepts; clients with more send several calls. */
+export const CHECK_CONTENT_MAX_FILES = 500;
+
+/** A SHA-256 as 64 hex characters, normalised to lower case (what `documents.file_hash` stores). */
+export const Sha256HexSchema = z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/)
+    .transform((hash) => hash.toLowerCase());
+
+export const CheckContentRequestSchema = z.object({
+    /** Folder the files are about to go into. Without it only the content is checked. */
+    folder_id: UuidSchema.optional(),
+    files: z
+        .array(
+            z.object({
+                name: z.string().min(1),
+                /** Left out when the client could not read the file: it then gets the name check only. */
+                sha256: Sha256HexSchema.optional(),
+            }),
+        )
+        .min(1)
+        .max(CHECK_CONTENT_MAX_FILES),
+});
+export type CheckContentRequest = z.input<typeof CheckContentRequestSchema>;
+
+/**
+ * Where the same content already is. A match inside a private folder or collection (unlocked or not)
+ * is only ever `private`, with no id, name or path; a match that is only in the trash is `trash`.
+ */
+export const ContentLocationSchema = z.discriminatedUnion('where', [
+    z.object({
+        where: z.literal('folder'),
+        /** `/Collection/Folder`, from the current names; null for a document at the root. */
+        folder_path: z.string().nullable(),
+        filename: z.string(),
+    }),
+    z.object({ where: z.literal('private') }),
+    z.object({ where: z.literal('trash') }),
+]);
+export type ContentLocation = z.infer<typeof ContentLocationSchema>;
+
+export const CheckContentResultSchema = z.object({
+    name: z.string(),
+    sha256: z.string().nullable(),
+    /** Null when the content is nowhere in the library (or no hash was sent). */
+    content: ContentLocationSchema.nullable(),
+    /** A document with this filename is already in the target folder, whatever its content. */
+    name_conflict: z.boolean(),
+});
+export type CheckContentResult = z.infer<typeof CheckContentResultSchema>;
+
+export const CheckContentResponseSchema = z.object({
+    /** One entry per requested file, in request order. */
+    results: z.array(CheckContentResultSchema),
+});
+export type CheckContentResponse = z.infer<typeof CheckContentResponseSchema>;
+
 export const MoveDocumentsRequestSchema = z.object({
     document_ids: z.array(UuidSchema).min(1).max(100),
     folder_id: UuidSchema,

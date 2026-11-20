@@ -194,7 +194,6 @@ export class UploadService {
     /**
      * Upload a single file
      * @param effectiveFilename - Used for original_filename when doing keep_both (renamed with (n) suffix)
-     * @param skipHashDuplicate - When true, do not short-circuit on hash match (used when user chose replace/keep_both)
      * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to the new document
      */
     private async uploadSingleFile(
