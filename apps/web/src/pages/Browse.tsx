@@ -1,9 +1,11 @@
 import { DocumentGrid, DocumentSkeleton, EmptyDocumentsState, SelectionBanner } from '@/components/documents';
+import { LockedFolderNotice } from '@/components/folders/LockedFolderNotice';
 import { Button } from '@/components/ui/button';
 import { ProcessingIndicator } from '@/components/ui/ProcessingIndicator';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { UploadFAB } from '@/components/upload';
 import { useInfiniteDocuments } from '@/lib/api';
+import { useLockedFolderPrompt } from '@/lib/hooks/useLockedFolderPrompt';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useCurrentSection } from '@/lib/sections';
 import { useSelectionOptional } from '@/lib/selection';
@@ -41,6 +43,8 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteDocuments({
         ...(sectionId && { folderId: sectionId }),
     });
+
+    const { isLocked, unlock } = useLockedFolderPrompt(error);
 
     const documents = data?.pages.flatMap((p) => p.items) ?? [];
     const total = data?.pages[0]?.total ?? 0;
@@ -108,13 +112,15 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                     </div>
                 </div>
 
-                {error && (
+                {isLocked && <LockedFolderNotice onUnlock={unlock} />}
+
+                {error && !isLocked && (
                     <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
                         Failed to load documents. Please try again.
                     </div>
                 )}
 
-                {isLoading ? (
+                {isLocked ? null : isLoading ? (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                         {Array.from({ length: 10 }).map((_, i) =>
                             showSkeleton ? (

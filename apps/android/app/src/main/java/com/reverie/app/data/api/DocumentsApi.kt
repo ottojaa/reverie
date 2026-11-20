@@ -10,7 +10,6 @@ import com.reverie.app.data.api.model.DocumentStatusResponse
 import com.reverie.app.data.api.model.JobIdResponse
 import com.reverie.app.data.api.model.MoveDocumentsRequest
 import com.reverie.app.data.api.model.Paginated
-import com.reverie.app.data.api.model.SetDocumentPrivacyRequest
 import com.reverie.app.data.api.model.UpdateDocumentRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.request.delete
@@ -47,11 +46,6 @@ class DocumentsApi @Inject constructor(
     suspend fun deleteBatch(ids: List<String>) = client.delete("documents") {
         contentType(ContentType.Application.Json)
         setBody(BatchDeleteDocuments(ids))
-    }.throwIfError()
-
-    suspend fun setPrivacy(ids: List<String>, isPrivate: Boolean) = client.patch("documents/privacy") {
-        contentType(ContentType.Application.Json)
-        setBody(SetDocumentPrivacyRequest(ids, isPrivate))
     }.throwIfError()
 
     suspend fun rename(id: String, filename: String): DocumentDto = client.patch("documents/$id") {

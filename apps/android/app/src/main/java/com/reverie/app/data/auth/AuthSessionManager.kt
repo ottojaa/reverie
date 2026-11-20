@@ -1,5 +1,6 @@
 package com.reverie.app.data.auth
 
+import com.reverie.app.data.api.SessionCookieStorage
 import com.reverie.app.data.api.cookieValue
 import com.reverie.app.data.api.decode
 import com.reverie.app.data.api.storedCookieValue
@@ -43,6 +44,7 @@ import javax.inject.Singleton
 class AuthSessionManager @Inject constructor(
     private val lazyClient: Lazy<HttpClient>,
     private val tokenStore: TokenStore,
+    private val cookieStorage: SessionCookieStorage,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val client: HttpClient get() = lazyClient.get()
@@ -168,6 +170,9 @@ class AuthSessionManager @Inject constructor(
         expiresAtEpochMs = 0
         currentUser = null
         tokenStore.clear()
+        // Forget every cookie, including the folder-lock session, so the next sign-in starts with
+        // all private folders closed. Runs for forced logouts (failed refresh) as well as user ones.
+        cookieStorage.clear()
         _authState.value = AuthState.LoggedOut
     }
 

@@ -43,11 +43,24 @@ sealed class ReverieApiException(message: String, cause: Throwable? = null) : Ex
         is Serialization -> "The server sent an unexpected response."
     }
 
+    /**
+     * The id of the closed private folder behind this failure, or null for any other error. The
+     * server answers 403 `FOLDER_LOCKED` with `details.folder_id` for anything inside a locked
+     * folder; callers react by asking for the password and retrying.
+     */
+    fun lockedFolderId(): String? {
+        if (this !is Http || statusCode != 403 || code != FOLDER_LOCKED_CODE) return null
+        return details?.get("folder_id")?.jsonPrimitive?.contentOrNull
+    }
+
     companion object {
+        const val FOLDER_LOCKED_CODE = "FOLDER_LOCKED"
+
         /** True when the failure is an authentication/authorization problem (401/403). */
         fun isAuthFailure(e: ReverieApiException): Boolean = when (e) {
             is Auth -> e.code == AuthErrorCode.TOKEN_EXPIRED || e.code == AuthErrorCode.TOKEN_INVALID
-            is Http -> e.statusCode == 401 || e.statusCode == 403
+            // A locked folder is a 403 too, but the session is fine: it needs a folder password, not a re-login.
+            is Http -> e.statusCode == 401 || (e.statusCode == 403 && e.code != FOLDER_LOCKED_CODE)
             else -> false
         }
 

@@ -3,7 +3,7 @@ import { db } from '../db/kysely';
 import type { Database, Document, Folder } from '../db/schema';
 import { getSetting } from '../settings/settings.service.js';
 import { getDeduplicatedFilename } from '../utils/filename';
-import { excludeTrashed } from './privacy';
+import { excludeTrashed, loadLockMap } from './privacy';
 import { restoreFolder } from './trash-folders';
 import { getUploadService } from './upload.service';
 
@@ -30,6 +30,10 @@ interface PurgeScope {
     userId?: string;
     ids?: string[];
     olderThan?: Date;
+    /** Documents only: those that sit in one of these folders. */
+    folderIds?: string[];
+    /** Rows (documents by their folder, folders by id) that must survive, such as items under a closed lock. */
+    exceptFolderIds?: string[];
 }
 
 export class TrashService {
@@ -70,12 +74,17 @@ export class TrashService {
     }
 
     private async restoreDocument(trx: Kysely<Database>, doc: Document): Promise<void> {
-        const folder = doc.folder_id
-            ? await excludeTrashed(trx.selectFrom('folders').select('id').where('id', '=', doc.folder_id), '').executeTakeFirst()
-            : undefined;
-        const folderId = folder?.id ?? null;
+        const folderId = await this.resolveRestoreFolder(trx, doc);
+        const { deleted_at } = await trx.selectFrom('documents').select('deleted_at').where('id', '=', doc.id).executeTakeFirstOrThrow();
+
+        // It came back together with its private folder.
+        if (deleted_at === null) return;
+
         const taken = folderId
-            ? await excludeTrashed(trx.selectFrom('documents').select('original_filename').where('folder_id', '=', folderId), '').execute()
+            ? await excludeTrashed(
+                  trx.selectFrom('documents').select('original_filename').where('folder_id', '=', folderId).where('id', '!=', doc.id),
+                  '',
+              ).execute()
             : [];
         const filename = getDeduplicatedFilename(
             taken.map((row) => row.original_filename),
@@ -83,6 +92,27 @@ export class TrashService {
         );
 
         await trx.updateTable('documents').set({ deleted_at: null, folder_id: folderId, original_filename: filename }).where('id', '=', doc.id).execute();
+    }
+
+    /**
+     * The folder a restored document goes back to. A trashed private folder is restored first
+     * (with its collection) so the document is never left at the root, where it would be public;
+     * a trashed public folder sends it to the root, as before.
+     */
+    private async resolveRestoreFolder(trx: Kysely<Database>, doc: Document): Promise<string | null> {
+        if (!doc.folder_id) return null;
+
+        const folder = await trx.selectFrom('folders').select(['id', 'deleted_at']).where('id', '=', doc.folder_id).executeTakeFirst();
+
+        if (!folder) return null;
+
+        if (!folder.deleted_at) return folder.id;
+
+        if (!(await loadLockMap(doc.user_id, trx)).has(folder.id)) return null;
+
+        await restoreFolder(doc.user_id, folder.id, trx);
+
+        return folder.id;
     }
 
     /**
@@ -110,21 +140,30 @@ export class TrashService {
         const trashedAt = new Map(folders.map((folder) => [folder.id, folder.deleted_at?.getTime()]));
         // A folder trashed together with its collection is part of the collection's entry.
         const topLevel = folders.filter((folder) => !folder.parent_id || trashedAt.get(folder.parent_id) !== folder.deleted_at?.getTime());
+        // Likewise a document trashed with its private folder (same timestamp) is part of the folder's entry.
+        const standalone = documents.filter((doc) => !doc.folder_id || trashedAt.get(doc.folder_id) !== doc.deleted_at?.getTime());
 
-        return { documents, folders: topLevel, retentionDays };
+        return { documents: standalone, folders: topLevel, retentionDays };
     }
 
-    /** Delete trashed items for good ("Delete forever"). Live items are never touched. */
-    async purge(userId: string, selection: TrashSelection): Promise<TrashResult> {
+    /**
+     * Delete trashed items for good ("Delete forever"). Live items are never touched, and a folder
+     * that contains a closed lock (`lockedFolderIds`) is left alone, since deleting it would delete the lock too.
+     */
+    async purge(userId: string, selection: TrashSelection, lockedFolderIds: string[] = []): Promise<TrashResult> {
         const documents = await this.purgeDocuments({ userId, ids: selection.documentIds ?? [] });
-        const folders = await this.purgeFolders({ userId, ids: selection.folderIds ?? [] });
+        const folders = await this.purgeFolders({ userId, ids: selection.folderIds ?? [], exceptFolderIds: lockedFolderIds });
 
         return { documents, folders };
     }
 
-    async emptyTrash(userId: string): Promise<TrashResult> {
-        const documents = await this.purgeDocuments({ userId });
-        const folders = await this.purgeFolders({ userId });
+    /**
+     * Empty the trash. Items under a closed lock (`lockedFolderIds`) are left alone: the user cannot
+     * see them, so they must not be destroyed on their behalf.
+     */
+    async emptyTrash(userId: string, lockedFolderIds: string[] = []): Promise<TrashResult> {
+        const documents = await this.purgeDocuments({ userId, exceptFolderIds: lockedFolderIds });
+        const folders = await this.purgeFolders({ userId, exceptFolderIds: lockedFolderIds });
 
         return { documents, folders };
     }
@@ -153,6 +192,10 @@ export class TrashService {
                 .$if(scope.userId !== undefined, (qb) => qb.where('user_id', '=', scope.userId!))
                 .$if(scope.ids !== undefined, (qb) => qb.where('id', 'in', scope.ids!))
                 .$if(scope.olderThan !== undefined, (qb) => qb.where('deleted_at', '<', scope.olderThan!))
+                .$if(scope.folderIds !== undefined, (qb) => qb.where('folder_id', 'in', scope.folderIds!))
+                .$if(scope.exceptFolderIds !== undefined && scope.exceptFolderIds.length > 0, (qb) =>
+                    qb.where((eb) => eb.or([eb('folder_id', 'is', null), eb('folder_id', 'not in', scope.exceptFolderIds!)])),
+                )
                 .returningAll()
                 .execute();
 
@@ -185,19 +228,62 @@ export class TrashService {
         return purged.length;
     }
 
+    /**
+     * documents.folder_id is ON DELETE SET NULL and folders.parent_id is ON DELETE CASCADE, so deleting
+     * a folder silently deletes its child folders and drops their documents to the root. A private
+     * folder's trashed documents are therefore purged first, for every folder the delete will remove,
+     * and a folder is skipped when the delete would cascade into a lock that must survive.
+     */
     private async purgeFolders(scope: PurgeScope): Promise<number> {
         if (scope.ids && scope.ids.length === 0) return 0;
 
-        const rows = await db
-            .deleteFrom('folders')
+        const exceptIds = scope.exceptFolderIds ?? [];
+        const selected = await db
+            .selectFrom('folders')
+            .select(['id', 'user_id'])
             .where('deleted_at', 'is not', null)
             .$if(scope.userId !== undefined, (qb) => qb.where('user_id', '=', scope.userId!))
             .$if(scope.ids !== undefined, (qb) => qb.where('id', 'in', scope.ids!))
+            .$if(scope.olderThan !== undefined, (qb) => qb.where('deleted_at', '<', scope.olderThan!))
+            .$if(exceptIds.length > 0, (qb) => qb.where('id', 'not in', exceptIds))
+            .execute();
+        const spared = await this.fetchParentIds(exceptIds);
+        const candidates = selected.filter((folder) => !spared.has(folder.id));
+
+        if (candidates.length === 0) return 0;
+
+        const candidateIds = candidates.map((folder) => folder.id);
+        const cascaded = await db.selectFrom('folders').select(['id', 'user_id']).where('parent_id', 'in', candidateIds).execute();
+
+        await this.purgePrivateDocumentsOf([...candidates, ...cascaded]);
+
+        const rows = await db
+            .deleteFrom('folders')
+            .where('id', 'in', candidateIds)
+            .where('deleted_at', 'is not', null)
             .$if(scope.olderThan !== undefined, (qb) => qb.where('deleted_at', '<', scope.olderThan!))
             .returning('id')
             .execute();
 
         return rows.length;
+    }
+
+    /** Parents of the given folders: deleting one of these would cascade into a folder that has to survive. */
+    private async fetchParentIds(folderIds: string[]): Promise<Set<string>> {
+        if (folderIds.length === 0) return new Set();
+
+        const rows = await db.selectFrom('folders').select('parent_id').where('id', 'in', folderIds).where('parent_id', 'is not', null).execute();
+
+        return new Set(rows.map((row) => row.parent_id!));
+    }
+
+    private async purgePrivateDocumentsOf(folders: Array<{ id: string; user_id: string }>): Promise<void> {
+        for (const userId of new Set(folders.map((folder) => folder.user_id))) {
+            const lockMap = await loadLockMap(userId);
+            const privateIds = folders.filter((folder) => folder.user_id === userId && lockMap.has(folder.id)).map((folder) => folder.id);
+
+            if (privateIds.length > 0) await this.purgeDocuments({ userId, folderIds: privateIds });
+        }
     }
 }
 

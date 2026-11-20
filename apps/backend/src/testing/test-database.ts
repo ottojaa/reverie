@@ -154,7 +154,10 @@ export function createDbProxy(): { db: Kysely<Database>; use: (db: Kysely<Databa
 
             const value = Reflect.get(current, property, current) as unknown;
 
-            return typeof value === 'function' ? value.bind(current) : value;
+            if (typeof value !== 'function') return value;
+
+            // `db.fn` is a callable that also carries `countAll`, `sum`, ...; binding alone would drop those.
+            return Object.assign(value.bind(current), value);
         },
     });
 

@@ -15,7 +15,7 @@ interface HeaderProps {
 // Ghost's default hover is full-strength accent (indigo) — far too loud for header chrome
 const quietHover = 'hover:bg-secondary hover:text-foreground dark:hover:bg-secondary';
 
-/** The app-level action cluster (vault, Organize, notifications, theme) — also embedded in the /search shell. */
+/** The app-level action cluster (Organize, notifications, theme) — also embedded in the /search shell. */
 export function HeaderActions() {
     const { isDark, setIsDark } = useTheme();
     const { openOrganize } = useOrganize();

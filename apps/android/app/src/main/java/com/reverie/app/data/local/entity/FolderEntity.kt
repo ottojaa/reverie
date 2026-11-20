@@ -19,7 +19,7 @@ data class FolderEntity(
     val sortOrder: Int,
     val type: String,
     val isPrivate: Boolean,
-    // Vault lock state at last fetch (see DocumentEntity.locked). Refreshed on unlock/lock.
+    // Lock state at last fetch; every tree refresh (e.g. after an unlock) overwrites it.
     val locked: Boolean,
     val documentCount: Int,
     val createdAt: String,

@@ -1,10 +1,9 @@
-import { useDeleteDocuments, useSetDocumentPrivacy } from '@/lib/api/documents';
+import { useDeleteDocuments } from '@/lib/api/documents';
 import { buildDownloadUrl, buildFileUrl } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useLongPress } from '@/lib/hooks/useLongPress';
 import { useSelectionOptional } from '@/lib/selection';
-import { useVault } from '@/lib/vault';
 import { useDraggable } from '@dnd-kit/core';
 import type { Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,11 +26,9 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
     const selection = useSelectionOptional();
     const confirm = useConfirm();
     const deleteDocuments = useDeleteDocuments();
-    const setDocumentPrivacy = useSetDocumentPrivacy();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isMobile = useIsMobile();
-    const { requestUnlock } = useVault();
 
     const lastTapRef = useRef<{ id: string; time: number } | null>(null);
     const longPressFiredRef = useRef(false);
@@ -43,18 +40,10 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
     // --- Navigation ---
 
     const navigateToDocument = useCallback(() => {
-        // A locked private document can't be opened — prompt to unlock, then navigate by id
-        // (the viewer refetches the now-unlocked content).
-        if (document.locked) {
-            requestUnlock(() => navigate({ to: '/document/$id', params: { id: document.id } }));
-
-            return;
-        }
-
         queryClient.setQueryData(['document', document.id], document);
         queryClient.invalidateQueries({ queryKey: ['document', document.id] });
         navigate({ to: '/document/$id', params: { id: document.id } });
-    }, [queryClient, document, navigate, requestUnlock]);
+    }, [queryClient, document, navigate]);
 
     /** Returns true if this tap was the second of a double-tap. */
     const isDoubleTap = useCallback(() => {
@@ -188,31 +177,9 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         });
     };
 
-    // --- Privacy ---
-
-    const handleTogglePrivate = () => {
-        // Removing privacy while locked would expose content without the password — unlock first.
-        if (document.locked) {
-            requestUnlock();
-
-            return;
-        }
-
-        // Apply to the whole selection when this card is part of it, otherwise just this doc.
-        const ids = isSelected && selectedIds.size > 0 ? Array.from(selectedIds) : [document.id];
-        setDocumentPrivacy.mutate({ document_ids: ids, is_private: !document.is_private });
-    };
-
     // --- Download ---
 
     const handleDownload = () => {
-        // No signed URL is served for a locked document — prompt to unlock instead.
-        if (document.locked) {
-            requestUnlock();
-
-            return;
-        }
-
         const fileUrl = buildFileUrl(document.file_url);
 
         if (!fileUrl) return;
@@ -229,14 +196,11 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         isSelected,
         isDragging,
         isMobile,
-        isPrivate: document.is_private,
-        isLocked: document.locked,
         // Handlers
         handleClick,
         handleDoubleClick,
         handleOpen: navigateToDocument,
         handleDelete,
-        handleTogglePrivate,
         handleDownload,
         // Selection-aware target ids: the whole selection when this card is selected, else just this doc
         targetIds: documentIds,

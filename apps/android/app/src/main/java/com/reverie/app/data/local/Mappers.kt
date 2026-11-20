@@ -15,7 +15,18 @@ import kotlinx.serialization.json.jsonObject
 
 // ---- Documents ----
 
-fun DocumentDto.toEntity(now: Long, lastAccessedAt: Long = now): DocumentEntity = DocumentEntity(
+/**
+ * The Room row for this document, or null when it is private. This is the single gate that keeps
+ * private documents (and their metadata) off disk: every write to the documents table goes through
+ * it, so a private document can't be persisted by accident.
+ */
+fun DocumentDto.toEntityOrNull(now: Long, lastAccessedAt: Long = now): DocumentEntity? =
+    if (is_private) null else toEntityUnchecked(now, lastAccessedAt)
+
+/** The persistable subset of [this]: private documents are dropped (see [toEntityOrNull]). */
+fun List<DocumentDto>.toCacheableEntities(now: Long): List<DocumentEntity> = mapNotNull { it.toEntityOrNull(now) }
+
+private fun DocumentDto.toEntityUnchecked(now: Long, lastAccessedAt: Long): DocumentEntity = DocumentEntity(
     id = id,
     folderId = folder_id,
     originalFilename = original_filename,
@@ -35,8 +46,6 @@ fun DocumentDto.toEntity(now: Long, lastAccessedAt: Long = now): DocumentEntity 
     llmProcessedAt = llm_processed_at,
     llmTokenCount = llm_token_count,
     photoMetadataJson = photo_metadata?.let { ApiJson.encodeToString(DocumentPhotoMetadata.serializer(), it) },
-    isPrivate = is_private,
-    locked = locked,
     createdAt = created_at,
     updatedAt = updated_at,
     cachedAt = now,
@@ -65,8 +74,8 @@ fun DocumentEntity.toDto(): DocumentDto = DocumentDto(
     llm_metadata = llmMetadataJson?.let { parseJsonObject(it) },
     llm_processed_at = llmProcessedAt,
     llm_token_count = llmTokenCount,
-    is_private = isPrivate,
-    locked = locked,
+    // Only non-private documents are ever cached.
+    is_private = false,
     created_at = createdAt,
     updated_at = updatedAt,
     file_url = null,

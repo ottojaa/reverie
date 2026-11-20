@@ -19,12 +19,15 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,12 +60,15 @@ fun CollectionsScreen(
     var createFolderParentId by remember { mutableStateOf<String?>(null) }
     var editTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var deleteTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
-    var showVaultUnlock by remember { mutableStateOf(false) }
+    val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
 
-    // Toggling privacy off on a locked folder would expose it without the password — prompt to
-    // unlock instead. Otherwise flip its privacy flag.
+    // After a locked folder is unlocked the view model emits its id; step into it.
+    LaunchedEffect(viewModel) { viewModel.openFolder.collect(onOpenFolder) }
+
+    // Making a locked folder public needs its lock open; the view model asks for the password
+    // when the server refuses, then repeats the change.
     val onTogglePrivate: (FolderWithChildren) -> Unit = { node ->
-        if (node.locked) showVaultUnlock = true else viewModel.setPrivate(node.id, !node.is_private)
+        viewModel.setPrivate(node.id, node.name, !node.is_private)
     }
 
     Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
@@ -106,12 +112,12 @@ fun CollectionsScreen(
                             aggregateCount = aggregateCount(node),
                             // Locked collection: tapping prompts to unlock (its folders are hidden
                             // until then) instead of expanding.
-                            onToggle = { if (node.locked) showVaultUnlock = true else viewModel.toggleExpand(node.id) },
+                            onToggle = { if (node.locked) viewModel.unlock(node) else viewModel.toggleExpand(node.id) },
                             onNewFolder = { createFolderParentId = node.id },
                             onEdit = { editTarget = node },
                             onTogglePrivate = { onTogglePrivate(node) },
                             onDelete = { deleteTarget = node },
-                            onUnlock = { showVaultUnlock = true },
+                            onUnlock = { viewModel.unlock(node) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -120,11 +126,11 @@ fun CollectionsScreen(
                         items(node.children, key = { it.id }) { folder ->
                             FolderTreeItem(
                                 folder = folder,
-                                onOpen = { if (folder.locked) showVaultUnlock = true else onOpenFolder(folder.id) },
+                                onOpen = { if (folder.locked) viewModel.unlock(folder) else onOpenFolder(folder.id) },
                                 onEdit = { editTarget = folder },
                                 onTogglePrivate = { onTogglePrivate(folder) },
                                 onDelete = { deleteTarget = folder },
-                                onUnlock = { showVaultUnlock = true },
+                                onUnlock = { viewModel.unlock(folder) },
                                 // Extra indent so nested folders read as belonging to the collection.
                                 indent = 44.dp,
                                 modifier = Modifier.animateItem(),
@@ -135,11 +141,11 @@ fun CollectionsScreen(
                     item(key = node.id) {
                         FolderTreeItem(
                             folder = node,
-                            onOpen = { if (node.locked) showVaultUnlock = true else onOpenFolder(node.id) },
+                            onOpen = { if (node.locked) viewModel.unlock(node) else onOpenFolder(node.id) },
                             onEdit = { editTarget = node },
                             onTogglePrivate = { onTogglePrivate(node) },
                             onDelete = { deleteTarget = node },
-                            onUnlock = { showVaultUnlock = true },
+                            onUnlock = { viewModel.unlock(node) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -178,7 +184,7 @@ fun CollectionsScreen(
             initial = FolderFormData(target.name, target.emoji, target.description, target.is_private),
             onSubmit = {
                 viewModel.edit(target.id, it.name, it.emoji, it.description)
-                if (it.isPrivate != target.is_private) viewModel.setPrivate(target.id, it.isPrivate)
+                if (it.isPrivate != target.is_private) viewModel.setPrivate(target.id, it.name, it.isPrivate)
                 editTarget = null
             },
             onDismiss = { editTarget = null },
@@ -198,10 +204,20 @@ fun CollectionsScreen(
         )
     }
 
-    if (showVaultUnlock) {
+    unlockPrompt?.let { prompt ->
         VaultUnlockSheet(
-            onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
-            onDismiss = { showVaultUnlock = false },
+            prompt = prompt,
+            onSubmit = viewModel.unlocker::submit,
+            onDismiss = viewModel::dismissUnlock,
+        )
+    }
+
+    state.notice?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissNotice,
+            title = { Text("Set an account password") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = viewModel::dismissNotice) { Text("OK") } },
         )
     }
 }

@@ -8,7 +8,6 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
@@ -32,13 +31,14 @@ import javax.inject.Singleton
 class ReverieClientFactory @Inject constructor(
     private val serverUrlProvider: ServerUrlProvider,
     private val authSessionManager: Lazy<AuthSessionManager>,
+    private val cookieStorage: SessionCookieStorage,
 ) {
     fun create(): HttpClient {
         val client = HttpClient(OkHttp) {
             expectSuccess = false
 
             install(ContentNegotiation) { json(ApiJson) }
-            install(HttpCookies) { storage = AcceptAllCookiesStorage() }
+            install(HttpCookies) { storage = cookieStorage }
             install(HttpTimeout) {
                 requestTimeoutMillis = 60_000
                 connectTimeoutMillis = 30_000

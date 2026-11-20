@@ -23,7 +23,6 @@ export interface World {
         | 'invoice'
         | 'notes'
         | 'loose'
-        | 'lockedOwn'
         | 'inLockedFolder'
         | 'inVault'
         | 'inVaultInner'
@@ -40,7 +39,7 @@ export interface World {
 }
 
 /** The documents a user must never see, whatever they ask. */
-export const HIDDEN_DOCS = ['lockedOwn', 'inLockedFolder', 'inVault', 'inVaultInner', 'trashed', 'inTrashedFolder'] as const;
+export const HIDDEN_DOCS = ['inLockedFolder', 'inVault', 'inVaultInner', 'trashed', 'inTrashedFolder'] as const;
 
 async function seedWorld(db: Kysely<Database>): Promise<World> {
     const alice = await seedUser(db, 'alice');
@@ -71,20 +70,12 @@ async function seedWorld(db: Kysely<Database>): Promise<World> {
             userId: alice,
             name: 'notes.pdf',
             folderId: work.id,
-            category: 'document',
+            category: 'other',
             extractedDate: day('2023-06-01'),
             ocrText: 'Meeting notes about the roadmap',
             summary: 'Notes on the roadmap',
         }),
-        loose: await seedDocument(db, { userId: alice, name: 'loose.pdf', category: 'document', ocrText: 'A loose page' }),
-        lockedOwn: await seedDocument(db, {
-            userId: alice,
-            name: 'locked-own.pdf',
-            isPrivate: true,
-            ocrText: 'LOCKEDWORD content',
-            summary: 'LOCKEDWORD summary',
-            tags: ['lockedtag'],
-        }),
+        loose: await seedDocument(db, { userId: alice, name: 'loose.pdf', category: 'other', ocrText: 'A loose page' }),
         inLockedFolder: await seedDocument(db, {
             userId: alice,
             name: 'in-locked-folder.pdf',
@@ -137,7 +128,7 @@ async function seedWorld(db: Kysely<Database>): Promise<World> {
             userId: alice,
             name: 'scan.jpg',
             mime: 'image/jpeg',
-            category: 'document',
+            category: 'other',
             ocrText: 'SCANTEXT',
             summary: 'A scanned letter SCANTEXT',
             photo: {},

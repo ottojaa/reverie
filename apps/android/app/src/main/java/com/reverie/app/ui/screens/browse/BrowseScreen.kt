@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -96,7 +97,7 @@ fun BrowseScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
-    var showVaultUnlock by remember { mutableStateOf(false) }
+    val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
 
     val onUploadClick: () -> Unit = { showUploadActions = true }
     // Collapsing top bar: hides on scroll down, returns on scroll up.
@@ -164,6 +165,17 @@ fun BrowseScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 state.isLoading -> LoadingGrid(contentPadding = gridPadding)
+                state.lockedFolderId != null ->
+                    Box(Modifier.padding(innerPadding).fillMaxSize()) {
+                        val lockedId = state.lockedFolderId!!
+                        EmptyState(
+                            icon = Icons.Outlined.Lock,
+                            title = "This folder is private",
+                            description = "Enter your account password to open it.",
+                            actionLabel = "Unlock",
+                            onAction = { viewModel.unlocker.request(lockedId, state.folder?.name) },
+                        )
+                    }
                 state.error != null && state.documents.isEmpty() ->
                     Box(Modifier.padding(innerPadding).fillMaxSize()) {
                         ErrorState(message = state.error!!, onRetry = { viewModel.refresh(initial = true) })
@@ -194,10 +206,6 @@ fun BrowseScreen(
                     onClick = { document ->
                         if (state.inSelectionMode) {
                             viewModel.toggleSelect(document.id)
-                        } else if (document.locked) {
-                            // Locked private item — prompt to unlock instead of opening. After a
-                            // successful unlock the grid re-fetches and the item opens on next tap.
-                            showVaultUnlock = true
                         } else {
                             // Publish this grid's order so the viewer can swipe through it.
                             viewModel.prepareSequence()
@@ -234,9 +242,7 @@ fun BrowseScreen(
             ) {
                 SelectionTopBar(
                     count = state.selectedIds.size,
-                    allPrivate = state.allSelectedPrivate,
                     onClose = viewModel::clearSelection,
-                    onTogglePrivate = viewModel::togglePrivateSelected,
                     onDownload = {
                         viewModel.downloadSelected { targets ->
                             targets.forEach { enqueueDownload(context, it.url, it.filename) }
@@ -304,10 +310,11 @@ fun BrowseScreen(
         )
     }
 
-    if (showVaultUnlock) {
+    unlockPrompt?.let { prompt ->
         VaultUnlockSheet(
-            onUnlock = { password, onResult -> viewModel.unlockVault(password, onResult) },
-            onDismiss = { showVaultUnlock = false },
+            prompt = prompt,
+            onSubmit = viewModel.unlocker::submit,
+            onDismiss = viewModel.unlocker::dismiss,
         )
     }
 }

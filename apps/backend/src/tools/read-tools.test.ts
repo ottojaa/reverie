@@ -264,7 +264,7 @@ describeDb('photos: details only', () => {
         const out = await run(w.alice, 'get_document', { document_id: w.docs.emptyExif });
 
         expect(out.summary).toContain('SCANTEXT');
-        expect(out.type).toBe('document');
+        expect(out.type).toBe('other');
     });
 
     it('search cannot confirm hidden content: no match on summary, entity or OCR words of a photo', async () => {
@@ -329,7 +329,7 @@ describeDb('list_folders, list_folder_contents and get_library_overview', () => 
         const asMap = (entries: { name: string; count: number }[]) => Object.fromEntries(entries.map((entry) => [entry.name, entry.count]));
 
         expect(out.total).toBe(8);
-        expect(asMap(out.by_category)).toMatchObject({ receipt: 1, screenshot: 1, document: 3, photo: 3 });
+        expect(asMap(out.by_category)).toMatchObject({ receipt: 1, screenshot: 1, other: 3, photo: 3 });
         expect(asMap(out.by_year)).toMatchObject({ '2024': 2, '2023': 1, '2022': 1 });
         expect(asMap(out.by_place)).toMatchObject({ 'Helsinki, Finland': 1, 'Tampere, Finland': 1 });
         expect(asMap(out.by_folder)).toMatchObject({ '/Work': 2, '/Work/Invoices': 1 });

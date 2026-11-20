@@ -5,10 +5,14 @@ import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.reverie.app.data.api.ServerUrlProvider
+import com.reverie.app.data.api.SessionCookieStorage
+import com.reverie.app.data.api.StorageCookieJar
 import com.reverie.app.data.auth.AuthSessionManager
 import com.reverie.app.data.image.AuthImageAuthenticator
 import com.reverie.app.data.image.AuthImageInterceptor
+import com.reverie.app.data.image.PrivateThumbnailInterceptor
 import com.reverie.app.data.image.ThumbnailMapper
+import com.reverie.app.data.local.PrivateDocumentStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.EntryPoint
@@ -43,11 +47,22 @@ object ImageModule {
 
     private const val THUMB_DISK_CACHE_BYTES = 250L * 1024 * 1024
 
+    // Renamed from "coil_thumbs" when private documents moved off disk: the old directory may hold
+    // thumbnails of what are now private documents, and the Room migration deletes it (it can't be
+    // purged selectively, and nothing has it open at that point).
+    const val THUMB_CACHE_DIR = "coil_thumbs_v2"
+
     @Provides
     @Singleton
     @AuthedOkHttp
-    fun provideAuthedOkHttpClient(authSessionManager: AuthSessionManager): OkHttpClient =
+    fun provideAuthedOkHttpClient(
+        authSessionManager: AuthSessionManager,
+        cookieStorage: SessionCookieStorage,
+    ): OkHttpClient =
         OkHttpClient.Builder()
+            // Same cookie store as the Ktor client: private-folder thumbnails/video are only served
+            // when the `vault_session` cookie (open folder locks) rides along.
+            .cookieJar(StorageCookieJar(cookieStorage))
             .addInterceptor(AuthImageInterceptor(authSessionManager))
             .authenticator(AuthImageAuthenticator(authSessionManager))
             // Cold start fills the whole grid at once; the default 5 requests/host serialized the
@@ -60,10 +75,14 @@ object ImageModule {
     fun provideImageLoader(
         @ApplicationContext context: Context,
         serverUrlProvider: ServerUrlProvider,
+        privateStore: PrivateDocumentStore,
         @AuthedOkHttp okHttpClient: OkHttpClient,
     ): ImageLoader {
         return ImageLoader.Builder(context)
-            .components { add(ThumbnailMapper(serverUrlProvider)) }
+            .components {
+                add(ThumbnailMapper(serverUrlProvider))
+                add(PrivateThumbnailInterceptor(privateStore))
+            }
             .okHttpClient(okHttpClient)
             // Explicit in-memory cache so thumbnails aren't re-decoded/re-fetched while the cold
             // disk cache fills. RGB_565 halves the bitmap footprint for the opaque JPEG thumbnails.
@@ -71,7 +90,7 @@ object ImageModule {
             .allowRgb565(true)
             .diskCache(
                 DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("coil_thumbs"))
+                    .directory(context.cacheDir.resolve(THUMB_CACHE_DIR))
                     .maxSizeBytes(THUMB_DISK_CACHE_BYTES)
                     .build(),
             )

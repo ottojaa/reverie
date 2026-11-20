@@ -1,10 +1,9 @@
-import { VaultStatusSchema, VaultUnlockRequestSchema, type VaultStatus, type VaultUnlockRequest } from '@reverie/shared';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { NotFoundError, VaultStatusSchema, VaultUnlockRequestSchema, type VaultStatus, type VaultUnlockRequest } from '@reverie/shared';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { env } from '../../config/env.js';
-import { db } from '../../db/kysely.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
-import { isVaultUnlocked, signVaultToken, VAULT_COOKIE } from '../../services/vault.js';
+import { clearVaultCookie, fetchHasPassword, loadFolderLocks, setVaultCookie } from '../../services/folder-locks.js';
+import { loadLockMap } from '../../services/privacy.js';
 
 const VaultErrorSchema = z.object({ error: z.string(), message: z.string() });
 
@@ -15,40 +14,33 @@ export default async function (fastify: FastifyInstance) {
         authService = createAuthService(fastify);
     });
 
-    // Build the current vault status from the DB + request cookie.
-    async function buildStatus(request: FastifyRequest, userId: string): Promise<VaultStatus> {
-        const user = await db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
-
-        return {
-            unlocked: isVaultUnlocked(fastify, request, userId),
-            has_password: !!user?.password_hash,
-        };
-    }
-
-    // GET /vault/status - current lock state (requires authentication)
+    // GET /vault/status - whether any folder lock is open in this session (requires authentication)
     fastify.get(
         '/vault/status',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Get the current vault (private-items) lock state',
+                description: 'Get the folder-lock state of this session',
                 tags: ['Vault'],
                 response: { 200: VaultStatusSchema },
             },
         },
-        async function (request) {
-            return buildStatus(request, request.user.id);
+        async function (request): Promise<VaultStatus> {
+            const userId = request.user.id;
+            const locks = await loadFolderLocks(fastify, request, userId);
+
+            return { unlocked: locks.openLockIds.length > 0, has_password: await fetchHasPassword(userId) };
         },
     );
 
-    // POST /vault/unlock - unlock private items by re-entering the account password
+    // POST /vault/unlock - open one folder's lock by re-entering the account password
     fastify.post<{ Body: VaultUnlockRequest }>(
         '/vault/unlock',
         {
             config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Unlock the vault (open private items) with the account password',
+                description: 'Unlock one private folder (or collection) with the account password. Other folders stay locked.',
                 tags: ['Vault'],
                 body: VaultUnlockRequestSchema,
                 response: { 200: VaultStatusSchema, 400: VaultErrorSchema, 401: VaultErrorSchema },
@@ -63,47 +55,43 @@ export default async function (fastify: FastifyInstance) {
             }
 
             if (!user.password_hash) {
-                return reply.status(400).send({ error: 'no_password', message: 'Set an account password to unlock private items' });
+                return reply.status(400).send({ error: 'no_password', message: 'Set an account password to unlock private folders' });
             }
 
-            const ok = await authService.verifyPassword(request.body.password, user.password_hash);
-
-            if (!ok) {
+            if (!(await authService.verifyPassword(request.body.password, user.password_hash))) {
                 return reply.status(401).send({ error: 'invalid_credentials', message: 'Incorrect password' });
             }
 
-            // Session cookie (no maxAge/expires): the unlock lasts until the browser/app
-            // session ends, logout, or an explicit lock — no idle timeout. maxAge on the
-            // JWT is just a long backstop so the token itself never expires mid-session.
-            reply.setCookie(VAULT_COOKIE, signVaultToken(fastify, userId), {
-                httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                path: '/',
-            });
+            // Trash is ignored by the lock map, so a trashed private folder can be unlocked to browse and restore it.
+            const lockId = (await loadLockMap(userId)).get(request.body.folder_id);
 
-            // Cookie is on the reply, not yet on the request, so report the fresh session directly.
+            if (!lockId) throw new NotFoundError('Private folder', request.body.folder_id);
+
+            const locks = await loadFolderLocks(fastify, request, userId);
+
+            // Session cookie (no maxAge/expires): the unlock lasts until the browser/app session ends or
+            // logout. Re-signed with the old open locks plus this one.
+            setVaultCookie(fastify, reply, userId, Array.from(new Set([...locks.openLockIds, lockId])));
+
             return { unlocked: true, has_password: true };
         },
     );
 
-    // POST /vault/lock - re-lock private items immediately
+    // POST /vault/lock - close every open lock at once (the app has no per-folder lock action; kept for older Android builds)
     fastify.post(
         '/vault/lock',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Lock the vault (re-hide private item content)',
+                description: 'Close every folder lock opened in this session',
                 tags: ['Vault'],
                 response: { 200: VaultStatusSchema },
             },
         },
-        async function (request, reply) {
-            reply.clearCookie(VAULT_COOKIE, { path: '/' });
+        async function (request, reply): Promise<VaultStatus> {
+            clearVaultCookie(reply);
 
-            const user = await db.selectFrom('users').select('password_hash').where('id', '=', request.user.id).executeTakeFirst();
-
-            return { unlocked: false, has_password: !!user?.password_hash };
+            return { unlocked: false, has_password: await fetchHasPassword(request.user.id) };
         },
     );
 }

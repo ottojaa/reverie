@@ -1,29 +1,28 @@
 import { z } from 'zod';
+import { UuidSchema } from './common.js';
 
 /**
- * Vault = the server-enforced lock over private items.
- *
- * Private items (is_private, or effectively private via a private collection/folder)
- * always appear in listings, but the backend withholds their content — file_url,
- * thumbnails, summaries, location — until the user unlocks by re-entering their
- * account password. Each locked item carries `locked: true`; clients show a lock
- * affordance and prompt to unlock on open. Unlocking grants a session-lived vault
- * session (httpOnly session cookie) that lasts until app quit, logout, or explicit
- * lock — there is no idle timeout. Search always excludes private items regardless
- * of vault state. Users without an account password cannot lock (nothing to unlock
- * with), so their private items stay openable.
+ * Folder locks: each private folder (or private collection, which locks its folders) is its own
+ * lock. Unlocking asks for the account password and opens exactly that one lock for the app
+ * session (an httpOnly session cookie that lasts until app quit or logout; there is no idle
+ * timeout). Private documents are never returned outside their own folder, locked or not: not
+ * in "All documents", search, facets, suggestions or counts. Users without an account password
+ * cannot lock (nothing to unlock with), so their private folders stay openable.
  */
 
-// POST /vault/unlock — re-enter the account login password to unlock private items.
+// POST /vault/unlock: re-enter the account login password to open one folder's lock.
+// `folder_id` is the private folder or collection to open (a trashed one is accepted too, so it
+// can be browsed and restored from the trash).
 export const VaultUnlockRequestSchema = z.object({
     password: z.string().min(1),
+    folder_id: UuidSchema,
 });
 
 export type VaultUnlockRequest = z.infer<typeof VaultUnlockRequestSchema>;
 
 // GET /vault/status — and the response of unlock/lock.
 export const VaultStatusSchema = z.object({
-    // Whether a valid vault session is currently active (private items unlocked).
+    // Whether at least one folder lock is currently open in this session.
     unlocked: z.boolean(),
     // Whether the user has an account password to unlock with. OAuth-only users
     // (no password_hash) cannot lock/unlock; the UI uses this to nudge them to set one.

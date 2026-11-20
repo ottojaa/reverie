@@ -8,14 +8,9 @@ export const vaultApi = {
         return VaultStatusSchema.parse(data);
     },
 
-    async unlock(password: string): Promise<VaultStatus> {
-        const { data } = await apiClient.post('/vault/unlock', { password });
-
-        return VaultStatusSchema.parse(data);
-    },
-
-    async lock(): Promise<VaultStatus> {
-        const { data } = await apiClient.post('/vault/lock');
+    /** Opens the lock of one private folder or collection for this session (checks the account password). */
+    async unlock(password: string, folderId: string): Promise<VaultStatus> {
+        const { data } = await apiClient.post('/vault/unlock', { password, folder_id: folderId });
 
         return VaultStatusSchema.parse(data);
     },

@@ -5,12 +5,17 @@ import { SectionIcon } from '@/components/ui/SectionIcon';
 import { formatDate, formatFileSize, getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { TrashDocument, TrashFolder } from '@reverie/shared';
-import { Folder, Lock, RotateCcw, Trash2 } from 'lucide-react';
+import { Folder, Lock, LockOpen, RotateCcw, Trash2 } from 'lucide-react';
 
 export type TrashItem = { kind: 'document'; item: TrashDocument } | { kind: 'folder'; item: TrashFolder };
 
 export function toTrashItemKey(entry: TrashItem): string {
     return `${entry.kind}:${entry.item.id}`;
+}
+
+/** A private folder or collection whose lock is closed arrives as a bare row without a name. */
+export function isLockedFolderEntry(entry: TrashItem): boolean {
+    return entry.kind === 'folder' && entry.item.locked;
 }
 
 /** "in 12 days", "tomorrow", "soon": when the purge job will remove the item for good. */
@@ -27,6 +32,14 @@ export function toPurgeLabel(purgeAt: string, now: Date = new Date()): string {
 function TrashThumbnail({ entry }: { entry: TrashItem }) {
     const box = 'flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted';
 
+    if (isLockedFolderEntry(entry)) {
+        return (
+            <div className={box} title="Locked">
+                <Lock className="size-4 text-accent" aria-hidden />
+            </div>
+        );
+    }
+
     if (entry.kind === 'folder') {
         return (
             <div className={box}>
@@ -41,14 +54,6 @@ function TrashThumbnail({ entry }: { entry: TrashItem }) {
 
     const doc = entry.item;
     const url = getThumbnailUrl(doc, 'sm');
-
-    if (doc.locked) {
-        return (
-            <div className={box} title="Locked">
-                <Lock className="size-4 text-accent" aria-hidden />
-            </div>
-        );
-    }
 
     return (
         <div className={box}>
@@ -67,12 +72,15 @@ interface TrashRowProps {
     busy: boolean;
     onToggle: () => void;
     onRestore: () => void;
+    /** Opens the lock of a locked folder so its name shows and it can be restored. */
+    onUnlock: () => void;
     onPurge: () => void;
 }
 
-export function TrashRow({ entry, selected, busy, onToggle, onRestore, onPurge }: TrashRowProps) {
+export function TrashRow({ entry, selected, busy, onToggle, onRestore, onUnlock, onPurge }: TrashRowProps) {
     const isFolder = entry.kind === 'folder';
-    const name = isFolder ? entry.item.name : entry.item.original_filename;
+    const isLocked = isLockedFolderEntry(entry);
+    const name = isFolder ? (isLocked ? 'Locked folder' : entry.item.name) : entry.item.original_filename;
     const detail = isFolder ? (entry.item.type === 'collection' ? 'Collection' : 'Folder') : formatFileSize(entry.item.size_bytes);
 
     return (
@@ -88,14 +96,23 @@ export function TrashRow({ entry, selected, busy, onToggle, onRestore, onPurge }
                 </p>
             </div>
             <div className="ml-auto flex shrink-0 gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={onRestore} disabled={busy}>
-                    <RotateCcw className="size-3.5" />
-                    Restore
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge} disabled={busy}>
-                    <Trash2 className="size-3.5" />
-                    Delete forever
-                </Button>
+                {isLocked ? (
+                    <Button type="button" variant="outline" size="sm" onClick={onUnlock} disabled={busy}>
+                        <LockOpen className="size-3.5" />
+                        Unlock
+                    </Button>
+                ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={onRestore} disabled={busy}>
+                        <RotateCcw className="size-3.5" />
+                        Restore
+                    </Button>
+                )}
+                {!isLocked && (
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge} disabled={busy}>
+                        <Trash2 className="size-3.5" />
+                        Delete forever
+                    </Button>
+                )}
             </div>
         </li>
     );

@@ -2,6 +2,8 @@ package com.reverie.app.data.api
 
 import com.reverie.app.data.api.model.AuthErrorCode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -38,5 +40,26 @@ class ApiErrorTest {
         assertTrue(ReverieApiException.isAuthFailure(ReverieApiException.Http(401, "x", "y")))
         assertTrue(ReverieApiException.isAuthFailure(ReverieApiException.Http(403, "x", "y")))
         assertTrue(!ReverieApiException.isAuthFailure(ReverieApiException.Http(404, "x", "y")))
+    }
+
+    private val lockedBody =
+        """{"statusCode":403,"error":"FOLDER_LOCKED","message":"Folder is locked","details":{"folder_id":"f-123"}}"""
+
+    @Test fun `FOLDER_LOCKED carries the folder id to unlock`() {
+        val e = ReverieApiException.parse(403, lockedBody)
+        assertEquals("f-123", e.lockedFolderId())
+    }
+
+    @Test fun `other 403s and other errors name no folder`() {
+        val forbidden = ReverieApiException.parse(403, """{"statusCode":403,"error":"FORBIDDEN","message":"No"}""")
+        val lockedWithoutId = ReverieApiException.parse(403, """{"statusCode":403,"error":"FOLDER_LOCKED","message":"x"}""")
+        val notFound = ReverieApiException.parse(404, """{"statusCode":404,"error":"NOT_FOUND","message":"x"}""")
+        assertNull(forbidden.lockedFolderId())
+        assertNull(lockedWithoutId.lockedFolderId())
+        assertNull(notFound.lockedFolderId())
+    }
+
+    @Test fun `a locked folder is not an auth failure`() {
+        assertFalse(ReverieApiException.isAuthFailure(ReverieApiException.parse(403, lockedBody)))
     }
 }

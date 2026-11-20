@@ -9,13 +9,14 @@ import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from '@/lib/sections';
 import { cn } from '@/lib/utils';
-import { VaultSidebarControl } from './VaultSidebarControl';
+import { useVault } from '@/lib/vault';
 import type { FolderWithChildren } from '@reverie/shared';
-import { Link, useLocation, useParams } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import { Bot, LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Separator } from '../ui/separator';
 import { Skeleton } from '../ui/skeleton';
 import type { SortableTreeHandlers } from './Layout';
@@ -34,6 +35,8 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const { data: userFromQuery } = useUser();
     const { data: sections = [], isLoading } = useSections();
     const confirm = useConfirm();
+    const navigate = useNavigate();
+    const { hasPassword } = useVault();
 
     const user = userFromQuery ?? authUser;
     const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
@@ -133,7 +136,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
             const docCount = folder.children.reduce((sum, child) => sum + child.document_count, 0);
             const ok = await confirm({
                 title: 'Make collection private?',
-                description: `"${folder.name}" — its ${folderCount} folder${folderCount !== 1 ? 's' : ''} and ${docCount} file${docCount !== 1 ? 's' : ''} will be hidden from search.`,
+                description: `"${folder.name}" — its ${folderCount} folder${folderCount !== 1 ? 's' : ''} and ${docCount} file${docCount !== 1 ? 's' : ''} will only show inside it, never in All documents or search.`,
                 confirmText: 'Make private',
             });
 
@@ -141,6 +144,13 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
         }
 
         updateFolder.mutate({ id: folder.id, data: { is_private: makePrivate } });
+
+        // Without an account password nothing can be locked, so say where to set one (never block).
+        if (makePrivate && hasPassword === false) {
+            toast.info('Private folders are only locked once your account has a password. Set one in Settings.', {
+                action: { label: 'Open Settings', onClick: () => void navigate({ to: '/settings' }) },
+            });
+        }
     };
 
     const handleSectionsChange = async (orderUpdates: Array<{ id: string; sort_order: number }>, parentChanges?: Array<{ id: string; parent_id: string }>) => {
@@ -267,7 +277,6 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
 
             {/* Storage & Settings */}
             <div className="shrink-0 border-t border-sidebar-border p-2">
-                <VaultSidebarControl />
                 {user ? (
                     <Link to="/settings" className="block px-3 py-2.5 transition-colors hover:bg-sidebar-accent" onClick={onClose}>
                         <div className="h-1.5 bg-secondary rounded-full overflow-hidden">

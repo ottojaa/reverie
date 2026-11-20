@@ -13,13 +13,12 @@ export const FolderSchema = z.object({
     emoji: z.string().max(48).nullable(),
     sort_order: z.number(),
     type: FolderTypeSchema,
-    // Explicitly-set privacy flag on this folder. Effective privacy also inherits
-    // from an ancestor (a private collection makes its folders private); callers
-    // compute inheritance from the tree — see getPrivateFolderIds on the backend.
+    // Explicitly-set privacy flag on this folder. A folder inside a private collection is
+    // private too, whatever this flag says; `locked` already accounts for that.
     is_private: z.boolean(),
-    // True when this folder is effectively private AND the caller has no active vault
-    // session (and has an account password). Clients show a lock affordance and gate
-    // navigation until the vault is unlocked. See vault.ts.
+    // True when this folder is effectively private AND its lock is closed (the caller has an
+    // account password and has not unlocked it in this session). Clients show a padlock and ask
+    // for the password before opening it. See vault.ts.
     locked: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),

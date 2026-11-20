@@ -126,7 +126,7 @@ vi.mock('bullmq', () => ({
 
 const USER = 'user-1';
 
-function seed(kind: 'own-flag' | 'folder' | 'collection' | 'public', mimeType: string) {
+function seed(kind: 'folder' | 'collection' | 'public', mimeType: string) {
     const isVisionImage = mimeType.startsWith('image/');
     const folderId = kind === 'folder' || kind === 'collection' ? 'folder-1' : null;
 
@@ -140,7 +140,6 @@ function seed(kind: 'own-flag' | 'folder' | 'collection' | 'public', mimeType: s
         id: 'doc-1',
         user_id: USER,
         folder_id: folderId,
-        is_private: kind === 'own-flag',
         mime_type: mimeType,
         file_path: 'files/doc-1',
         size_bytes: 100,
@@ -189,7 +188,7 @@ beforeEach(() => {
     mockAnthropicSuccess();
 });
 
-const PRIVATE_KINDS = ['own-flag', 'folder', 'collection'] as const;
+const PRIVATE_KINDS = ['folder', 'collection'] as const;
 const FORCED_TYPES = [
     { forceType: undefined, mimeType: 'application/pdf', label: 'no forced type' },
     { forceType: 'text_summary', mimeType: 'application/pdf', label: 'forced text_summary' },

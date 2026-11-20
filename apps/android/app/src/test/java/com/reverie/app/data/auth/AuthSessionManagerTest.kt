@@ -1,6 +1,7 @@
 package com.reverie.app.data.auth
 
 import com.reverie.app.data.api.ApiJson
+import com.reverie.app.data.api.SessionCookieStorage
 import com.reverie.app.data.api.model.LoginResponse
 import com.reverie.app.data.api.model.UserDto
 import com.reverie.app.data.api.model.UserRole
@@ -79,7 +80,7 @@ class AuthSessionManagerTest {
 
     private fun manager(client: HttpClient, store: TokenStore): AuthSessionManager {
         val scope = CoroutineScope(UnconfinedTestDispatcher())
-        return AuthSessionManager(Lazy { client }, store, scope)
+        return AuthSessionManager(Lazy { client }, store, SessionCookieStorage(), scope)
     }
 
     private suspend fun AuthSessionManager.seed() {

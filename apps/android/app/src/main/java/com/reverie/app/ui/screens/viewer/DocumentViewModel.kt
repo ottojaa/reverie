@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.viewer
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentOcrResult
@@ -11,18 +12,23 @@ import com.reverie.app.data.api.model.UserRole
 import com.reverie.app.data.local.FileCacheManager
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
+import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.domain.model.AuthState
+import com.reverie.app.ui.components.FolderUnlocker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -37,6 +43,7 @@ import javax.inject.Inject
 class DocumentViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val documentRepository: DocumentRepository,
+    vaultRepository: VaultRepository,
     private val fileCacheManager: FileCacheManager,
     private val realtimeManager: RealtimeManager,
     private val serverUrlProvider: ServerUrlProvider,
@@ -73,6 +80,14 @@ class DocumentViewModel @Inject constructor(
     val videoBackground: StateFlow<VideoBackground> = settingsRepository.settings
         .map { it.videoBackground }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VideoBackground.BLACK)
+
+    // Documents the server refused with FOLDER_LOCKED (document id -> the lock that guards it), so
+    // the page can offer an unlock instead of an endless spinner.
+    private val _lockedDocuments = MutableStateFlow<Map<String, String>>(emptyMap())
+    val lockedDocuments: StateFlow<Map<String, String>> = _lockedDocuments.asStateFlow()
+
+    /** Password prompt for a locked folder; a successful unlock re-fetches the refused documents. */
+    val unlocker = FolderUnlocker(vaultRepository, viewModelScope) { folderId -> retryLocked(folderId) }
 
     private var currentSub: AutoCloseable? = null
     private var currentId: String? = null
@@ -132,11 +147,6 @@ class DocumentViewModel @Inject constructor(
         refresh(id)
     }
 
-    fun setPrivate(id: String, isPrivate: Boolean) = viewModelScope.launch {
-        runCatching { documentRepository.setPrivacy(listOf(id), isPrivate) }
-        refresh(id)
-    }
-
     fun rename(id: String, filename: String) = viewModelScope.launch {
         runCatching { documentRepository.rename(id, filename) }
     }
@@ -147,12 +157,34 @@ class DocumentViewModel @Inject constructor(
 
     override fun onCleared() {
         currentSub?.close()
+        // Leaving the viewer: the transient on-disk copies of private originals go with it.
+        fileCacheManager.clearPrivate()
+    }
+
+    /** Ask for the password of the lock guarding [id], when the server has said it is locked. */
+    fun requestUnlock(id: String) {
+        val folderId = _lockedDocuments.value[id] ?: return
+        unlocker.request(folderId)
+    }
+
+    private fun retryLocked(folderId: String) {
+        val ids = _lockedDocuments.value.filterValues { it == folderId }.keys
+        _lockedDocuments.update { it - ids }
+        ids.forEach(::refresh)
+    }
+
+    private fun onFetchFailed(id: String, throwable: Throwable) {
+        val folderId = (throwable as? ReverieApiException)?.lockedFolderId() ?: return
+        _lockedDocuments.update { it + (id to folderId) }
+        if (id == currentId) unlocker.request(folderId)
     }
 
     /** Re-pull the record into Room so observers (toolbar/insights) refresh; this also refreshes the
      * repository's cached signed URL (a rotated signature lands on fetch). */
     private fun refresh(id: String) {
-        viewModelScope.launch { runCatching { documentRepository.fetchDocument(id) } }
+        viewModelScope.launch {
+            runCatching { documentRepository.fetchDocument(id) }.onFailure { onFetchFailed(id, it) }
+        }
     }
 
     private fun absolute(url: String): String =

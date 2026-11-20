@@ -8,6 +8,9 @@ import androidx.room.PrimaryKey
  * Cached document row. Mirrors DocumentDto minus the signed, short-lived `file_url` /
  * `thumbnail_urls` (deliberately never persisted — they expire). Complex sub-objects are
  * stored as JSON strings. `lastAccessedAt` drives retention/eviction.
+ *
+ * Documents in private folders are NEVER stored here (see [toEntityOrNull]); they live only in
+ * the in-memory PrivateDocumentStore, so there is deliberately no privacy column.
  */
 @Entity(
     tableName = "documents",
@@ -33,10 +36,6 @@ data class DocumentEntity(
     val llmProcessedAt: String?,
     val llmTokenCount: Long?,
     val photoMetadataJson: String?,
-    val isPrivate: Boolean,
-    // Vault lock state at last fetch. Refreshed from the server on unlock/lock; stale-safe
-    // offline (locked content is never cached, so a stale `true` just keeps it locked).
-    val locked: Boolean,
     val createdAt: String,
     val updatedAt: String,
     val cachedAt: Long,

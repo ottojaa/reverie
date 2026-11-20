@@ -27,6 +27,7 @@ import javax.inject.Singleton
  * LRU cache of original files streamed to disk, backing the PDF viewer and offline reads.
  * Files larger than [MAX_CACHEABLE_BYTES] are streamed straight through rather than cached
  * (videos play via ExoPlayer against the signed URL and never come through here).
+ * Originals of private documents bypass the LRU index and go to [privateDir] instead.
  */
 @Singleton
 class FileCacheManager @Inject constructor(
@@ -39,6 +40,15 @@ class FileCacheManager @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
     private val dir = File(context.cacheDir, "originals").apply { mkdirs() }
+
+    // Originals of private-folder documents. The PDF/image viewers need a real File, so these do
+    // touch disk, but only transiently: never indexed in [cachedFileDao] (so never reused as a
+    // cache hit), wiped at process start (the init below), on logout and when the viewer closes.
+    // This is the one place private document bytes exist on disk.
+    private val privateDir = File(context.cacheDir, "private-originals").apply {
+        deleteRecursively()
+        mkdirs()
+    }
 
     /**
      * Return the cached original file, downloading it on a cache miss. [onProgress] receives the
@@ -61,13 +71,16 @@ class FileCacheManager @Inject constructor(
         val absolute = if (fileUrl.startsWith("http")) fileUrl
         else serverUrlProvider.current().removeSuffix("/") + fileUrl
 
-        val target = File(dir, documentId)
+        val isPrivate = document.is_private
+        val target = File(if (isPrivate) privateDir else dir, documentId)
         val response = client.get(absolute)
         response.throwIfError()
         val total = response.contentLength()
         response.bodyAsChannel().toInputStream().use { input ->
             target.outputStream().use { output -> copyReporting(input, output, total, onProgress) }
         }
+
+        if (isPrivate) return@withContext target
 
         cachedFileDao.upsert(
             CachedFileEntity(
@@ -85,6 +98,23 @@ class FileCacheManager @Inject constructor(
     suspend fun clear() = withContext(io) {
         cachedFileDao.clear()
         dir.listFiles()?.forEach { it.delete() }
+        clearPrivate()
+    }
+
+    /** Delete the transient private originals of [documentIds], or all of them when null. */
+    fun clearPrivate(documentIds: Collection<String>? = null) {
+        val files = privateDir.listFiles() ?: return
+        files.filter { documentIds == null || it.name in documentIds }.forEach { it.delete() }
+    }
+
+    /** Remove [documentIds] from the LRU index and delete their cached files. */
+    suspend fun evict(documentIds: Collection<String>) = withContext(io) {
+        for (id in documentIds) {
+            val entry = cachedFileDao.get(id) ?: continue
+            File(dir, entry.relativePath).delete()
+            cachedFileDao.delete(id)
+        }
+        clearPrivate(documentIds)
     }
 
     private suspend fun evictIfNeeded() {

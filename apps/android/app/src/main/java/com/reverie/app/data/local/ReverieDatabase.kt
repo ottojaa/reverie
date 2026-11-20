@@ -23,9 +23,9 @@ import com.reverie.app.data.local.entity.UploadTaskEntity
         UploadTaskEntity::class,
         UploadItemEntity::class,
     ],
-    // v4: documents.locked + folders.locked added (vault lock state). Destructive fallback
-    // (DatabaseModule) rebuilds the cache from the network, so no hand-written Migration is needed.
-    version = 4,
+    // v5: documents lost isPrivate/locked (private documents are never stored; see Migration4To5).
+    // Other version jumps fall back to a destructive rebuild from the network (DatabaseModule).
+    version = 5,
     exportSchema = false,
 )
 abstract class ReverieDatabase : RoomDatabase() {

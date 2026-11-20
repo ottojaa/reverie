@@ -31,8 +31,13 @@ interface DocumentDao {
     @Query("DELETE FROM documents WHERE folderId = :folderId AND id NOT IN (:keepIds)")
     suspend fun deleteInFolderNotIn(folderId: String, keepIds: List<String>)
 
-    @Query("UPDATE documents SET isPrivate = :isPrivate WHERE id IN (:ids)")
-    suspend fun setPrivacy(ids: List<String>, isPrivate: Boolean)
+    /** Which of [ids] have a cached row (used to detect documents that became private after caching). */
+    @Query("SELECT id FROM documents WHERE id IN (:ids)")
+    suspend fun existingIds(ids: List<String>): List<String>
+
+    /** Cached documents whose folder is not one of the known-public [publicFolderIds]. */
+    @Query("SELECT id FROM documents WHERE folderId IS NOT NULL AND folderId NOT IN (:publicFolderIds)")
+    suspend fun idsOutsideFolders(publicFolderIds: List<String>): List<String>
 
     @Query("UPDATE documents SET lastAccessedAt = :timestamp WHERE id = :id")
     suspend fun touchLastAccessed(id: String, timestamp: Long)

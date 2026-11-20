@@ -6,7 +6,7 @@ import { ToolError } from './types';
 
 /**
  * The one place that decides what a tool may see or touch: the user's own documents and folders
- * that are neither trashed nor locked (own flag, folder, or collection). Every read goes through
+ * that are neither trashed nor private (a private folder or collection). Every read goes through
  * these query builders, and every write re-checks its targets with the assert helpers inside its
  * transaction, so an item locked or trashed after a search cannot be reached through its id or an
  * old selection. Nothing here, or anywhere in tools/, can unlock anything.

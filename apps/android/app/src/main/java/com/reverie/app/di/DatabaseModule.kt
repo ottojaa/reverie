@@ -2,6 +2,7 @@ package com.reverie.app.di
 
 import android.content.Context
 import androidx.room.Room
+import com.reverie.app.data.local.Migration4To5
 import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.local.dao.CachedFileDao
 import com.reverie.app.data.local.dao.DocumentDao
@@ -23,6 +24,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): ReverieDatabase =
         Room.databaseBuilder(context, ReverieDatabase::class.java, "reverie.db")
+            .addMigrations(Migration4To5(context.cacheDir))
             .fallbackToDestructiveMigration()
             .build()
 

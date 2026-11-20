@@ -11,6 +11,15 @@ export interface JwtPayload {
     email: string;
 }
 
+/**
+ * A login (access/refresh) token has no `scope`. The folder-lock cookie's JWT is signed with the
+ * same secret and carries `scope: 'vault'`, so anything that accepts a login token must reject
+ * scoped ones, or the cookie value could be replayed as a bearer token.
+ */
+export function isLoginPayload(decoded: object): decoded is JwtPayload {
+    return !('scope' in decoded);
+}
+
 // Authenticated user info attached to request
 export interface AuthUser {
     id: string;
@@ -74,6 +83,9 @@ export default fp(async function (fastify) {
     fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
         try {
             const decoded = await request.jwtVerify<JwtPayload>();
+
+            if (!isLoginPayload(decoded)) throw new Error('Not a login token');
+
             request.user = {
                 id: decoded.sub,
                 email: decoded.email,
