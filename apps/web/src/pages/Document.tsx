@@ -2,8 +2,10 @@ import { InsightPanel } from '@/components/document-viewer/insights/InsightPanel
 import type { ViewerProps } from '@/components/document-viewer/viewer-registry';
 import { getViewerLoader } from '@/components/document-viewer/viewer-registry';
 import { ViewerToolbar } from '@/components/document-viewer/ViewerToolbar';
+import { LockedFolderNotice } from '@/components/folders/LockedFolderNotice';
 import { useDocument } from '@/lib/api';
 import { buildFileUrl } from '@/lib/commonhelpers';
+import { useLockedFolderPrompt } from '@/lib/hooks/useLockedFolderPrompt';
 import { useDocumentStatus } from '@/lib/useDocumentStatus';
 import { useParams } from '@tanstack/react-router';
 import { FileWarning } from 'lucide-react';
@@ -46,6 +48,7 @@ export function DocumentPage() {
     const { data: document, isLoading, error } = useDocument(id);
     const [isInsightsOpen, setIsInsightsOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const { isLocked, unlock } = useLockedFolderPrompt(error);
 
     // Subscribe to real-time job status updates via websocket
     useDocumentStatus(document?.id);
@@ -75,6 +78,15 @@ export function DocumentPage() {
                     <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                     <p className="text-sm text-muted-foreground">Loading document...</p>
                 </motion.div>
+            </div>
+        );
+    }
+
+    // Its folder is locked: the password prompt is already open, this is the fallback after a cancel
+    if (isLocked) {
+        return (
+            <div className="flex h-full w-full items-center justify-center bg-background">
+                <LockedFolderNotice onUnlock={unlock} />
             </div>
         );
     }

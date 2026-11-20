@@ -25,7 +25,7 @@ story Immich can't touch.
 Per-document LLM summaries/entities/topics · a library agent (in-app and over MCP) · real
 document-type support (Office/PDF/text/code with rendered thumbnails) · hierarchical
 collections→folders · pluggable **S3** storage · Electron desktop app · content-addressable dedup
-storage · the password-locked Vault · document-date-vs-photo-date distinction.
+storage · per-folder locks for private folders · document-date-vs-photo-date distinction.
 
 ---
 
@@ -121,7 +121,7 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 | Email verification (signup, password change/reset) | ✅          | ❌                   | 🛠️                 |
 | 2FA / TOTP                                         | ⚠️ recent   | ❌                   | 🧊                 |
 | Authenticated realtime socket                      | ✅          | ✅ JWT handshake     | ✅ (#60, #65)      |
-| Per-item lock (private items, re-prompt to open)   | —           | ✅ per-resource lock | ✅ (#64)           |
+| Per-item lock (private items, re-prompt to open)   | —           | ✅ per-folder lock   | ✅ (#64)           |
 
 ---
 
@@ -139,8 +139,8 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
    Folders keep their meaning: deleting one drops its documents to the root and the folder itself is
    restorable (empty).
 3. ✅ **Authenticate the realtime socket** (#60, #65). The JWT is verified in the socket handshake and
-   rooms are scoped to the authenticated `user_id`. Shipped alongside the per-item lock for private
-   items (#64) and uploads up to 20 GB (#66).
+   rooms are scoped to the authenticated `user_id`. Shipped alongside the first lock for private
+   items (#64, since replaced by one lock per private folder) and uploads up to 20 GB (#66).
 4. **Fix duplicate detection.** Today it matches `original_filename` within a single folder. Switch
    to **`file_hash`, globally** (drop the `folder_id` filter; `idx_documents_hash` already exists),
    matching what content-addressable storage already does physically. Keep filename as a secondary
@@ -160,8 +160,8 @@ storage · the password-locked Vault · document-date-vs-photo-date distinction.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude
   **Haiku** call each (summary, entities, tags). **Personal photos and locked items never go to
   Anthropic.**
-    - ✅ **Privacy gate** (#68) — the LLM workers refuse any locked item (its own flag, its folder, or
-      its collection) at processing time, even when it was locked while its job waited.
+    - ✅ **Privacy gate** (#68) — the LLM workers refuse any private item (one in a private folder or
+      collection) at processing time, even when it was locked while its job waited.
     - ✅ **Haiku 5.5** (#70) for the background jobs (summaries and image descriptions), on SDK 1.x and
       the current API version, with model, tokens and cost logged per summary.
     - ✅ **Shared tool registry** (#72) — one set of library tools (search, get, list, overview, tags, move,

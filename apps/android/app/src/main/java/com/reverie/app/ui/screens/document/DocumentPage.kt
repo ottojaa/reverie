@@ -8,6 +8,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Box
@@ -128,6 +129,9 @@ fun DocumentPage(
 ) {
     val context = LocalContext.current
     val document by viewModel.observeDocument(id).collectAsStateWithLifecycle(initialValue = null)
+    // The server refused this document with FOLDER_LOCKED and no copy is held: show an unlock prompt.
+    val lockedDocuments by viewModel.lockedDocuments.collectAsStateWithLifecycle()
+    val isLocked = document == null && id in lockedDocuments
     // Signed URLs are stripped from the cache; fetch (once, cached) when this page enters composition.
     // The pager only composes the current page ± beyondViewportPageCount, so only nearby pages fetch.
     val fileUrl by produceState<String?>(initialValue = null, id) { value = viewModel.fileUrl(id) }
@@ -207,10 +211,6 @@ fun DocumentPage(
 
         val viewer: @Composable (Modifier) -> Unit = { mod ->
             document?.let { doc ->
-                if (doc.locked) {
-                    LockedDocumentPlaceholder(mod)
-                    return@let
-                }
                 DocumentViewerBody(
                     document = doc,
                     fileUrl = fileUrl,
@@ -277,7 +277,11 @@ fun DocumentPage(
                 // transition, when the viewer draws nothing). Non-image seamless heroes stay put.
                 seamlessHero -> {
                     val keepImageHero = viewerType != ViewerType.IMAGE || transitionActive || !imageContentVisible
-                    if (keepImageHero) DocumentDiveHero(id, Modifier.fillMaxSize())
+                    // Without a live sequence (deep link) the document may be private and its folder
+                    // locked or not yet known: hold the thumbnail back until the record says what
+                    // it is, so a private thumbnail is never requested blind.
+                    val mayLoadThumbnail = !isLocked && (document != null || !viewModel.isFallback)
+                    if (keepImageHero && mayLoadThumbnail) DocumentDiveHero(id, Modifier.fillMaxSize())
                 }
                 else -> document?.let { DocumentDiveStandIn(it, videoBackground, Modifier.fillMaxSize()) }
             }
@@ -294,6 +298,7 @@ fun DocumentPage(
         }
         // Images self-gate on the transition (see ImageViewer's placeholder swap).
         if (viewerType == ViewerType.IMAGE) viewer(Modifier.fillMaxSize())
+        if (isLocked) LockedDocumentPlaceholder(Modifier.fillMaxSize(), onUnlock = { viewModel.requestUnlock(id) })
     }
 }
 
@@ -317,11 +322,11 @@ private fun VideoBufferingSpinner(modifier: Modifier = Modifier) {
 }
 
 /**
- * Shown when the pager swipes onto a locked private document (its content is withheld server-side).
- * The user unlocks from the grid/tree lock icons; here we just explain why there's nothing to show.
+ * Shown when the server refused a document because its private folder's lock is closed (deep link
+ * or a swipe onto it). Offers the password prompt instead of a blank page.
  */
 @Composable
-private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier) {
+private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier, onUnlock: () -> Unit) {
     Column(
         modifier = modifier.padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -335,10 +340,12 @@ private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "This item is locked. Unlock private items to open it.",
+            "This document is in a private folder.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onUnlock) { Text("Unlock") }
     }
 }

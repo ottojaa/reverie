@@ -1,5 +1,7 @@
 import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
+import { assertDocumentsOpen } from '../../services/document-access';
+import { loadFolderLocks } from '../../services/folder-locks';
 import { getFolderService } from '../../services/folder.service';
 import { getUploadService, type ConflictStrategy, type UploadedFile } from '../../services/upload.service';
 import { discardUploadedFiles, receiveUploadedFile } from '../../utils/upload-files';
@@ -69,6 +71,13 @@ export default async function (fastify: FastifyInstance) {
                 }
 
                 const resolvedFolderId = folder.id;
+
+                // Uploading into a locked folder would reveal its filenames (duplicate handling); copying
+                // metadata reads another document. Both need the folder's lock open.
+                const locks = await loadFolderLocks(fastify, request, userId);
+                locks.assertOpen(resolvedFolderId);
+
+                if (copyMetadataFromDocumentId) await assertDocumentsOpen(locks, userId, [copyMetadataFromDocumentId]);
 
                 const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy, copyMetadataFromDocumentId);
 

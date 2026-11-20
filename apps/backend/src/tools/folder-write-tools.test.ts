@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
-import { seedDocument } from '../testing/seed';
+import { seedDocument, seedFolder } from '../testing/seed';
 import { describeDb, refusal, run } from '../testing/tool-world';
 import { loadAudit, snapshotLibrary } from '../testing/write-helpers';
 import { trashFolder } from '../services/trash-folders';
@@ -191,13 +191,19 @@ describeDb('create_folder', () => {
         expect((await db().selectFrom('folders').select('deleted_at').where('id', '=', docFolder.id).executeTakeFirstOrThrow()).deleted_at).toBeNull();
     });
 
-    it('counts a locked or trashed document as content too, so undo cannot drop it to the root', async () => {
+    it('counts a private subfolder and its document as content, so undo cannot drop them to the root', async () => {
         const out = await run(alice(), 'create_folder', { name: unique('HoldsLocked') });
-        const folder = await db().selectFrom('folders').select('id').where('path', '=', out.path).where('user_id', '=', alice()).executeTakeFirstOrThrow();
-        const locked = await seedDocument(db(), { userId: alice(), name: unique('l') + '.pdf', folderId: folder.id, isPrivate: true });
+        const parent = await db()
+            .selectFrom('folders')
+            .select(['id', 'path'])
+            .where('path', '=', out.path)
+            .where('user_id', '=', alice())
+            .executeTakeFirstOrThrow();
+        const locked = await seedFolder(db(), alice(), unique('Inner'), { parent, isPrivate: true });
+        const doc = await seedDocument(db(), { userId: alice(), name: unique('l') + '.pdf', folderId: locked.id });
 
         expect(await refusal(alice(), 'undo_write', { audit_id: out.audit_id })).toBe('Cannot undo: the folder is not empty');
-        expect((await db().selectFrom('documents').select('folder_id').where('id', '=', locked).executeTakeFirstOrThrow()).folder_id).toBe(folder.id);
+        expect((await db().selectFrom('documents').select('folder_id').where('id', '=', doc).executeTakeFirstOrThrow()).folder_id).toBe(locked.id);
     });
 
     it('undo refuses after the folder was renamed', async () => {

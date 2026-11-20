@@ -9,7 +9,6 @@ import {
     JobStatusEnum,
     MoveDocumentsRequestSchema,
     PaginatedResponseSchema,
-    SetDocumentPrivacyRequestSchema,
     TrimVideoRequestSchema,
     TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
@@ -18,9 +17,8 @@ import {
     type DocumentListQuery,
     type DocumentPhotoMetadata,
     type MoveDocumentsRequest,
-    type SetDocumentPrivacyRequest,
 } from '@reverie/shared';
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
 import { type Document as DbDocument, type LlmResult, type PhotoMetadata } from '../../db/schema';
@@ -29,9 +27,10 @@ import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
 import { getFolderService } from '../../services/folder.service';
-import { excludeTrashed, getPrivateFolderIds, isDocumentEffectivelyPrivate, isDocumentPrivate } from '../../services/privacy';
+import { loadOpenDocument } from '../../services/document-access';
+import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
+import { excludePrivateDocuments, excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
-import { isVaultLocked } from '../../services/vault';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
@@ -89,11 +88,19 @@ export default async function (fastify: FastifyInstance) {
             const userId = request.user.id;
             const { limit, offset, folder_id, category, date_from, date_to } = request.query;
 
+            // A private folder's documents are listed only by asking for that folder, once it is open.
+            // Every other listing (no folder filter) leaves private folders out, locked or not.
+            const locks = await loadFolderLocks(fastify, request, userId);
+            locks.assertOpen(folder_id ?? null);
+            const privateFolderIds = locks.privateFolderIds;
+
             let query = excludeTrashed(db.selectFrom('documents').selectAll().where('user_id', '=', userId), '');
 
             // Apply filters
             if (folder_id) {
                 query = query.where('folder_id', '=', folder_id);
+            } else {
+                query = excludePrivateDocuments(query, privateFolderIds, '');
             }
 
             if (category) {
@@ -113,6 +120,8 @@ export default async function (fastify: FastifyInstance) {
 
             if (folder_id) {
                 countQuery = countQuery.where('folder_id', '=', folder_id);
+            } else {
+                countQuery = excludePrivateDocuments(countQuery, privateFolderIds, '');
             }
 
             if (category) {
@@ -127,22 +136,13 @@ export default async function (fastify: FastifyInstance) {
                 countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
             }
 
-            // Private documents always appear in listings; when the vault is locked their
-            // content is withheld (locked: true) rather than the items being hidden.
-            const vaultLocked = await isVaultLocked(fastify, request, userId);
-            const privateFolderIds = vaultLocked ? await getPrivateFolderIds(userId) : [];
-
             const [documents, countResult] = await Promise.all([
                 query.orderBy('created_at', 'desc').limit(limit).offset(offset).execute(),
                 countQuery.executeTakeFirst(),
             ]);
 
-            // Serialize documents with signed URLs (parallel for performance)
-            const serializedDocuments = await Promise.all(
-                documents.map((doc) =>
-                    serializeDocument(doc, undefined, undefined, { locked: vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds) }),
-                ),
-            );
+            // Rows only get here once their folder is known to be open, so serializing signs their URLs.
+            const serializedDocuments = await Promise.all(documents.map((doc) => serializeDocument(doc, locks)));
 
             return {
                 items: serializedDocuments,
@@ -176,6 +176,8 @@ export default async function (fastify: FastifyInstance) {
             if (filenames.length === 0) {
                 return { duplicates: [] };
             }
+
+            (await loadFolderLocks(fastify, request, userId)).assertOpen(folder_id);
 
             const existing = await excludeTrashed(
                 db
@@ -227,7 +229,7 @@ export default async function (fastify: FastifyInstance) {
             }
 
             const docsToMove = await excludeTrashed(
-                db.selectFrom('documents').select(['id', 'original_filename']).where('id', 'in', document_ids).where('user_id', '=', userId),
+                db.selectFrom('documents').select(['id', 'original_filename', 'folder_id']).where('id', 'in', document_ids).where('user_id', '=', userId),
                 '',
             )
                 .orderBy('id')
@@ -236,6 +238,14 @@ export default async function (fastify: FastifyInstance) {
             if (docsToMove.length === 0) {
                 return reply.status(204).send();
             }
+
+            // Moving out of a locked folder would turn its documents public, so the source locks must be open.
+            // Moving into a private folder hides documents and needs nothing, unless a conflict strategy
+            // is set: that reads and changes the destination's filenames.
+            const locks = await loadFolderLocks(fastify, request, userId);
+            locks.assertAllOpen(docsToMove.map((doc) => doc.folder_id));
+
+            if (conflict_strategy) locks.assertOpen(folder_id);
 
             if (conflict_strategy === 'replace') {
                 const filenames = docsToMove.map((d) => d.original_filename);
@@ -267,53 +277,6 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
-    // Mark/unmark documents as private (batch) (requires authentication)
-    fastify.patch<{
-        Body: SetDocumentPrivacyRequest;
-    }>(
-        '/documents/privacy',
-        {
-            preHandler: [fastify.authenticate],
-            schema: {
-                description: 'Mark or unmark documents as private',
-                body: SetDocumentPrivacyRequestSchema,
-                response: {
-                    200: z.object({ updated: z.number() }),
-                },
-            },
-        },
-        async function (request, reply) {
-            const userId = request.user.id;
-            const { document_ids, is_private } = request.body;
-
-            // Removing privacy while the vault is locked would expose content without the
-            // password — refuse it for any currently-locked (effectively-private) document.
-            if (!is_private && (await isVaultLocked(fastify, request, userId))) {
-                const privateFolderIds = await getPrivateFolderIds(userId);
-                // Trashed documents stay in the check: they are still locked until purged.
-                const targets = await db
-                    .selectFrom('documents')
-                    .select(['is_private', 'folder_id'])
-                    .where('user_id', '=', userId)
-                    .where('id', 'in', document_ids)
-                    .execute();
-
-                if (targets.some((doc) => isDocumentEffectivelyPrivate(doc, privateFolderIds))) {
-                    return reply.forbidden('Unlock to change privacy of a locked document');
-                }
-            }
-
-            const result = await db
-                .updateTable('documents')
-                .set({ is_private, updated_at: new Date() })
-                .where('user_id', '=', userId)
-                .where('id', 'in', document_ids)
-                .executeTakeFirst();
-
-            return { updated: Number(result.numUpdatedRows ?? 0) };
-        },
-    );
-
     // Get document thumbnail (requires authentication)
     fastify.get<{
         Params: { id: string; size: 'sm' | 'md' | 'lg' };
@@ -330,17 +293,7 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
-
-            // A locked private document's thumbnail would leak its content — refuse it.
-            if (await resolveDocumentLocked(fastify, request, userId, document)) {
-                return reply.forbidden('Document is locked');
-            }
+            const { document, locks } = await loadOpenDocument(fastify, request, request.params.id);
 
             if (!document.thumbnail_paths) {
                 return reply.notFound('Thumbnail not available');
@@ -355,7 +308,8 @@ export default async function (fastify: FastifyInstance) {
             try {
                 const buffer = await storageService.readFile(thumbnailPath);
                 reply.header('Content-Type', 'image/webp');
-                reply.header('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+                // A private thumbnail must not outlive its lock in a browser or app disk cache.
+                reply.header('Cache-Control', locks.isPrivate(document.folder_id) ? 'private, no-store' : 'public, max-age=31536000');
 
                 return reply.send(buffer);
             } catch {
@@ -380,24 +334,13 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
-
-            // While locked, return the redacted document (title/type only) without fetching
-            // or exposing its LLM/photo content.
-            if (await resolveDocumentLocked(fastify, request, userId, document)) {
-                return await serializeDocument(document, null, null, { locked: true });
-            }
+        async function (request) {
+            const { document, locks } = await loadOpenDocument(fastify, request, request.params.id);
 
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
             const photoMeta = await db.selectFrom('photo_metadata').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            return await serializeDocument(document, llmResult, photoMeta ?? null);
+            return await serializeDocument(document, locks, llmResult, photoMeta ?? null);
         },
     );
 
@@ -421,11 +364,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document, locks } = await loadOpenDocument(fastify, request, request.params.id);
 
             const { original_filename } = request.body;
 
@@ -456,7 +395,7 @@ export default async function (fastify: FastifyInstance) {
             const updated = await uploadService.getDocument(request.params.id, userId);
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            return await serializeDocument(updated!, llmResult);
+            return await serializeDocument(updated!, locks, llmResult);
         },
     );
 
@@ -479,11 +418,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { locks } = await loadOpenDocument(fastify, request, request.params.id);
 
             const parts = request.parts();
             let file: UploadedFile | null = null;
@@ -503,7 +438,7 @@ export default async function (fastify: FastifyInstance) {
                 const updated = await uploadService.replaceDocumentFile(request.params.id, userId, file);
                 const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-                return await serializeDocument(updated, llmResult);
+                return await serializeDocument(updated, locks, llmResult);
             } finally {
                 // The stored file is moved out of the temp dir; this cleans up when something failed before that
                 if (file) await discardUploadedFiles([file]);
@@ -531,11 +466,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             const isVideo =
                 getFileCategory(document.mime_type) === 'video' ||
@@ -591,11 +522,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             await getTrashService().trashDocuments(userId, [document.id]);
 
@@ -628,6 +555,8 @@ export default async function (fastify: FastifyInstance) {
             if (found.length === 0) {
                 return reply.notFound('No documents found');
             }
+
+            (await loadFolderLocks(fastify, request, userId)).assertAllOpen(found.map((d) => d.folder_id));
 
             await getTrashService().trashDocuments(
                 userId,
@@ -665,13 +594,8 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+        async function (request) {
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             // Get related jobs
             const jobs = await db
@@ -710,13 +634,8 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+        async function (request) {
+            await loadOpenDocument(fastify, request, request.params.id);
 
             const jobs = await db
                 .selectFrom('processing_jobs')
@@ -764,13 +683,9 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             // Check if already processing or complete
             if (document.ocr_status === 'complete') {
@@ -839,12 +754,7 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            await loadOpenDocument(fastify, request, request.params.id);
 
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
@@ -883,13 +793,9 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             // Create processing_job first (UUID required for worker tracking)
             const createdJob = await db
@@ -964,13 +870,9 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document, locks } = await loadOpenDocument(fastify, request, request.params.id);
 
             // Check if already processed
             const existingLlmResult = await db.selectFrom('llm_results').select('id').where('document_id', '=', request.params.id).executeTakeFirst();
@@ -982,7 +884,7 @@ export default async function (fastify: FastifyInstance) {
             // Check eligibility
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: await isDocumentPrivate(document) });
+            const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: locks.isPrivate(document.folder_id) });
 
             if (!eligibility.eligible) {
                 return {
@@ -1036,12 +938,7 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            const { document } = await loadOpenDocument(fastify, request, request.params.id);
 
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
@@ -1078,13 +975,9 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
-            const document = await uploadService.getDocument(request.params.id, userId);
-
-            if (!document) {
-                return reply.notFound('Document not found');
-            }
+            await loadOpenDocument(fastify, request, request.params.id);
 
             // Clear existing LLM result and set status to pending
             await db.deleteFrom('llm_results').where('document_id', '=', request.params.id).execute();
@@ -1147,13 +1040,18 @@ export default async function (fastify: FastifyInstance) {
 
             const jobIds: string[] = [];
             const skipped: Array<{ document_id: string; reason: string }> = [];
-            const privateFolderIds = await getPrivateFolderIds(userId);
+            const locks = await loadFolderLocks(fastify, request, userId);
 
             for (const documentId of document_ids) {
                 // Verify document belongs to user
                 const document = await uploadService.getDocument(documentId, userId);
 
                 if (!document) {
+                    skipped.push({ document_id: documentId, reason: 'not_found' });
+                    continue;
+                }
+
+                if (locks.isLocked(document.folder_id)) {
                     skipped.push({ document_id: documentId, reason: 'not_found' });
                     continue;
                 }
@@ -1169,7 +1067,7 @@ export default async function (fastify: FastifyInstance) {
                 // Check eligibility
                 const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst();
 
-                const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: isDocumentEffectivelyPrivate(document, privateFolderIds) });
+                const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: locks.isPrivate(document.folder_id) });
 
                 if (!eligibility.eligible) {
                     skipped.push({ document_id: documentId, reason: eligibility.reason ?? 'not_eligible' });
@@ -1207,39 +1105,14 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-/**
- * Whether a document's content must be withheld from this request: the vault is locked
- * (user has a password + no active session) AND the document is effectively private.
- */
-async function resolveDocumentLocked(
-    fastify: FastifyInstance,
-    request: FastifyRequest,
-    userId: string,
-    doc: { is_private: boolean; folder_id: string | null },
-): Promise<boolean> {
-    if (!(await isVaultLocked(fastify, request, userId))) return false;
-
-    const privateFolderIds = await getPrivateFolderIds(userId);
-
-    return isDocumentEffectivelyPrivate(doc, privateFolderIds);
-}
-
 // Detail-only (GET /documents/:id): pass `photoMeta ?? null` to include the
 // photo_metadata field (null when no row exists); omit the argument on list
 // endpoints to leave the field absent and avoid per-row joins.
-// When `opts.locked` is set the document is serialized redacted — every content-bearing
-// field is withheld (no signed URLs are even generated) and only the title/type remain.
-async function serializeDocument(
-    doc: DbDocument,
-    llmResult?: LlmResult | null,
-    photoMeta?: PhotoMetadata | null,
-    opts?: { locked?: boolean },
-): Promise<Document> {
-    const locked = opts?.locked ?? false;
-
-    // Generate signed URLs for file access — skipped entirely while locked.
-    const fileUrl = locked ? null : await storageService.getFileUrl(doc.file_path);
-    const thumbnailUrls = locked ? null : await resolveThumbnailUrls(storageService, doc.thumbnail_paths);
+// Only documents whose folder lock is open reach this point (see loadOpenDocument and the list
+// handler), so signed URLs are always safe to produce. Built field by field, never by spreading the
+// row, so a column added to `documents` later is not exposed by accident.
+async function serializeDocument(doc: DbDocument, locks: FolderLocks, llmResult?: LlmResult | null, photoMeta?: PhotoMetadata | null): Promise<Document> {
+    const [fileUrl, thumbnailUrls] = await Promise.all([storageService.getFileUrl(doc.file_path), resolveThumbnailUrls(storageService, doc.thumbnail_paths)]);
 
     const serialized: Document = {
         id: doc.id,
@@ -1252,19 +1125,18 @@ async function serializeDocument(
         width: doc.width,
         height: doc.height,
         duration_seconds: doc.duration_seconds,
-        thumbnail_blurhash: locked ? null : doc.thumbnail_blurhash,
-        thumbnail_paths: locked ? null : doc.thumbnail_paths,
+        thumbnail_blurhash: doc.thumbnail_blurhash,
+        thumbnail_paths: doc.thumbnail_paths,
         document_category: doc.document_category as Document['document_category'],
-        extracted_date: locked ? null : formatDateOnly(doc.extracted_date),
+        extracted_date: formatDateOnly(doc.extracted_date),
         ocr_status: doc.ocr_status as Document['ocr_status'],
         thumbnail_status: doc.thumbnail_status as Document['thumbnail_status'],
         llm_status: doc.llm_status,
-        llm_summary: locked ? null : (llmResult?.summary ?? null),
-        llm_metadata: locked ? null : ((llmResult?.metadata as Document['llm_metadata']) ?? null),
-        llm_processed_at: locked ? null : (llmResult?.processed_at?.toISOString() ?? null),
-        llm_token_count: locked ? null : (llmResult?.token_count ?? null),
-        is_private: doc.is_private,
-        locked,
+        llm_summary: llmResult?.summary ?? null,
+        llm_metadata: (llmResult?.metadata as Document['llm_metadata']) ?? null,
+        llm_processed_at: llmResult?.processed_at?.toISOString() ?? null,
+        llm_token_count: llmResult?.token_count ?? null,
+        is_private: locks.isPrivate(doc.folder_id),
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
@@ -1275,7 +1147,7 @@ async function serializeDocument(
         return serialized;
     }
 
-    return { ...serialized, photo_metadata: locked || !photoMeta ? null : toDocumentPhotoMetadata(photoMeta) };
+    return { ...serialized, photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null };
 }
 
 function toDocumentPhotoMetadata(photoMeta: PhotoMetadata): DocumentPhotoMetadata {

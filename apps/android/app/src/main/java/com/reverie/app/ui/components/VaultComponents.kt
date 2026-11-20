@@ -25,19 +25,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
 /**
- * Passcode sheet to unlock private items with the account password. The unlock lasts the whole
- * app session — no timeout — and re-locks on explicit lock, logout, or process death.
+ * Password sheet that opens ONE private folder's lock with the account password. The lock stays
+ * open until the user signs out or the app process ends; there is no way to re-lock it by hand.
+ * [prompt] carries the busy flag and the server's verdict on the last attempt.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VaultUnlockSheet(
-    onUnlock: (String, onResult: (Boolean) -> Unit) -> Unit,
+    prompt: FolderUnlockPrompt,
+    onSubmit: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
     var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -52,46 +52,35 @@ fun VaultUnlockSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Unlock private items", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Enter your account password to open private items. They stay unlocked until you lock them or the app closes.",
+                prompt.folderName?.let { "Unlock $it" } ?: "Unlock private folder",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Enter your account password to open this private folder. It stays open until you sign out or the app closes.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it; error = false },
+                onValueChange = { password = it },
                 label = { Text("Password") },
                 singleLine = true,
-                isError = error,
-                enabled = !loading,
+                isError = prompt.error != null,
+                enabled = !prompt.isBusy,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { submit(password, onUnlock, onSetLoading = { loading = it }, onError = { error = it }, onDismiss) }),
+                keyboardActions = KeyboardActions(onDone = { onSubmit(password) }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (error) {
-                Text("Incorrect password.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            prompt.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             Button(
-                onClick = { submit(password, onUnlock, onSetLoading = { loading = it }, onError = { error = it }, onDismiss) },
-                enabled = !loading && password.isNotBlank(),
+                onClick = { onSubmit(password) },
+                enabled = !prompt.isBusy && password.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Unlock") }
         }
-    }
-}
-
-private fun submit(
-    password: String,
-    onUnlock: (String, (Boolean) -> Unit) -> Unit,
-    onSetLoading: (Boolean) -> Unit,
-    onError: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    onSetLoading(true)
-    onUnlock(password) { success ->
-        onSetLoading(false)
-        if (success) onDismiss() else onError(true)
     }
 }

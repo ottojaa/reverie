@@ -3,15 +3,18 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { toFolderLockState } from '@/lib/folder-lock';
 import { useVault } from '@/lib/vault';
 import { cn } from '@/lib/utils';
 import type { AnimateLayoutChanges } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Lock, LockOpen, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
+
+import { FolderLockBadge } from './FolderLockBadge';
 
 interface SectionItemProps {
     section: FolderWithChildren;
@@ -43,17 +46,22 @@ export function SectionItem({
     const triggerRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
     const { requestUnlock } = useVault();
+    const navigate = useNavigate();
 
     const ownPrivate = section.is_private;
     const isLocked = section.locked;
 
-    // Removing privacy while locked would expose content without the password — unlock first.
-    const handleTogglePrivate = () => {
-        if (isLocked) {
-            requestUnlock();
+    // Opening the folder's lock, then going in.
+    const handleUnlock = async () => {
+        if (!(await requestUnlock(section.id))) return;
 
-            return;
-        }
+        onClose?.();
+        void navigate({ to: '/browse/$sectionId', params: { sectionId: section.id } });
+    };
+
+    // Making a folder public needs its lock open, so a locked one asks for the password first.
+    const handleTogglePrivate = async () => {
+        if (isLocked && !(await requestUnlock(section.id))) return;
 
         onTogglePrivate?.(section, !ownPrivate);
     };
@@ -103,7 +111,7 @@ export function SectionItem({
                     // Locked folder: prompt to unlock instead of navigating into it.
                     if (isLocked) {
                         e.preventDefault();
-                        requestUnlock();
+                        void handleUnlock();
 
                         return;
                     }
@@ -113,27 +121,8 @@ export function SectionItem({
             >
                 {section.name}
             </Link>
-            {isLocked ? (
-                <button
-                    type="button"
-                    className="shrink-0 text-accent transition-transform hover:scale-110"
-                    aria-label="Locked — click to unlock"
-                    title="Locked — click to unlock"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        requestUnlock();
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    <Lock className="size-3" />
-                </button>
-            ) : (
-                // Only a folder made private on its own shows a lock — inherited privacy is
-                // conveyed by the parent collection's lock (the single lock unit). Unlocked →
-                // an open padlock signals it's accessible this session.
-                ownPrivate && <LockOpen className="size-3 shrink-0 text-accent" aria-label="Private (unlocked)" />
-            )}
+            {/* Inherited privacy is conveyed by the parent collection's lock, so only a folder's own flag counts. */}
+            <FolderLockBadge state={toFolderLockState(section)} onUnlock={() => void handleUnlock()} />
             {section.document_count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{section.document_count}</span>}
             {isMobile ? (
                 <DropdownMenu>

@@ -1,50 +1,53 @@
-import { db } from '../db/kysely';
+import type { Kysely } from 'kysely';
+import { db } from '../db/kysely.js';
+import type { Database } from '../db/schema.js';
 
 /**
- * Privacy helpers shared across search, folder listing and document listing.
+ * Which folders are private, worked out at query time (nothing is denormalized).
  *
- * Effective privacy is derived at query time (no denormalization): a document is
- * private if its own is_private flag is set OR it lives in an effectively-private
- * folder. A folder is effectively private if its own flag is set OR its parent
- * collection is private. Because the hierarchy is exactly two levels
- * (collection -> folder), one extra lookup covers the whole cascade.
+ * A document has no privacy of its own: it is private exactly when its folder is. A folder is
+ * private when it is flagged itself or sits in a private collection. The hierarchy is two levels
+ * (collection -> folder), so one extra lookup covers the whole cascade.
+ *
+ * Each private folder belongs to one lock: the private collection when there is one, otherwise the
+ * folder itself. Opening a lock (see folder-locks.ts) opens every folder that maps to it.
  */
 
-/**
- * All folder ids that are effectively private for a user. Cheap: the private set is
- * typically a small fraction of a user's folders and is backed by a partial index.
- */
+/** Folder id -> id of the lock that covers it, for every private folder of a user. Trash is ignored on purpose: a trashed private folder stays private. */
+export type LockMap = ReadonlyMap<string, string>;
+
+export async function loadLockMap(userId: string, conn: Kysely<Database> = db): Promise<LockMap> {
+    const roots = await conn.selectFrom('folders').select('id').where('user_id', '=', userId).where('is_private', '=', true).execute();
+
+    if (roots.length === 0) return new Map();
+
+    const ownLocks = roots.map((root): [string, string] => [root.id, root.id]);
+    const children = await conn
+        .selectFrom('folders')
+        .select(['id', 'parent_id'])
+        .where('user_id', '=', userId)
+        .where(
+            'parent_id',
+            'in',
+            roots.map((root) => root.id),
+        )
+        .execute();
+    // A folder in a private collection is covered by the collection's lock, even if it is flagged too.
+    const inheritedLocks = children.map((child): [string, string] => [child.id, child.parent_id!]);
+
+    return new Map([...ownLocks, ...inheritedLocks]);
+}
+
+/** Ids of every private folder (collections included) of a user. */
 export async function getPrivateFolderIds(userId: string): Promise<string[]> {
-    const roots = await db.selectFrom('folders').select('id').where('user_id', '=', userId).where('is_private', '=', true).execute();
-
-    const rootIds = roots.map((r) => r.id);
-
-    if (rootIds.length === 0) return [];
-
-    // Child folders of a private collection inherit its privacy.
-    const children = await db.selectFrom('folders').select('id').where('user_id', '=', userId).where('parent_id', 'in', rootIds).execute();
-
-    return Array.from(new Set([...rootIds, ...children.map((r) => r.id)]));
+    return Array.from((await loadLockMap(userId)).keys());
 }
 
-/**
- * Whether a document is effectively private given the user's private-folder set (from
- * getPrivateFolderIds): its own flag is set, or it lives in an effectively-private folder.
- */
-export function isDocumentEffectivelyPrivate(doc: { is_private: boolean; folder_id: string | null }, privateFolderIds: string[]): boolean {
-    return doc.is_private || (doc.folder_id !== null && privateFolderIds.includes(doc.folder_id));
-}
-
-/**
- * Effective privacy of a single stored document (own flag, its folder, or its collection).
- * For callers that have a document but no private-folder set at hand, such as background workers.
- */
-export async function isDocumentPrivate(doc: { user_id: string; is_private: boolean; folder_id: string | null }): Promise<boolean> {
-    if (doc.is_private) return true;
-
+/** Whether a stored document sits in a private folder. For callers with no lock state at hand, such as background workers. */
+export async function isDocumentPrivate(doc: { user_id: string; folder_id: string | null }): Promise<boolean> {
     if (doc.folder_id === null) return false;
 
-    return isDocumentEffectivelyPrivate(doc, await getPrivateFolderIds(doc.user_id));
+    return (await loadLockMap(doc.user_id)).has(doc.folder_id);
 }
 
 // The heterogeneous Kysely query builders across search/facets/suggest don't share a
@@ -52,21 +55,17 @@ export async function isDocumentPrivate(doc: { user_id: string; is_private: bool
 // style in query-builder.ts). They only ever append `.where(...)` clauses.
 
 /**
- * Append the privacy exclusion to a document-scoped query so private items never
+ * Append the privacy exclusion to a document-scoped query so private documents never
  * surface. `prefix` is the documents alias with a trailing dot: 'd.' for the joined
  * search queries, '' for a bare selectFrom('documents').
  */
 export function excludePrivateDocuments<T>(query: T, privateFolderIds: string[], prefix: 'd.' | '' = 'd.'): T {
-    let next = (query as any).where(`${prefix}is_private`, '=', false);
+    if (privateFolderIds.length === 0) return query;
 
-    if (privateFolderIds.length > 0) {
-        next = next.where((eb: any) => eb.or([eb(`${prefix}folder_id`, 'is', null), eb(`${prefix}folder_id`, 'not in', privateFolderIds)]));
-    }
-
-    return next as T;
+    return (query as any).where((eb: any) => eb.or([eb(`${prefix}folder_id`, 'is', null), eb(`${prefix}folder_id`, 'not in', privateFolderIds)])) as T;
 }
 
-/** Exclude effectively-private folders from a folders-scoped query (bare or aliased id column). */
+/** Exclude private folders from a folders-scoped query (bare or aliased id column). */
 export function excludePrivateFolders<T>(query: T, privateFolderIds: string[], idColumn = 'id'): T {
     if (privateFolderIds.length === 0) return query;
 
@@ -76,7 +75,7 @@ export function excludePrivateFolders<T>(query: T, privateFolderIds: string[], i
 /**
  * Hide trashed rows from a documents- or folders-scoped query. `prefix` is the table alias with a
  * trailing dot ('d.', 'f.') or '' for a bare selectFrom. Not part of the privacy helpers: a trashed
- * item in a private folder is still locked, so getPrivateFolderIds deliberately ignores trash.
+ * item in a private folder is still locked, so loadLockMap deliberately ignores trash.
  */
 export function excludeTrashed<T>(query: T, prefix: string): T {
     return (query as any).where(`${prefix}deleted_at`, 'is', null) as T;

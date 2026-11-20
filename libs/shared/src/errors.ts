@@ -43,6 +43,13 @@ export class ConflictError extends AppError {
     }
 }
 
+/** The item sits in a private folder whose lock is closed in this session. */
+export class FolderLockedError extends AppError {
+    constructor(folderId: string) {
+        super(403, 'FOLDER_LOCKED', 'This folder is locked', { folder_id: folderId });
+    }
+}
+
 export class StorageError extends AppError {
     constructor(message: string) {
         super(500, 'STORAGE_ERROR', message);

@@ -19,7 +19,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **Full-text search**: Filter DSL + faceted search (date, category, type, tags, location from EXIF), autocomplete, and a command palette in web
 - **Document viewer**: PDF, images, video, and text via a viewer registry, with an AI insight panel; in-app image crop editor and video trim editor
 - **Thumbnails**: WebP thumbnails + blurhash for images, PDFs, Office docs (via LibreOffice), video frames, and text/code
-- **Vault**: Password-locked privacy for private collections/folders and documents
+- **Private folders**: Mark a collection or folder private and it gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
 - **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
 - **Auth**: JWT + rotating refresh tokens, optional Google OAuth; multi-user with admin user management

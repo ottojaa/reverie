@@ -12,9 +12,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The vault unlock session is returned only as an httpOnly session cookie, which the client's
- * in-memory cookie jar carries on subsequent requests — no extra handling needed here. It has no
- * timeout; it lasts until the process dies, logout clears the jar, or an explicit lock.
+ * Private-folder locks. A successful unlock is recorded server-side in the httpOnly
+ * `vault_session` session cookie, which the shared [SessionCookieStorage] replays on every later
+ * request; the client keeps no unlock state of its own. There is deliberately no lock call — the
+ * app can only open locks, and logout closes them all.
  */
 @Singleton
 class VaultApi @Inject constructor(
@@ -22,10 +23,9 @@ class VaultApi @Inject constructor(
 ) {
     suspend fun status(): VaultStatus = client.get("vault/status").decode()
 
-    suspend fun unlock(password: String): VaultStatus = client.post("vault/unlock") {
-        contentType(ContentType.Application.Json)
-        setBody(VaultUnlockRequest(password))
-    }.decode()
-
-    suspend fun lock(): VaultStatus = client.post("vault/lock").decode()
+    suspend fun unlock(folderId: String, password: String): VaultStatus =
+        client.post("vault/unlock") {
+            contentType(ContentType.Application.Json)
+            setBody(VaultUnlockRequest(password = password, folder_id = folderId))
+        }.decode()
 }

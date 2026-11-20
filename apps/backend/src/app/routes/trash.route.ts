@@ -8,43 +8,57 @@ import {
     type TrashResult,
 } from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
+import { db } from '../../db/kysely';
 import type { Document, Folder } from '../../db/schema';
-import { getPrivateFolderIds, isDocumentEffectivelyPrivate } from '../../services/privacy';
+import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
 import { getStorageService } from '../../services/storage.service';
 import { getTrashService } from '../../services/trash.service';
-import { isVaultLocked } from '../../services/vault';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
 
 const storageService = getStorageService();
 
-async function toTrashDocument(doc: Document, locked: boolean, purgeAt: Date): Promise<TrashDocument> {
+async function toTrashDocument(doc: Document, locks: FolderLocks, purgeAt: Date): Promise<TrashDocument> {
     return {
         id: doc.id,
         original_filename: doc.original_filename,
         mime_type: doc.mime_type,
         size_bytes: Number(doc.size_bytes),
         folder_id: doc.folder_id,
-        is_private: doc.is_private,
-        locked,
-        // Content stays withheld while the vault is locked, exactly as in /documents.
-        thumbnail_blurhash: locked ? null : doc.thumbnail_blurhash,
-        thumbnail_urls: locked ? null : await resolveThumbnailUrls(storageService, doc.thumbnail_paths),
+        is_private: locks.isPrivate(doc.folder_id),
+        thumbnail_blurhash: doc.thumbnail_blurhash,
+        thumbnail_urls: await resolveThumbnailUrls(storageService, doc.thumbnail_paths),
         deleted_at: doc.deleted_at!.toISOString(),
         purge_at: purgeAt.toISOString(),
     };
 }
 
-function toTrashFolder(folder: Folder, locked: boolean, purgeAt: Date): TrashFolder {
+/** A trashed folder whose lock is closed is a bare row (no name or emoji): the user unlocks it to see and restore it. */
+function toTrashFolder(folder: Folder, locks: FolderLocks, purgeAt: Date): TrashFolder {
+    const locked = locks.isLocked(folder.id);
+
     return {
         id: folder.id,
-        name: folder.name,
+        name: locked ? '' : folder.name,
         type: folder.type,
-        emoji: folder.emoji,
+        emoji: locked ? null : folder.emoji,
         is_private: folder.is_private,
         locked,
         deleted_at: folder.deleted_at!.toISOString(),
         purge_at: purgeAt.toISOString(),
     };
+}
+
+/**
+ * Restoring or purging a private item needs its lock open, like reading it does. Documents are
+ * judged by their folder, trashed or not.
+ */
+async function assertSelectionOpen(locks: FolderLocks, userId: string, selection: { document_ids: string[]; folder_ids: string[] }): Promise<void> {
+    const docs =
+        selection.document_ids.length === 0
+            ? []
+            : await db.selectFrom('documents').select('folder_id').where('user_id', '=', userId).where('id', 'in', selection.document_ids).execute();
+
+    locks.assertAllOpen([...docs.map((doc) => doc.folder_id), ...selection.folder_ids]);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,20 +83,16 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const { documents, folders, retentionDays } = await trashService.listTrash(userId);
-            const vaultLocked = await isVaultLocked(fastify, request, userId);
-            // Private ids are looked up regardless of trash, so a trashed item stays locked.
-            const privateFolderIds = vaultLocked ? await getPrivateFolderIds(userId) : [];
+            const locks = await loadFolderLocks(fastify, request, userId);
+            // Items under a closed lock stay out, except a trashed private folder that is its own lock:
+            // it lists as a bare row, because the tree has no row to unlock it from.
+            const visibleFolders = folders.filter((folder) => !locks.isHidden(folder.id));
+            const visibleDocuments = documents.filter((doc) => !locks.isLocked(doc.folder_id));
 
             return {
                 retention_days: retentionDays,
-                documents: await Promise.all(
-                    documents.map((doc) =>
-                        toTrashDocument(doc, vaultLocked && isDocumentEffectivelyPrivate(doc, privateFolderIds), toPurgeAt(doc.deleted_at, retentionDays)),
-                    ),
-                ),
-                folders: folders.map((folder) =>
-                    toTrashFolder(folder, vaultLocked && privateFolderIds.includes(folder.id), toPurgeAt(folder.deleted_at, retentionDays)),
-                ),
+                documents: await Promise.all(visibleDocuments.map((doc) => toTrashDocument(doc, locks, toPurgeAt(doc.deleted_at, retentionDays)))),
+                folders: visibleFolders.map((folder) => toTrashFolder(folder, locks, toPurgeAt(folder.deleted_at, retentionDays))),
             };
         },
     );
@@ -99,6 +109,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const { document_ids, folder_ids } = request.body;
+            await assertSelectionOpen(await loadFolderLocks(fastify, request, request.user.id), request.user.id, request.body);
 
             return trashService.restore(request.user.id, { documentIds: document_ids, folderIds: folder_ids });
         },
@@ -116,6 +127,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const { document_ids, folder_ids } = request.body;
+            await assertSelectionOpen(await loadFolderLocks(fastify, request, request.user.id), request.user.id, request.body);
 
             return trashService.purge(request.user.id, { documentIds: document_ids, folderIds: folder_ids });
         },
@@ -126,12 +138,14 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Empty the trash: delete everything in it for good',
+                description: 'Empty the trash: delete everything in it for good, except items under a closed folder lock',
                 response: { 200: TrashResultSchema },
             },
         },
         async function (request) {
-            return trashService.emptyTrash(request.user.id);
+            const locks = await loadFolderLocks(fastify, request, request.user.id);
+
+            return trashService.emptyTrash(request.user.id, locks.lockedFolderIds);
         },
     );
 }

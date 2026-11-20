@@ -2,12 +2,15 @@ import { NotFoundError } from '@reverie/shared';
 import type { Kysely } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database, Folder } from '../db/schema';
-import { excludeTrashed } from './privacy';
+import { excludeTrashed, loadLockMap } from './privacy';
 
 /**
- * Folder half of the trash. A folder is only a name, so trashing one never touches the files of
- * the documents that were in it: live documents drop to the root (exactly what the old hard
- * delete did through ON DELETE SET NULL) and the folder row is kept for a later restore.
+ * Folder half of the trash. Trashing a folder never touches the files of its documents.
+ * - A public folder's live documents drop to the root (exactly what the old hard delete did
+ *   through ON DELETE SET NULL) and the folder row is kept for a later restore.
+ * - A private folder's live documents are trashed with it, under the same timestamp, and keep
+ *   their folder: dropping them to the root would make them public. Restoring the folder
+ *   brings them back (see TrashService.restore).
  */
 
 type DbOrTrx = Kysely<Database>;
@@ -29,9 +32,27 @@ export function trashFolder(userId: string, id: string, trx?: DbOrTrx): Promise<
                 : [];
         const ids = [id, ...children.map((child) => child.id)];
 
-        // Live documents go to the root; trashed ones keep their folder so a restore can put them back.
-        await excludeTrashed(t.updateTable('documents').set({ folder_id: null }).where('folder_id', 'in', ids).where('user_id', '=', userId), '').execute();
-        await t.updateTable('folders').set({ deleted_at: new Date() }).where('id', 'in', ids).execute();
+        const now = new Date();
+        const lockMap = await loadLockMap(userId, t);
+        const privateIds = ids.filter((folderId) => lockMap.has(folderId));
+        const publicIds = ids.filter((folderId) => !lockMap.has(folderId));
+
+        // Already-trashed documents keep their folder so a restore can put them back.
+        if (privateIds.length > 0) {
+            await excludeTrashed(
+                t.updateTable('documents').set({ deleted_at: now }).where('folder_id', 'in', privateIds).where('user_id', '=', userId),
+                '',
+            ).execute();
+        }
+
+        if (publicIds.length > 0) {
+            await excludeTrashed(
+                t.updateTable('documents').set({ folder_id: null }).where('folder_id', 'in', publicIds).where('user_id', '=', userId),
+                '',
+            ).execute();
+        }
+
+        await t.updateTable('folders').set({ deleted_at: now }).where('id', 'in', ids).execute();
     });
 }
 
@@ -41,7 +62,7 @@ async function isPathTaken(t: DbOrTrx, userId: string, path: string): Promise<bo
     return row !== undefined;
 }
 
-/** Bring one trashed folder back under `parentPath`, renaming it if a live folder took its name. */
+/** Bring one trashed folder (and the documents trashed with it) back under `parentPath`, renaming the folder if a live folder took its name. */
 async function restoreOne(t: DbOrTrx, folder: Folder, parentPath: string): Promise<Folder> {
     let name = folder.name;
 
@@ -49,12 +70,18 @@ async function restoreOne(t: DbOrTrx, folder: Folder, parentPath: string): Promi
         name = attempt === 1 ? `${folder.name} (restored)` : `${folder.name} (restored ${attempt})`;
     }
 
-    return t
+    const restored = await t
         .updateTable('folders')
         .set({ name, path: `${parentPath}/${name}`, deleted_at: null, updated_at: new Date() })
         .where('id', '=', folder.id)
         .returningAll()
         .executeTakeFirstOrThrow();
+
+    // Documents trashed together with a private folder (same timestamp) come back with it. Nothing
+    // could be added to the folder while it was in the trash, so their names cannot clash.
+    await t.updateTable('documents').set({ deleted_at: null }).where('folder_id', '=', folder.id).where('deleted_at', '=', folder.deleted_at).execute();
+
+    return restored;
 }
 
 async function fetchTrashedFolder(t: DbOrTrx, userId: string, id: string): Promise<Folder | undefined> {
@@ -92,7 +119,7 @@ async function restoreIn(t: DbOrTrx, userId: string, id: string): Promise<Folder
     return restoreOne(t, stillTrashed, livePath);
 }
 
-/** Restore a trashed folder (empty); a trashed parent collection is restored first. */
+/** Restore a trashed folder with the documents trashed with it; a trashed parent collection is restored first. */
 export function restoreFolder(userId: string, id: string, trx?: DbOrTrx): Promise<Folder> {
     return inTransaction(trx, (t) => restoreIn(t, userId, id));
 }

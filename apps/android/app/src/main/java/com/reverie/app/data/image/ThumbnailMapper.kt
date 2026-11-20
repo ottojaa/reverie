@@ -14,6 +14,10 @@ class ThumbnailMapper(
     private val serverUrlProvider: ServerUrlProvider,
 ) : Mapper<ThumbnailRef, String> {
     override fun map(data: ThumbnailRef, options: Options): String =
-        serverUrlProvider.current().removeSuffix("/") +
-            "/documents/${data.documentId}/thumbnail/${data.size.wire}"
+        toThumbnailUrl(serverUrlProvider.current(), data)
 }
+
+/** The thumbnail endpoint URL for [ref]; also the Coil disk-cache key of that thumbnail. */
+fun toThumbnailUrl(serverUrl: String, ref: ThumbnailRef): String =
+    serverUrl.removeSuffix("/") + "/documents/${ref.documentId}/thumbnail/${ref.size.wire}"
+

@@ -15,9 +15,8 @@ export const TrashDocumentSchema = z.object({
     size_bytes: z.number(),
     // The folder it came back to if restored; null when it was at the root.
     folder_id: UuidSchema.nullable(),
+    // Read-only: true when the document's folder is private. Only listed while its lock is open.
     is_private: z.boolean(),
-    // Same meaning as on /documents: private content is withheld while the vault is locked.
-    locked: z.boolean(),
     thumbnail_blurhash: z.string().nullable(),
     thumbnail_urls: ThumbnailUrlsSchema.nullable(),
     deleted_at: z.string(),
@@ -28,10 +27,13 @@ export type TrashDocument = z.infer<typeof TrashDocumentSchema>;
 
 export const TrashFolderSchema = z.object({
     id: UuidSchema,
+    // Empty while `locked`: a private folder in the trash shows no name until it is unlocked.
     name: z.string(),
     type: FolderTypeSchema,
     emoji: z.string().nullable(),
     is_private: z.boolean(),
+    // True for a private folder or collection whose lock is closed. It lists only as a bare row
+    // (no name, emoji or contents) that the user can unlock to see and restore it.
     locked: z.boolean(),
     deleted_at: z.string(),
     purge_at: z.string(),

@@ -57,11 +57,9 @@ data class DocumentDto(
     val llm_metadata: JsonObject? = null,
     val llm_processed_at: String? = null,
     val llm_token_count: Long? = null,
+    // Read-only, derived by the server from the document's folder (a document has no flag of its
+    // own). Private documents are never persisted to disk — see DocumentRepository.
     val is_private: Boolean,
-    // True when this item is effectively private AND the vault is locked for this session:
-    // the server withholds all content (urls/thumbnails/summary/location) and the UI shows a
-    // lock affordance instead of opening. See VaultRepository.
-    val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
     // Signed, short-lived URLs — never persist these.
@@ -134,12 +132,6 @@ data class MoveDocumentsRequest(
 
 @Serializable
 data class UpdateDocumentRequest(val original_filename: String)
-
-@Serializable
-data class SetDocumentPrivacyRequest(
-    val document_ids: List<String>,
-    val is_private: Boolean,
-)
 
 @Serializable
 data class DocumentOcrResult(

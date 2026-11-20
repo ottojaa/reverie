@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { toFolderLockState } from '@/lib/folder-lock';
 import { useVault } from '@/lib/vault';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -11,6 +12,8 @@ import { ChevronDown, Lock, LockOpen, MoreHorizontal, Pencil, Plus, Trash2 } fro
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
+
+import { FolderLockBadge } from './FolderLockBadge';
 
 /** Prefix category IDs to disambiguate from section IDs in collision detection */
 export function categoryIdToSortableId(categoryId: string): string {
@@ -52,13 +55,16 @@ export function CategoryItem({
     const { requestUnlock } = useVault();
     const sortableId = categoryIdToSortableId(category.id);
 
-    // Removing privacy while locked would expose content without the password — unlock first.
-    const handleTogglePrivate = () => {
-        if (isLocked) {
-            requestUnlock();
+    // Opening the collection's lock, then expanding it so its folders show.
+    const handleUnlock = async () => {
+        if (!(await requestUnlock(category.id))) return;
 
-            return;
-        }
+        if (collapsed) onToggleCollapse();
+    };
+
+    // Making a collection public needs its lock open, so a locked one asks for the password first.
+    const handleTogglePrivate = async () => {
+        if (isLocked && !(await requestUnlock(category.id))) return;
 
         onTogglePrivate?.(category, !isPrivate);
     };
@@ -88,7 +94,7 @@ export function CategoryItem({
             {...listeners}
             // Locked collection: clicking anywhere on the row prompts to unlock (its folders are
             // hidden until then) rather than expanding.
-            onClick={isLocked ? () => requestUnlock() : undefined}
+            onClick={isLocked ? () => void handleUnlock() : undefined}
         >
             {/* Collapse chevron — a locked collection can't expand (children hidden), so hide it. */}
             {!isLocked && (
@@ -113,25 +119,7 @@ export function CategoryItem({
 
             {/* Category name - uppercase label style */}
             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{category.name}</span>
-            {isLocked ? (
-                <button
-                    type="button"
-                    className="shrink-0 text-accent transition-transform hover:scale-110"
-                    aria-label="Locked — click to unlock"
-                    title="Locked — click to unlock"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        requestUnlock();
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    <Lock className="size-3" />
-                </button>
-            ) : (
-                // Private but currently unlocked → an open padlock signals it's accessible this session.
-                isPrivate && <LockOpen className="size-3 shrink-0 text-accent" aria-label="Private (unlocked)" />
-            )}
+            <FolderLockBadge state={toFolderLockState(category)} onUnlock={() => void handleUnlock()} />
 
             {/* Add folder — hidden while locked (can't add into a collection you can't see). */}
             {!isLocked && (

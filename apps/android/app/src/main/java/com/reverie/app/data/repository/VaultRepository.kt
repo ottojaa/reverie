@@ -1,38 +1,62 @@
 package com.reverie.app.data.repository
 
+import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.VaultApi
-import com.reverie.app.data.api.model.VaultStatus
+import com.reverie.app.data.api.model.AuthErrorCode
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Result of trying to open one private folder lock with the account password. */
+sealed interface UnlockOutcome {
+    data object Unlocked : UnlockOutcome
+    data object WrongPassword : UnlockOutcome
+
+    /** The account has no password, so there is nothing to unlock with (and nothing locks). */
+    data object NoPassword : UnlockOutcome
+
+    /** The folder is not private (any more), so there is no lock to open. */
+    data object NotPrivate : UnlockOutcome
+
+    /** Network or server trouble; [message] is user-facing. */
+    data class Failed(val message: String) : UnlockOutcome
+}
 
 @Singleton
 class VaultRepository @Inject constructor(
     private val vaultApi: VaultApi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    private val _status = MutableStateFlow<VaultStatus?>(null)
-    val status: StateFlow<VaultStatus?> = _status.asStateFlow()
-
-    suspend fun refresh(): VaultStatus? = withContext(io) {
-        runCatching { vaultApi.status() }.getOrNull()?.also { _status.value = it }
+    /**
+     * Open the lock around [folderId] (a private folder, or a private collection covering its
+     * folders). The server remembers it in the session cookie; callers refetch the tree/list after.
+     */
+    suspend fun unlock(folderId: String, password: String): UnlockOutcome = withContext(io) {
+        try {
+            vaultApi.unlock(folderId, password)
+            UnlockOutcome.Unlocked
+        } catch (e: ReverieApiException) {
+            e.toUnlockOutcome()
+        }
     }
 
-    suspend fun unlock(password: String): Result<VaultStatus> = withContext(io) {
-        runCatching { vaultApi.unlock(password) }.onSuccess { _status.value = it }
+    /** Whether the account has a password. Null when it can't be determined (offline). */
+    suspend fun hasPassword(): Boolean? = withContext(io) {
+        runCatching { vaultApi.status().has_password }.getOrNull()
     }
+}
 
-    suspend fun lock(): Result<VaultStatus> = withContext(io) {
-        runCatching { vaultApi.lock() }.onSuccess { _status.value = it }
-    }
-
-    /** Reset in-memory unlock state (e.g. on logout, when the cookie jar is cleared). */
-    fun reset() {
-        _status.value = null
-    }
+/**
+ * Map an unlock failure to an outcome. A wrong password arrives as either error envelope: the
+ * auth shape (`INVALID_CREDENTIALS`, no statusCode) or the generic one (`401 invalid_credentials`).
+ */
+fun ReverieApiException.toUnlockOutcome(): UnlockOutcome = when {
+    this is ReverieApiException.Auth && code == AuthErrorCode.INVALID_CREDENTIALS -> UnlockOutcome.WrongPassword
+    this !is ReverieApiException.Http -> UnlockOutcome.Failed(userMessage())
+    statusCode == 401 && code == "invalid_credentials" -> UnlockOutcome.WrongPassword
+    statusCode == 400 && code == "no_password" -> UnlockOutcome.NoPassword
+    statusCode == 404 -> UnlockOutcome.NotPrivate
+    else -> UnlockOutcome.Failed(userMessage())
 }

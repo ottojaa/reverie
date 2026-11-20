@@ -64,7 +64,7 @@ describeDb('undo_write', () => {
         const id = await newDoc();
         const out = await run(alice(), 'add_tags', { document_ids: [id], tags: ['later-locked'] });
 
-        await db().updateTable('documents').set({ is_private: true }).where('id', '=', id).execute();
+        await db().updateTable('documents').set({ folder_id: ctx.world().folders.vault.id }).where('id', '=', id).execute();
         expect(await refusal(alice(), 'undo_write', { audit_id: out.audit_id })).toMatch(/Documents not found/);
         expect(await loadTagNames(db(), id)).toEqual(['later-locked']);
     });
@@ -107,7 +107,7 @@ describeDb('writes cannot reach locked or trashed items', () => {
             expect(await refusal(alice(), tool, input), tool).toMatch(/^Documents not found/);
         }
 
-        expect(await loadTagNames(db(), ctx.world().docs.lockedOwn)).toEqual(['lockedtag']);
+        expect(await loadTagNames(db(), ctx.world().docs.inLockedFolder)).toEqual(['lockedtag']);
     });
 
     it('refuses a document that was locked or trashed after the search that produced the selection', async () => {
@@ -115,9 +115,9 @@ describeDb('writes cannot reach locked or trashed items', () => {
         const b = await newDoc({ tags: ['latechange'] });
         const search = await run(alice(), 'search_documents', { tags: ['latechange'] });
 
-        await db().updateTable('documents').set({ is_private: true }).where('id', '=', a).execute();
+        await db().updateTable('documents').set({ folder_id: ctx.world().folders.vault.id }).where('id', '=', a).execute();
         expect(await refusal(alice(), 'add_tags', { selection_id: search.selection_id, tags: ['x'] })).toContain(a);
-        await db().updateTable('documents').set({ is_private: false, deleted_at: new Date() }).where('id', '=', a).execute();
+        await db().updateTable('documents').set({ folder_id: null, deleted_at: new Date() }).where('id', '=', a).execute();
         expect(await refusal(alice(), 'add_tags', { selection_id: search.selection_id, tags: ['x'] })).toContain(a);
         expect(await loadTagNames(db(), b)).toEqual(['latechange']);
     });

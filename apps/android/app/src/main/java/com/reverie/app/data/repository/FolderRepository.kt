@@ -7,7 +7,9 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.ReorderFolderUpdate
 import com.reverie.app.data.api.model.ReorderFoldersRequest
 import com.reverie.app.data.api.model.UpdateFolderRequest
+import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.dao.FolderDao
+import com.reverie.app.data.local.entity.FolderEntity
 import com.reverie.app.data.local.flattenToEntities
 import com.reverie.app.data.local.toDto
 import com.reverie.app.data.local.toTree
@@ -23,6 +25,7 @@ import javax.inject.Singleton
 class FolderRepository @Inject constructor(
     private val folderDao: FolderDao,
     private val foldersApi: FoldersApi,
+    private val purger: PrivateDataPurger,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
     /** The two-level tree, reassembled from cached rows. */
@@ -38,6 +41,8 @@ class FolderRepository @Inject constructor(
         val entities = tree.flattenToEntities(System.currentTimeMillis())
         folderDao.upsertAll(entities)
         folderDao.deleteNotIn(entities.map { it.id })
+        // A folder (or whole collection) may have gone private since its documents were cached.
+        purger.purgeOutsideFolders(entities.toPublicFolderIds())
     }
 
     suspend fun create(request: CreateFolderRequest): FolderDto = withContext(io) {
@@ -57,4 +62,10 @@ class FolderRepository @Inject constructor(
         foldersApi.reorder(ReorderFoldersRequest(updates))
         refresh()
     }
+}
+
+/** Ids of folders that are not private, neither by their own flag nor through their parent. */
+internal fun List<FolderEntity>.toPublicFolderIds(): List<String> {
+    val privateIds = filter { it.isPrivate }.map { it.id }.toSet()
+    return filterNot { it.id in privateIds || it.parentId in privateIds }.map { it.id }
 }

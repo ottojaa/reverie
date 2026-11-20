@@ -105,14 +105,10 @@ export const DocumentSchema = z.object({
     llm_metadata: z.record(z.unknown()).nullable(),
     llm_processed_at: z.string().datetime().nullable(),
     llm_token_count: z.number().nullable(),
-    // Explicitly-set privacy flag on this document. A document is also effectively
-    // private if its folder or that folder's collection is private (query-time cascade).
+    // Read-only: true when the document's folder or collection is private. Documents have no
+    // privacy setting of their own; they are private exactly when their folder is. A document
+    // is only ever returned while its folder's lock is open.
     is_private: z.boolean(),
-    // True when this item is effectively private AND the caller has no active vault
-    // session (and has an account password to unlock with). While locked, the server
-    // withholds all content-bearing fields (file_url, thumbnails, llm_*, photo_metadata)
-    // and clients show a lock affordance instead of opening. See vault.ts.
-    locked: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     // Signed URLs for secure file access
@@ -186,13 +182,6 @@ export const UpdateDocumentRequestSchema = z.object({
     original_filename: z.string().min(1).max(255),
 });
 export type UpdateDocumentRequest = z.infer<typeof UpdateDocumentRequestSchema>;
-
-// Mark/unmark one or more documents as private (batch, mirrors MoveDocumentsRequest).
-export const SetDocumentPrivacyRequestSchema = z.object({
-    document_ids: z.array(UuidSchema).min(1).max(100),
-    is_private: z.boolean(),
-});
-export type SetDocumentPrivacyRequest = z.infer<typeof SetDocumentPrivacyRequestSchema>;
 
 export const DocumentOcrResultSchema = z.object({
     document_id: UuidSchema,

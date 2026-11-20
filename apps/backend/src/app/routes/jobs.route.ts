@@ -3,6 +3,8 @@ import { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { getJobService } from '../../jobs/job.service';
+import { fetchLockedDocuments } from '../../services/document-access';
+import { loadFolderLocks } from '../../services/folder-locks';
 
 export default async function jobsRoute(fastify: FastifyInstance) {
     const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -34,6 +36,14 @@ export default async function jobsRoute(fastify: FastifyInstance) {
             const userId = request.user.id;
 
             const job = await jobService.getJob(id, userId);
+
+            // A job's result and error text can quote the document, so it follows the document's lock.
+            if (job?.target_type === 'document') {
+                const locks = await loadFolderLocks(fastify, request, userId);
+                const lockedFolderId = (await fetchLockedDocuments(locks, userId, [job.target_id])).get(job.target_id);
+
+                if (lockedFolderId) locks.assertOpen(lockedFolderId);
+            }
 
             if (!job) {
                 return reply.status(404).send({
@@ -73,7 +83,14 @@ export default async function jobsRoute(fastify: FastifyInstance) {
             const jobIds = ids.split(',').filter(Boolean);
             const userId = request.user.id;
 
-            const jobs = await jobService.getJobsByIds(jobIds, userId);
+            const allJobs = await jobService.getJobsByIds(jobIds, userId);
+            const locks = await loadFolderLocks(fastify, request, userId);
+            const lockedDocuments = await fetchLockedDocuments(
+                locks,
+                userId,
+                allJobs.map((job) => job.target_id),
+            );
+            const jobs = allJobs.filter((job) => !lockedDocuments.has(job.target_id));
 
             return jobs.map((job) => ({
                 id: job.id,

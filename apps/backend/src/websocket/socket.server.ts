@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import type { JwtPayload } from '../app/plugins/auth';
+import { isLoginPayload, type JwtPayload } from '../app/plugins/auth';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 
@@ -72,6 +72,9 @@ export function initializeSocketServer({ httpServer, fastify }: SocketServerOpti
 
         try {
             const decoded = fastify.jwt.verify<JwtPayload>(token);
+
+            if (!isLoginPayload(decoded)) throw new Error('Not a login token');
+
             (socket.data as SocketData).userId = decoded.sub;
             next();
         } catch {

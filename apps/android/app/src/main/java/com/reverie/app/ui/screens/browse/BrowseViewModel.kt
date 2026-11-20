@@ -18,6 +18,7 @@ import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
+import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +28,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -45,10 +45,10 @@ data class BrowseUiState(
     val hasMore: Boolean = false,
     val processingCount: Int = 0,
     val selectedIds: Set<String> = emptySet(),
+    /** Set when the server refused the list with FOLDER_LOCKED: the lock that must be opened first. */
+    val lockedFolderId: String? = null,
 ) {
     val inSelectionMode: Boolean get() = selectedIds.isNotEmpty()
-    val allSelectedPrivate: Boolean
-        get() = selectedIds.isNotEmpty() && documents.filter { it.id in selectedIds }.all { it.is_private }
 }
 
 /** A resolved, ready-to-enqueue download: a signed file URL + the name to save it under. */
@@ -62,6 +62,7 @@ private data class BrowseControl(
     val loaded: Int = 0,
     val error: String? = null,
     val selectedIds: Set<String> = emptySet(),
+    val lockedFolderId: String? = null,
 )
 
 @HiltViewModel
@@ -116,8 +117,8 @@ class BrowseViewModel @Inject constructor(
      * than starting after it.
      */
     fun prefetch(document: DocumentDto) {
-        // Nothing to warm for a locked document — its content is withheld until unlocked.
-        if (document.locked) return
+        // Private originals must not land in Coil's disk cache, and the viewer fetches them itself.
+        if (document.is_private) return
         viewModelScope.launch {
             val raw = documentRepository.fileUrl(document.id) ?: return@launch
             if (document.mime_type.startsWith("image/")) {
@@ -126,9 +127,10 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    /** Unlock the vault with the account password; on success the list re-fetches (see init). */
-    fun unlockVault(password: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch { onResult(vaultRepository.unlock(password).isSuccess) }
+    /** Password prompt for a locked folder; a successful unlock re-fetches the list and the tree. */
+    val unlocker = FolderUnlocker(vaultRepository, viewModelScope) {
+        refresh()
+        runCatching { folderRepository.refresh() }
     }
 
     private val control = MutableStateFlow(BrowseControl())
@@ -152,6 +154,7 @@ class BrowseViewModel @Inject constructor(
             hasMore = docs.size < ctrl.total,
             processingCount = docs.count { !isFullyProcessed(it) },
             selectedIds = ctrl.selectedIds,
+            lockedFolderId = ctrl.lockedFolderId,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState(isLoading = true))
 
@@ -162,21 +165,6 @@ class BrowseViewModel @Inject constructor(
         }
         observePendingThumbnails()
         collectThumbnailJobEvents()
-        observeVaultChanges()
-    }
-
-    /**
-     * When the vault is unlocked or re-locked, re-fetch the list so each row's `locked` flag (and
-     * with it the withheld content) flips. Drops the initial emission so we don't double-load.
-     */
-    private fun observeVaultChanges() {
-        viewModelScope.launch {
-            vaultRepository.status
-                .map { it?.unlocked == true }
-                .distinctUntilChanged()
-                .drop(1)
-                .collect { refresh() }
-        }
     }
 
     /**
@@ -220,20 +208,26 @@ class BrowseViewModel @Inject constructor(
 
     fun refresh(initial: Boolean = false) {
         viewModelScope.launch {
-            control.update { it.copy(isLoading = initial, isRefreshing = !initial, error = null) }
+            control.update { it.copy(isLoading = initial, isRefreshing = !initial, error = null, lockedFolderId = null) }
             runCatching { documentRepository.refresh(folderId, PAGE_SIZE, 0) }
                 .onSuccess { page ->
                     control.update { it.copy(total = page.total, loaded = page.loaded, isLoading = false, isRefreshing = false, error = null) }
                 }
-                .onFailure { throwable ->
-                    control.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            error = if (connectivity.currentlyOnline()) messageFor(throwable) else null,
-                        )
-                    }
-                }
+                .onFailure { throwable -> onRefreshFailed(throwable) }
+        }
+    }
+
+    private fun onRefreshFailed(throwable: Throwable) {
+        val lockedId = (throwable as? ReverieApiException)?.lockedFolderId()
+        // A closed lock is not an error: ask for the password and retry (see [unlocker]).
+        if (lockedId != null) unlocker.request(lockedId, uiState.value.folder?.name)
+        control.update {
+            it.copy(
+                isLoading = false,
+                isRefreshing = false,
+                lockedFolderId = lockedId,
+                error = if (lockedId == null && connectivity.currentlyOnline()) messageFor(throwable) else null,
+            )
         }
     }
 
@@ -263,16 +257,6 @@ class BrowseViewModel @Inject constructor(
         if (ids.isEmpty()) return
         viewModelScope.launch {
             runCatching { documentRepository.delete(ids) }
-            clearSelection()
-        }
-    }
-
-    fun togglePrivateSelected() {
-        val ids = control.value.selectedIds.toList()
-        if (ids.isEmpty()) return
-        val target = !uiState.value.allSelectedPrivate
-        viewModelScope.launch {
-            runCatching { documentRepository.setPrivacy(ids, target) }
             clearSelection()
         }
     }

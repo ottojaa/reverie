@@ -5,7 +5,9 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.entity.DocumentEntity
 import com.reverie.app.data.local.toDto
-import com.reverie.app.data.local.toEntity
+import com.reverie.app.data.local.PrivateDataPurger
+import com.reverie.app.data.local.PrivateDocumentStore
+import com.reverie.app.data.local.toCacheableEntities
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +15,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -27,12 +30,18 @@ data class PageResult(val total: Int, val loaded: Int) {
 
 /**
  * Stale-while-revalidate access to documents. Room is the display source of truth; the
- * network refreshes it. Signed file/thumbnail URLs are never persisted (see [toEntity]).
+ * network refreshes it. Signed file/thumbnail URLs are never persisted (see [toCacheableEntities]).
+ *
+ * Documents in private folders are the exception to "Room is the source of truth": they are kept
+ * only in [privateStore] (process memory) and merged into the folder/document flows, so no
+ * private metadata reaches disk.
  */
 @Singleton
 class DocumentRepository @Inject constructor(
     private val documentDao: DocumentDao,
     private val documentsApi: DocumentsApi,
+    private val privateStore: PrivateDocumentStore,
+    private val purger: PrivateDataPurger,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
     // Signed file URLs are never persisted (Room strips them), so opening a document would normally
@@ -51,31 +60,56 @@ class DocumentRepository @Inject constructor(
     // leaving composition) doesn't kill the shared fetch.
     private val fileUrlFlights = java.util.concurrent.ConcurrentHashMap<String, Deferred<String?>>()
     private val flightScope = CoroutineScope(SupervisorJob() + io)
-    /** Cached documents for the grid. `folderId == null` is the all-documents view. */
+    /**
+     * Documents for the grid. `folderId == null` is the all-documents view, which by design never
+     * contains private documents; a folder view also carries that folder's in-memory private ones.
+     */
     fun observeDocuments(folderId: String?): Flow<List<DocumentDto>> {
-        val source = if (folderId == null) documentDao.observeAll() else documentDao.observeByFolder(folderId)
         // Map entities→DTOs (allocations + JSON parsing) off the main thread; without this the grid's
         // combine/stateIn on viewModelScope (Main) re-maps the whole cached list on every Room write.
-        return source.map { rows -> rows.map(DocumentEntity::toDto) }.flowOn(io)
+        if (folderId == null) {
+            return documentDao.observeAll().map { rows -> rows.map(DocumentEntity::toDto) }.flowOn(io)
+        }
+        val cached = documentDao.observeByFolder(folderId).map { rows -> rows.map(DocumentEntity::toDto) }
+        return combine(cached, privateStore.observeFolder(folderId)) { rows, private ->
+            if (private.isEmpty()) rows else (rows + private).sortedByDescending { it.created_at }
+        }.flowOn(io)
     }
 
-    fun observeDocument(id: String): Flow<DocumentDto?> =
+    fun observeDocument(id: String): Flow<DocumentDto?> {
         // distinctUntilChanged (entity-level) drops the re-map on every unrelated Room write to this
         // row (touchAccessed, the open-time fetch upsert); flowOn(io) keeps toDto's JSON parse off
         // the main thread, mirroring observeDocuments.
-        documentDao.observeById(id).distinctUntilChanged().map { it?.toDto() }.flowOn(io)
+        val cached = documentDao.observeById(id).distinctUntilChanged().map { it?.toDto() }
+        return combine(cached, privateStore.observe(id)) { row, private -> private ?: row }.flowOn(io)
+    }
+
+    /**
+     * Route fetched documents to their store: public ones to Room, private ones to memory (and
+     * purge any disk copy cached before the document became private).
+     */
+    private suspend fun absorb(items: List<DocumentDto>) {
+        val now = System.currentTimeMillis()
+        documentDao.upsertAll(items.toCacheableEntities(now))
+        val (private, public) = items.partition { it.is_private }
+        privateStore.putAll(private)
+        // A document that left its private folder (now public) must stop being served from memory.
+        privateStore.remove(public.map { it.id })
+        purger.purgeCachedCopies(private.map { it.id })
+        // Harvest the per-row signed URLs (see fileUrls above) before Room strips them.
+        items.forEach { dto -> dto.file_url?.let { fileUrls[dto.id] = it } }
+    }
 
     /** Fetch one page from the network into the cache. Throws [com.reverie.app.data.api.ReverieApiException]. */
     suspend fun refresh(folderId: String?, limit: Int, offset: Int): PageResult = withContext(io) {
         val page = documentsApi.list(limit = limit, offset = offset, folderId = folderId)
-        val now = System.currentTimeMillis()
-        documentDao.upsertAll(page.items.map { it.toEntity(now) })
-        // Harvest the per-row signed URLs (see fileUrls above) before Room strips them.
-        page.items.forEach { dto -> dto.file_url?.let { fileUrls[dto.id] = it } }
+        absorb(page.items)
 
         // If a single page covered the whole folder, drop rows the server no longer returns.
         if (folderId != null && offset == 0 && page.items.size >= page.total) {
-            documentDao.deleteInFolderNotIn(folderId, page.items.map { it.id })
+            val keep = page.items.map { it.id }
+            documentDao.deleteInFolderNotIn(folderId, keep)
+            privateStore.removeInFolderNotIn(folderId, keep.toSet())
         }
         PageResult(total = page.total, loaded = offset + page.items.size)
     }
@@ -83,9 +117,8 @@ class DocumentRepository @Inject constructor(
     /** Fetch + cache a single document detail (includes photo/LLM metadata). */
     suspend fun fetchDocument(id: String): DocumentDto = withContext(io) {
         val dto = documentsApi.get(id)
-        documentDao.upsertAll(listOf(dto.toEntity(System.currentTimeMillis())))
-        // Refresh the in-memory signed URL — this is where a rotated signature lands.
-        dto.file_url?.let { fileUrls[id] = it }
+        // Also refreshes the in-memory signed URL — this is where a rotated signature lands.
+        absorb(listOf(dto))
         dto
     }
 
@@ -109,22 +142,21 @@ class DocumentRepository @Inject constructor(
     suspend fun delete(ids: List<String>) = withContext(io) {
         documentsApi.deleteBatch(ids)
         documentDao.deleteByIds(ids)
+        privateStore.remove(ids)
         ids.forEach { fileUrls.remove(it) }
-    }
-
-    suspend fun setPrivacy(ids: List<String>, isPrivate: Boolean) = withContext(io) {
-        documentsApi.setPrivacy(ids, isPrivate)
-        documentDao.setPrivacy(ids, isPrivate)
     }
 
     suspend fun rename(id: String, filename: String): DocumentDto = withContext(io) {
         val dto = documentsApi.rename(id, filename)
-        documentDao.upsertAll(listOf(dto.toEntity(System.currentTimeMillis())))
+        absorb(listOf(dto))
         dto
     }
 
     suspend fun move(ids: List<String>, folderId: String) = withContext(io) {
         documentsApi.move(ids, folderId, conflict = null)
+        // The destination may be private (or the source was): drop every local copy and let the
+        // next folder refresh re-route each document to the right store.
+        purger.forgetMoved(ids)
     }
 
     suspend fun touchAccessed(id: String) = withContext(io) {

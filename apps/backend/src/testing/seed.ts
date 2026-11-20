@@ -11,7 +11,6 @@ export interface SeedDocument {
     mime?: string;
     category?: string | null;
     extractedDate?: Date | null;
-    isPrivate?: boolean;
     deleted?: boolean;
     ocrText?: string;
     summary?: string;
@@ -88,7 +87,6 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             llm_status: 'complete',
             has_meaningful_text: doc.ocrText !== undefined,
             search_vector: null,
-            is_private: doc.isPrivate ?? false,
             deleted_at: doc.deleted ? new Date() : null,
         })
         .returning('id')

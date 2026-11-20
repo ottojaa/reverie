@@ -10,8 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -48,7 +46,6 @@ fun ViewerToolbar(
     onEdit: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onRename: () -> Unit,
-    onTogglePrivate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val canEdit = document != null &&
@@ -109,16 +106,6 @@ fun ViewerToolbar(
                         text = { Text("Rename") },
                         leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                         onClick = onRename,
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (document?.is_private == true) "Remove from private" else "Make private") },
-                        leadingIcon = {
-                            Icon(
-                                if (document?.is_private == true) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
-                                contentDescription = null,
-                            )
-                        },
-                        onClick = onTogglePrivate,
                     )
                 }
             }

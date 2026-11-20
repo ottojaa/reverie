@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Lock } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiTokensCard } from '../components/settings/ApiTokensCard';
 import { Button } from '../components/ui/button';
@@ -8,8 +7,6 @@ import { Input } from '../components/ui/input';
 import { authApi } from '../lib/api/auth-api';
 import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
-import { useConfirm } from '../lib/confirm';
-import { useVault } from '../lib/vault';
 
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -17,19 +14,6 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
     const { user, logout } = useAuth();
-    const { unlocked, hasPassword, lockNow } = useVault();
-    const confirm = useConfirm();
-
-    const handleLock = async () => {
-        const ok = await confirm({
-            title: 'Lock private items?',
-            description: "Private folders and files will be hidden again — you'll need your account password to open them for the rest of this session.",
-            confirmText: 'Lock',
-            cancelText: 'Cancel',
-        });
-
-        if (ok) lockNow();
-    };
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -122,7 +106,7 @@ function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Change Password</CardTitle>
-                        <CardDescription>Update your account password</CardDescription>
+                        <CardDescription>Update your account password. It is also the password that unlocks your private folders.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -176,42 +160,6 @@ function SettingsPage() {
                                 {isLoading ? 'Changing...' : 'Change Password'}
                             </Button>
                         </form>
-                    </CardContent>
-                </Card>
-
-                {/* Private items */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Private items</CardTitle>
-                        <CardDescription>
-                            Folders and files you mark private stay visible in your library but need your account password to open. They're always excluded from
-                            search. Once unlocked they stay open until you lock them, sign out, or quit.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {!hasPassword && (
-                            <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                                Set an account password below to lock private items. Without one, private items stay openable.
-                            </div>
-                        )}
-                        {hasPassword && (
-                            <div className="flex items-center gap-3">
-                                {unlocked ? (
-                                    <>
-                                        <Button variant="outline" size="sm" onClick={handleLock}>
-                                            <Lock className="size-4" />
-                                            Lock private items
-                                        </Button>
-                                        <span className="text-xs text-muted-foreground">Private items are unlocked.</span>
-                                    </>
-                                ) : (
-                                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Lock className="size-4" />
-                                        Private items are locked. Click a locked item to unlock.
-                                    </span>
-                                )}
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
 

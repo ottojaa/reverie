@@ -36,7 +36,7 @@ describe('applySearchFilters', () => {
         const { sql } = compile({}, ['types', 'fullText']);
 
         expect(sql).toContain('"d"."user_id" =');
-        expect(sql).toContain('"d"."is_private" =');
+        expect(sql).toContain('"d"."deleted_at" is null');
     });
 
     it('excludes documents in private folders and collections, through the query organize retrieval uses', () => {
@@ -47,7 +47,6 @@ describe('applySearchFilters', () => {
             .select('d.id')
             .compile();
 
-        expect(compiled.sql).toContain('"d"."is_private" =');
         expect(compiled.sql).toContain('"d"."folder_id" not in');
         expect(compiled.parameters).toEqual(expect.arrayContaining(['private-folder', 'private-child']));
     });

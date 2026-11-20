@@ -1,10 +1,11 @@
-import { toTrashItemKey, TrashRow, type TrashItem } from '@/components/trash/TrashRow';
+import { isLockedFolderEntry, toTrashItemKey, TrashRow, type TrashItem } from '@/components/trash/TrashRow';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api/client';
 import { useEmptyTrash, usePurgeFromTrash, useRestoreFromTrash, useTrash, type TrashSelection } from '@/lib/api/trash';
 import { useConfirm } from '@/lib/confirm';
+import { useVault } from '@/lib/vault';
 import { createFileRoute } from '@tanstack/react-router';
 import { RotateCcw, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -30,6 +31,7 @@ function TrashPage() {
     const purge = usePurgeFromTrash();
     const emptyTrash = useEmptyTrash();
     const confirm = useConfirm();
+    const { requestUnlock } = useVault();
     const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(new Set());
 
     const entries = useMemo<TrashItem[]>(
@@ -53,8 +55,16 @@ function TrashPage() {
         setSelectedKeys(next);
     };
 
+    // Unlocking refetches the trash, so the folder's real name replaces the bare row.
+    const handleUnlock = (entry: TrashItem) => {
+        void requestUnlock(entry.item.id);
+    };
+
+    // A locked folder can only be restored after it is unlocked, so bulk restores leave those out.
+    const restorable = selected.filter((entry) => !isLockedFolderEntry(entry));
+
     const handleRestore = (targets: TrashItem[]) => {
-        restore.mutate(toSelection(targets), { onSuccess: () => setSelectedKeys(new Set()) });
+        restore.mutate(toSelection(targets.filter((entry) => !isLockedFolderEntry(entry))), { onSuccess: () => setSelectedKeys(new Set()) });
     };
 
     const handlePurge = async (targets: TrashItem[]) => {
@@ -112,7 +122,13 @@ function TrashPage() {
                     </label>
                     {selected.length > 0 && (
                         <div className="flex gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => handleRestore(selected)} disabled={busy}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRestore(selected)}
+                                disabled={busy || restorable.length === 0}
+                            >
                                 <RotateCcw className="size-3.5" />
                                 Restore selected
                             </Button>
@@ -150,6 +166,7 @@ function TrashPage() {
                             busy={busy}
                             onToggle={() => toggle(entry)}
                             onRestore={() => handleRestore([entry])}
+                            onUnlock={() => handleUnlock(entry)}
                             onPurge={() => handlePurge([entry])}
                         />
                     ))}

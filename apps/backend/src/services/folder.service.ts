@@ -166,8 +166,8 @@ export class FolderService {
 
     /**
      * Get full folder tree (root folders with nested children and document_count).
-     * Private folders/documents are always included (with full counts) — the vault lock is
-     * applied at serialization time (per-folder `locked` flag), not by hiding rows here.
+     * Private folders are always included with their true counts; the folder-lock redaction
+     * (locked folders show no documents, locked collections no folders) is applied by the route.
      */
     async getFolderTree(
         userId: string,

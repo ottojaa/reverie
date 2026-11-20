@@ -95,7 +95,6 @@ fun DocumentCard(
                 hasThumbnail = document.hasRenderedThumbnail,
                 size = thumbnailSize,
                 durationSeconds = document.duration_seconds,
-                locked = document.locked,
                 modifier = Modifier.matchParentSize(),
             )
         }
@@ -109,10 +108,9 @@ fun DocumentCard(
         ) {
             SelectedCheck()
         }
-        // Locked tiles already render a full lock placeholder, so the corner badge is only for
-        // unlocked-but-private items (a subtle "this is private" marker).
+        // A subtle "this is private" marker for documents inside an open private folder.
         AnimatedVisibility(
-            visible = !selected && document.is_private && !document.locked,
+            visible = !selected && document.is_private,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart).padding(6.dp),

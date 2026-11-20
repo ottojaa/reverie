@@ -18,14 +18,7 @@ import { dbProxy } from '../testing/db-proxy.js';
 import { describeDb, useWorld, type World } from '../testing/tool-world.js';
 import { listTools } from '../tools/registry.js';
 
-const hidden = (world: World) => [
-    world.docs.lockedOwn,
-    world.docs.inLockedFolder,
-    world.docs.inVault,
-    world.docs.inVaultInner,
-    world.docs.trashed,
-    world.docs.inTrashedFolder,
-];
+const hidden = (world: World) => [world.docs.inLockedFolder, world.docs.inVault, world.docs.inVaultInner, world.docs.trashed, world.docs.inTrashedFolder];
 
 describeDb('/mcp', () => {
     const ctx = useWorld();
@@ -162,7 +155,7 @@ describeDb('/mcp', () => {
 
         it('reports a refusal as a tool error, not a transport failure', async () => {
             const client = await connect((await createApiToken(ctx.world().alice, 'refused')).secret);
-            const refused = await call(client, 'get_document', { document_id: ctx.world().docs.lockedOwn });
+            const refused = await call(client, 'get_document', { document_id: ctx.world().docs.inLockedFolder });
 
             expect(refused.isError).toBe(true);
             expect(refused.output.error).toMatch(/not found/i);
