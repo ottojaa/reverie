@@ -1,10 +1,13 @@
 import {
+    CHECK_CONTENT_MAX_FILES,
+    CheckContentResponseSchema,
     CheckDuplicatesResponseSchema,
     DocumentListResponseSchema,
     DocumentOcrResultSchema,
     DocumentSchema,
     JobIdResponseSchema,
     TrimVideoResponseSchema,
+    type CheckContentResult,
     type CheckDuplicatesResponse,
     type Document,
     type DocumentOcrResult,
@@ -72,6 +75,25 @@ export const documentsApi = {
         });
 
         return CheckDuplicatesResponseSchema.parse(data);
+    },
+
+    /**
+     * Which of these files' content is already in the library, and whether the name is taken in `folderId`.
+     * Results come back in the order of `files`; more than one request is made past the server's per-call limit.
+     */
+    async checkContent(folderId: string | undefined, files: Array<{ name: string; sha256?: string }>): Promise<CheckContentResult[]> {
+        const results: CheckContentResult[] = [];
+
+        for (let start = 0; start < files.length; start += CHECK_CONTENT_MAX_FILES) {
+            const { data } = await apiClient.post('/documents/check-content', {
+                ...(folderId && { folder_id: folderId }),
+                files: files.slice(start, start + CHECK_CONTENT_MAX_FILES),
+            });
+
+            results.push(...CheckContentResponseSchema.parse(data).results);
+        }
+
+        return results;
     },
 
     async reprocessLlm(documentId: string) {

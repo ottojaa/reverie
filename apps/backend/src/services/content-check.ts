@@ -48,7 +48,12 @@ async function loadRowsByHash(userId: string, hashes: string[]): Promise<Map<str
 /** Filenames that already exist (live) in the target folder. */
 async function loadFilenamesInFolder(userId: string, folderId: string, names: string[]): Promise<Set<string>> {
     const rows = await excludeTrashed(
-        db.selectFrom('documents').select('original_filename').where('user_id', '=', userId).where('folder_id', '=', folderId).where('original_filename', 'in', names),
+        db
+            .selectFrom('documents')
+            .select('original_filename')
+            .where('user_id', '=', userId)
+            .where('folder_id', '=', folderId)
+            .where('original_filename', 'in', names),
         '',
     ).execute();
 

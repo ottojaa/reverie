@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { documentsApi } from '@/lib/api/documents';
 import { formatFileSize } from '@/lib/commonhelpers';
+import { useFileHashes } from '@/lib/hash/useFileHashes';
 import { flattenSectionTree, useSections } from '@/lib/sections';
 import { isFileTooLarge, useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
@@ -15,8 +15,9 @@ import { toast } from 'sonner';
 
 import { useCountdown } from '@/lib/hooks/useCountdown';
 import { SectionIcon } from '../ui/SectionIcon';
-import { DuplicateOptionsDialog } from './DuplicateOptionsDialog';
+import { DuplicateReviewDialog } from './DuplicateReviewDialog';
 import { UploadFileItem } from './UploadFileItem';
+import { useUploadCheck } from './useUploadCheck';
 
 function AnimatedCheckCircle({ className }: { className?: string }) {
     return (
@@ -143,7 +144,9 @@ export function UploadModal() {
     const queryClient = useQueryClient();
     const prevAllComplete = useRef(false);
     const [successPhase, setSuccessPhase] = useState(false);
-    const [duplicateFilenames, setDuplicateFilenames] = useState<string[] | null>(null);
+    const hashes = useFileHashes(files);
+    const targetFolderId = selectedFolderId ?? defaultFolderId;
+    const uploadCheck = useUploadCheck({ files, hashes, folderId: targetFolderId, startUpload, removeFile });
 
     const { percent, completedCount, total, phase, phaseLabel } = useOverallProgress();
 
@@ -289,7 +292,7 @@ export function UploadModal() {
                                         exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                                         className="overflow-hidden"
                                     >
-                                        <UploadFileItem file={file} onRemove={removeFile} onRetry={retryFile} disableExitAnimation />
+                                        <UploadFileItem file={file} hash={hashes[file.id]} onRemove={removeFile} onRetry={retryFile} disableExitAnimation />
                                     </motion.div>
                                 ))}
                             </AnimatePresence>
@@ -334,34 +337,16 @@ export function UploadModal() {
                                 {isCounting ? `Closing in (${Math.floor(seconds)})` : 'Close'}
                             </Button>
                             {hasQueued && (
-                                <Button
-                                    size="sm"
-                                    disabled={isUploading}
-                                    onClick={async () => {
-                                        const folderId = selectedFolderId ?? defaultFolderId;
-
-                                        if (!folderId) return;
-
-                                        const queued = files.filter((f) => f.status === 'queued');
-                                        const filenames = queued.map((f) => f.file.name);
-
-                                        try {
-                                            const { duplicates } = await documentsApi.checkDuplicates(folderId, filenames);
-
-                                            if (duplicates.length > 0) {
-                                                setDuplicateFilenames(duplicates);
-                                            } else {
-                                                startUpload(folderId).catch((err) => toast.error(err instanceof Error ? err.message : 'Upload failed'));
-                                            }
-                                        } catch {
-                                            toast.error('Failed to check for duplicates');
-                                        }
-                                    }}
-                                >
+                                <Button size="sm" disabled={isUploading || uploadCheck.isChecking || uploadCheck.isHashing} onClick={uploadCheck.check}>
                                     {isUploading ? (
                                         <>
                                             <Loader2 className="mr-2 size-4 animate-spin" />
                                             Uploading...
+                                        </>
+                                    ) : uploadCheck.isHashing || uploadCheck.isChecking ? (
+                                        <>
+                                            <Loader2 className="mr-2 size-4 animate-spin" />
+                                            Checking files...
                                         </>
                                     ) : (
                                         <>
@@ -376,19 +361,15 @@ export function UploadModal() {
                 </DialogContent>
             </Dialog>
 
-            <DuplicateOptionsDialog
-                open={duplicateFilenames !== null}
-                duplicateFilenames={duplicateFilenames ?? []}
-                action="upload"
-                onConfirm={(strategy) => {
-                    const folderId = selectedFolderId ?? defaultFolderId;
-
-                    if (folderId) startUpload(folderId, strategy).catch((err) => toast.error(err instanceof Error ? err.message : 'Upload failed'));
-
-                    setDuplicateFilenames(null);
-                }}
-                onCancel={() => setDuplicateFilenames(null)}
-            />
+            {uploadCheck.review && (
+                <DuplicateReviewDialog
+                    items={uploadCheck.review.items}
+                    cleanCount={uploadCheck.review.cleanCount}
+                    folderName={selectedFolder?.name}
+                    onConfirm={uploadCheck.confirm}
+                    onCancel={uploadCheck.cancel}
+                />
+            )}
         </>
     );
 }

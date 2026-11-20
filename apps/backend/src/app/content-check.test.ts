@@ -143,13 +143,28 @@ describeDb('POST /documents/check-content', () => {
         const markers = (privateFilename: string) => {
             const { folders } = world();
 
-            return [folders.vault.id, folders.vaultInner.id, folders.lockedFolder.id, folders.secretParent.id, 'Vault', 'Inner', 'Hidden', 'Archive', privateFilename];
+            return [
+                folders.vault.id,
+                folders.vaultInner.id,
+                folders.lockedFolder.id,
+                folders.secretParent.id,
+                'Vault',
+                'Inner',
+                'Hidden',
+                'Archive',
+                privateFilename,
+            ];
         };
 
         it('answers "private" with no id, name or path for a document in a private collection', async () => {
             const { db, alice } = world();
             const { folders } = world();
-            const id = await seedDocument(db, { userId: alice, name: 'tax-return-secret.pdf', folderId: folders.vaultInner.id, hash: sha('private-collection') });
+            const id = await seedDocument(db, {
+                userId: alice,
+                name: 'tax-return-secret.pdf',
+                folderId: folders.vaultInner.id,
+                hash: sha('private-collection'),
+            });
 
             const { status, raw, results } = await check([{ name: 'scan.pdf', sha256: sha('private-collection') }]);
 

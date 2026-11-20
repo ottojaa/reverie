@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { formatFileSize } from '@/lib/commonhelpers';
+import type { FileHashState } from '@/lib/hash/useFileHashes';
 import { isFileTooLarge, type UploadFile } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, File, FileArchive, FileAudio, FileCode, FileImage, FileSpreadsheet, FileText, FileVideo, RefreshCw, X } from 'lucide-react';
@@ -9,6 +10,8 @@ import { Spinner } from '../ui/spinner';
 
 interface UploadFileItemProps {
     file: UploadFile;
+    /** Progress of the content hash used for the duplicate check */
+    hash?: FileHashState;
     onRemove?: (fileId: string) => void;
     onRetry?: (fileId: string) => void;
     /** When true, root is a plain div (for use inside a parent that handles exit animation) */
@@ -54,7 +57,7 @@ function getFileIcon(mimeType: string): { icon: typeof File; color: string } {
     return { icon: File, color: 'text-gray-400' };
 }
 
-export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }: UploadFileItemProps) {
+export function UploadFileItem({ file, hash, onRemove, onRetry, disableExitAnimation }: UploadFileItemProps) {
     const { icon: FileIcon, color: iconColor } = getFileIcon(file.file.type);
     const isImage = file.file.type.startsWith('image/');
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -77,6 +80,8 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
 
     const isProcessing = file.status === 'processing';
     const isQueued = file.status === 'queued';
+    const isHashing = isQueued && (!hash || hash.status === 'hashing');
+    const hashPercent = hash?.status === 'hashing' ? Math.round(hash.progress * 100) : 0;
     const className = cn('relative overflow-hidden rounded-lg border bg-card p-4', isQueued && 'opacity-80');
 
     const content = (
@@ -116,7 +121,9 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
                     <p className="truncate font-medium">{file.file.name}</p>
                     <p className="text-sm text-muted-foreground">
                         {formatFileSize(file.file.size)}
-                        {isQueued && ' • Queued'}
+                        {isQueued && !isHashing && ' • Queued'}
+                        {isHashing && ` • Checking contents ${hashPercent}%`}
+                        {isQueued && hash?.status === 'error' && <span className="text-warning"> • Couldn't check contents, comparing names only</span>}
                         {file.status === 'uploading' && ` • Uploading ${progress}%`}
                         {file.status === 'processing' && ' • Generating preview\u2026'}
                         {file.status === 'error' && file.error && <span className="text-destructive"> • {file.error}</span>}
@@ -168,6 +175,18 @@ export function UploadFileItem({ file, onRemove, onRetry, disableExitAnimation }
                     </Button>
                 )}
             </div>
+            {isHashing && (
+                <div
+                    role="progressbar"
+                    aria-label={`Checking contents of ${file.file.name}`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={hashPercent}
+                    className="relative mt-3 h-1 overflow-hidden rounded-full bg-muted"
+                >
+                    <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${hashPercent}%` }} />
+                </div>
+            )}
         </>
     );
 
