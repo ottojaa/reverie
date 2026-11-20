@@ -20,6 +20,13 @@ export function toReviewItems(queued: UploadFile[], results: CheckContentResult[
     });
 }
 
+/** Ids of the queued files that stay in the upload once the person's Skip choices are applied. */
+export function toKeptIds(queued: { id: string }[], skipIds: string[]): Set<string> {
+    const skipped = new Set(skipIds);
+
+    return new Set(queued.filter((f) => !skipped.has(f.id)).map((f) => f.id));
+}
+
 /** ['Work', 'Invoices'] -> "Work › Invoices". Null (a document with no folder) has no path to show. */
 export function toBreadcrumb(folderPath: string[]): string {
     return folderPath.join(' › ');

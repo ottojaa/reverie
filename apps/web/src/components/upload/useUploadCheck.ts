@@ -1,6 +1,6 @@
 import { documentsApi } from '@/lib/api/documents';
 import type { FileHashState } from '@/lib/hash/useFileHashes';
-import { toReviewItems, type ReviewItem } from '@/lib/upload/duplicateReview';
+import { toKeptIds, toReviewItems, type ReviewItem } from '@/lib/upload/duplicateReview';
 import type { UploadFile } from '@/lib/upload';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -66,8 +66,7 @@ export function useUploadCheck({ files, hashes, folderId, startUpload, removeFil
 
         // startUpload reads the queue from the render it was created in, where the skipped files are
         // still queued: name the files to send instead of relying on the removal above.
-        const skipped = new Set(skipIds);
-        const kept = new Set(queued.filter((f) => !skipped.has(f.id)).map((f) => f.id));
+        const kept = toKeptIds(queued, skipIds);
 
         if (!folderId || kept.size === 0) return;
 

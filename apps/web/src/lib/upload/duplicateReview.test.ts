@@ -1,6 +1,6 @@
 import type { CheckContentResult } from '@reverie/shared';
 import { describe, expect, it } from 'vitest';
-import { describeContent, describeNameConflict, needsConflictChoice, toBreadcrumb, toReviewItems } from './duplicateReview';
+import { describeContent, describeNameConflict, needsConflictChoice, toBreadcrumb, toKeptIds, toReviewItems } from './duplicateReview';
 import type { UploadFile } from './types';
 
 const upload = (id: string, name: string): UploadFile => ({ id, file: new File(['x'], name), status: 'queued', uploadProgress: 0, processingProgress: 0 });
@@ -63,6 +63,14 @@ describe('name conflict wording and choice', () => {
         expect(needsConflictChoice(nameOnly!, false)).toBe(true);
         expect(needsConflictChoice(both!, false)).toBe(false);
         expect(needsConflictChoice(both!, true)).toBe(true);
+    });
+
+    it('keeps only the files that were not skipped', () => {
+        const queued = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+        expect([...toKeptIds(queued, ['b'])]).toEqual(['a', 'c']);
+        expect(toKeptIds(queued, ['a', 'b', 'c']).size).toBe(0);
+        expect(toKeptIds(queued, []).size).toBe(3);
     });
 
     it('breadcrumbs a path', () => {
