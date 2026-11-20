@@ -20,6 +20,10 @@ import { getTrashService } from './trash.service';
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// What the "which trashed folders qualify" select returns, so the folder DELETE is reached.
+const trashedFolder = { id: 'folder-1', user_id: USER_ID };
+const isTrashedFolderSelect = (sql: string) => sql.startsWith('select') && sql.includes('from "folders"') && sql.includes('"deleted_at" is not null');
+
 const trashedDocs = [
     { id: 'doc-1', user_id: USER_ID },
     { id: 'doc-2', user_id: USER_ID },
@@ -39,7 +43,12 @@ beforeEach(() => {
 describe('purge', () => {
     it('only deletes rows that are trashed and older than the retention cutoff, then their files', async () => {
         const now = new Date('2026-11-19T12:00:00Z');
-        h.recording.respond = (sql) => (sql.startsWith('delete from "documents"') ? trashedDocs : undefined);
+
+        h.recording.respond = (sql) => {
+            if (sql.startsWith('delete from "documents"')) return trashedDocs;
+
+            return isTrashedFolderSelect(sql) ? [trashedFolder] : undefined;
+        };
 
         const result = await getTrashService().purgeExpired(now);
 
@@ -58,6 +67,8 @@ describe('purge', () => {
 
     it('"Delete forever" and "Empty trash" never touch live rows and apply no cutoff', async () => {
         const service = getTrashService();
+
+        h.recording.respond = (sql) => (isTrashedFolderSelect(sql) ? [trashedFolder] : undefined);
 
         await service.purge(USER_ID, { documentIds: ['doc-1'], folderIds: ['folder-1'] });
         await service.emptyTrash(USER_ID);

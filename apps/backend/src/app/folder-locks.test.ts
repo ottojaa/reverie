@@ -489,6 +489,46 @@ describeDb('folder locks over HTTP', () => {
             expect(await db.selectFrom('folders').select('id').where('id', '=', folder.id).executeTakeFirst()).toBeDefined();
         });
 
+        it('purges a trashed private collection together with its folders’ documents instead of dropping them to the root', async () => {
+            const { alice, db } = world();
+            const collection = await seedFolder(db, alice, 'Purged vault', { isPrivate: true });
+            const inner = await seedFolder(db, alice, 'Purged vault inner', { parent: collection });
+            const doc = await seedDocument(db, { userId: alice, name: 'purged-vault.pdf', folderId: inner.id });
+            const session = newSession();
+
+            await session.unlock(collection.id);
+            await trashFolder(alice, collection.id);
+            expect((await session.request('POST', '/trash/purge', { folder_ids: [collection.id] })).status).toBe(200);
+
+            expect(await db.selectFrom('documents').select('id').where('id', '=', doc).executeTakeFirst()).toBeUndefined();
+            expect(
+                await db
+                    .selectFrom('documents')
+                    .select('id')
+                    .where('user_id', '=', alice)
+                    .where('folder_id', 'is', null)
+                    .where('original_filename', '=', 'purged-vault.pdf')
+                    .execute(),
+            ).toEqual([]);
+        });
+
+        it('leaves a trashed public collection alone when it contains a closed lock, on purge and on empty', async () => {
+            const { alice, db } = world();
+            const collection = await seedFolder(db, alice, 'Public shell');
+            const inner = await seedFolder(db, alice, 'Locked inside shell', { parent: collection, isPrivate: true });
+            const doc = await seedDocument(db, { userId: alice, name: 'inside-shell.pdf', folderId: inner.id });
+
+            await trashFolder(alice, collection.id);
+            expect((await newSession().request('POST', '/trash/purge', { folder_ids: [collection.id] })).status).toBe(200);
+            expect((await newSession().request('DELETE', '/trash')).status).toBe(200);
+
+            const row = await db.selectFrom('documents').select('folder_id').where('id', '=', doc).executeTakeFirstOrThrow();
+
+            expect(row.folder_id).toBe(inner.id);
+            expect(await db.selectFrom('folders').select('id').where('id', '=', collection.id).executeTakeFirst()).toBeDefined();
+            expect(await db.selectFrom('folders').select('id').where('id', '=', inner.id).executeTakeFirst()).toBeDefined();
+        });
+
         it('trashes a private folder through the API without dropping its documents to the root', async () => {
             const { alice, db, folders } = world();
             const folder = await seedFolder(db, alice, 'Api trashed', { parent: folders.work, isPrivate: true });

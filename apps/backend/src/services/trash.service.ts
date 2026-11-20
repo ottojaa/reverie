@@ -146,10 +146,13 @@ export class TrashService {
         return { documents: standalone, folders: topLevel, retentionDays };
     }
 
-    /** Delete trashed items for good ("Delete forever"). Live items are never touched. */
-    async purge(userId: string, selection: TrashSelection): Promise<TrashResult> {
+    /**
+     * Delete trashed items for good ("Delete forever"). Live items are never touched, and a folder
+     * that contains a closed lock (`lockedFolderIds`) is left alone, since deleting it would delete the lock too.
+     */
+    async purge(userId: string, selection: TrashSelection, lockedFolderIds: string[] = []): Promise<TrashResult> {
         const documents = await this.purgeDocuments({ userId, ids: selection.documentIds ?? [] });
-        const folders = await this.purgeFolders({ userId, ids: selection.folderIds ?? [] });
+        const folders = await this.purgeFolders({ userId, ids: selection.folderIds ?? [], exceptFolderIds: lockedFolderIds });
 
         return { documents, folders };
     }
@@ -226,14 +229,16 @@ export class TrashService {
     }
 
     /**
-     * documents.folder_id is ON DELETE SET NULL, so deleting a private folder would drop its trashed
-     * documents to the root. They are purged first (their files are the folder's content).
+     * documents.folder_id is ON DELETE SET NULL and folders.parent_id is ON DELETE CASCADE, so deleting
+     * a folder silently deletes its child folders and drops their documents to the root. A private
+     * folder's trashed documents are therefore purged first, for every folder the delete will remove,
+     * and a folder is skipped when the delete would cascade into a lock that must survive.
      */
     private async purgeFolders(scope: PurgeScope): Promise<number> {
         if (scope.ids && scope.ids.length === 0) return 0;
 
         const exceptIds = scope.exceptFolderIds ?? [];
-        const candidates = await db
+        const selected = await db
             .selectFrom('folders')
             .select(['id', 'user_id'])
             .where('deleted_at', 'is not', null)
@@ -242,20 +247,34 @@ export class TrashService {
             .$if(scope.olderThan !== undefined, (qb) => qb.where('deleted_at', '<', scope.olderThan!))
             .$if(exceptIds.length > 0, (qb) => qb.where('id', 'not in', exceptIds))
             .execute();
+        const spared = await this.fetchParentIds(exceptIds);
+        const candidates = selected.filter((folder) => !spared.has(folder.id));
 
-        await this.purgePrivateDocumentsOf(candidates);
+        if (candidates.length === 0) return 0;
+
+        const candidateIds = candidates.map((folder) => folder.id);
+        const cascaded = await db.selectFrom('folders').select(['id', 'user_id']).where('parent_id', 'in', candidateIds).execute();
+
+        await this.purgePrivateDocumentsOf([...candidates, ...cascaded]);
 
         const rows = await db
             .deleteFrom('folders')
+            .where('id', 'in', candidateIds)
             .where('deleted_at', 'is not', null)
-            .$if(scope.userId !== undefined, (qb) => qb.where('user_id', '=', scope.userId!))
-            .$if(scope.ids !== undefined, (qb) => qb.where('id', 'in', scope.ids!))
             .$if(scope.olderThan !== undefined, (qb) => qb.where('deleted_at', '<', scope.olderThan!))
-            .$if(exceptIds.length > 0, (qb) => qb.where('id', 'not in', exceptIds))
             .returning('id')
             .execute();
 
         return rows.length;
+    }
+
+    /** Parents of the given folders: deleting one of these would cascade into a folder that has to survive. */
+    private async fetchParentIds(folderIds: string[]): Promise<Set<string>> {
+        if (folderIds.length === 0) return new Set();
+
+        const rows = await db.selectFrom('folders').select('parent_id').where('id', 'in', folderIds).where('parent_id', 'is not', null).execute();
+
+        return new Set(rows.map((row) => row.parent_id!));
     }
 
     private async purgePrivateDocumentsOf(folders: Array<{ id: string; user_id: string }>): Promise<void> {

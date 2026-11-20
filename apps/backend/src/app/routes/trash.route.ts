@@ -127,9 +127,10 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const { document_ids, folder_ids } = request.body;
-            await assertSelectionOpen(await loadFolderLocks(fastify, request, request.user.id), request.user.id, request.body);
+            const locks = await loadFolderLocks(fastify, request, request.user.id);
+            await assertSelectionOpen(locks, request.user.id, request.body);
 
-            return trashService.purge(request.user.id, { documentIds: document_ids, folderIds: folder_ids });
+            return trashService.purge(request.user.id, { documentIds: document_ids, folderIds: folder_ids }, locks.lockedFolderIds);
         },
     );
 
