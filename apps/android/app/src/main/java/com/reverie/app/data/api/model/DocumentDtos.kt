@@ -151,7 +151,7 @@ sealed interface ContentLocation
 @Serializable
 @SerialName("folder")
 data class FolderContent(
-    /** `/Collection/Folder`; null for a document that isn't in a folder. */
+    /** Names from the collection down, e.g. `["Work", "Invoices"]`; null for a document that isn't in a folder. */
     val folder_path: List<String>? = null,
     val filename: String,
 ) : ContentLocation

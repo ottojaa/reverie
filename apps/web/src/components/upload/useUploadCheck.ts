@@ -15,7 +15,7 @@ interface UseUploadCheckOptions {
     files: UploadFile[];
     hashes: Record<string, FileHashState>;
     folderId: string | undefined;
-    startUpload: (folderId: string, strategy?: ConflictStrategy) => Promise<void>;
+    startUpload: (folderId: string, strategy?: ConflictStrategy, onlyFileIds?: ReadonlySet<string>) => Promise<void>;
     removeFile: (fileId: string) => void;
 }
 
@@ -64,11 +64,14 @@ export function useUploadCheck({ files, hashes, folderId, startUpload, removeFil
 
         for (const id of skipIds) removeFile(id);
 
-        const everythingSkipped = skipIds.length === queued.length;
+        // startUpload reads the queue from the render it was created in, where the skipped files are
+        // still queued: name the files to send instead of relying on the removal above.
+        const skipped = new Set(skipIds);
+        const kept = new Set(queued.filter((f) => !skipped.has(f.id)).map((f) => f.id));
 
-        if (!folderId || everythingSkipped) return;
+        if (!folderId || kept.size === 0) return;
 
-        startUpload(folderId, strategy).catch(reportUploadError);
+        startUpload(folderId, strategy, kept).catch(reportUploadError);
     }
 
     return { review, isChecking, isHashing, check, confirm, cancel: () => setReview(null) };

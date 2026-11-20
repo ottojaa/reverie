@@ -28,7 +28,7 @@ export default defineConfig(() => ({
         include: ['lucide-react/dynamic'],
     },
     worker: {
-        // Classic worker: the packaged Electron app loads the page from file://, where a module worker can't be fetched.
+        // Classic (iife) worker in the build: the packaged Electron app loads the page from file://, where a module worker can't be fetched.
         format: 'iife' as const,
     },
     build: {

@@ -1,4 +1,5 @@
 import { hashBlob } from './sha256';
+import HashWorker from './sha256.worker?worker';
 import type { HashWorkerRequest, HashWorkerResponse } from './sha256.worker';
 
 /** Hashes files one at a time, off the main thread when a worker can start, on it (chunked) when not. */
@@ -10,9 +11,10 @@ export interface FileHasher {
 class WorkerUnavailableError extends Error {}
 
 function startWorker(): Worker {
-    // Classic (not module) worker: the packaged Electron app loads the page from file://, where a
-    // module worker's script cannot be fetched. The wasm is inlined in the bundle, so nothing else is fetched.
-    return new Worker(new URL('./sha256.worker.ts', import.meta.url));
+    // Vite's `?worker` import: a module worker in dev (where the script has real `import`s), and the iife
+    // bundle in production (`worker.format` in vite.config.mts), so the packaged Electron app can load it
+    // from file://. The wasm is inlined, so nothing else is fetched.
+    return new HashWorker();
 }
 
 /**

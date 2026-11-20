@@ -20,7 +20,7 @@ export function toReviewItems(queued: UploadFile[], results: CheckContentResult[
     });
 }
 
-/** "/Work/Invoices" -> "Work › Invoices". Null (a document with no folder) has no path to show. */
+/** ['Work', 'Invoices'] -> "Work › Invoices". Null (a document with no folder) has no path to show. */
 export function toBreadcrumb(folderPath: string[]): string {
     return folderPath.join(' › ');
 }
