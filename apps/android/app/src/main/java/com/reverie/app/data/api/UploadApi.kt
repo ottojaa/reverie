@@ -9,7 +9,10 @@ import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.util.cio.readChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import java.io.File
+import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,50 @@ class UploadApi @Inject constructor(
         mimeType: String,
         conflictStrategy: String?,
         onProgress: suspend (sent: Long, total: Long) -> Unit,
+    ): UploadResponse = submit(
+        sessionId = sessionId,
+        folderId = folderId,
+        filename = filename,
+        mimeType = mimeType,
+        conflictStrategy = conflictStrategy,
+        size = file.length(),
+        body = { file.readChannel() },
+        onProgress = onProgress,
+    )
+
+    /**
+     * Upload a file straight from a stream (a `content://` URI the caller opens), with no copy on
+     * disk. [size] is the byte count when known; null sends the body without a declared length.
+     * [openStream] is called once per attempt and the stream is closed when the body has been sent.
+     */
+    suspend fun uploadStream(
+        sessionId: String,
+        folderId: String,
+        filename: String,
+        mimeType: String,
+        conflictStrategy: String?,
+        size: Long?,
+        openStream: () -> InputStream,
+    ): UploadResponse = submit(
+        sessionId = sessionId,
+        folderId = folderId,
+        filename = filename,
+        mimeType = mimeType,
+        conflictStrategy = conflictStrategy,
+        size = size,
+        body = { openStream().toByteReadChannel() },
+        onProgress = { _, _ -> },
+    )
+
+    private suspend fun submit(
+        sessionId: String,
+        folderId: String,
+        filename: String,
+        mimeType: String,
+        conflictStrategy: String?,
+        size: Long?,
+        body: () -> ByteReadChannel,
+        onProgress: suspend (sent: Long, total: Long) -> Unit,
     ): UploadResponse {
         val response = client.submitFormWithBinaryData(
             url = "upload",
@@ -39,7 +86,7 @@ class UploadApi @Inject constructor(
                 conflictStrategy?.let { append("conflict_strategy", it) }
                 append(
                     key = "files",
-                    value = ChannelProvider(size = file.length()) { file.readChannel() },
+                    value = ChannelProvider(size = size, block = body),
                     headers = Headers.build {
                         append(HttpHeaders.ContentDisposition, "filename=\"$filename\"")
                         append(HttpHeaders.ContentType, mimeType)
@@ -47,7 +94,7 @@ class UploadApi @Inject constructor(
                 )
             },
         ) {
-            onUpload { sent, total -> onProgress(sent, total ?: file.length()) }
+            onUpload { sent, total -> onProgress(sent, total ?: size ?: 0L) }
         }
         return response.decode()
     }

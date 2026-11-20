@@ -48,8 +48,8 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 | Capability                                      | Immich   | Reverie                           | Plan                                     |
 | ----------------------------------------------- | -------- | --------------------------------- | ---------------------------------------- |
-| Background camera auto-backup                   | ✅ core  | ❌ manual upload only             | 🔜 **next core feature**                 |
-| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                                | 🛠️ with auto-backup                      |
+| Background camera auto-backup                   | ✅ core  | ✅ Android, app closed            | ✅ shipped                               |
+| Selective/excluded album backup, Wi-Fi-only     | ✅       | ✅ pick albums, Wi-Fi only        | ✅ shipped                               |
 | De-dup on upload                                | checksum | ✅ content hash, library-wide     | ✅ shipped (web + Android manual upload) |
 | Large uploads                                   | ✅       | ✅ up to 20 GB, clear size errors | ✅ (#66)                                 |
 | On-device cleanup after verified backup         | ✅       | ❌                                | 🛠️ after auto-backup                     |
@@ -129,10 +129,14 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### 🔜 Now / Next — core everything-app foundations
 
-1. **Background auto-backup (Android).** The single biggest gap vs Immich and the reason people run
-   it. Foundation already exists (content-addressable storage, `file_hash`, `check-duplicates`,
-   foreground `UploadWorker`). Needs: `PeriodicWorkRequest` + `MediaStore` observer, a
-   "back up these albums / Wi-Fi-only" settings surface, and a local backed-up-asset ledger.
+1. ✅ **Background auto-backup (Android).** A settings screen turns it on, picks the albums (Camera
+   preselected), a destination folder and Wi-Fi only (on by default). A periodic WorkManager job plus
+   a new-media trigger hash each new photo and video, ask `check-content` first, and upload only what
+   the library doesn't hold: content in a folder, a private folder or the trash is skipped and never
+   copied back out. A device-side ledger (Room, one row per MediaStore item) remembers what's done.
+   The worker is a plain background one working in slices of about 8 minutes; a video too big for one
+   slice gets a slice to itself and, if that isn't enough, waits for "Back up now" with the app open
+   (the server has no resumable upload yet). On-device cleanup stays planned.
 2. ✅ **Trash + soft-delete with configurable TTL** (#71). Deletes set `deleted_at`; trashed items are
    hidden from listings, search and every AI path, and can be restored or deleted forever from the
    Trash view. A retention worker purges them after `trash.retentionDays` (server-settings store).

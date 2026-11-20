@@ -41,6 +41,7 @@ object Routes {
 
     const val SETTINGS_PASSWORD = "settings/password"
     const val SETTINGS_PRIVACY = "settings/privacy"
+    const val SETTINGS_BACKUP = "settings/backup"
 
     /** Routes where the bottom bar is hidden. */
     val fullScreenRoutes = setOf(DOCUMENT)

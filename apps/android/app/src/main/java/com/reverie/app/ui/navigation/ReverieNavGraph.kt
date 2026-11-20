@@ -64,6 +64,13 @@ fun ReverieNavGraph(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onChangePassword = { navController.navigate(Routes.SETTINGS_PASSWORD) },
+                onOpenBackup = { navController.navigate(Routes.SETTINGS_BACKUP) },
+            )
+        }
+
+        composable(Routes.SETTINGS_BACKUP) {
+            com.reverie.app.ui.screens.settings.backup.BackupSettingsScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 

@@ -23,6 +23,15 @@ import javax.inject.Singleton
 /** The server's per-call limit for /documents/check-content. */
 private const val CHECK_CONTENT_BATCH = 500
 
+/**
+ * Asks the server about [files] in as many calls as the per-call limit needs; answers come back in
+ * [files]' order. Throws when a call fails (callers decide how to react to the reason).
+ */
+suspend fun DocumentsApi.checkContentInBatches(folderId: String?, files: List<CheckContentFile>): List<CheckContentResult> =
+    files.chunked(CHECK_CONTENT_BATCH).flatMap { batch ->
+        checkContent(CheckContentRequest(folderId, batch)).results
+    }
+
 @Singleton
 class UploadRepository @Inject constructor(
     private val uploadDao: UploadDao,
@@ -46,11 +55,7 @@ class UploadRepository @Inject constructor(
      * itself failed, so the caller can carry on without it instead of blocking the upload.
      */
     suspend fun checkContent(folderId: String?, files: List<CheckContentFile>): List<CheckContentResult>? = withContext(io) {
-        runCatching {
-            files.chunked(CHECK_CONTENT_BATCH).flatMap { batch ->
-                documentsApi.checkContent(CheckContentRequest(folderId, batch)).results
-            }
-        }.getOrNull()
+        runCatching { documentsApi.checkContentInBatches(folderId, files) }.getOrNull()
     }
 
     /** Stage the picked files and enqueue the background upload; returns the session id. */
