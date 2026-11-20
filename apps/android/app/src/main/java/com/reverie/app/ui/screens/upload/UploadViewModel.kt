@@ -66,6 +66,8 @@ data class ReviewState(
     /** Indexes (into [uris]) of content matches the person chose to upload anyway; the rest are skipped. */
     val uploadAnyway: Set<Int> = emptySet(),
     val nameStrategy: NameStrategy = NameStrategy.REPLACE,
+    /** Files that couldn't be read for hashing, so were compared by name only. */
+    val unhashed: Int = 0,
 )
 
 @HiltViewModel
@@ -177,7 +179,7 @@ class UploadViewModel @Inject constructor(
                 if (findings.isEmpty()) {
                     start(folderId, state.uris, conflictStrategy = null)
                 } else {
-                    _review.update { it?.copy(findings = findings, uploadAnyway = emptySet()) }
+                    _review.update { it?.copy(findings = findings, uploadAnyway = emptySet(), unhashed = hashes.count { h -> h == null }) }
                 }
             } finally {
                 _review.update { it?.copy(checking = null) }

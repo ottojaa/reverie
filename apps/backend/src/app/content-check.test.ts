@@ -23,7 +23,7 @@ const PASSWORD = 'correct horse battery staple';
 /** The hash the server would store for these bytes. */
 const sha = (content: string): string => createHash('sha256').update(content).digest('hex');
 
-type Content = { where: 'folder'; folder_path: string | null; filename: string } | { where: 'private' } | { where: 'trash' } | null;
+type Content = { where: 'folder'; folder_path: string[] | null; filename: string } | { where: 'private' } | { where: 'trash' } | null;
 interface Result {
     name: string;
     sha256: string | null;
@@ -97,7 +97,7 @@ describeDb('POST /documents/check-content', () => {
             {
                 name: 'copy-of-holiday.jpg',
                 sha256: sha('other-folder'),
-                content: { where: 'folder', folder_path: '/Work/Invoices', filename: 'holiday.jpg' },
+                content: { where: 'folder', folder_path: ['Work', 'Invoices'], filename: 'holiday.jpg' },
                 name_conflict: false,
             },
         ]);
@@ -112,7 +112,7 @@ describeDb('POST /documents/check-content', () => {
 
         await db.updateTable('folders').set({ name: 'Work' }).where('id', '=', folders.work.id).execute();
 
-        expect(results[0]?.content).toEqual({ where: 'folder', folder_path: '/Renamed Work/Invoices', filename: 'stale-path.jpg' });
+        expect(results[0]?.content).toEqual({ where: 'folder', folder_path: ['Renamed Work', 'Invoices'], filename: 'stale-path.jpg' });
     });
 
     it('reports a document at the root with a null path', async () => {
@@ -135,7 +135,7 @@ describeDb('POST /documents/check-content', () => {
             { name: 'b.jpg', sha256: sha('trash-and-live') },
         ]);
 
-        expect(results.map((r) => r.content)).toEqual([{ where: 'trash' }, { where: 'folder', folder_path: '/Work/Invoices', filename: 'kept.jpg' }]);
+        expect(results.map((r) => r.content)).toEqual([{ where: 'trash' }, { where: 'folder', folder_path: ['Work', 'Invoices'], filename: 'kept.jpg' }]);
     });
 
     describe('private folders', () => {
@@ -210,7 +210,7 @@ describeDb('POST /documents/check-content', () => {
 
             const { raw, results } = await check([{ name: 'scan.pdf', sha256: sha('both') }]);
 
-            expect(results[0]?.content).toEqual({ where: 'folder', folder_path: '/Work', filename: 'public-twin.pdf' });
+            expect(results[0]?.content).toEqual({ where: 'folder', folder_path: ['Work'], filename: 'public-twin.pdf' });
             expect(raw).not.toContain('hidden-twin.pdf');
         });
 
@@ -242,7 +242,7 @@ describeDb('POST /documents/check-content', () => {
             expect(results[0]).toEqual({
                 name: 'budget.xlsx',
                 sha256: sha('budget-new'),
-                content: { where: 'folder', folder_path: '/Work/Invoices', filename: 'budget-2024.xlsx' },
+                content: { where: 'folder', folder_path: ['Work', 'Invoices'], filename: 'budget-2024.xlsx' },
                 name_conflict: true,
             });
         });
@@ -253,7 +253,7 @@ describeDb('POST /documents/check-content', () => {
 
             const { results } = await check([{ name: 'same.pdf', sha256: sha('same') }], folders.empty.id);
 
-            expect(results[0]).toMatchObject({ content: { where: 'folder', folder_path: '/Empty', filename: 'same.pdf' }, name_conflict: true });
+            expect(results[0]).toMatchObject({ content: { where: 'folder', folder_path: ['Empty'], filename: 'same.pdf' }, name_conflict: true });
         });
 
         it('flags it in an unlocked private target as well, where the content is only "private"', async () => {
@@ -292,7 +292,7 @@ describeDb('POST /documents/check-content', () => {
 
         const { results } = await check([{ name: 'no-target.jpg', sha256: sha('no-target') }]);
 
-        expect(results[0]).toMatchObject({ content: { where: 'folder', folder_path: '/Work' }, name_conflict: false });
+        expect(results[0]).toMatchObject({ content: { where: 'folder', folder_path: ['Work'] }, name_conflict: false });
     });
 
     it('still checks the name of a file the client could not hash', async () => {

@@ -203,8 +203,8 @@ export type CheckContentRequest = z.input<typeof CheckContentRequestSchema>;
 export const ContentLocationSchema = z.discriminatedUnion('where', [
     z.object({
         where: z.literal('folder'),
-        /** `/Collection/Folder`, from the current names; null for a document at the root. */
-        folder_path: z.string().nullable(),
+        /** Names from the collection down (`['Work', 'Invoices']`), current names; null for a document at the root. A list, not a joined string, because a folder name may contain `/`. */
+        folder_path: z.array(z.string()).nullable(),
         filename: z.string(),
     }),
     z.object({ where: z.literal('private') }),

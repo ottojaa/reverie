@@ -16,7 +16,7 @@ interface ContentRow {
     folderId: string | null;
     filename: string;
     deleted: boolean;
-    path: string | null;
+    path: string[] | null;
 }
 
 /** Documents with these hashes, oldest first. The path comes from current names: `folders.path` goes stale when a collection is renamed. */
@@ -36,7 +36,7 @@ async function loadRowsByHash(userId: string, hashes: string[]): Promise<Map<str
         .execute();
 
     for (const row of rows) {
-        const path = row.folder_name === null ? null : row.parent_name === null ? '/' + row.folder_name : '/' + row.parent_name + '/' + row.folder_name;
+        const path = row.folder_name === null ? null : row.parent_name === null ? [row.folder_name] : [row.parent_name, row.folder_name];
         const entry: ContentRow = { folderId: row.folder_id, filename: row.original_filename, deleted: row.deleted_at !== null, path };
 
         byHash.set(row.file_hash, [...(byHash.get(row.file_hash) ?? []), entry]);

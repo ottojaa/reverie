@@ -34,7 +34,7 @@ class ContentReviewTest {
 
     @Test
     fun `names the folder with a breadcrumb, and the filename when it differs`() {
-        val described = describeContent(FolderContent("Work/Invoices", "old.pdf"), "new.pdf")
+        val described = describeContent(FolderContent(listOf("Work", "Invoices"), "old.pdf"), "new.pdf")
 
         assertEquals("Already in Work › Invoices", described.label)
         assertEquals("As old.pdf", described.detail)
@@ -42,7 +42,7 @@ class ContentReviewTest {
 
     @Test
     fun `does not repeat an identical filename and handles a file outside any folder`() {
-        assertNull(describeContent(FolderContent("Work", "a.pdf"), "a.pdf").detail)
+        assertNull(describeContent(FolderContent(listOf("Work"), "a.pdf"), "a.pdf").detail)
         assertEquals("Already in your library, not in a folder", describeContent(FolderContent(null, "a.pdf"), "a.pdf").label)
     }
 

@@ -15,6 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val BUFFER_BYTES = 64 * 1024
+private const val PROGRESS_INTERVAL_NANOS = 100_000_000L
 
 /**
  * SHA-256 of everything [this] stream yields, as lower-case hex: the value the server stores as
@@ -71,9 +72,17 @@ class ContentHasher @Inject constructor(
         val sizes = uris.map { querySize(it) }
         val bytesTotal = sizes.sum()
         var bytesBefore = 0L
+        var lastEmit = 0L
         uris.mapIndexed { index, uri ->
             onProgress(HashProgress(index, uris.size, bytesBefore, bytesTotal))
-            val hash = hash(uri) { done -> onProgress(HashProgress(index, uris.size, bytesBefore + done, bytesTotal)) }
+            val hash = hash(uri) { done ->
+                // One callback per 64 KiB block would be tens of thousands of UI updates for a big video.
+                val now = System.nanoTime()
+                if (now - lastEmit >= PROGRESS_INTERVAL_NANOS) {
+                    lastEmit = now
+                    onProgress(HashProgress(index, uris.size, bytesBefore + done, bytesTotal))
+                }
+            }
             bytesBefore += sizes[index]
             hash
         }.also { onProgress(HashProgress(uris.size, uris.size, bytesTotal, bytesTotal)) }

@@ -21,8 +21,8 @@ fun toFindings(names: List<String>, results: List<CheckContentResult>): List<Con
         if (result.content == null && !result.name_conflict) null else ContentFinding(index, name, result)
     }
 
-/** "/Work/Invoices" -> "Work › Invoices". */
-fun toBreadcrumb(folderPath: String): String = folderPath.split('/').filter { it.isNotEmpty() }.joinToString(" › ")
+/** ["Work", "Invoices"] -> "Work › Invoices". */
+fun toBreadcrumb(folderPath: List<String>): String = folderPath.joinToString(" › ")
 
 /**
  * The wording for where content already is. The web upload dialog says the same; keep them in step.

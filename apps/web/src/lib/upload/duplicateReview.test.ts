@@ -28,14 +28,14 @@ describe('toReviewItems', () => {
 
 describe('describeContent', () => {
     it('names the folder with a breadcrumb and the filename when it differs', () => {
-        expect(describeContent({ where: 'folder', folder_path: '/Work/Invoices', filename: 'old.pdf' }, 'new.pdf')).toEqual({
+        expect(describeContent({ where: 'folder', folder_path: ['Work', 'Invoices'], filename: 'old.pdf' }, 'new.pdf')).toEqual({
             label: 'Already in Work › Invoices',
             detail: 'As old.pdf',
         });
     });
 
     it('does not repeat an identical filename', () => {
-        expect(describeContent({ where: 'folder', folder_path: '/Work', filename: 'a.pdf' }, 'a.pdf').detail).toBeUndefined();
+        expect(describeContent({ where: 'folder', folder_path: ['Work'], filename: 'a.pdf' }, 'a.pdf').detail).toBeUndefined();
     });
 
     it('says so when the file sits outside any folder', () => {
@@ -66,6 +66,6 @@ describe('name conflict wording and choice', () => {
     });
 
     it('breadcrumbs a path', () => {
-        expect(toBreadcrumb('/A/B')).toBe('A › B');
+        expect(toBreadcrumb(['A', 'B'])).toBe('A › B');
     });
 });

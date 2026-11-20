@@ -152,7 +152,7 @@ sealed interface ContentLocation
 @SerialName("folder")
 data class FolderContent(
     /** `/Collection/Folder`; null for a document that isn't in a folder. */
-    val folder_path: String? = null,
+    val folder_path: List<String>? = null,
     val filename: String,
 ) : ContentLocation
 

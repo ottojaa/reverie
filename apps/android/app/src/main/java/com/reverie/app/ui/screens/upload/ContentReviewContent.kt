@@ -77,6 +77,14 @@ fun FindingsContent(
         )
     }
 
+    if (state.unhashed > 0) {
+        Text(
+            "Couldn't check the contents of ${state.unhashed} ${if (state.unhashed == 1) "file" else "files"}, comparing names only.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
     Column(
         modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
