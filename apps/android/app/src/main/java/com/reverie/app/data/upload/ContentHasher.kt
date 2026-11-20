@@ -57,12 +57,15 @@ class ContentHasher @Inject constructor(
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    /** The SHA-256 of [uri]'s content, or null when it can't be opened or read. Cancellable. */
-    suspend fun hash(uri: Uri, onBytes: (Long) -> Unit = {}): String? = withContext(io) {
+    /**
+     * The SHA-256 of [uri]'s content, or null when it can't be opened or read. Cancellable. Pass [mimeType]
+     * when the caller already knows it, so the hash opens exactly the bytes the caller will upload.
+     */
+    suspend fun hash(uri: Uri, mimeType: String? = null, onBytes: (Long) -> Unit = {}): String? = withContext(io) {
         // openOriginal's fallback throws for a file that was deleted or whose grant lapsed (FileNotFound,
         // Security); like a read error, that is "couldn't hash", not a crash.
         try {
-            val stream = context.contentResolver.openOriginal(uri) ?: return@withContext null
+            val stream = context.contentResolver.openOriginal(uri, mimeType ?: context.contentResolver.getType(uri)) ?: return@withContext null
             stream.use { it.sha256Hex(onBytes) }
         } catch (e: java.io.IOException) {
             null

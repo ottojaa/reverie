@@ -70,6 +70,7 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     onChangePassword: () -> Unit = {},
+    onOpenBackup: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -171,6 +172,23 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(8.dp))
             VideoBackgroundSelector(selected = settings.videoBackground, onSelect = viewModel::setVideoBackground)
+        }
+
+        SettingsCard(title = "Backup") {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenBackup),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Photo backup", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Back up new photos and videos automatically",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
 
         SettingsCard(title = "Security") {

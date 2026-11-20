@@ -76,3 +76,23 @@ class Migration4To5(private val cacheDir: File) : Migration(4, 5) {
                 "`cachedAt` INTEGER NOT NULL, `lastAccessedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
     }
 }
+
+/**
+ * v5 -> v6: adds the auto-backup tables. Purely additive: no existing table or row is touched, so
+ * the cached library survives the upgrade.
+ */
+object Migration5To6 : Migration(5, 6) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Mirror the tables Room generates for BackupLedgerEntity / BackupRetryEntity; Room
+        // validates the schema after migrating, so a drift here fails at startup.
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `backup_ledger` (`mediaId` INTEGER NOT NULL, `sha256` TEXT NOT NULL, " +
+                "`documentId` TEXT, `outcome` TEXT NOT NULL, `handledAt` INTEGER NOT NULL, PRIMARY KEY(`mediaId`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `backup_retry` (`mediaId` INTEGER NOT NULL, `failures` INTEGER NOT NULL, " +
+                "`cutOffs` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, `lastError` TEXT, PRIMARY KEY(`mediaId`))",
+        )
+    }
+}

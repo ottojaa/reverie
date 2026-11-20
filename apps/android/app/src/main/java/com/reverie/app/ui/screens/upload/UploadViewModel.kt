@@ -299,27 +299,4 @@ class UploadViewModel @Inject constructor(
         }
         return out
     }
-
-    private fun toPickerSections(tree: List<FolderWithChildren>): List<FolderPickerSection> {
-        val sections = mutableListOf<FolderPickerSection>()
-        val rootFolders = mutableListOf<FolderOption>()
-        tree.forEach { node ->
-            when (node.type) {
-                FolderType.COLLECTION -> sections += FolderPickerSection(
-                    id = node.id,
-                    name = node.name,
-                    emoji = node.emoji,
-                    collectionId = node.id,
-                    folders = node.children
-                        .filter { it.type == FolderType.FOLDER }
-                        .map { FolderOption(it.id, it.name, it.emoji) },
-                )
-                FolderType.FOLDER -> rootFolders += FolderOption(node.id, node.name, node.emoji)
-            }
-        }
-        if (rootFolders.isNotEmpty()) {
-            sections += FolderPickerSection(id = "root", name = "Folders", emoji = null, collectionId = null, folders = rootFolders)
-        }
-        return sections
-    }
 }
