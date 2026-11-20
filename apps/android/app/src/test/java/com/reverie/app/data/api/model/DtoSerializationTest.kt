@@ -164,4 +164,32 @@ class DtoSerializationTest {
           "file_url":null,"thumbnail_urls":null
         }
     """.trimIndent()
+
+    @Test fun `decodes a check-content response with all three locations and a miss`() {
+        val payload = """
+            {"results": [
+              {"name":"a.jpg","sha256":"aa","content":{"where":"folder","folder_path":"/Work/Invoices","filename":"old.jpg"},"name_conflict":false},
+              {"name":"b.jpg","sha256":"bb","content":{"where":"private"},"name_conflict":false},
+              {"name":"c.jpg","sha256":"cc","content":{"where":"trash"},"name_conflict":true},
+              {"name":"d.jpg","sha256":null,"content":null,"name_conflict":true},
+              {"name":"e.jpg","sha256":"ee","content":{"where":"folder","folder_path":null,"filename":"e.jpg"},"name_conflict":false}
+            ]}
+        """.trimIndent()
+
+        val results = json.decodeFromString<CheckContentResponse>(payload).results
+
+        assertEquals(FolderContent("/Work/Invoices", "old.jpg"), results[0].content)
+        assertEquals(PrivateContent, results[1].content)
+        assertEquals(TrashContent, results[2].content)
+        assertTrue(results[2].name_conflict)
+        assertNull(results[3].content)
+        assertNull(results[3].sha256)
+        assertEquals(FolderContent(null, "e.jpg"), results[4].content)
+    }
+
+    @Test fun `encodes a check-content request without a target folder or a missing hash`() {
+        val body = json.encodeToString(CheckContentRequest.serializer(), CheckContentRequest(files = listOf(CheckContentFile("a.jpg", "ab"), CheckContentFile("b.jpg"))))
+
+        assertEquals("""{"files":[{"name":"a.jpg","sha256":"ab"},{"name":"b.jpg"}]}""", body)
+    }
 }

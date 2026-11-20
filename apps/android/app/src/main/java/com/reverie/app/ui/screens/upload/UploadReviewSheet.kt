@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -26,7 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,25 +68,23 @@ fun UploadReviewSheet(viewModel: UploadViewModel = hiltViewModel()) {
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (state.sessionId == null) {
-                ReviewContent(
+            when {
+                state.sessionId != null -> ProgressContent(viewModel = viewModel, sessionId = state.sessionId)
+                state.checking != null -> CheckingContent(progress = state.checking)
+                state.findings.isNotEmpty() -> FindingsContent(
+                    state = state,
+                    onUploadAnyway = viewModel::setUploadAnyway,
+                    onStrategy = viewModel::setNameStrategy,
+                    onConfirm = viewModel::confirmFindings,
+                    onCancel = viewModel::cancelFindings,
+                )
+                else -> ReviewContent(
                     state = state,
                     onPickFolder = { showFolderPicker = true },
                     onUpload = viewModel::requestUpload,
                 )
-            } else {
-                ProgressContent(viewModel = viewModel, sessionId = state.sessionId)
             }
         }
-    }
-
-    if (state.duplicates.isNotEmpty() && state.sessionId == null) {
-        DuplicateDialog(
-            count = state.duplicates.size,
-            onReplace = { viewModel.resolveDuplicates("replace") },
-            onKeepBoth = { viewModel.resolveDuplicates("keep_both") },
-            onCancel = viewModel::dismiss,
-        )
     }
 
     if (showFolderPicker) {
@@ -194,25 +190,4 @@ private fun ProgressContent(viewModel: UploadViewModel, sessionId: String) {
             UploadFileRow(item = item)
         }
     }
-}
-
-@Composable
-private fun DuplicateDialog(
-    count: Int,
-    onReplace: () -> Unit,
-    onKeepBoth: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text("$count already ${if (count == 1) "exists" else "exist"}") },
-        text = { Text("${if (count == 1) "A file" else "Some files"} with the same name already ${if (count == 1) "exists" else "exist"} in this folder.") },
-        confirmButton = { TextButton(onClick = onKeepBoth) { Text("Keep both") } },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onCancel) { Text("Cancel") }
-                TextButton(onClick = onReplace) { Text("Replace") }
-            }
-        },
-    )
 }

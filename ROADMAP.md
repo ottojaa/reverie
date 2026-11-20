@@ -46,15 +46,15 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### Ingest & backup
 
-| Capability                                      | Immich   | Reverie                           | Plan                                        |
-| ----------------------------------------------- | -------- | --------------------------------- | ------------------------------------------- |
-| Background camera auto-backup                   | ✅ core  | ❌ manual upload only             | 🔜 **next core feature**                    |
-| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                                | 🛠️ with auto-backup                         |
-| De-dup on upload                                | checksum | ⚠️ filename + folder-scoped only  | 🛠️ move to content-hash, global (see below) |
-| Large uploads                                   | ✅       | ✅ up to 20 GB, clear size errors | ✅ (#66)                                    |
-| On-device cleanup after verified backup         | ✅       | ❌                                | 🛠️ after auto-backup                        |
-| Server-side external libraries (watch a folder) | ✅       | ❌                                | 🧊                                          |
-| CLI bulk upload                                 | ✅       | ❌                                | 🧊                                          |
+| Capability                                      | Immich   | Reverie                           | Plan                                     |
+| ----------------------------------------------- | -------- | --------------------------------- | ---------------------------------------- |
+| Background camera auto-backup                   | ✅ core  | ❌ manual upload only             | 🔜 **next core feature**                 |
+| Selective/excluded album backup, Wi-Fi-only     | ✅       | ❌                                | 🛠️ with auto-backup                      |
+| De-dup on upload                                | checksum | ✅ content hash, library-wide     | ✅ shipped (web + Android manual upload) |
+| Large uploads                                   | ✅       | ✅ up to 20 GB, clear size errors | ✅ (#66)                                 |
+| On-device cleanup after verified backup         | ✅       | ❌                                | 🛠️ after auto-backup                     |
+| Server-side external libraries (watch a folder) | ✅       | ❌                                | 🧊                                       |
+| CLI bulk upload                                 | ✅       | ❌                                | 🧊                                       |
 
 ### Safety & data lifecycle
 
@@ -71,7 +71,7 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 | LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
 | Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
 | Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                              |
-| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ⚠️ organize-only chat                       | ✅ in-app agent over the shared tool registry         |
+| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ✅ in-app agent                             | ✅ in-app agent over the shared tool registry         |
 | Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
 | Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
 | Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                                    |
@@ -141,10 +141,12 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 3. ✅ **Authenticate the realtime socket** (#60, #65). The JWT is verified in the socket handshake and
    rooms are scoped to the authenticated `user_id`. Shipped alongside the first lock for private
    items (#64, since replaced by one lock per private folder) and uploads up to 20 GB (#66).
-4. **Fix duplicate detection.** Today it matches `original_filename` within a single folder. Switch
-   to **`file_hash`, globally** (drop the `folder_id` filter; `idx_documents_hash` already exists),
-   matching what content-addressable storage already does physically. Keep filename as a secondary
-   "same name, different content" warning.
+4. ✅ **Fix duplicate detection.** Before an upload, web and the Android manual upload hash each file
+   (SHA-256, the server's `file_hash`) and ask `POST /documents/check-content` where that content
+   already is, anywhere in the library: a folder and filename, "in a private folder" (never an id, name
+   or path, locked or not) or "in Trash". **Skip** is the default; **Upload anyway** and the replace /
+   keep both choice for a same-name-different-content file are still offered. The endpoint takes name +
+   hash in batches with or without a target folder, so the auto-backup can call it too.
 
 ### 🛠️ Then — sharing, search intelligence, media
 

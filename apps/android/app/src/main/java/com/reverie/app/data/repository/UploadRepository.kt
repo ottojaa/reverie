@@ -2,8 +2,13 @@ package com.reverie.app.data.repository
 
 import android.net.Uri
 import com.reverie.app.data.api.DocumentsApi
+import com.reverie.app.data.api.model.CheckContentFile
+import com.reverie.app.data.api.model.CheckContentRequest
+import com.reverie.app.data.api.model.CheckContentResult
 import com.reverie.app.data.local.dao.UploadDao
 import com.reverie.app.data.local.entity.UploadItemEntity
+import com.reverie.app.data.upload.ContentHasher
+import com.reverie.app.data.upload.HashProgress
 import com.reverie.app.data.upload.UploadEnqueuer
 import com.reverie.app.data.upload.UploadStager
 import com.reverie.app.di.IoDispatcher
@@ -15,11 +20,15 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The server's per-call limit for /documents/check-content. */
+private const val CHECK_CONTENT_BATCH = 500
+
 @Singleton
 class UploadRepository @Inject constructor(
     private val uploadDao: UploadDao,
     private val documentsApi: DocumentsApi,
     private val stager: UploadStager,
+    private val hasher: ContentHasher,
     private val enqueuer: UploadEnqueuer,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -28,8 +37,20 @@ class UploadRepository @Inject constructor(
 
     fun observeItems(sessionId: String): Flow<List<UploadItemEntity>> = uploadDao.observeItems(sessionId)
 
-    suspend fun checkDuplicates(folderId: String, filenames: List<String>): List<String> = withContext(io) {
-        runCatching { documentsApi.checkDuplicates(folderId, filenames).duplicates }.getOrDefault(emptyList())
+    /** SHA-256 of each picked file, read straight from its URI; null for one that can't be read. */
+    suspend fun hashContents(uris: List<Uri>, onProgress: (HashProgress) -> Unit): List<String?> = hasher.hashAll(uris, onProgress)
+
+    /**
+     * Which of [files]' content is already in the library, and whether each name is taken in [folderId]
+     * (null: no target, content only). Answers come back in [files]' order. Null when the check
+     * itself failed, so the caller can carry on without it instead of blocking the upload.
+     */
+    suspend fun checkContent(folderId: String?, files: List<CheckContentFile>): List<CheckContentResult>? = withContext(io) {
+        runCatching {
+            files.chunked(CHECK_CONTENT_BATCH).flatMap { batch ->
+                documentsApi.checkContent(CheckContentRequest(folderId, batch)).results
+            }
+        }.getOrNull()
     }
 
     /** Stage the picked files and enqueue the background upload; returns the session id. */
