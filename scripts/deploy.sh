@@ -48,8 +48,10 @@ fi
 
 # Build backend image (runtime stage = FROM reverie-ocr-base + built app).
 # This is the fast, per-deploy build; it does NOT touch Python/CUDA.
-# reverie-agent (stock Claude Code + wrapper) is built here too, or `up -d` would never rebuild it.
-docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend reverie-agent
+# reverie-agent (stock Claude Code + wrapper), reverie-ml (embedding models) and postgres (pgvector) are built here
+# too, or `up -d` would never rebuild them. reverie-ml installs requirements before copying code and postgres has no
+# changing inputs, so both are cached layers on an ordinary deploy.
+docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build backend reverie-agent reverie-ml postgres
 
 # Extract web dist from builder stage.
 docker build \
@@ -78,6 +80,25 @@ trap - EXIT
 # Best-effort image cleanup — this is cosmetic and must NEVER abort the deploy, so the
 # critical `up -d` + migrations below always run.
 docker rmi -f reverie-builder >/dev/null 2>&1 || true
+
+# Back up the database before `up -d` can recreate Postgres on a new image or run a migration. The dump comes from
+# the still-running old container. A failed dump aborts the deploy (set -e) with the old stack untouched. The only
+# skip is a first deploy, where no Postgres container exists yet.
+BACKUP_DIR="${DEPLOY_DIR}/backups"
+if docker ps -q --filter name='^reverie-postgres$' | grep -q .; then
+    mkdir -p "$BACKUP_DIR"
+    BACKUP_FILE="${BACKUP_DIR}/reverie-$(date -u '+%Y%m%dT%H%M%SZ').dump"
+    echo "Backing up the database to ${BACKUP_FILE}..."
+    # Embedding rows are left out of the dump (definitions stay): they are derived data, large, and the backfill
+    # rebuilds them after a restore.
+    docker exec reverie-postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc \
+        --exclude-table-data=document_text_embeddings --exclude-table-data=document_image_embeddings "$POSTGRES_DB"' >"${BACKUP_FILE}.partial"
+    mv "${BACKUP_FILE}.partial" "$BACKUP_FILE"
+    # Keep the newest 7 dumps.
+    ls -1t "$BACKUP_DIR"/reverie-*.dump | tail -n +8 | xargs -r rm -f
+else
+    echo "No running reverie-postgres container: skipping the pre-deploy backup (first deploy)."
+fi
 
 # Start/restart containers
 docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d

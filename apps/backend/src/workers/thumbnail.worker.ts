@@ -8,6 +8,7 @@ import { extname, join } from 'path';
 import sharp from 'sharp';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
+import { enqueueImageEmbedding } from '../embeddings/enqueue';
 import { decodeTextForPreview } from '../ocr/text-extractor';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
@@ -395,6 +396,9 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
         })
         .where('id', '=', documentId)
         .execute();
+
+    // Every image, private ones included, is embedded from its thumbnail rendition (local only).
+    if (document.mime_type.startsWith('image/')) await enqueueImageEmbedding(documentId);
 
     logger.info('Thumbnail job completed', {
         documentId,

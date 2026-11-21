@@ -1,0 +1,19 @@
+{
+    "name": "reverie-ml",
+    "$schema": "../../node_modules/nx/schemas/project-schema.json",
+    "projectType": "application",
+    "sourceRoot": "apps/reverie-ml/app",
+    "tags": [],
+    "targets": {
+        "test": {
+            "executor": "nx:run-commands",
+            "options": {
+                "command": "python3 -m pytest -q",
+                "cwd": "apps/reverie-ml",
+                "env": {
+                    "REVERIE_ML_AUTOSTART": "0"
+                }
+            }
+        }
+    }
+}

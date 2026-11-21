@@ -3,6 +3,7 @@ export { createThumbnailWorker } from './thumbnail.worker';
 export { createLlmWorker } from './llm.worker';
 export { createTrimWorker } from './trim.worker';
 export { createTrashWorker } from './trash.worker';
+export { createEmbedWorker, startEmbedWorker } from './embed.worker';
 export * from './worker.utils';
 
 import { createOcrWorker } from './ocr.worker';
@@ -10,6 +11,7 @@ import { createThumbnailWorker } from './thumbnail.worker';
 import { createLlmWorker } from './llm.worker';
 import { createTrimWorker } from './trim.worker';
 import { createTrashWorker } from './trash.worker';
+import { startEmbedWorker } from './embed.worker';
 import { createWorkerLogger } from './worker.utils';
 
 const logger = createWorkerLogger('WorkerManager');
@@ -26,11 +28,12 @@ export function startAllWorkers() {
     const llmWorker = createLlmWorker();
     const trimWorker = createTrimWorker();
     const trashWorker = createTrashWorker();
+    const embedWorker = startEmbedWorker();
 
     // Graceful shutdown
     const shutdown = async () => {
         logger.info('Shutting down workers...');
-        await Promise.all([ocrWorker.close(), thumbnailWorker.close(), llmWorker.close(), trimWorker.close(), trashWorker.close()]);
+        await Promise.all([ocrWorker.close(), thumbnailWorker.close(), llmWorker.close(), trimWorker.close(), trashWorker.close(), embedWorker?.close()]);
         logger.info('All workers stopped');
         process.exit(0);
     };

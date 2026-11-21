@@ -72,7 +72,7 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 | Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
 | Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                              |
 | Conversational AI assistant (organize + bulk edit + search) | ❌                 | ✅ in-app agent                             | ✅ in-app agent over the shared tool registry         |
-| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🛠️ local embeddings + pgvector (hybrid with tsvector) |
+| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🚧 embeddings shipped (pgvector); search ranking next |
 | Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
 | Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                                    |
 
@@ -161,6 +161,8 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
   and nothing leaves the machine). Hybrid with tsvector (keep lexical for exact matches).
   Reverie-specific angle: embed **LLM summaries + OCR text** (semantic doc search Immich can't do),
   optionally plus CLIP image embeddings. Near-dup detection follows for near-free.
+  _Status:_ the embeddings are built and kept current (local text + image models in `reverie-ml`, pgvector,
+  backfill); search ranking does not use them yet.
 - **Video transcoding + adaptive streaming** — the "personal Netflix" use case, prioritized ahead of
   photo editing.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude

@@ -1,6 +1,7 @@
 import { Job, Worker } from 'bullmq';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
+import { enqueueTextEmbedding } from '../embeddings/enqueue';
 import { isProcessableImage, isTextExtractable, processDocument, shouldQueueLlmJob } from '../ocr';
 import { addLlmJob } from '../queues/llm.queue';
 import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
@@ -145,6 +146,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Rebuild unified search vector with OCR text + EXIF metadata.
         // Will be rebuilt again after LLM processing if queued.
         await rebuildSearchVector(db, documentId);
+        await enqueueTextEmbedding(documentId);
 
         await publishJobProgress(job.id!, 100, documentId, job.data.sessionId, job.data.userId);
 

@@ -264,6 +264,32 @@ export interface AgentMessagesTable {
 export type AgentChatRow = Selectable<AgentChatsTable>;
 export type AgentMessageRow = Selectable<AgentMessagesTable>;
 
+// Embeddings (pgvector). `embedding` is pgvector's text form, '[0.1,0.2,...]'; use toVectorLiteral to write it.
+export interface DocumentTextEmbeddingsTable {
+    id: Generated<string>;
+    document_id: string;
+    chunk_index: number;
+    /** The chunk's character range within the embedded text (summary, blank line, OCR text). */
+    char_start: number;
+    char_end: number;
+    /** md5 of the whole embedded text, the same on every chunk of a document. */
+    content_hash: string;
+    model: string;
+    model_version: string;
+    embedding: string;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export interface DocumentImageEmbeddingsTable {
+    document_id: string;
+    /** md5 of the thumbnail rendition that was embedded. */
+    content_hash: string;
+    model: string;
+    model_version: string;
+    embedding: string;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
 // Database interface
 export interface Database {
     users: UsersTable;
@@ -280,4 +306,6 @@ export interface Database {
     api_tokens: ApiTokensTable;
     agent_chats: AgentChatsTable;
     agent_messages: AgentMessagesTable;
+    document_text_embeddings: DocumentTextEmbeddingsTable;
+    document_image_embeddings: DocumentImageEmbeddingsTable;
 }

@@ -15,6 +15,9 @@ import type { Database } from '../db/schema';
  * Where it comes from, first match wins:
  * 1. `TEST_DATABASE_URL`: a server to create a throwaway database on (e.g. `docker compose up postgres`);
  * 2. a throwaway cluster started from an `initdb` on PATH or in a Homebrew/Postgres.app install.
+ * Either way the server needs the pgvector extension (migration 017 creates it): the Postgres image in
+ * `docker/postgres` has it. `createTestDatabase` checks `pg_available_extensions` first and fails with a
+ * message saying so, rather than with a bare `extension "vector" is not available` from inside a migration.
  * With neither, `createTestDatabase` throws: a silently skipped suite would let a privacy regression
  * through the gate. `SKIP_DB_TESTS=1` turns those suites into no-ops on purpose.
  */
@@ -112,6 +115,18 @@ async function createScratchDatabase(adminUrl: string): Promise<{ url: string; d
     };
 }
 
+/** Fails clearly when the server has no pgvector, which every test database needs. */
+export async function assertVectorExtension(db: Kysely<Database>): Promise<void> {
+    const { rows } = await sql<{ name: string }>`SELECT name FROM pg_available_extensions WHERE name = 'vector'`.execute(db);
+
+    if (rows.length > 0) return;
+
+    throw new Error(
+        'The test Postgres has no pgvector extension: point TEST_DATABASE_URL at the compose postgres (docker compose up -d postgres, ' +
+            'built from docker/postgres) or install pgvector for the Postgres that initdb comes from. SKIP_DB_TESTS=1 skips these suites on purpose.',
+    );
+}
+
 export async function createTestDatabase(): Promise<TestDatabase> {
     const adminUrl = process.env['TEST_DATABASE_URL'];
     const binDir = adminUrl ? null : findPostgresBinDir();
@@ -123,6 +138,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     const db = toKysely(scratch.url);
 
     try {
+        await assertVectorExtension(db);
         await migrate(db);
     } catch (error) {
         await db.destroy();

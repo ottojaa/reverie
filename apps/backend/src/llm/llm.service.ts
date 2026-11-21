@@ -12,6 +12,7 @@ import { Entity } from '@reverie/shared';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
+import { enqueueTextEmbedding } from '../embeddings/enqueue';
 import { rebuildSearchVector } from '../search/search-indexer';
 import { isDocumentPrivate } from '../services/privacy';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
@@ -229,6 +230,8 @@ async function processTextSummary(
     await updateSearchIndex(document.id, { tags: proposedTags, topics, entities: groundedEntities });
 
     await rebuildSearchVector(db, document.id);
+    // The summary is part of the embedded text, so embed again now that it exists.
+    await enqueueTextEmbedding(document.id);
 
     const dbWriteMs = Date.now() - dbWriteStart;
     logTimings('text_summary', document.id, {
@@ -304,6 +307,8 @@ async function processVisionDocument(document: Document, baseTimings: { fetchMs:
     await updateSearchIndex(document.id, { tags: [], topics: result.detected_objects ?? [], entities: [] });
 
     await rebuildSearchVector(db, document.id);
+    // The summary is part of the embedded text, so embed again now that it exists.
+    await enqueueTextEmbedding(document.id);
 
     const dbWriteMs = Date.now() - dbWriteStart;
     logTimings('vision_describe', document.id, {
