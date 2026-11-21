@@ -254,7 +254,7 @@ export interface PhotoMetadataTable {
     processed_at: ColumnType<Date, Date | undefined, never>;
 }
 
-/** A finished set of HLS renditions, keyed by the content hash of the original (see migration 023). */
+/** A finished set of HLS renditions, keyed by the content hash of the original (see migration 024). */
 export interface TranscodeSetsTable {
     file_hash: string;
     /** Every stored file's storage path, `master.m3u8` included. */
