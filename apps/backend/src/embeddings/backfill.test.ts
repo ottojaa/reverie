@@ -111,18 +111,25 @@ describeDb('embedding backfill', () => {
 
         expect(first.kind).toBe('next');
         expect(queued).toHaveLength(2);
-        // Only one of the two queued documents finished before the "crash".
-        await embedAll();
 
-        const done = await db.selectFrom('document_text_embeddings').select('document_id').distinct().execute();
+        // Only the first of the two queued documents finishes before the "crash"; the second stays queued but unembedded.
+        const [finished, unfinished] = queued.splice(0);
+        const read = async () => Buffer.from('x');
 
-        // Restart with a fresh cursor, as the next backend start does.
+        await embedDocumentText({ db, ml, readFile: read }, finished!.id);
+
+        // Restart with a fresh cursor, as the next backend start does: the finished document is not queued again,
+        // the unfinished one is.
+        await runBackfillPage(deps, START);
+
+        expect(queued.map((job) => job.id)).toContain(unfinished!.id);
+        expect(queued.map((job) => job.id)).not.toContain(finished!.id);
+
         queued = [];
         await runToEnd(START);
 
         const total = await db.selectFrom('document_text_embeddings').select('document_id').distinct().execute();
 
-        expect(done).toHaveLength(2);
         expect(total).toHaveLength(text.length);
     });
 

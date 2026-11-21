@@ -42,8 +42,8 @@ and fix the numbers here.
 
 Paddle's flags are set on the backend service in `docker-compose.prod.yml` and reach the OCR subprocess because the
 backend spawns it with `...process.env`. If Paddle needs more than the cap, OCR fails with an out-of-memory error
-rather than starving reverie-ml; raise the cap only after re-doing this table. If reverie-ml cannot get the GPU it falls
-back to CPU (slow: see the throughput in `eval/RESULTS.md`), and the backend never blocks OCR or uploads on it.
+rather than starving reverie-ml; raise the cap only after re-doing this table. If no CUDA device is visible reverie-ml runs on
+CPU (slow: see the throughput in `eval/RESULTS.md`), and the backend never blocks OCR or uploads on it.
 
 ## Development
 

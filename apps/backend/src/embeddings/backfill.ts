@@ -7,7 +7,10 @@ import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings
 import { MlUnavailableError, type MlClient } from './ml.client';
 import { toModelRef } from './embedding.service';
 
-export type BackfillStep = { kind: 'next'; cursor: EmbedBackfillCursor } | { kind: 'wait'; reason: 'ml-not-ready' | 'queues-busy' } | { kind: 'done' };
+export type BackfillStep =
+    | { kind: 'next'; cursor: EmbedBackfillCursor }
+    | { kind: 'wait'; reason: 'ml-not-ready' | 'queues-busy' | 'error' }
+    | { kind: 'done' };
 
 export interface BackfillDeps {
     db: Kysely<Database>;

@@ -72,3 +72,24 @@ def test_image_text_tower(ready_client):
     response = ready_client.post("/embed/image-text", json={"texts": ["punainen talo"]})
     assert response.status_code == 200
     assert len(response.json()["embeddings"][0]) == 8
+
+
+def test_model_load_is_retried_until_it_succeeds_and_the_error_clears():
+    from app.registry import Registry
+
+    registry = Registry(device="cpu")
+    attempts = {"count": 0}
+    sleeps: list[float] = []
+
+    def flaky_text():
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise OSError("network blip")
+        return object()
+
+    registry.load(flaky_text, lambda: object(), sleep=sleeps.append)
+
+    assert registry.ready
+    assert registry.error is None
+    assert attempts["count"] == 3
+    assert sleeps == [15, 30]

@@ -43,20 +43,34 @@ export async function runEmbedJob(deps: EmbedDeps, name: string, documentId: str
  * `DelayedError` tells the worker the job was moved to delayed on purpose, so it is not completed or failed.
  */
 async function processBackfill(job: Job<EmbedBackfillData>, ml: MlClient, token: string | undefined): Promise<void> {
-    const step = await runBackfillPage(
-        {
-            db,
-            ml,
-            isBusy: isPipelineBusy,
-            enqueue: (kind, id) => addEmbedJob(kind, id, BACKFILL_PRIORITY),
-            batchSize: env.EMBED_BACKFILL_BATCH,
-        },
-        job.data.cursor,
-    );
+    const step = await loadBackfillStep(job, ml);
 
     if (step.kind === 'done') logger.info('Embedding backfill finished');
 
     await rescheduleBackfill(job, step, env.EMBED_BACKFILL_INTERVAL_MS, token);
+}
+
+/**
+ * Any error while paging (a dropped DB connection, or migration 017 not applied yet on the first deploy) becomes a
+ * wait: the backfill job is added only at worker start, so letting it fail would end it until the next deploy.
+ */
+async function loadBackfillStep(job: Job<EmbedBackfillData>, ml: MlClient): Promise<BackfillStep> {
+    try {
+        return await runBackfillPage(
+            {
+                db,
+                ml,
+                isBusy: isPipelineBusy,
+                enqueue: (kind, id) => addEmbedJob(kind, id, BACKFILL_PRIORITY),
+                batchSize: env.EMBED_BACKFILL_BATCH,
+            },
+            job.data.cursor,
+        );
+    } catch (error) {
+        logger.error('Embedding backfill page failed, trying again later', error instanceof Error ? error : new Error(String(error)));
+
+        return { kind: 'wait', reason: 'error' };
+    }
 }
 
 /** Moves a backfill job to delayed for its next page (or to wait for ML / quiet queues). Returns normally only when done. */

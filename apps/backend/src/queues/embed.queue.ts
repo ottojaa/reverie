@@ -31,7 +31,7 @@ export function getEmbedQueue(): Queue {
         embedQueueInstance = new Queue(QUEUE_NAMES.EMBED, {
             connection: getRedisConnectionOptions(),
             defaultJobOptions: {
-                // reverie-ml can be down for a while (first start downloads several GB): back off from 30 s, about 2 h in all.
+                // reverie-ml can be down for a while (first start downloads several GB): back off from 30 s, about an hour in all (seven retries: 30 s doubling, ~63 min).
                 attempts: 8,
                 backoff: { type: 'exponential', delay: 30_000 },
                 removeOnComplete: true,
