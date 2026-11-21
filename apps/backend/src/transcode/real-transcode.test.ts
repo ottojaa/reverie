@@ -62,6 +62,34 @@ function makeRotatedHlgClip(path: string): void {
     ffmpeg(['-display_rotation', '90', '-i', unrotated, '-c', 'copy', path]);
 }
 
+/**
+ * A phone screen recording as ffprobe reported the failing ones: audio is stream 0, the video is stream 1 with a 90 kHz
+ * timebase and frames only where the screen changed (about 25 per second, unevenly spaced, some one tick apart).
+ */
+function makeScreenRecordingClip(path: string): void {
+    ffmpeg([
+        ...['-f', 'lavfi', '-i', 'testsrc2=size=720x1584:rate=1000:duration=5.5'],
+        ...['-f', 'lavfi', '-i', 'sine=frequency=440:duration=5.5:sample_rate=48000'],
+        ...['-vf', "select='gt(random(1),0.975)',settb=1/90000,setpts='floor(PTS*0.9+random(2)*40)'", '-fps_mode', 'passthrough'],
+        ...['-video_track_timescale', '90000', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ac', '1'],
+        ...['-map', '1:a', '-map', '0:v', path],
+    ]);
+}
+
+/** The gaps, in seconds, between the video frames of a playlist, in display order. */
+function probeFrameGaps(playlist: string): number[] {
+    const out = execFileSync('ffprobe', [
+        ...['-v', 'error', '-allowed_extensions', 'ALL', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', playlist],
+    ]).toString();
+    const times = out
+        .trim()
+        .split('\n')
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    return times.slice(1).map((time, index) => Math.round((time - times[index]!) * 10_000) / 10_000);
+}
+
 interface ProbedStream {
     codec_type: string;
     codec_name: string;
@@ -263,6 +291,43 @@ describeDb('real transcode of synthetic clips', () => {
             expect(result.toneMap).toBe(hasZscale ? 'zscale-hable' : 'fallback-hlg');
 
             await expectWellFormedSet(dir, ['1080x1920', '720x1280', '480x852']);
+        },
+        300_000,
+    );
+
+    it.skipIf(!hasFfmpeg)(
+        'turns a variable-rate screen recording with audio first into constant 25 fps rungs with keyframes every 4 s',
+        async () => {
+            const source = join(workDir, 'screen-check.mp4');
+
+            makeScreenRecordingClip(source);
+
+            const [first, second] = probeStreams(source);
+
+            // The clip is shaped like the failing recordings: audio is stream 0, and the video's timebase is 1/90000.
+            expect([first!.codec_type, second!.codec_type]).toEqual(['audio', 'video']);
+
+            const { dir } = await transcodeClip('screen-recording', makeScreenRecordingClip);
+
+            for (const rung of ['v720', 'v480']) {
+                const playlist = join(dir, rung, 'index.m3u8');
+                const video = probeStreams(playlist).find((stream) => stream.codec_type === 'video')!;
+                const gaps = probeFrameGaps(playlist);
+                const keyframes = probeKeyframes(playlist);
+
+                expect(
+                    probeStreams(playlist)
+                        .map((stream) => stream.codec_type)
+                        .sort(),
+                ).toEqual(['audio', 'video']);
+                expect(video.height! / video.width!).toBeCloseTo(1584 / 720, 1);
+                // Constant 25 fps: every gap is one frame, within a hundredth of a second of 1/25.
+                expect(gaps.length).toBeGreaterThan(100);
+                expect(gaps.every((gap) => Math.abs(gap - 0.04) < 0.01)).toBe(true);
+                // Keyframes at the start and at 4 s.
+                expect(keyframes).toHaveLength(2);
+                expect(keyframes[1]! - keyframes[0]!).toBeCloseTo(4, 1);
+            }
         },
         300_000,
     );

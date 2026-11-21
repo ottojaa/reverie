@@ -5,8 +5,10 @@ const counts = vi.hoisted(
     () => ({ ocr: {}, thumbnail: {}, llm: {}, transcode: {} }) as Record<'ocr' | 'thumbnail' | 'llm' | 'transcode', Record<string, number>>,
 );
 const setStatus = vi.hoisted(() => vi.fn());
+const markJobFailed = vi.hoisted(() => vi.fn());
 
 vi.mock('../db/kysely', () => ({ db: {} }));
+vi.mock('../jobs/job.service', () => ({ getJobService: () => ({ markJobFailed }) }));
 vi.mock('../services/storage.service', () => ({ getStorageService: () => ({}) }));
 vi.mock('../queues/ocr.queue', () => ({ getOcrQueue: () => ({ getJobCounts: async () => counts.ocr }) }));
 vi.mock('../queues/thumbnail.queue', () => ({ getThumbnailQueue: () => ({ getJobCounts: async () => counts.thumbnail }) }));
@@ -83,10 +85,13 @@ describe('isLastAttempt', () => {
 });
 
 describe('markFailedWhenFinal', () => {
-    beforeEach(() => setStatus.mockReset().mockResolvedValue(undefined));
+    beforeEach(() => {
+        setStatus.mockReset().mockResolvedValue(undefined);
+        markJobFailed.mockReset().mockResolvedValue(undefined);
+    });
 
-    const transcodeJob = (attemptsMade: number, attempts = 3) =>
-        ({ name: 'transcode', attemptsMade, opts: { attempts }, data: { documentId: 'doc-1', userId: 'u' } }) as unknown as Job<{
+    const transcodeJob = (attemptsMade: number, attempts = 3, finishedOn?: number) =>
+        ({ id: 'job-1', name: 'transcode', attemptsMade, finishedOn, opts: { attempts }, data: { documentId: 'doc-1', userId: 'u' } }) as unknown as Job<{
             documentId: string;
             userId: string;
         }>;
@@ -101,6 +106,22 @@ describe('markFailedWhenFinal', () => {
         await markFailedWhenFinal(transcodeJob(3), new Error('ffmpeg failed: boom'));
 
         expect(setStatus).toHaveBeenCalledWith(expect.anything(), 'doc-1', 'failed');
+    });
+
+    it('marks the video failed when BullMQ gives up on a stalled job with attempts to spare', async () => {
+        // A job stalled more than once is failed by BullMQ with only 1 of 3 attempts counted, and `finishedOn` set.
+        await markFailedWhenFinal(transcodeJob(1, 3, Date.now()), new Error('job stalled more than allowable limit'));
+
+        expect(setStatus).toHaveBeenCalledWith(expect.anything(), 'doc-1', 'failed');
+        // Its tracking row never saw the failure, so it would otherwise stay live and block a re-queue.
+        expect(markJobFailed).toHaveBeenCalledWith('job-1', 'job stalled more than allowable limit', 1);
+    });
+
+    it('leaves the tracking row alone when the last attempt was used up: the tracking wrapper already failed it', async () => {
+        await markFailedWhenFinal(transcodeJob(3, 3, Date.now()), new Error('ffmpeg failed: boom'));
+
+        expect(setStatus).toHaveBeenCalledWith(expect.anything(), 'doc-1', 'failed');
+        expect(markJobFailed).not.toHaveBeenCalled();
     });
 
     it('marks it failed at once for an error that can never succeed', async () => {

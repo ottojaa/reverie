@@ -66,16 +66,35 @@ describe('decideLadder', () => {
     });
 
     describe('frame rate', () => {
+        const rateOf = (frameRate: number | null) => decideLadder({ ...SDR, frameRate }).frameRate;
+
         it('keeps a 60 fps clip as it is', () => {
-            expect(decideLadder({ ...SDR, frameRate: 60 }).frameRateCap).toBeNull();
+            expect(rateOf(60)).toEqual({ num: 60, den: 1 });
         });
 
         it('caps a 240 fps slow-motion clip at 60', () => {
-            expect(decideLadder({ ...SDR, frameRate: 240 }).frameRateCap).toBe(60);
+            expect(rateOf(240)).toEqual({ num: 60, den: 1 });
         });
 
-        it('keeps an unknown frame rate', () => {
-            expect(decideLadder({ ...SDR, frameRate: null }).frameRateCap).toBeNull();
+        it('encodes a source with no frame rate at 30', () => {
+            expect(rateOf(null)).toEqual({ num: 30, den: 1 });
+            expect(rateOf(0)).toEqual({ num: 30, den: 1 });
+            expect(rateOf(Number.NaN)).toEqual({ num: 30, den: 1 });
+        });
+
+        it('keeps the exact NTSC rates', () => {
+            expect(rateOf(30000 / 1001)).toEqual({ num: 30000, den: 1001 });
+            expect(rateOf(24000 / 1001)).toEqual({ num: 24000, den: 1001 });
+            expect(rateOf(60000 / 1001)).toEqual({ num: 60000, den: 1001 });
+        });
+
+        it('rounds a variable-rate average that only sits near an NTSC rate', () => {
+            expect(rateOf(29.94)).toEqual({ num: 30, den: 1 });
+            expect(rateOf(28.6)).toEqual({ num: 29, den: 1 });
+        });
+
+        it('never rounds a mostly still recording down to 0 fps', () => {
+            expect(rateOf(0.3)).toEqual({ num: 1, den: 1 });
         });
     });
 
