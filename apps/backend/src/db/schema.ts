@@ -80,6 +80,8 @@ export interface DocumentsTable {
     ocr_facts_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
     /** When the camera EXIF (make, model, lens, GPS) was read from the stored file into photo_metadata; null until it was. */
     camera_read_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+    /** When the full EXIF (images) or the ffprobe facts (videos) were read from the stored file into photo_metadata / video_metadata; null until they were. */
+    media_read_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
     search_vector: unknown | null; // tsvector type — unified search index
     /** When the document went to the trash; null while live. */
     deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
@@ -204,12 +206,55 @@ export interface PhotoMetadataTable {
     longitude: number | null;
     country: string | null;
     city: string | null;
+    /** The clock reading as if it were UTC; the instant is taken_at minus taken_at_offset when the offset is known. Photos and videos alike. */
     taken_at: Date | null;
+    /** The UTC offset the capture clock was in ('+02:00'), when the file says so. */
+    taken_at_offset: string | null;
     camera_make: string | null;
     camera_model: string | null;
     lens_model: string | null;
+    iso: number | null;
+    f_number: number | null;
+    /** Seconds. */
+    exposure_time: number | null;
+    /** Millimetres. */
+    focal_length: number | null;
+    focal_length_35mm: number | null;
+    flash_fired: boolean | null;
+    /** EXIF orientation, 1-8. */
+    orientation: number | null;
+    /** The image size as shot, from EXIF. */
+    pixel_width: number | null;
+    pixel_height: number | null;
     processed_at: ColumnType<Date, Date | undefined, never>;
 }
+
+// Video Metadata table: one row per video, from ffprobe. A video's GPS and capture date live in photo_metadata.
+export interface VideoMetadataTable {
+    document_id: string;
+    container: string | null;
+    video_codec: string | null;
+    video_profile: string | null;
+    pixel_format: string | null;
+    audio_codec: string | null;
+    /** Whole-file bits per second. */
+    bitrate: number | null;
+    /** The coded size; a player applies `rotation` to get the displayed size. */
+    width: number | null;
+    height: number | null;
+    frame_rate: number | null;
+    /** Degrees clockwise a player must turn the picture: 0, 90, 180 or 270. */
+    rotation: number | null;
+    color_transfer: string | null;
+    color_primaries: string | null;
+    color_space: string | null;
+    is_hdr: ColumnType<boolean, boolean | undefined, boolean>;
+    /** The container's creation time (a UTC instant). */
+    creation_time: Date | null;
+    processed_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+export type VideoMetadata = Selectable<VideoMetadataTable>;
 
 export type PhotoMetadata = Selectable<PhotoMetadataTable>;
 export type NewPhotoMetadata = Insertable<PhotoMetadataTable>;
@@ -362,6 +407,7 @@ export interface Database {
     processing_jobs: ProcessingJobsTable;
     document_tags: DocumentTagsTable;
     photo_metadata: PhotoMetadataTable;
+    video_metadata: VideoMetadataTable;
     server_settings: ServerSettingsTable;
     tool_audit_log: ToolAuditLogTable;
     api_tokens: ApiTokensTable;

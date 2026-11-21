@@ -4,11 +4,11 @@ import { MlRejectedError, MlUnavailableError } from '../embeddings/ml.client';
 
 vi.mock('../db/kysely', () => ({ db: {} }));
 vi.mock('../embeddings/embedding.service', () => ({ embedDocumentText: vi.fn(), embedDocumentImage: vi.fn(), toModelRef: vi.fn() }));
-vi.mock('../image-kind/camera-read', () => ({ readDocumentCamera: vi.fn(), findDocumentsMissingCameraRead: vi.fn() }));
+vi.mock('../media/media-read', () => ({ readDocumentMedia: vi.fn(), findDocumentsMissingMediaRead: vi.fn() }));
 vi.mock('../services/storage.service', () => ({ getStorageService: () => ({}) }));
 
 import { embedDocumentImage, embedDocumentText } from '../embeddings/embedding.service';
-import { readDocumentCamera } from '../image-kind/camera-read';
+import { readDocumentMedia } from '../media/media-read';
 import { rescheduleBackfill, runEmbedJob, type EmbedWorkerDeps } from './embed.worker';
 
 const settleKind = vi.fn().mockResolvedValue(undefined);
@@ -68,19 +68,19 @@ describe('embed jobs', () => {
 
     it('reads the camera columns for a read-camera job and then settles the kind with the new facts', async () => {
         settleKind.mockClear();
-        vi.mocked(readDocumentCamera).mockResolvedValueOnce('read');
+        vi.mocked(readDocumentMedia).mockResolvedValueOnce('read');
         vi.mocked(embedDocumentImage).mockClear();
 
         await runEmbedJob(deps, 'read-camera', 'e');
 
-        expect(readDocumentCamera).toHaveBeenCalledWith(deps, 'e');
+        expect(readDocumentMedia).toHaveBeenCalledWith(deps, 'e');
         expect(settleKind).toHaveBeenCalledWith('e');
         expect(embedDocumentImage).not.toHaveBeenCalled();
     });
 
-    it('settles after a missing file too (the image is final), but not for a document that is gone or is no image', async () => {
+    it('settles after a missing file too (the image is final), but not for a document that is gone or is no media', async () => {
         settleKind.mockClear();
-        vi.mocked(readDocumentCamera).mockResolvedValueOnce('no-file').mockResolvedValueOnce('no-document').mockResolvedValueOnce('no-image');
+        vi.mocked(readDocumentMedia).mockResolvedValueOnce('no-file').mockResolvedValueOnce('no-document').mockResolvedValueOnce('no-media');
 
         await runEmbedJob(deps, 'read-camera', 'f');
         expect(settleKind).toHaveBeenCalledTimes(1);
@@ -88,6 +88,16 @@ describe('embed jobs', () => {
         await runEmbedJob(deps, 'read-camera', 'g');
         await runEmbedJob(deps, 'read-camera', 'h');
         expect(settleKind).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not classify again an image that already had its camera columns, nor a video: reading their facts changes no verdict', async () => {
+        settleKind.mockClear();
+        vi.mocked(readDocumentMedia).mockResolvedValueOnce('refreshed').mockResolvedValueOnce('video');
+
+        await runEmbedJob(deps, 'read-camera', 'i');
+        await runEmbedJob(deps, 'read-camera', 'j');
+
+        expect(settleKind).not.toHaveBeenCalled();
     });
 
     it('retries the job when the kind cannot be settled because reverie-ml went away', async () => {

@@ -8,7 +8,26 @@ vi.mock('@webkitty/geo-rev', () => ({ createRevGeocoder: async () => ({ lookup: 
 import { extractExifMetadata, toPhotoMetadataValues } from './exif-extractor';
 import type { ExifMetadata } from './types';
 
-const EMPTY: ExifMetadata = { latitude: null, longitude: null, city: null, country: null, takenAt: null, cameraMake: null, cameraModel: null, lensModel: null };
+const EMPTY: ExifMetadata = {
+    latitude: null,
+    longitude: null,
+    city: null,
+    country: null,
+    takenAt: null,
+    takenAtOffset: null,
+    cameraMake: null,
+    cameraModel: null,
+    lensModel: null,
+    iso: null,
+    fNumber: null,
+    exposureTime: null,
+    focalLength: null,
+    focalLength35mm: null,
+    flashFired: null,
+    orientation: null,
+    pixelWidth: null,
+    pixelHeight: null,
+};
 
 describe('extractExifMetadata: camera facts', () => {
     beforeEach(() => parse.mockReset());
@@ -36,9 +55,15 @@ describe('extractExifMetadata: camera facts', () => {
     });
 
     it('still returns the date and GPS facts', async () => {
-        parse.mockResolvedValue({ latitude: 60.17, longitude: 24.94, DateTimeOriginal: new Date('2025-06-01T10:00:00Z') });
+        parse.mockResolvedValue({ latitude: 60.17, longitude: 24.94, DateTimeOriginal: '2025:06:01 10:00:00' });
 
-        expect(await extractExifMetadata(Buffer.from('x'))).toMatchObject({ latitude: 60.17, city: 'Helsinki', country: 'Finland', cameraMake: null });
+        expect(await extractExifMetadata(Buffer.from('x'))).toMatchObject({
+            latitude: 60.17,
+            city: 'Helsinki',
+            country: 'Finland',
+            takenAt: new Date('2025-06-01T10:00:00Z'),
+            cameraMake: null,
+        });
     });
 
     it('returns no facts when the file has no EXIF or cannot be parsed', async () => {
@@ -70,9 +95,19 @@ describe('toPhotoMetadataValues', () => {
                 city: 'Oulu',
                 country: 'Finland',
                 takenAt,
+                takenAtOffset: '+03:00',
                 cameraMake: 'Apple',
                 cameraModel: 'iPhone',
                 lensModel: 'wide',
+                iso: 100,
+                fNumber: 1.8,
+                exposureTime: 0.01,
+                focalLength: 6.9,
+                focalLength35mm: 24,
+                flashFired: false,
+                orientation: 6,
+                pixelWidth: 4032,
+                pixelHeight: 3024,
             }),
         ).toEqual({
             latitude: 1,
@@ -80,11 +115,25 @@ describe('toPhotoMetadataValues', () => {
             city: 'Oulu',
             country: 'Finland',
             taken_at: takenAt,
+            taken_at_offset: '+03:00',
             camera_make: 'Apple',
             camera_model: 'iPhone',
             lens_model: 'wide',
+            iso: 100,
+            f_number: 1.8,
+            exposure_time: 0.01,
+            focal_length: 6.9,
+            focal_length_35mm: 24,
+            flash_fired: false,
+            orientation: 6,
+            pixel_width: 4032,
+            pixel_height: 3024,
         });
         expect(toPhotoMetadataValues({ ...EMPTY, lensModel: 'wide' })).toEqual({ lens_model: 'wide' });
+    });
+
+    it('keeps a flash that did not fire and a zero-valued coordinate, which are facts rather than gaps', () => {
+        expect(toPhotoMetadataValues({ ...EMPTY, flashFired: false })).toEqual({ flash_fired: false });
     });
 
     it('keeps a latitude of zero', () => {

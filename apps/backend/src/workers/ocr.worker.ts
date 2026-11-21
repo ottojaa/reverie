@@ -143,10 +143,10 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         // From here the embed side may act on this OCR run: it waits for the marker. The database's clock, not
         // this process's, because the marker is compared with `processing_jobs.created_at`, which the database stamps.
-        // An OCR run that read the file's EXIF also marks the camera columns read; the embed backfill reads the rest.
+        // An OCR run that read the file's EXIF also marks the camera columns and the full EXIF read; the embed backfill reads the rest.
         await db
             .updateTable('documents')
-            .set({ ocr_facts_at: sql<Date>`now()`, ...(exif && { camera_read_at: sql<Date>`now()` }) })
+            .set({ ocr_facts_at: sql<Date>`now()`, ...(exif && { camera_read_at: sql<Date>`now()`, media_read_at: sql<Date>`now()` }) })
             .where('id', '=', documentId)
             .execute();
 

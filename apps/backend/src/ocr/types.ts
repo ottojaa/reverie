@@ -65,11 +65,27 @@ export interface ExifMetadata {
     longitude: number | null;
     city: string | null;
     country: string | null;
+    /** The capture clock reading as if it were UTC (see `takenAtOffset`). */
     takenAt: Date | null;
+    /** The UTC offset the capture clock was in ('+02:00'), when the file says so. */
+    takenAtOffset: string | null;
     /** Camera make, model and lens from EXIF; null for screenshots and scans. */
     cameraMake: string | null;
     cameraModel: string | null;
     lensModel: string | null;
+    iso: number | null;
+    fNumber: number | null;
+    /** Seconds. */
+    exposureTime: number | null;
+    /** Millimetres. */
+    focalLength: number | null;
+    focalLength35mm: number | null;
+    flashFired: boolean | null;
+    /** EXIF orientation, 1-8. */
+    orientation: number | null;
+    /** The image size as shot. */
+    pixelWidth: number | null;
+    pixelHeight: number | null;
 }
 
 /**

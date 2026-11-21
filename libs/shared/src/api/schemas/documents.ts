@@ -82,17 +82,58 @@ export const EntitySchema = z.object({
 
 export type Entity = z.infer<typeof EntitySchema>;
 
-// EXIF-derived photo metadata (GPS location + capture time), populated at upload
-// time for photos that carry GPS EXIF data.
+// EXIF-derived photo metadata (GPS location, capture time, camera and exposure). A video's GPS and
+// capture date are kept in the same shape. The camera and exposure fields are optional so a client
+// built before they existed still parses a response without them.
 export const DocumentPhotoMetadataSchema = z.object({
     latitude: z.number().nullable(),
     longitude: z.number().nullable(),
     city: z.string().nullable(),
     country: z.string().nullable(),
+    // The clock reading as if it were UTC; the instant is this minus `taken_at_offset` when that is known.
     taken_at: z.string().nullable(),
+    // The UTC offset the capture clock was in ('+02:00'), when the file says so.
+    taken_at_offset: z.string().nullable().optional(),
+    camera_make: z.string().nullable().optional(),
+    camera_model: z.string().nullable().optional(),
+    lens_model: z.string().nullable().optional(),
+    iso: z.number().nullable().optional(),
+    f_number: z.number().nullable().optional(),
+    // Seconds.
+    exposure_time: z.number().nullable().optional(),
+    // Millimetres.
+    focal_length: z.number().nullable().optional(),
+    focal_length_35mm: z.number().nullable().optional(),
+    flash_fired: z.boolean().nullable().optional(),
+    // EXIF orientation, 1-8.
+    orientation: z.number().nullable().optional(),
+    // The image size as shot.
+    pixel_width: z.number().nullable().optional(),
+    pixel_height: z.number().nullable().optional(),
 });
 
 export type DocumentPhotoMetadata = z.infer<typeof DocumentPhotoMetadataSchema>;
+
+// A video's technical facts, from ffprobe. Detail-only, like photo_metadata.
+export const DocumentVideoMetadataSchema = z.object({
+    container: z.string().nullable(),
+    video_codec: z.string().nullable(),
+    video_profile: z.string().nullable(),
+    audio_codec: z.string().nullable(),
+    // Whole-file bits per second.
+    bitrate: z.number().nullable(),
+    // The coded size; apply `rotation` for the size a player shows.
+    width: z.number().nullable(),
+    height: z.number().nullable(),
+    frame_rate: z.number().nullable(),
+    // Degrees clockwise a player turns the picture: 0, 90, 180 or 270.
+    rotation: z.number().nullable(),
+    color_transfer: z.string().nullable(),
+    is_hdr: z.boolean(),
+    creation_time: z.string().nullable(),
+});
+
+export type DocumentVideoMetadata = z.infer<typeof DocumentVideoMetadataSchema>;
 
 export const DocumentSchema = z.object({
     id: UuidSchema,
@@ -129,6 +170,8 @@ export const DocumentSchema = z.object({
     // Only populated on the document detail endpoint (GET /documents/:id);
     // omitted from list responses to avoid per-row joins.
     photo_metadata: DocumentPhotoMetadataSchema.nullable().optional(),
+    // Detail-only as well; null for a video not probed yet and for anything that is not a video.
+    video_metadata: DocumentVideoMetadataSchema.nullable().optional(),
     // Detail-only too: the document's tags with where each came from.
     tags: z.array(DocumentTagSchema).optional(),
 });

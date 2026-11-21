@@ -254,7 +254,23 @@ export class UploadService {
             if (sourceDoc) {
                 const sourceMetadata = await db
                     .selectFrom('photo_metadata')
-                    .select(['latitude', 'longitude', 'country', 'city', 'taken_at', 'camera_make', 'camera_model', 'lens_model'])
+                    .select([
+                        'latitude',
+                        'longitude',
+                        'country',
+                        'city',
+                        'taken_at',
+                        'taken_at_offset',
+                        'camera_make',
+                        'camera_model',
+                        'lens_model',
+                        'iso',
+                        'f_number',
+                        'exposure_time',
+                        'focal_length',
+                        'focal_length_35mm',
+                        'flash_fired',
+                    ])
                     .where('document_id', '=', copyMetadataFromDocumentId)
                     .executeTakeFirst();
                 const exifValues = toPhotoMetadataValues(
@@ -264,9 +280,20 @@ export class UploadService {
                         city: sourceMetadata.city,
                         country: sourceMetadata.country,
                         takenAt: sourceMetadata.taken_at,
+                        takenAtOffset: sourceMetadata.taken_at_offset,
                         cameraMake: sourceMetadata.camera_make,
                         cameraModel: sourceMetadata.camera_model,
                         lensModel: sourceMetadata.lens_model,
+                        iso: sourceMetadata.iso,
+                        fNumber: sourceMetadata.f_number,
+                        exposureTime: sourceMetadata.exposure_time,
+                        focalLength: sourceMetadata.focal_length,
+                        focalLength35mm: sourceMetadata.focal_length_35mm,
+                        flashFired: sourceMetadata.flash_fired,
+                        // The edited file has its own orientation and size, not the original's.
+                        orientation: null,
+                        pixelWidth: null,
+                        pixelHeight: null,
                     },
                 );
 

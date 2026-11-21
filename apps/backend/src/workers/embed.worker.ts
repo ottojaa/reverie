@@ -1,7 +1,9 @@
 import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
+import { access } from 'fs/promises';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
-import { readDocumentCamera } from '../image-kind/camera-read';
+import { readDocumentMedia } from '../media/media-read';
+import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/video-probe';
 import { isPipelineBusy, runBackfillPage, type BackfillStep } from '../embeddings/backfill';
 import { embedDocumentImage, embedDocumentText, type EmbedDeps } from '../embeddings/embedding.service';
 import { isKindFlipActive, settleImageKind } from '../image-kind/service';
@@ -30,6 +32,22 @@ type EmbedJob = Job<EmbedJobData | EmbedBackfillData>;
 /** What the embed worker needs beyond embedding: the image-kind step that follows an image embedding or a classify job. */
 export interface EmbedWorkerDeps extends EmbedDeps {
     settleKind: (documentId: string) => Promise<unknown>;
+    /** Probes a stored video by path, for the read-camera job (which reads a video's facts too). */
+    probeVideo: (path: string, mimeType: string) => Promise<VideoProbe>;
+}
+
+/** ffprobe on a stored video, through a local path so a video of any size is never read into memory. */
+async function probeStoredVideo(path: string, mimeType: string): Promise<VideoProbe> {
+    const file = await getStorageService().getLocalFilePath(path, toVideoExtension(mimeType));
+
+    try {
+        // ffprobe cannot tell a missing file from a bad one; this throws the ENOENT the caller treats as final.
+        await access(file.path);
+
+        return await probeVideoFile(file.path);
+    } finally {
+        await file.cleanup().catch(() => {});
+    }
 }
 
 /**
@@ -44,6 +62,7 @@ async function processEmbedJob(job: EmbedJob, ml: MlClient, token: string | unde
         db,
         ml,
         readFile: (path) => getStorageService().readFile(path),
+        probeVideo: probeStoredVideo,
         settleKind: (documentId) => settleImageKind(kindDeps, documentId),
     };
 
@@ -76,9 +95,12 @@ export async function runEmbedJob(deps: EmbedWorkerDeps, name: string, documentI
     }
 }
 
-/** Fills the image's camera columns from its file, then classifies it again: the verdict now has the camera facts. */
+/**
+ * Fills the media's EXIF or video columns from its file. An image read for the first time is then classified again: the
+ * verdict now has the camera facts. One that already had them, and every video, is not.
+ */
 async function readCameraAndSettle(deps: EmbedWorkerDeps, documentId: string): Promise<unknown> {
-    const outcome = await readDocumentCamera(deps, documentId);
+    const outcome = await readDocumentMedia(deps, documentId);
 
     if (outcome === 'read' || outcome === 'no-file') await deps.settleKind(documentId);
 
