@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -17,6 +18,9 @@ from pydantic import BaseModel, Field
 
 from .embedders import ImageDecodeError
 from .registry import Registry, new_registry
+from .runtime import describe
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 MAX_TEXTS = 64
 MAX_IMAGES = 16
@@ -51,7 +55,6 @@ class EmbeddingsResponse(BaseModel):
 def create_app(registry: Registry | None = None, autostart: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.registry = registry or new_registry()
         if autostart:
             app.state.registry.start()
         yield
@@ -73,7 +76,14 @@ def create_app(registry: Registry | None = None, autostart: bool = True) -> Fast
             models["text"] = ModelInfo(name=current.text.name, revision=current.text.revision, dimensions=current.text.dimensions)
         if current.image:
             models["image"] = ModelInfo(name=current.image.name, revision=current.image.revision, dimensions=current.image.dimensions)
-        return {"ready": current.ready, "device": current.device, "error": current.error, "models": models}
+        return {
+            "ready": current.ready,
+            "device": current.device,
+            "gpu_warning": current.device_warning,
+            "error": current.error,
+            "models": models,
+            **describe(current.device),
+        }
 
     @app.post("/embed/text", response_model=EmbeddingsResponse)
     async def embed_text(body: TextRequest, request: Request):
