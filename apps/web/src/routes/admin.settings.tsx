@@ -1,8 +1,10 @@
+import { AiProvidersCard } from '@/components/admin/AiProvidersCard';
 import { EmbeddingStatusCard } from '@/components/admin/EmbeddingStatusCard';
 import { ServerSettingRow } from '@/components/admin/ServerSettingRow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { adminApi } from '@/lib/api/admin';
 import { getApiErrorMessage } from '@/lib/api/client';
+import { isAiProviderSetting } from '@/lib/ai-providers';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -33,6 +35,8 @@ function AdminSettingsPage() {
 
     if (!isAdmin) return null;
 
+    const otherSettings = settings.filter((setting) => !isAiProviderSetting(setting.key));
+
     return (
         <div className="container p-6">
             <div className="mb-6">
@@ -40,7 +44,9 @@ function AdminSettingsPage() {
                 <p className="mt-1 text-sm text-muted-foreground">Changes apply to the server right away. Anything you reset falls back to its default.</p>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <AiProvidersCard settings={settings} isLoading={isLoading} />
+
+            <div className="mt-8 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                 {isLoading && (
                     <div className="space-y-4 p-5">
                         {[1, 2].map((i) => (
@@ -50,7 +56,7 @@ function AdminSettingsPage() {
                 )}
                 {error && <p className="p-5 text-sm text-destructive">{getApiErrorMessage(error, 'Failed to load settings')}</p>}
                 <ul className="divide-y divide-border">
-                    {settings.map((setting) => (
+                    {otherSettings.map((setting) => (
                         <li key={setting.key}>
                             <ServerSettingRow key={JSON.stringify(setting.value)} setting={setting} />
                         </li>
