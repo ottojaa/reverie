@@ -5,6 +5,7 @@ import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
 import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
+import { deleteTranscodeSetIfUnused } from '../transcode/cleanup';
 import { getDeduplicatedFilename } from '../utils/filename';
 import type { UploadedFile } from '../utils/upload-files';
 import { excludeTrashed } from './privacy';
@@ -155,7 +156,7 @@ export class UploadService {
      * removed when this document holds the last reference. Thumbnails are
      * per-document (`thumbnails/<documentId>/…`) and always removed.
      */
-    async deleteDocumentFiles(document: Pick<Document, 'id' | 'file_path' | 'thumbnail_paths'>, userId: string): Promise<void> {
+    async deleteDocumentFiles(document: Pick<Document, 'id' | 'file_path' | 'file_hash' | 'mime_type' | 'thumbnail_paths'>, userId: string): Promise<void> {
         const otherReference = await db
             .selectFrom('documents')
             .select('id')
@@ -171,6 +172,11 @@ export class UploadService {
             for (const path of Object.values(document.thumbnail_paths)) {
                 await this.storageService.deleteFile(path, userId);
             }
+        }
+
+        // The HLS renditions are shared by content hash, so they go with the last document that has it.
+        if (document.mime_type.startsWith('video/')) {
+            await deleteTranscodeSetIfUnused(db, this.storageService, document.file_hash, document.id);
         }
     }
 
@@ -237,6 +243,8 @@ export class UploadService {
             llm_status: 'skipped',
             // For files that can't have thumbnails, mark as complete immediately
             thumbnail_status: canThumbnail ? 'pending' : 'complete',
+            // The thumbnail step queues the transcode; until then the video is 'pending', which is what the backfill looks for.
+            transcode_status: getFileCategory(mimeType) === 'video' ? 'pending' : 'skipped',
         };
 
         const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();
@@ -416,6 +424,7 @@ export class UploadService {
                 thumbnail_paths: null,
                 ocr_status: 'pending',
                 thumbnail_status: canThumbnail ? 'pending' : 'complete',
+                transcode_status: getFileCategory(mimeType) === 'video' ? 'pending' : 'skipped',
                 updated_at: new Date(),
             })
             .where('id', '=', documentId)

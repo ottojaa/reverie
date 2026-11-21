@@ -19,6 +19,17 @@ export { getTrashQueue, scheduleTrashPurge, closeTrashQueue, type TrashPurgeJobR
 // Embed Queue
 export { getEmbedQueue, addEmbedJob, addEmbedBackfillJob, closeEmbedQueue, EMBED_JOBS, type EmbedJobData, type EmbedBackfillData } from './embed.queue';
 
+// Transcode Queue
+export {
+    getTranscodeQueue,
+    addTranscodeJob,
+    addTranscodeBackfillJob,
+    closeTranscodeQueue,
+    TRANSCODE_JOBS,
+    type TranscodeJobData,
+    type TranscodeBackfillData,
+} from './transcode.queue';
+
 // Trim Queue
 export { getTrimQueue, addTrimJob, closeTrimQueue, type TrimJobData, type TrimJobResult } from './trim.queue';
 
@@ -28,6 +39,7 @@ import { closeLlmQueue } from './llm.queue';
 import { closeTrimQueue } from './trim.queue';
 import { closeTrashQueue } from './trash.queue';
 import { closeEmbedQueue } from './embed.queue';
+import { closeTranscodeQueue } from './transcode.queue';
 import { closeRedisConnections } from './redis';
 
 // Close all queues
@@ -39,6 +51,7 @@ export async function closeAllQueues(): Promise<void> {
         closeTrimQueue(),
         closeTrashQueue(),
         closeEmbedQueue(),
+        closeTranscodeQueue(),
         closeRedisConnections(),
     ]);
 }

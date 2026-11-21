@@ -14,6 +14,9 @@ export function useDocumentStatus(documentId: string | undefined) {
         (event: JobEvent) => {
             if (event.document_id !== documentId) return;
 
+            // Below, any event is mapped onto whichever of ocr/thumbnail/llm is pending or processing; a transcode runs on its own clock and must not flip those.
+            if (event.job_type === 'transcode') return;
+
             // Update single document query
             queryClient.setQueryData<Document>(['document', documentId], (old) => {
                 if (!old) return old;

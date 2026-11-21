@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobStatusEnum } from '../api/schemas/jobs.js';
+import { JobStatusEnum, JobTypeEnum } from '../api/schemas/jobs.js';
 
 export const JobEventTypeEnum = z.enum(['job:started', 'job:progress', 'job:complete', 'job:failed']);
 
@@ -10,6 +10,8 @@ export const JobEventSchema = z.object({
     job_id: z.string().uuid(),
     // Owner of the target document; the server routes each event to this user's room only.
     user_id: z.string().uuid().optional(),
+    // Which kind of job this is; absent on events from before it was sent.
+    job_type: JobTypeEnum.optional(),
     document_id: z.string().uuid().optional(),
     folder_id: z.string().uuid().optional(),
     session_id: z.string().optional(),

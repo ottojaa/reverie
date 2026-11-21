@@ -301,6 +301,11 @@ export class StorageService {
         return this.storage.exists(path);
     }
 
+    /** Check if a file exists at a storage path. */
+    async fileExists(path: string): Promise<boolean> {
+        return this.storage.exists(path);
+    }
+
     /**
      * Generate a URL for a file
      */
