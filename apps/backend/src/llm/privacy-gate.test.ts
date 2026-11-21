@@ -306,11 +306,15 @@ describe('checkLlmEligibility', () => {
     const document = { mime_type: 'application/pdf', has_meaningful_text: true } as Document;
 
     it('reports private before any other reason', () => {
-        expect(checkLlmEligibility(document, null, { isPrivate: true })).toMatchObject({ eligible: false, reason: 'private', processingType: 'skip' });
+        expect(checkLlmEligibility(document, null, { isPrivate: true, vision: false })).toMatchObject({
+            eligible: false,
+            reason: 'private',
+            processingType: 'skip',
+        });
     });
 
     it('does not report private for a public document', () => {
-        expect(checkLlmEligibility(document, null, { isPrivate: false }).reason).not.toBe('private');
+        expect(checkLlmEligibility(document, null, { isPrivate: false, vision: false }).reason).not.toBe('private');
     });
 });
 
@@ -348,7 +352,11 @@ describe('trashed documents never reach Anthropic', () => {
     it('checkLlmEligibility reports trashed', () => {
         const document = { mime_type: 'application/pdf', has_meaningful_text: true, deleted_at: new Date() } as Document;
 
-        expect(checkLlmEligibility(document, null, { isPrivate: false })).toMatchObject({ eligible: false, reason: 'trashed', processingType: 'skip' });
+        expect(checkLlmEligibility(document, null, { isPrivate: false, vision: false })).toMatchObject({
+            eligible: false,
+            reason: 'trashed',
+            processingType: 'skip',
+        });
     });
 });
 

@@ -1,6 +1,13 @@
-import { ListServerSettingsResponseSchema, ServerSettingParamsSchema, ServerSettingResponseSchema, UpdateServerSettingRequestSchema } from '@reverie/shared';
+import {
+    ListServerSettingsResponseSchema,
+    ServerSettingParamsSchema,
+    ServerSettingResponseSchema,
+    UpdateServerSettingRequestSchema,
+    UpdateServerSettingsRequestSchema,
+    type UpdateServerSettingsRequest,
+} from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
-import { listSettings, resetSetting, setSetting } from '../../settings/settings.service.js';
+import { applySettings, listSettings, resetSetting, setSetting } from '../../settings/settings.service.js';
 
 export default async function (fastify: FastifyInstance) {
     const preHandler = [fastify.authenticate, fastify.authenticateAdmin];
@@ -16,6 +23,24 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async () => ({ settings: await listSettings() }),
+    );
+
+    fastify.put(
+        '/admin/settings',
+        {
+            preHandler,
+            schema: {
+                description: 'Set and reset several server settings in one transaction; nothing is written if one value is refused (admin only)',
+                tags: ['Admin'],
+                body: UpdateServerSettingsRequestSchema,
+                response: { 200: ListServerSettingsResponseSchema },
+            },
+        },
+        async (request) => {
+            const { set, reset } = request.body as UpdateServerSettingsRequest;
+
+            return { settings: await applySettings({ set, reset }, request.user.id) };
+        },
     );
 
     fastify.put(
