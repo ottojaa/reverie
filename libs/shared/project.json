@@ -5,6 +5,7 @@
     "sourceRoot": "libs/shared/src",
     "targets": {
         "typecheck": {
+            "inputs": ["default", "^production", { "externalDependencies": ["typescript"] }],
             "options": {
                 "command": "tsc --build --noEmit && tsc -p tsconfig.spec.json"
             }

@@ -33,7 +33,10 @@
             },
             "configurations": { "development": {}, "production": { "esbuildOptions": { "sourcemap": false, "outExtension": { ".js": ".js" } } } }
         },
-        "typecheck": { "options": { "command": "tsc --build --emitDeclarationOnly && tsc -p tsconfig.spec.json" } },
+        "typecheck": {
+            "inputs": ["default", "^production", { "externalDependencies": ["typescript"] }],
+            "options": { "command": "tsc --build --emitDeclarationOnly && tsc -p tsconfig.spec.json" }
+        },
         "test": { "dependsOn": ["build"] },
         "prune-lockfile": {
             "dependsOn": ["build"],
