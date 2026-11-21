@@ -17,20 +17,30 @@ const CANONICAL_TYPES = ['photo', 'document', 'receipt', 'screenshot', 'video'] 
 const countDistinctDocuments = sql<number>`count(DISTINCT d.id)::int`;
 
 /**
- * Generate all facets for a search query
+ * Generate all facets for a search query.
+ *
+ * Facets cover the fused result set: the full-text matches plus `alsoMatchIds`, the documents that matched by
+ * meaning (computed under the query's full filter set). With no facet selected a count is therefore the result
+ * count. With one selected, the other values of that dimension count only their full-text matches: the meaning
+ * matches were already narrowed by the selection, and clicking another value reruns them under that value.
  */
-export async function generateFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<SearchFacets> {
+export async function generateFacets(
+    parsed: ParsedQuery,
+    userId: string,
+    privateFolderIds: string[],
+    alsoMatchIds: readonly string[] = [],
+): Promise<SearchFacets> {
     // Run all facet queries in parallel
     const [types, formats, folders, uploadPeriod, tags, hasText, categories, entities, locations] = await Promise.all([
-        getTypeFacets(parsed, userId, privateFolderIds),
-        getFormatFacets(parsed, userId, privateFolderIds),
-        getFolderFacets(parsed, userId, privateFolderIds),
-        getUploadPeriodFacets(parsed, userId, privateFolderIds),
-        getTagFacets(parsed, userId, privateFolderIds),
-        getHasTextFacets(parsed, userId, privateFolderIds),
-        getCategoryFacets(parsed, userId, privateFolderIds),
-        getEntityFacets(parsed, userId, privateFolderIds),
-        getLocationFacets(parsed, userId, privateFolderIds),
+        getTypeFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getFormatFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getFolderFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getUploadPeriodFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getTagFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getHasTextFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getCategoryFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getEntityFacets(parsed, userId, privateFolderIds, alsoMatchIds),
+        getLocationFacets(parsed, userId, privateFolderIds, alsoMatchIds),
     ]);
 
     return {
@@ -47,8 +57,14 @@ export async function generateFacets(parsed: ParsedQuery, userId: string, privat
 }
 
 /** Facet base: all active filters applied except the omitted dimension(s). */
-function narrowedBase(parsed: ParsedQuery, userId: string, privateFolderIds: string[], omit: FilterDimension[]): SearchQueryBase {
-    return applySearchFilters(documentJoins(), parsed, userId, privateFolderIds, new Set(omit));
+function narrowedBase(
+    parsed: ParsedQuery,
+    userId: string,
+    privateFolderIds: string[],
+    omit: FilterDimension[],
+    alsoMatchIds: readonly string[],
+): SearchQueryBase {
+    return applySearchFilters(documentJoins(), parsed, userId, privateFolderIds, new Set(omit), alsoMatchIds);
 }
 
 type NameMatcher = (a: string, b: string) => boolean;
@@ -74,10 +90,10 @@ function appendMissingSelected(items: FacetItem[], activeValues: string[] | unde
  * the narrowed query through the same type predicate search uses, so the facet
  * count always equals the result count when clicked.
  */
-async function getTypeFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+async function getTypeFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
     const counts = await Promise.all(
         CANONICAL_TYPES.map((type) =>
-            applyTypesFilter(narrowedBase(parsed, userId, privateFolderIds, ['types']), [type])
+            applyTypesFilter(narrowedBase(parsed, userId, privateFolderIds, ['types'], alsoMatchIds), [type])
                 .select(countDistinctDocuments.as('count'))
                 .executeTakeFirst(),
         ),
@@ -95,8 +111,8 @@ async function getTypeFacets(parsed: ParsedQuery, userId: string, privateFolderI
 /**
  * Format facets (pdf, jpg, png, etc.)
  */
-async function getFormatFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const results = await narrowedBase(parsed, userId, privateFolderIds, ['formats'])
+async function getFormatFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const results = await narrowedBase(parsed, userId, privateFolderIds, ['formats'], alsoMatchIds)
         .select(['d.mime_type', countDistinctDocuments.as('count')])
         .groupBy('d.mime_type')
         .orderBy(sql`count(DISTINCT d.id)`, 'desc')
@@ -115,8 +131,8 @@ async function getFormatFacets(parsed: ParsedQuery, userId: string, privateFolde
 /**
  * Folder facets (top folders by document count)
  */
-async function getFolderFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const results = await narrowedBase(parsed, userId, privateFolderIds, ['folders'])
+async function getFolderFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const results = await narrowedBase(parsed, userId, privateFolderIds, ['folders'], alsoMatchIds)
         .select(['f.path', countDistinctDocuments.as('count')])
         .where('f.path', 'is not', null)
         .groupBy('f.path')
@@ -138,14 +154,14 @@ async function getFolderFacets(parsed: ParsedQuery, userId: string, privateFolde
 /**
  * Upload period facets (this week, this month, etc.)
  */
-async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
+async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const yearAgo = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
 
-    const base = () => narrowedBase(parsed, userId, privateFolderIds, ['uploaded']).select(countDistinctDocuments.as('count'));
+    const base = () => narrowedBase(parsed, userId, privateFolderIds, ['uploaded'], alsoMatchIds).select(countDistinctDocuments.as('count'));
 
     const [thisWeek, thisMonth, thisYear, older] = await Promise.all([
         base().where('d.created_at', '>=', weekAgo).executeTakeFirst(),
@@ -167,8 +183,8 @@ async function getUploadPeriodFacets(parsed: ParsedQuery, userId: string, privat
 /**
  * Tag facets
  */
-async function getTagFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['tags']).select('d.id');
+async function getTagFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['tags'], alsoMatchIds).select('d.id');
 
     const results = await db
         .selectFrom('document_tags as dt')
@@ -191,8 +207,8 @@ async function getTagFacets(parsed: ParsedQuery, userId: string, privateFolderId
 /**
  * Has text facets
  */
-async function getHasTextFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const base = () => narrowedBase(parsed, userId, privateFolderIds, ['hasText']).select(countDistinctDocuments.as('count'));
+async function getHasTextFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const base = () => narrowedBase(parsed, userId, privateFolderIds, ['hasText'], alsoMatchIds).select(countDistinctDocuments.as('count'));
 
     const [withText, withoutText] = await Promise.all([
         base().where('d.has_meaningful_text', '=', true).executeTakeFirst(),
@@ -212,8 +228,8 @@ async function getHasTextFacets(parsed: ParsedQuery, userId: string, privateFold
  * filters expand to category predicates, so leaving an active type filter
  * applied would zero out every sibling category.
  */
-async function getCategoryFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const results = await narrowedBase(parsed, userId, privateFolderIds, ['types', 'categories'])
+async function getCategoryFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const results = await narrowedBase(parsed, userId, privateFolderIds, ['types', 'categories'], alsoMatchIds)
         .select(['d.document_category', countDistinctDocuments.as('count')])
         .where('d.document_category', 'is not', null)
         .groupBy('d.document_category')
@@ -235,8 +251,8 @@ async function getCategoryFacets(parsed: ParsedQuery, userId: string, privateFol
 /**
  * Entity facets (organization names extracted by the LLM)
  */
-async function getEntityFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['entities']).select('d.id');
+async function getEntityFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['entities'], alsoMatchIds).select('d.id');
 
     // Unnest llm_results.metadata->'entities' and count organization canonical names.
     const results = await db
@@ -266,8 +282,8 @@ async function getEntityFacets(parsed: ParsedQuery, userId: string, privateFolde
  * location filter matches case-insensitively (ILIKE), so selected-marking
  * does too.
  */
-async function getLocationFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[]): Promise<FacetItem[]> {
-    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['locations']).select('d.id');
+async function getLocationFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const matchingDocumentIds = narrowedBase(parsed, userId, privateFolderIds, ['locations'], alsoMatchIds).select('d.id');
 
     const results = await db
         .selectFrom('photo_metadata as pm')

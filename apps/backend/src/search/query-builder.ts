@@ -25,10 +25,14 @@ function applySorting(query: SearchQueryBase, parsed: ParsedQuery, options: Sear
         const tsQuery = buildPrefixTsQuery(parsed.fullText);
 
         if (tsQuery) {
-            return query.orderBy(sql`ts_rank(d.search_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc').orderBy('d.created_at', 'desc');
+            // `d.id` last: equal ranks and timestamps (a bulk upload) must not swap between pages.
+            return query
+                .orderBy(sql`ts_rank(d.search_vector, ${tsQuery})`, options.sortOrder === 'desc' ? 'desc' : 'asc')
+                .orderBy('d.created_at', 'desc')
+                .orderBy('d.id');
         }
 
-        return query.orderBy('d.created_at', 'desc');
+        return query.orderBy('d.created_at', 'desc').orderBy('d.id');
     }
 
     if (options.sortBy === 'uploaded') {
@@ -60,8 +64,9 @@ export function buildSearchQuery(
     userId: string,
     options: SearchQueryOptions,
     privateFolderIds: string[],
+    alsoMatchIds?: readonly string[],
 ): SearchQueryBase {
-    const filtered = applySearchFilters(baseQuery, parsed, userId, privateFolderIds);
+    const filtered = applySearchFilters(baseQuery, parsed, userId, privateFolderIds, undefined, alsoMatchIds);
     const sorted = applySorting(filtered, parsed, options);
 
     return sorted.limit(options.limit).offset(options.offset);
@@ -75,6 +80,7 @@ export function buildCountQuery(
     parsed: ParsedQuery,
     userId: string,
     privateFolderIds: string[],
+    alsoMatchIds?: readonly string[],
 ): SelectQueryBuilder<SearchDatabase, 'd' | 'f' | 'ocr' | 'llm' | 'pm', { count: number }> {
     // Reuse the search query builder but without sorting and pagination
     const query = buildSearchQuery(
@@ -88,6 +94,7 @@ export function buildCountQuery(
             sortOrder: 'desc',
         },
         privateFolderIds,
+        alsoMatchIds,
     );
 
     // Replace select with count

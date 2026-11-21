@@ -104,6 +104,13 @@ const envSchema = z.object({
         .int()
         .positive()
         .default(6 * 60 * 60 * 1000),
+    // Search by meaning. A document counts as a meaning match only at or above its model's cosine-similarity floor
+    // (starting values from apps/reverie-ml/eval/RESULTS.md, tuned on synthetic data). Each vector stream keeps at most
+    // SEMANTIC_TOP_K documents. Embedding the query gets SEMANTIC_TIMEOUT_MS, then search carries on with full text only.
+    SEMANTIC_TEXT_FLOOR: z.coerce.number().min(0).max(1).default(0.53),
+    SEMANTIC_IMAGE_FLOOR: z.coerce.number().min(0).max(1).default(0.17),
+    SEMANTIC_TOP_K: z.coerce.number().int().positive().default(100),
+    SEMANTIC_TIMEOUT_MS: z.coerce.number().int().positive().default(1_500),
 
     // LLM Processing
     LLM_ENABLED: envBoolean(true),

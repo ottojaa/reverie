@@ -3,10 +3,11 @@ import { buildDownloadUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { useRouter } from '@tanstack/react-router';
-import { ArrowLeft, Download, Edit3, Pencil } from 'lucide-react';
+import { ArrowLeft, Download, Edit3, Images, Pencil } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { InsightTitle } from './insights/InsightTitle';
+import { SimilarImagesDialog } from './SimilarImagesDialog';
 
 interface ViewerToolbarProps {
     document: Document;
@@ -23,6 +24,8 @@ interface ViewerToolbarProps {
 
 export function ViewerToolbar({ document, fileUrl, isInsightsOpen, onToggleInsights, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
     const router = useRouter();
+    const [isSimilarOpen, setIsSimilarOpen] = useState(false);
+    const isImage = document.mime_type.startsWith('image/');
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
 
     const handleDownload = useCallback(() => {
@@ -71,6 +74,15 @@ export function ViewerToolbar({ document, fileUrl, isInsightsOpen, onToggleInsig
                     >
                         {canEdit ? <Edit3 className="size-4" /> : <Pencil className="size-4" />}
                     </Button>
+                )}
+
+                {isImage && (
+                    <>
+                        <Button variant="ghost" size="icon-sm" onClick={() => setIsSimilarOpen(true)} title="Similar images" className="text-muted-foreground">
+                            <Images className="size-4" />
+                        </Button>
+                        <SimilarImagesDialog documentId={document.id} open={isSimilarOpen} onOpenChange={setIsSimilarOpen} />
+                    </>
                 )}
 
                 {/* Download */}

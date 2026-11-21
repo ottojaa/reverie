@@ -64,17 +64,17 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### Search & intelligence
 
-| Capability                                                  | Immich             | Reverie                                     | Plan                                                  |
-| ----------------------------------------------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------- |
-| Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                                    |
-| OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                                    |
-| LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                                    |
-| Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                              |
-| Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                              |
-| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ✅ in-app agent                             | ✅ in-app agent over the shared tool registry         |
-| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | 🚧 embeddings shipped (pgvector); search ranking next |
-| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ after pgvector                                     |
-| Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                                    |
+| Capability                                                  | Immich             | Reverie                                     | Plan                                          |
+| ----------------------------------------------------------- | ------------------ | ------------------------------------------- | --------------------------------------------- |
+| Full-text + rich filter DSL                                 | basic              | ✅ ahead (`type:`/`date:`/`entity:`/`has:`) | ✅                                            |
+| OCR text search                                             | ✅ recent          | ✅ ahead (PaddleOCR/Tesseract)              | ✅                                            |
+| LLM summaries / entities / auto-organize                    | ❌                 | ✅ unique                                   | ✅                                            |
+| Locked items never sent to Anthropic                        | n/a (local ML)     | ✅ enforced in the LLM workers              | ✅ (#68)                                      |
+| Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                      |
+| Conversational AI assistant (organize + bulk edit + search) | ❌                 | ✅ in-app agent                             | ✅ in-app agent over the shared tool registry |
+| Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | ✅ hybrid search + "find similar images"      |
+| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ next (the embeddings are in place)         |
+| Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                            |
 
 ### Sharing & access control
 
@@ -161,8 +161,9 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
   and nothing leaves the machine). Hybrid with tsvector (keep lexical for exact matches).
   Reverie-specific angle: embed **LLM summaries + OCR text** (semantic doc search Immich can't do),
   optionally plus CLIP image embeddings. Near-dup detection follows for near-free.
-  _Status:_ the embeddings are built and kept current (local text + image models in `reverie-ml`, pgvector,
-  backfill); search ranking does not use them yet.
+  _Status:_ shipped. Search fuses full text with the text and image embeddings (an exact word match still
+  ranks first; ML down falls back to full text), and a document's view can list similar images. Near-duplicate
+  detection is next.
 - **Video transcoding + adaptive streaming** — the "personal Netflix" use case, prioritized ahead of
   photo editing.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude

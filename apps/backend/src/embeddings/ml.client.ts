@@ -40,7 +40,7 @@ export interface MlClient {
     readyModels(): Promise<{ text: MlModelInfo; image: MlModelInfo }>;
     embedTexts(texts: string[], role: 'passage' | 'query'): Promise<MlEmbeddings>;
     embedImages(images: Buffer[]): Promise<MlEmbeddings>;
-    /** Texts embedded by the image model's text tower, so they compare with image embeddings (max 64 per request). */
+    /** Text embedded by the image model's text tower, so a phrase lands next to the images it describes (max 64 per request). */
     embedImageTexts(texts: string[]): Promise<MlEmbeddings>;
 }
 

@@ -57,4 +57,13 @@ describe('ml client', () => {
         expect(calls[0]).toEqual({ url: 'http://ml:8090/embed/text', body: { texts: ['hei'], role: 'passage' } });
         expect(calls[1]).toEqual({ url: 'http://ml:8090/embed/image', body: { images: [Buffer.from('abc').toString('base64')] } });
     });
+
+    it("posts query texts to the image model's text tower", async () => {
+        const { client, calls } = clientFor(() => json({ model: ready.models.image, embeddings: [[0, 1, 0, 0]] }));
+
+        const result = await client.embedImageTexts(['sunset at the beach']);
+
+        expect(calls[0]).toEqual({ url: 'http://ml:8090/embed/image-text', body: { texts: ['sunset at the beach'] } });
+        expect(result.embeddings).toEqual([[0, 1, 0, 0]]);
+    });
 });

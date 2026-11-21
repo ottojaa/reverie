@@ -3,11 +3,13 @@ import {
     QuickFiltersResponseSchema,
     SearchHelpSchema,
     SearchResponseSchema,
+    SimilarImagesResponseSchema,
     SuggestResponseSchema,
     type QuickFilter,
     type SearchFacets,
     type SearchHelp,
     type SearchResponse,
+    type SimilarImagesResponse,
     type SuggestionType,
 } from '@reverie/shared';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -28,6 +30,12 @@ export const searchApi = {
         const { data } = await apiClient.get('/search', { params });
 
         return SearchResponseSchema.parse(data);
+    },
+
+    async getSimilarImages(documentId: string, limit: number): Promise<SimilarImagesResponse> {
+        const { data } = await apiClient.get(`/documents/${documentId}/similar-images`, { params: { limit } });
+
+        return SimilarImagesResponseSchema.parse(data);
     },
 
     async getFacets(): Promise<SearchFacets> {
@@ -132,5 +140,17 @@ export function useSearchHelp() {
         queryFn: () => searchApi.getHelp(),
         enabled: isAuthenticated,
         staleTime: 10 * 60_000,
+    });
+}
+
+/** The images that look most like `documentId`; only fetched while the caller wants them (`enabled`). */
+export function useSimilarImages(documentId: string, limit: number, enabled: boolean) {
+    const { isAuthenticated } = useAuth();
+
+    return useQuery({
+        queryKey: ['similar-images', documentId, limit],
+        queryFn: () => searchApi.getSimilarImages(documentId, limit),
+        enabled: isAuthenticated && enabled,
+        staleTime: 60_000,
     });
 }

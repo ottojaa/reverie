@@ -1,11 +1,13 @@
 import { addFilter, replaceFilter, type ParsedQuery, type SortBy } from '@reverie/shared';
 import { z } from 'zod';
-import { buildCountQuery, buildSearchQuery, documentJoins, parseQuery, validateQuery } from '../search';
+import { applySearchFilters, documentJoins, parseQuery, validateQuery } from '../search';
+import { findRankedDocuments, type HybridContext } from '../search/hybrid-search';
+import { findSimilarImages } from '../search/similar-images';
 import { DOCUMENT_ROW_COLUMNS, loadTags, toDocumentRow, type DocumentRow } from './document-output';
-import { applySearchGuard, withoutDateRange } from './search-guard';
+import { applySearchGuard, applySemanticGuard, withoutDateRange } from './search-guard';
 import { createSelection, MAX_SELECTION_SIZE } from './selection.store';
 import { defineTool, ToolError } from './types';
-import { loadVisibility } from './visibility';
+import { loadVisibility, type Visibility } from './visibility';
 
 const MAX_PAGE_SIZE = 100;
 
@@ -25,6 +27,13 @@ const searchSchema = z.object({
     location: z.string().max(100).optional().describe('City or country of a photo'),
     folder: z.string().max(300).optional().describe('Folder path (starts with /) or part of a path'),
     folder_id: z.string().uuid().optional().describe('Only documents directly in this folder'),
+    similar_to: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+            'Id of an image: returns the images that look most like it, nearest first, instead of searching. Not combinable with `query`; the filters still apply. Photos whose content the tools withhold are neither sources nor results.',
+        ),
     sort_by: z.enum(['relevance', 'uploaded', 'date', 'filename', 'size']).default('relevance'),
     sort_order: z.enum(['asc', 'desc']).default('desc'),
     limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(25),
@@ -86,31 +95,84 @@ async function loadRows(ids: string[]): Promise<DocumentRow[]> {
     });
 }
 
+/** The match flag on a row: why a document is in the results. Left out when meaning search wasn't used. */
+function withMatch(rows: DocumentRow[], matches: Map<string, string | null>) {
+    return rows.map((row) => {
+        const match = matches.get(row.id);
+
+        return match ? { ...row, match } : row;
+    });
+}
+
+async function runSimilarImages(input: SearchInput, vis: Visibility) {
+    if (input.query.trim()) throw new ToolError('Invalid search: similar_to cannot be combined with a query');
+
+    const filters = toParsedQuery(input);
+    const source = await applySearchFilters(applySemanticGuard(documentJoins(), parseQuery('')), parseQuery(''), vis.userId, vis.privateFolderIds)
+        .where('d.id', '=', input.similar_to!)
+        .select('d.id')
+        .executeTakeFirst();
+
+    if (!source) throw new ToolError('Image not found: ' + input.similar_to);
+
+    const similar = await findSimilarImages(vis.userId, vis.privateFolderIds, input.similar_to!, {
+        limit: input.limit,
+        offset: input.offset,
+        base: applySemanticGuard(documentJoins(), filters),
+        filters: withoutDateRange(filters),
+    });
+
+    if (!similar) throw new ToolError('Image not analysed yet: ' + input.similar_to);
+
+    const rows = await loadRows(similar.entries.map((entry) => entry.id));
+    const similarity = new Map(similar.entries.map((entry) => [entry.id, Math.round(entry.similarity * 1000) / 1000]));
+
+    return {
+        total: similar.total,
+        offset: input.offset,
+        rows: rows.map((row) => ({ ...row, similarity: similarity.get(row.id) })),
+        selection_id: null,
+        selection_total: 0,
+        truncated: similar.total > input.offset + rows.length,
+    };
+}
+
+async function runSearch(input: SearchInput, vis: Visibility) {
+    const parsed = toParsedQuery(input);
+    const filters = withoutDateRange(parsed);
+    const ctx: HybridContext = {
+        userId: vis.userId,
+        privateFolderIds: vis.privateFolderIds,
+        fullTextBase: applySearchGuard(documentJoins(), parsed),
+        semanticBase: applySemanticGuard(documentJoins(), parsed),
+    };
+    const options = { limit: MAX_SELECTION_SIZE, offset: 0, sortBy: input.sort_by as SortBy, sortOrder: input.sort_order };
+    const ranked = await findRankedDocuments(filters, ctx, options);
+    const page = ranked.entries.slice(input.offset, input.offset + input.limit);
+    const rows = await loadRows(page.map((entry) => entry.id));
+    // A selection stands for matches the agent can act on in bulk. Meaning-only matches are loose by nature, so they are
+    // never swept into one: they are named by id (`document_ids`) after the agent has looked at them.
+    const selected = ranked.entries.filter((entry) => entry.match !== 'meaning').map((entry) => entry.id);
+
+    return {
+        total: ranked.total,
+        offset: input.offset,
+        rows: withMatch(rows, new Map(page.map((entry) => [entry.id, entry.match]))),
+        selection_id: selected.length > 0 ? await createSelection(vis.userId, selected) : null,
+        selection_total: selected.length,
+        truncated: ranked.total > ranked.entries.length,
+    };
+}
+
 export const searchDocuments = defineTool({
     name: 'search_documents',
     description:
-        'Keyword search over the library with filters. Returns one page of compact rows, the total, and a selection_id that stands for every match: pass it to a write tool instead of listing ids. Photos show filename, date, place and tags only.',
+        "Search the library by words and by meaning, with filters. A document that matches the words ranks first; others join when they are close in meaning, and a row's `match` says which ('keywords', 'meaning' or 'both'). Returns one page of compact rows, the total, and a selection_id that stands for the keyword matches (selection_total of them): pass it to a write tool instead of listing ids. Meaning-only matches are left out of the selection, so name those by id. Set `similar_to` to an image id to find images that look like it (nearest first; later pages are approximate, so take what you need from the first page). Photos show filename, date, place and tags only.",
     access: 'read',
     inputSchema: searchSchema,
     handler: async (input, ctx) => {
-        const parsed = toParsedQuery(input);
         const vis = await loadVisibility(ctx.user.id);
-        const base = applySearchGuard(documentJoins(), parsed);
-        const filters = withoutDateRange(parsed);
-        const options = { limit: MAX_SELECTION_SIZE, offset: 0, sortBy: input.sort_by as SortBy, sortOrder: input.sort_order };
-        const [matches, counted] = await Promise.all([
-            buildSearchQuery(base, filters, vis.userId, options, vis.privateFolderIds).select('d.id').execute(),
-            buildCountQuery(base, filters, vis.userId, vis.privateFolderIds).executeTakeFirstOrThrow(),
-        ]);
-        const ids = matches.map((match) => match.id);
-        const rows = await loadRows(ids.slice(input.offset, input.offset + input.limit));
 
-        return {
-            total: counted.count,
-            offset: input.offset,
-            rows,
-            selection_id: ids.length > 0 ? await createSelection(vis.userId, ids) : null,
-            truncated: counted.count > ids.length,
-        };
+        return input.similar_to ? runSimilarImages(input, vis) : runSearch(input, vis);
     },
 });

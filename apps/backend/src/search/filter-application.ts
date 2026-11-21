@@ -106,7 +106,9 @@ export function documentJoins(): SearchQueryBase {
 
 /**
  * Type filter (photo, document, receipt, screenshot, video). Shared by search
- * and the type facet so a facet count always equals the result count on click.
+ * and the type facet so a facet count equals the number of word matches the filter
+ * returns on click. A click also reruns the meaning streams under the new filter,
+ * so the result can hold meaning matches the count did not (see semantic-rank.ts).
  */
 export function applyTypesFilter(query: SearchQueryBase, types: readonly string[]): SearchQueryBase {
     const allCategories = types.flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
@@ -230,6 +232,7 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
  * Apply all ParsedQuery filters (plus user scoping and privacy exclusion) to a
  * documents query. Dimensions listed in `omit` are skipped entirely — positive
  * and negated filters alike. User scoping and privacy are never omittable.
+ * `alsoMatchIds` lets documents that matched by meaning stand in for the full-text match.
  */
 export function applySearchFilters(
     query: SearchQueryBase,
@@ -237,6 +240,7 @@ export function applySearchFilters(
     userId: string,
     privateFolderIds: string[],
     omit?: ReadonlySet<FilterDimension>,
+    alsoMatchIds?: readonly string[],
 ): SearchQueryBase {
     // Always filter by user
     query = query.where('d.user_id', '=', userId);
@@ -255,8 +259,14 @@ export function applySearchFilters(
         } else if (parsed.searchScope === 'summary') {
             query = query.where(sql<SqlBool>`llm.summary ILIKE ${'%' + parsed.fullText + '%'}`);
         } else if (tsQuery) {
-            // Unified search vector includes filename, OCR text, LLM data, photo metadata, tags
-            query = query.where(sql<SqlBool>`d.search_vector @@ ${tsQuery}`);
+            // Unified search vector includes filename, OCR text, LLM data, photo metadata, tags.
+            // `alsoMatchIds` are the documents that matched by meaning (semantic-rank.ts): they join the
+            // result set even though the words don't match. Every other filter below still applies to them.
+            query = query.where((eb) =>
+                alsoMatchIds?.length
+                    ? eb.or([sql<SqlBool>`d.search_vector @@ ${tsQuery}`, eb('d.id', 'in', [...alsoMatchIds])])
+                    : sql<SqlBool>`d.search_vector @@ ${tsQuery}`,
+            );
         }
     }
 
