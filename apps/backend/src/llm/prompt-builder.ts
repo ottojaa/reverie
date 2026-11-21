@@ -121,16 +121,6 @@ OTHER FIELDS
 - "extracted_date": YYYY-MM-DD. Prefer the document date / date of issue. For partial dates: "4/2000" -> "2000-04-01", "January 2000" -> "2000-01-01", "2000" alone -> "2000-01-01". If multiple dates exist, pick the one that best identifies when the document was created/issued. null if none found.
 `;
 
-/**
- * Vision system message for image description
- */
-const VISION_PROMPT = `Describe this image in 2-3 sentences. Include:
-- What the image shows (people, places, objects, scenes)
-- Any notable details or context
-- If it's a screenshot, describe the app/content shown
-
-Be concise and factual.`;
-
 interface BuildPromptContext {
     document: Pick<Document, 'original_filename'>;
     ocrResult?: Pick<OcrResult, 'confidence_score'> | null;
@@ -166,11 +156,4 @@ Analyze this document and extract all structured information as specified. Pay s
         user: userMessage,
         maxTokens: env.LLM_MAX_OUTPUT_TOKENS,
     };
-}
-
-/**
- * Get the vision prompt for image description
- */
-export function getVisionPrompt(): string {
-    return VISION_PROMPT;
 }

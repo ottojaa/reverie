@@ -7,6 +7,12 @@ export function formatCategory(category: string): string {
         .join(' ');
 }
 
+function toMetadataType(type: unknown): LlmMetadata['type'] {
+    if (type === 'vision_describe' || type === 'image_understanding') return type;
+
+    return 'text_summary';
+}
+
 /**
  * Safely parse llm_metadata from the loosely-typed API field into the domain LlmMetadata shape.
  * The actual data uses camelCase (matches backend EnhancedMetadata).
@@ -23,7 +29,7 @@ export function parseLlmMetadata(raw: Record<string, unknown> | null | undefined
     const rawEntities = typeof raw.entities === 'object' && raw.entities != null ? (raw.entities as Entity[]) : [];
 
     const result: LlmMetadata = {
-        type: raw.type === 'vision_describe' ? 'vision_describe' : 'text_summary',
+        type: toMetadataType(raw.type),
         entities: rawEntities.map((entity) => ({
             type: entity.type,
             canonical_name: entity.canonical_name,
@@ -36,6 +42,10 @@ export function parseLlmMetadata(raw: Record<string, unknown> | null | undefined
     if (typeof raw.title === 'string') result.title = raw.title;
 
     if (typeof raw.language === 'string') result.language = raw.language;
+
+    if (typeof raw.appOrSource === 'string' && raw.appOrSource.trim()) result.appOrSource = raw.appOrSource;
+
+    if (typeof raw.imageKind === 'string') result.imageKind = raw.imageKind;
 
     if (typeof raw.documentType === 'string') result.documentType = raw.documentType;
 

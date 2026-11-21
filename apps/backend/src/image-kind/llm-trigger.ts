@@ -1,6 +1,7 @@
 import { sql, type Kysely } from 'kysely';
 import { env } from '../config/env';
 import type { Database } from '../db/schema';
+import { toLookKindFromVerdict } from '../llm/image-look';
 import { shouldSkipLlmProcessing } from '../ocr/text-detector';
 import type { LlmJobData } from '../queues/llm.queue';
 import { isCameraBacked } from '../tools/photo';
@@ -18,14 +19,15 @@ interface Candidate {
 }
 
 /**
- * Text that clears the OCR thresholds gets a text summary, as it does when the OCR worker queues the job. An image
- * without text gets a look from Claude only when vision is on and it is not a photo: the verdict says so, and the
- * LLM worker's photo gate checks the camera evidence again.
+ * A screenshot, document, receipt or diagram with no camera facts gets the image call whatever its OCR text says
+ * (the call reads the pixels, so empty or poor OCR is no reason to skip it); it needs vision on. Anything else gets a
+ * text summary when its text clears the OCR thresholds, as when the OCR worker queues the job, and otherwise nothing:
+ * a photo is never sent. The LLM worker decides again when the job runs (decideImageLook).
  */
 function wantsLlmJob(candidate: Candidate, kind: ImageKind): boolean {
-    if (!shouldSkipLlmProcessing(candidate.confidence ?? 0, candidate.hasText)) return true;
+    if (env.LLM_VISION_ENABLED && toLookKindFromVerdict(kind) !== null && !candidate.hasCameraFacts) return true;
 
-    return !candidate.hasText && env.LLM_VISION_ENABLED && kind !== 'photo' && !candidate.hasCameraFacts;
+    return !shouldSkipLlmProcessing(candidate.confidence ?? 0, candidate.hasText);
 }
 
 /**

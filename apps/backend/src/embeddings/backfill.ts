@@ -9,6 +9,7 @@ import { getEmbedQueue, type EmbedBackfillCursor, type EmbedJobKind } from '../q
 import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings } from './embedding.repository';
 import { MlUnavailableError, type MlClient } from './ml.client';
 import { toModelRef } from './embedding.service';
+import { UNDERSTAND_PAGE_SIZE, findImagesToUnderstand } from '../llm/understand-backfill';
 
 export type BackfillStep =
     | { kind: 'next'; cursor: EmbedBackfillCursor }
@@ -21,6 +22,8 @@ export interface BackfillDeps {
     /** True while OCR, summaries or the embed queue itself have work, so the backfill does not compete with it. */
     isBusy: () => Promise<boolean>;
     enqueue: (kind: EmbedJobKind, documentId: string) => Promise<void>;
+    /** Queues the image call for one image; absent when the call is off (no API key or vision disabled), which skips that stage. */
+    queueUnderstanding?: (documentId: string) => Promise<unknown>;
     batchSize: number;
     /** The classifier whose verdicts the kind stage fills in. Defaults to the committed one. */
     classifier?: KindClassifierConfig;
@@ -30,7 +33,9 @@ const STAGES = {
     text: { next: 'image', job: 'embed-text' },
     image: { next: 'camera', job: 'embed-image' },
     camera: { next: 'kind', job: 'read-camera' },
-    kind: { next: null, job: 'classify-image' },
+    kind: { next: 'understand', job: 'classify-image' },
+    // Not an embed job: it queues the image call (see queueUnderstanding).
+    understand: { next: null, job: null },
 } as const;
 
 type ReadyModels = Awaited<ReturnType<MlClient['readyModels']>>;
@@ -42,13 +47,19 @@ function findMissing(deps: BackfillDeps, stage: EmbedBackfillCursor['stage'], mo
 
     if (stage === 'camera') return findDocumentsMissingCameraRead(deps.db, after, deps.batchSize);
 
+    if (stage === 'understand') return findImagesToUnderstand(deps.db, after, Math.min(deps.batchSize, UNDERSTAND_PAGE_SIZE));
+
     return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize, deps.classifier);
+}
+
+function enqueueOne(deps: BackfillDeps, job: EmbedJobKind | null, id: string): Promise<unknown> {
+    return job === null ? deps.queueUnderstanding!(id) : deps.enqueue(job, id);
 }
 
 /**
  * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, a camera
- * read of the stored file, or an image kind verdict from the current classifier. Stateless apart from the cursor: a restart simply asks the database
- * again, and finished documents no longer match. Text, then images, then camera reads (each ends with a new verdict), then kinds; each stage ends when a page comes back empty.
+ * read of the stored file, or an image kind verdict from the current classifier, then queue the image call for screenshots and document images that lack it. Stateless apart from the cursor: a restart simply asks the database
+ * again, and finished documents no longer match. Text, then images, then camera reads (each ends with a new verdict), then kinds, then image summaries; each stage ends when a page comes back empty.
  */
 export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillCursor): Promise<BackfillStep> {
     let models: ReadyModels;
@@ -64,12 +75,16 @@ export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillC
     if (await deps.isBusy()) return { kind: 'wait', reason: 'queues-busy' };
 
     const stage = STAGES[cursor.stage];
+
+    // Without the image call the last stage has nothing to do.
+    if (cursor.stage === 'understand' && !deps.queueUnderstanding) return { kind: 'done' };
+
     const ids = await findMissing(deps, cursor.stage, models, cursor.after);
     const last = ids.at(-1);
 
     if (last === undefined) return stage.next === null ? { kind: 'done' } : { kind: 'next', cursor: { stage: stage.next, after: null } };
 
-    for (const id of ids) await deps.enqueue(stage.job, id);
+    for (const id of ids) await enqueueOne(deps, stage.job, id);
 
     return { kind: 'next', cursor: { stage: cursor.stage, after: last } };
 }

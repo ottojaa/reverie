@@ -52,6 +52,15 @@ it('undoes to the heuristic category: filename, then text, then the stored size'
     expect(toHeuristicCategory(row({ filename: 'a.jpg' }))).not.toBe('screenshot');
 });
 
+it('undo also resets the receipt that apply wrote, but apply leaves a receipt alone', () => {
+    const receipt = row({ id: 'r', filename: 'Screenshot_3.png', category: 'receipt', kind: 'receipt' });
+
+    expect(planChanges([receipt], 'undo')).toEqual([{ id: 'r', from: 'receipt', to: 'screenshot' }]);
+    expect(planChanges([receipt], 'apply')).toEqual([]);
+    // A receipt the verdict does not back (an LLM choice on a document verdict) is not touched by undo.
+    expect(planChanges([row({ category: 'receipt', kind: 'document' })], 'undo')).toEqual([]);
+});
+
 describeDb('applying image kinds', () => {
     let database: TestDatabase;
     let db: Kysely<Database>;
@@ -145,6 +154,16 @@ describeDb('applying image kinds', () => {
         expect(await categoryOf(text)).toBe('other');
         expect(await categoryOf(named)).toBe('screenshot');
         expect(await categoryOf(invoice)).toBe('invoice');
+    });
+
+    it('apply then undo restores a receipt verdict row to the heuristic category', async () => {
+        const id = await seedImage('scan.jpg', 'other', 'receipt', 'TOTAL 5');
+
+        await run('apply');
+        expect(await categoryOf(id)).toBe('receipt');
+
+        await run('undo');
+        expect(await categoryOf(id)).toBe('other');
     });
 
     it('prints no filenames or OCR text', async () => {

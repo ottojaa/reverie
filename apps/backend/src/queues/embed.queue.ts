@@ -17,7 +17,7 @@ export interface EmbedJobData {
 }
 
 export interface EmbedBackfillCursor {
-    stage: 'text' | 'image' | 'camera' | 'kind';
+    stage: 'text' | 'image' | 'camera' | 'kind' | 'understand';
     /** Last document id handled in this stage; null at the start of a stage. */
     after: string | null;
 }

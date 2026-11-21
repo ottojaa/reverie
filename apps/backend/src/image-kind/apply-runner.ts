@@ -1,7 +1,7 @@
 /**
  * One-off: rewrites `document_category` of the existing live images, either from their stored kind verdicts (what the
  * embed worker now does for each new image) or back to what the OCR heuristics said (the undo). Idempotent: a second
- * run changes nothing. Only a missing or heuristic category is touched, never one the LLM chose (`invoice`, `letter`).
+ * run changes nothing. Only a missing or heuristic category is touched, never one the LLM chose (`invoice`, `letter`); undo also resets the `receipt` that apply wrote.
  */
 import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema.js';
@@ -27,8 +27,15 @@ export interface CategoryChange {
     to: string;
 }
 
-function isReplaceable(category: string | null): boolean {
-    return category === null || REPLACEABLE_CATEGORIES.includes(category);
+/**
+ * Whether the script may rewrite this row's category. Apply and undo both touch a missing or heuristic category. Undo
+ * also resets a category equal to what the verdict maps to (`receipt`), which is what apply wrote and which is not a
+ * heuristic category; a `receipt` the LLM chose for a receipt verdict resets with it, and the LLM re-sets it on reprocess.
+ */
+function isRewritable(row: ApplyRow, mode: ApplyMode): boolean {
+    if (row.category === null || REPLACEABLE_CATEGORIES.includes(row.category)) return true;
+
+    return mode === 'undo' && row.kind !== null && row.category === KIND_TO_CATEGORY[row.kind];
 }
 
 /**
@@ -53,7 +60,7 @@ function toTargetCategory(row: ApplyRow, mode: ApplyMode): string | null {
 
 export function planChanges(rows: ApplyRow[], mode: ApplyMode): CategoryChange[] {
     return rows.flatMap((row) => {
-        const to = isReplaceable(row.category) ? toTargetCategory(row, mode) : null;
+        const to = isRewritable(row, mode) ? toTargetCategory(row, mode) : null;
 
         return to === null || to === row.category ? [] : [{ id: row.id, from: row.category, to }];
     });
@@ -106,13 +113,13 @@ export async function runApply(db: Kysely<Database>, options: { mode: ApplyMode;
     if (options.dryRun) return changes;
 
     await db.transaction().execute(async (trx) => {
-        for (const { id, to } of changes) {
-            // The category is re-checked in the WHERE so a row the LLM re-categorised meanwhile is not overwritten.
+        for (const { id, from, to } of changes) {
+            // The category read when planning is re-checked in the WHERE so a row the LLM re-categorised meanwhile is not overwritten.
             await trx
                 .updateTable('documents')
                 .set({ document_category: to })
                 .where('id', '=', id)
-                .where((eb) => eb.or([eb('document_category', 'is', null), eb('document_category', 'in', [...REPLACEABLE_CATEGORIES])]))
+                .where((eb) => (from === null ? eb('document_category', 'is', null) : eb('document_category', '=', from)))
                 .execute();
         }
     });

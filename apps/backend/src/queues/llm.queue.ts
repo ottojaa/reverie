@@ -1,6 +1,6 @@
 import { Entity } from '@reverie/shared';
 import { Queue } from 'bullmq';
-import type { LlmProcessingType, LlmSkipReason } from '../llm/types';
+import type { LlmSkipReason, StoredLlmProcessingType } from '../llm/types';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
@@ -9,8 +9,8 @@ export interface LlmJobData {
     /** Document owner; used to route job events to the owner's socket room only. */
     userId: string;
     sessionId?: string | undefined;
-    /** Optional - will be determined by eligibility check if not provided */
-    type?: LlmProcessingType | undefined;
+    /** Optional - will be determined by eligibility check if not provided. Jobs queued before the image call may say `vision_describe`. */
+    type?: StoredLlmProcessingType | undefined;
 }
 
 export interface LlmJobResult {

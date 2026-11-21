@@ -15,6 +15,8 @@ import {
     type EmbedBackfillCursor,
     type EmbedJobData,
 } from '../queues/embed.queue';
+import { isVisionAvailable } from '../llm/anthropic.client';
+import { queueUnderstanding } from '../llm/understand-backfill';
 import { addLlmJob } from '../queues/llm.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
@@ -107,6 +109,7 @@ async function loadBackfillStep(job: Job<EmbedBackfillData>, ml: MlClient): Prom
                 ml,
                 isBusy: isPipelineBusy,
                 enqueue: (kind, id) => addEmbedJob(kind, id, BACKFILL_PRIORITY),
+                ...(isVisionAvailable() && { queueUnderstanding: (id: string) => queueUnderstanding(db, addLlmJob, id) }),
                 batchSize: env.EMBED_BACKFILL_BATCH,
             },
             job.data.cursor,

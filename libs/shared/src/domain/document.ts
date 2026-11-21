@@ -61,8 +61,13 @@ export interface ExtractedDate {
  * so consumers must parse/validate at runtime.
  */
 export interface LlmMetadata {
-    type: 'text_summary' | 'vision_describe';
+    /** `vision_describe` only appears on rows written before the image call replaced it. */
+    type: 'text_summary' | 'image_understanding' | 'vision_describe';
     title?: string;
+    /** What app or source an image comes from (e.g. "Lunamux terminal"); only the image call sets it. */
+    appOrSource?: string;
+    /** The kind the image call settled on: screenshot, document, receipt or diagram. */
+    imageKind?: string;
     language?: string;
     entities: Entity[];
     topics: string[];
