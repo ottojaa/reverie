@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     // Import after the env is set so env.ts (which validates + can exit) loads lazily.
     const { env } = await import('../../config/env.js');
     const { analyzeOcrText } = await import('../../llm/text-analysis.js');
+    const { AnthropicProvider } = await import('../../llm/anthropic.provider.js');
 
     if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set: export it or put it in .env');
 
@@ -84,7 +85,12 @@ async function main(): Promise<void> {
             if (spent > argv['max-cost']) throw new Error('Stopped: running cost passed --max-cost: ' + spent.toFixed(4));
 
             try {
-                const analysis = await analyzeOcrText({ original_filename: doc.filename }, { raw_text: doc.text, confidence_score: null }, variant);
+                const analysis = await analyzeOcrText(
+                    { original_filename: doc.filename },
+                    { raw_text: doc.text, confidence_score: null },
+                    variant,
+                    new AnthropicProvider(variant.model),
+                );
                 const entityNames = analysis.entities.map((entity) => entity.canonical_name);
                 const texts = [analysis.title ?? '', analysis.summary, ...analysis.topics, ...analysis.tags, ...entityNames];
 

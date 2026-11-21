@@ -12,7 +12,7 @@ import { groundEntities } from './entity-grounding';
 import type { LlmAnalysis } from './llm-response.schema';
 import { buildDocumentPrompt } from './prompt-builder';
 import { getProvider } from './provider-config';
-import type { LlmCallOptions, LlmCallUsage } from './provider';
+import type { LlmCallOptions, LlmCallUsage, LlmProvider } from './provider';
 import { buildSpellingCorrector, correctText } from './spelling-corrector';
 import { prepareTextForLlm } from './text-preparer';
 import type { PreparedText } from './types';
@@ -39,6 +39,8 @@ export async function analyzeOcrText(
     document: Pick<Document, 'original_filename'>,
     ocrResult: Pick<OcrResult, 'raw_text' | 'confidence_score'>,
     options: LlmCallOptions = {},
+    /** Replaces the configured summary provider; the model-comparison script pins Anthropic so it never reads settings. */
+    provider?: LlmProvider,
 ): Promise<TextAnalysis> {
     const prepareStart = Date.now();
     const prepared = prepareTextForLlm(ocrResult.raw_text);
@@ -46,7 +48,7 @@ export async function analyzeOcrText(
     const preparePromptMs = Date.now() - prepareStart;
 
     const llmStart = Date.now();
-    const { result, tokenCount, call } = await (await getProvider('summary')).summarize(prompt, options);
+    const { result, tokenCount, call } = await (provider ?? (await getProvider('summary'))).summarize(prompt, options);
     const llmMs = Date.now() - llmStart;
 
     // Ground entity names against the OCR text: accept casing/whitespace tidy and
