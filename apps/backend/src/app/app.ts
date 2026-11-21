@@ -5,6 +5,11 @@ import * as path from 'path';
 
 export interface AppOptions {}
 
+// Everything in plugins/ and routes/ that autoload finds gets required at start-up, in production
+// too. A test file there would pull in vitest, which the production image does not have, and the
+// server would die at boot. Tests live next to this file instead; the build also leaves them out of dist.
+export const AUTOLOAD_IGNORE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]s$/;
+
 // Wrapped in fastify-plugin so the decorators added by inner plugins (notably
 // `jwt` from @fastify/jwt) are exposed on the ROOT instance rather than staying
 // in this plugin's encapsulated scope. main.ts hands that root instance to the
@@ -15,12 +20,14 @@ export const app = fp(async function app(fastify: FastifyInstance, opts: AppOpti
     // Plugins are loaded alphabetically, so we prefix with numbers for order
     fastify.register(AutoLoad, {
         dir: path.join(__dirname, 'plugins'),
+        ignorePattern: AUTOLOAD_IGNORE_PATTERN,
         options: { ...opts },
     });
 
     // Register routes
     fastify.register(AutoLoad, {
         dir: path.join(__dirname, 'routes'),
+        ignorePattern: AUTOLOAD_IGNORE_PATTERN,
         options: { ...opts },
     });
 });

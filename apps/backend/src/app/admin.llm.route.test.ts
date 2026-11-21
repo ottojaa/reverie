@@ -22,9 +22,9 @@ const h = vi.hoisted(() => {
     };
 });
 
-vi.mock('../../config/env.js', () => ({ env: h.env }));
+vi.mock('../config/env.js', () => ({ env: h.env }));
 // authenticateAdmin looks the caller's role up through this module; nothing else here touches the database.
-vi.mock('../../db/kysely.js', () => ({
+vi.mock('../db/kysely.js', () => ({
     db: {
         selectFrom: () => ({
             select: () => ({
@@ -34,9 +34,9 @@ vi.mock('../../db/kysely.js', () => ({
     },
 }));
 
-import authPlugin from '../plugins/auth.js';
-import errorHandler from '../plugins/error-handler.js';
-import llmRoute from './admin.llm.route.js';
+import authPlugin from './plugins/auth.js';
+import errorHandler from './plugins/error-handler.js';
+import llmRoute from './routes/admin.llm.route.js';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const USER_ID = '22222222-2222-4222-8222-222222222222';

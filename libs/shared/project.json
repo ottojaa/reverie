@@ -6,7 +6,7 @@
     "targets": {
         "typecheck": {
             "options": {
-                "command": "tsc --build --noEmit"
+                "command": "tsc --build --noEmit && tsc -p tsconfig.spec.json"
             }
         },
         "lint": {
