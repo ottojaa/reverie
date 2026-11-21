@@ -120,6 +120,15 @@ const envSchema = z.object({
     SEMANTIC_TOP_K: z.coerce.number().int().positive().default(100),
     SEMANTIC_TIMEOUT_MS: z.coerce.number().int().positive().default(1_500),
 
+    // Near-duplicate detection. Two images are duplicates when their image embeddings reach this cosine similarity; a group needs
+    // every pair in it to reach it (no chains). Lowering it needs the backfill to scan again; raising it applies at once.
+    // 0.95 comes from SigLIP2 so400m on public photos: re-compressed (q60), halved, lightly cropped and burst-shifted copies score 0.95 or more,
+    // unrelated photos top out at 0.87. Same-layout screenshots and document pages score 0.96-0.99 whatever the text, so no threshold separates
+    // those from copies: "Not duplicates" is the answer to them. Run the duplicate-probe script on the real library to confirm or move it.
+    // Each image stores at most DUPLICATE_MAX_NEIGHBOURS of its nearest matches, so a burst larger than that can split into several groups.
+    DUPLICATE_MIN_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.95),
+    DUPLICATE_MAX_NEIGHBOURS: z.coerce.number().int().positive().default(50),
+
     // LLM Processing
     LLM_ENABLED: envBoolean(true),
     LLM_MAX_INPUT_CHARS: z.coerce.number().default(25000),

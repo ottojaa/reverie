@@ -73,7 +73,7 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 | Background AI on Claude Haiku 5.5                           | n/a                | ✅ Haiku 5.5                                | ✅ (#70)                                      |
 | Conversational AI assistant (organize + bulk edit + search) | ❌                 | ✅ in-app agent                             | ✅ in-app agent over the shared tool registry |
 | Semantic / natural-language search                          | ✅ CLIP + vectors  | ❌                                          | ✅ hybrid search + "find similar images"      |
-| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | 🛠️ next (the embeddings are in place)         |
+| Near-duplicate detection                                    | ✅ embedding-based | ❌ exact-hash only                          | ✅ Duplicates view + `find_duplicates` tool   |
 | Face detection & people                                     | ✅ InsightFace     | ❌                                          | ❌ low ROI for now                            |
 
 ### Sharing & access control
@@ -163,7 +163,8 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
   optionally plus CLIP image embeddings. Near-dup detection follows for near-free.
   _Status:_ shipped. Search fuses full text with the text and image embeddings (an exact word match still
   ranks first; ML down falls back to full text), and a document's view can list similar images. Near-duplicate
-  detection is next.
+  detection has shipped too: image pairs above a similarity threshold are stored as they are embedded, and the Duplicates
+  view groups them (no chains), suggests the copy to keep and moves the rest to the Trash, never deleting.
 - **Video transcoding + adaptive streaming** — the "personal Netflix" use case, prioritized ahead of
   photo editing.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude

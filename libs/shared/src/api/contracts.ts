@@ -5,6 +5,7 @@ export * from './schemas/api-tokens.js';
 export * from './schemas/auth.js';
 export * from './schemas/common.js';
 export * from './schemas/documents.js';
+export * from './schemas/duplicates.js';
 export * from './schemas/folders.js';
 export * from './schemas/jobs.js';
 export * from './schemas/organize.js';

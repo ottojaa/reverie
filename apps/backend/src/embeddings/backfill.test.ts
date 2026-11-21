@@ -10,6 +10,7 @@ import { createFakeMl, type FakeMl } from '../testing/fake-ml.js';
 import { seedDocument, seedFolder, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
+import { loadScanConfig, scanDuplicates } from '../duplicates/scan';
 import { readDocumentMedia } from '../media/media-read';
 import { clearPromptCache } from '../image-kind/prompt-cache';
 import { classifyDocumentImage } from '../image-kind/service';
@@ -66,6 +67,7 @@ describeDb('embedding backfill', () => {
         for (const { kind, id } of queued.splice(0)) {
             if (kind === 'embed-text') await embedDocumentText({ db, ml, readFile: read }, id);
             else if (kind === 'classify-image') await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
+            else if (kind === 'scan-duplicates') await scanDuplicates(id);
             else if (kind === 'read-camera') await readDocumentMedia({ db, readFile: read, probeVideo: async () => NO_VIDEO_FACTS }, id);
             else await embedDocumentImage({ db, ml, readFile: read }, id);
         }
@@ -262,8 +264,8 @@ describeDb('embedding backfill', () => {
             await runToEnd();
             queued = [];
 
-            // Nothing left to classify: the kind stage hands over to the understand stage.
-            expect(await runBackfillPage(deps, { stage: 'kind', after: null })).toEqual({ kind: 'next', cursor: { stage: 'understand', after: null } });
+            // Nothing left to classify: the kind stage hands over to the duplicates stage.
+            expect(await runBackfillPage(deps, { stage: 'kind', after: null })).toEqual({ kind: 'next', cursor: { stage: 'duplicates', after: null } });
             expect(queued).toHaveLength(0);
 
             await db.updateTable('document_image_kinds').set({ prompt_version: 'older' }).execute();
@@ -378,6 +380,55 @@ describeDb('embedding backfill', () => {
         });
     });
 
+    describe('the duplicates stage', () => {
+        const scanned = (id: string, threshold: number) =>
+            db.insertInto('document_duplicate_scans').values({ document_id: id, threshold, scanned_at: new Date() }).execute();
+
+        async function embeddedImage(name: string): Promise<string> {
+            const id = await seedDocument(db, { userId, name, mime: 'image/jpeg' });
+
+            await db
+                .updateTable('documents')
+                .set({ thumbnail_paths: { sm: '/s', md: '/m', lg: '/l' } })
+                .where('id', '=', id)
+                .execute();
+            await embedDocumentImage({ db, ml, readFile: async () => Buffer.from(name) }, id);
+
+            return id;
+        }
+
+        it('queues the images that were never scanned, and hands over to the understand stage when none are left', async () => {
+            const ids = [await embeddedImage('a.jpg'), await embeddedImage('b.jpg')].sort();
+            const text = await seedDocument(db, { userId, name: 'note.pdf', ocrText: 'text' });
+
+            await seedDocument(db, { userId, name: 'no-embedding.jpg', mime: 'image/jpeg' });
+
+            const first = await runBackfillPage({ ...deps, batchSize: 10 }, { stage: 'duplicates', after: null });
+
+            expect(queued).toEqual(ids.map((id) => ({ kind: 'scan-duplicates', id })));
+            expect(first.kind).toBe('next');
+            expect(queued.map((job) => job.id)).not.toContain(text);
+
+            await embedAll();
+
+            expect(await runBackfillPage(deps, { stage: 'duplicates', after: null })).toEqual({ kind: 'next', cursor: { stage: 'understand', after: null } });
+        });
+
+        it('scans again only the images scanned at a higher threshold than today’s', async () => {
+            const lowered = await embeddedImage('c.jpg');
+            const current = await embeddedImage('d.jpg');
+            const { minSimilarity } = loadScanConfig();
+
+            await scanned(lowered, Math.min(1, minSimilarity + 0.03));
+            await scanned(current, minSimilarity);
+            queued = [];
+
+            await runBackfillPage({ ...deps, batchSize: 10 }, { stage: 'duplicates', after: null });
+
+            expect(queued).toEqual([{ kind: 'scan-duplicates', id: lowered }]);
+        });
+    });
+
     describe('the understand stage (the image call over existing screenshots and document images)', () => {
         let llmJobs: { documentId: string; userId: string; jobId: string }[];
 
@@ -426,8 +477,8 @@ describeDb('embedding backfill', () => {
 
         const START_UNDERSTAND: EmbedBackfillCursor = { stage: 'understand', after: null };
 
-        it('comes after the kind stage, and finishes the whole backfill', async () => {
-            expect(await runBackfillPage(deps, { stage: 'kind', after: null })).toEqual({ kind: 'next', cursor: START_UNDERSTAND });
+        it('comes after the duplicates stage, and finishes the whole backfill', async () => {
+            expect(await runBackfillPage(deps, { stage: 'duplicates', after: null })).toEqual({ kind: 'next', cursor: START_UNDERSTAND });
             expect(await runBackfillPage(deps, START_UNDERSTAND)).toEqual({ kind: 'done' });
         });
 

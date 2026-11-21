@@ -6,6 +6,7 @@ import { findDocumentsMissingMediaRead } from '../media/media-read';
 import type { KindClassifierConfig } from '../image-kind/classifier-config';
 import { findDocumentsMissingKind } from '../image-kind/kind.repository';
 import { getEmbedQueue, type EmbedBackfillCursor, type EmbedJobKind } from '../queues/embed.queue';
+import { findImagesToScan, loadScanConfig, type ScanConfig } from '../duplicates/scan';
 import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings } from './embedding.repository';
 import { MlUnavailableError, type MlClient } from './ml.client';
 import { toModelRef } from './embedding.service';
@@ -27,6 +28,8 @@ export interface BackfillDeps {
     batchSize: number;
     /** The classifier whose verdicts the kind stage fills in. Defaults to the committed one. */
     classifier?: KindClassifierConfig;
+    /** The duplicate scan's settings, whose threshold the duplicates stage compares scans against. Defaults to the configured ones. */
+    duplicates?: ScanConfig;
 }
 
 const STAGES = {
@@ -34,7 +37,8 @@ const STAGES = {
     image: { next: 'camera', job: 'embed-image' },
     // Reads each image's EXIF and each video's ffprobe facts from the stored file. The names stay from when it only read the camera: jobs already in Redis carry them.
     camera: { next: 'kind', job: 'read-camera' },
-    kind: { next: 'understand', job: 'classify-image' },
+    kind: { next: 'duplicates', job: 'classify-image' },
+    duplicates: { next: 'understand', job: 'scan-duplicates' },
     // Not an embed job: it queues the image call (see queueUnderstanding).
     understand: { next: null, job: null },
 } as const;
@@ -48,6 +52,8 @@ function findMissing(deps: BackfillDeps, stage: EmbedBackfillCursor['stage'], mo
 
     if (stage === 'camera') return findDocumentsMissingMediaRead(deps.db, after, deps.batchSize);
 
+    if (stage === 'duplicates') return findImagesToScan(deps.db, (deps.duplicates ?? loadScanConfig()).minSimilarity, after, deps.batchSize);
+
     if (stage === 'understand') return findImagesToUnderstand(deps.db, after, Math.min(deps.batchSize, UNDERSTAND_PAGE_SIZE));
 
     return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize, deps.classifier);
@@ -58,8 +64,8 @@ function enqueueOne(deps: BackfillDeps, job: EmbedJobKind | null, id: string): P
 }
 
 /**
- * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, a read of the stored file's EXIF or video facts, or an image kind verdict from the current classifier, then queue the image call for screenshots and document images that lack it. Stateless apart from the cursor: a restart simply asks the database
- * again, and finished documents no longer match. Text, then images, then media reads (EXIF of images, ffprobe of videos; an image's ends with a new verdict), then kinds, then image summaries; each stage ends when a page comes back empty.
+ * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, a read of the stored file's EXIF or video facts, an image kind verdict from the current classifier, or a duplicate scan, then queue the image call for screenshots and document images that lack it. Stateless apart from the cursor: a restart simply asks the database
+ * again, and finished documents no longer match. Text, then images, then media reads (EXIF of images, ffprobe of videos; an image's ends with a new verdict), then kinds, then duplicate scans, then image summaries; each stage ends when a page comes back empty.
  */
 export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillCursor): Promise<BackfillStep> {
     let models: ReadyModels;

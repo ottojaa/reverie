@@ -7,17 +7,23 @@ export const EMBED_JOBS = {
     IMAGE: 'embed-image',
     CLASSIFY: 'classify-image',
     READ_CAMERA: 'read-camera',
+    SCAN_DUPLICATES: 'scan-duplicates',
     BACKFILL: 'embed-backfill',
 } as const;
 
-export type EmbedJobKind = typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE | typeof EMBED_JOBS.CLASSIFY | typeof EMBED_JOBS.READ_CAMERA;
+export type EmbedJobKind =
+    | typeof EMBED_JOBS.TEXT
+    | typeof EMBED_JOBS.IMAGE
+    | typeof EMBED_JOBS.CLASSIFY
+    | typeof EMBED_JOBS.READ_CAMERA
+    | typeof EMBED_JOBS.SCAN_DUPLICATES;
 
 export interface EmbedJobData {
     documentId: string;
 }
 
 export interface EmbedBackfillCursor {
-    stage: 'text' | 'image' | 'camera' | 'kind' | 'understand';
+    stage: 'text' | 'image' | 'camera' | 'kind' | 'duplicates' | 'understand';
     /** Last document id handled in this stage; null at the start of a stage. */
     after: string | null;
 }

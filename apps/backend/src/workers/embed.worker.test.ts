@@ -12,7 +12,8 @@ import { readDocumentMedia } from '../media/media-read';
 import { rescheduleBackfill, runEmbedJob, type EmbedWorkerDeps } from './embed.worker';
 
 const settleKind = vi.fn().mockResolvedValue(undefined);
-const deps = { settleKind } as unknown as EmbedWorkerDeps;
+const scanDuplicates = vi.fn().mockResolvedValue(0);
+const deps = { settleKind, scanDuplicates } as unknown as EmbedWorkerDeps;
 
 describe('embed jobs', () => {
     it('lets BullMQ retry while reverie-ml is down: the error passes through unchanged', async () => {
@@ -54,6 +55,45 @@ describe('embed jobs', () => {
         await runEmbedJob(deps, 'embed-image', 'b');
 
         expect(settleKind).toHaveBeenCalledWith('b');
+    });
+
+    it('scans for duplicates after an image embed, not after a text embed', async () => {
+        scanDuplicates.mockClear();
+        vi.mocked(embedDocumentText).mockResolvedValueOnce('embedded');
+        vi.mocked(embedDocumentImage).mockResolvedValueOnce('embedded');
+
+        await runEmbedJob(deps, 'embed-text', 'a');
+
+        expect(scanDuplicates).not.toHaveBeenCalled();
+
+        await runEmbedJob(deps, 'embed-image', 'b');
+
+        expect(scanDuplicates).toHaveBeenCalledWith('b');
+    });
+
+    it('keeps the embed job done when the duplicate scan after it fails: the backfill scans it later', async () => {
+        scanDuplicates.mockRejectedValueOnce(new Error('pgvector is busy'));
+        vi.mocked(embedDocumentImage).mockResolvedValueOnce('embedded');
+
+        await expect(runEmbedJob(deps, 'embed-image', 'b')).resolves.toBe('embedded');
+    });
+
+    it('runs a scan-duplicates job without embedding or classifying anything, and lets its failure retry the job', async () => {
+        scanDuplicates.mockClear();
+        settleKind.mockClear();
+        vi.mocked(embedDocumentImage).mockClear();
+
+        await runEmbedJob(deps, 'scan-duplicates', 'c');
+
+        expect(scanDuplicates).toHaveBeenCalledWith('c');
+        expect(embedDocumentImage).not.toHaveBeenCalled();
+        expect(settleKind).not.toHaveBeenCalled();
+
+        const error = new Error('database restarting');
+
+        scanDuplicates.mockRejectedValueOnce(error);
+
+        await expect(runEmbedJob(deps, 'scan-duplicates', 'c')).rejects.toBe(error);
     });
 
     it('settles a classify-image job without embedding anything', async () => {
