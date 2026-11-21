@@ -96,6 +96,8 @@ describeDb('/taught-labels', () => {
         const similarities = TaughtLabelSimilaritiesResponseSchema.parse((await call('GET', `/taught-labels/${label.id}/similarities`)).json());
 
         expect(similarities.similarities).toHaveLength(2);
+        // The manager's "would match" count (similarities at or above the threshold) equals the "now" count; the example is in neither.
+        expect(similarities.similarities.filter((value) => value >= label.threshold)).toHaveLength(label.match_count);
 
         const patched = await call('PATCH', '/taught-labels/' + label.id, { threshold: 0.7 });
 
