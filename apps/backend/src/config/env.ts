@@ -28,6 +28,21 @@ function findUp(name: string, from: string): string | undefined {
     }
 }
 
+/**
+ * A boolean env flag: `true`/`false`/`1`/`0`, any case. Anything else, including an empty string,
+ * fails startup. Never `z.coerce.boolean()`: that is `Boolean(value)`, so "false" and "0" read as true.
+ */
+function envBoolean(defaultValue: boolean) {
+    return z
+        .string()
+        .trim()
+        .toLowerCase()
+        .pipe(z.enum(['true', 'false', '1', '0']))
+        .transform((value) => value === 'true' || value === '1')
+        .optional()
+        .transform((value) => value ?? defaultValue);
+}
+
 const envSchema = z.object({
     // Server
     PORT: z.coerce.number().default(3000),
@@ -78,16 +93,16 @@ const envSchema = z.object({
     AGENT_SECRET_FILE: z.string().optional(),
 
     // LLM Processing
-    LLM_ENABLED: z.coerce.boolean().default(true),
+    LLM_ENABLED: envBoolean(true),
     LLM_MAX_INPUT_CHARS: z.coerce.number().default(25000),
     LLM_SNIPPET_SIZE: z.coerce.number().default(3000),
-    LLM_PROCESS_CODE_FILES: z.coerce.boolean().default(false),
+    LLM_PROCESS_CODE_FILES: envBoolean(false),
     LLM_MIN_OCR_CONFIDENCE: z.coerce.number().default(30),
     // Max output tokens for the per-document summary/vision calls.
     LLM_MAX_OUTPUT_TOKENS: z.coerce.number().default(2000),
 
     // LLM Vision (optional)
-    LLM_VISION_ENABLED: z.coerce.boolean().default(false),
+    LLM_VISION_ENABLED: envBoolean(false),
 
     // Trash: days a deleted item stays restorable. Fallback for the `trash.retentionDays`
     // server setting (an admin override in the DB wins). Keep the bounds in step with settings/registry.ts.
@@ -97,7 +112,7 @@ const envSchema = z.object({
     CORS_ORIGIN: z.string().url().default('http://localhost:4200'),
 
     // WebSocket
-    WS_ENABLED: z.coerce.boolean().default(true),
+    WS_ENABLED: envBoolean(true),
     WS_CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
     // Job Queue
