@@ -17,7 +17,7 @@ export { buildSkipMetadata, checkLlmEligibility, getFileCategory } from './eligi
 export { buildPromptWithSamplingContext, estimateTokenCount, prepareTextForLlm } from './text-preparer';
 
 // LLM client (Anthropic)
-export { isLlmAvailable, isVisionAvailable } from './anthropic.client';
+export { isCapabilityAvailable, isVisionAvailable } from './provider-config';
 
 // Types
 export type {

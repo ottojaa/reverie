@@ -8,10 +8,11 @@
 
 import type { Entity } from '@reverie/shared';
 import type { Document, OcrResult } from '../db/schema';
-import { summarizeDocument, type LlmCallOptions, type LlmCallUsage } from './anthropic.client';
 import { groundEntities } from './entity-grounding';
 import type { LlmAnalysis } from './llm-response.schema';
 import { buildDocumentPrompt } from './prompt-builder';
+import { getProvider } from './provider-config';
+import type { LlmCallOptions, LlmCallUsage } from './provider';
 import { buildSpellingCorrector, correctText } from './spelling-corrector';
 import { prepareTextForLlm } from './text-preparer';
 import type { PreparedText } from './types';
@@ -27,7 +28,8 @@ export interface TextAnalysis {
     title: string | null;
     topics: string[];
     tags: string[];
-    tokenCount: number;
+    /** Null when a local server reported no token counts. */
+    tokenCount: number | null;
     call: LlmCallUsage;
     preparePromptMs: number;
     llmMs: number;
@@ -44,7 +46,7 @@ export async function analyzeOcrText(
     const preparePromptMs = Date.now() - prepareStart;
 
     const llmStart = Date.now();
-    const { result, tokenCount, call } = await summarizeDocument(prompt, options);
+    const { result, tokenCount, call } = await (await getProvider('summary')).summarize(prompt, options);
     const llmMs = Date.now() - llmStart;
 
     // Ground entity names against the OCR text: accept casing/whitespace tidy and

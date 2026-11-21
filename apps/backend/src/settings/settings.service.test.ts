@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => {
     const rows = new Map<string, { key: string; value: unknown; updated_at: Date; updated_by: string | null }>();
 
-    return { rows, env: { TRASH_RETENTION_DAYS: 30 } };
+    return {
+        rows,
+        env: { TRASH_RETENTION_DAYS: 30, ANTHROPIC_SUMMARY_MODEL: 'claude-haiku-5-5', ANTHROPIC_VISION_MODEL: 'claude-haiku-5-5', LLM_VISION_ENABLED: false },
+    };
 });
 
 vi.mock('../config/env.js', () => ({ env: h.env }));
@@ -13,12 +16,20 @@ vi.mock('./settings.store.js', () => ({
     upsertSettingRow: async (key: string, value: unknown, updatedBy: string) => {
         h.rows.set(key, { key, value, updated_at: new Date('2026-11-19T12:00:00Z'), updated_by: updatedBy });
     },
+    applySettingRows: async (upserts: { key: string; value: unknown }[], deletes: string[], updatedBy: string) => {
+        for (const { key, value } of upserts) h.rows.set(key, { key, value, updated_at: new Date('2026-11-19T12:00:00Z'), updated_by: updatedBy });
+        for (const key of deletes) h.rows.delete(key);
+    },
     deleteSettingRow: async (key: string) => {
         h.rows.delete(key);
     },
 }));
 
-import { getSetting, listSettings, resetSetting, setSetting } from './settings.service.js';
+import { getSetting, getSettings, listSettings, resetSetting, setSetting } from './settings.service.js';
+
+async function listTrashSetting() {
+    return (await listSettings()).filter((item) => item.key === 'trash.retentionDays');
+}
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -61,6 +72,45 @@ describe('settings service', () => {
         expect(h.rows.size).toBe(0);
     });
 
+    it('defaults the AI providers to Anthropic with the models the environment names, read in one go', async () => {
+        expect(
+            await getSettings([
+                'llm.summary.provider',
+                'llm.summary.model',
+                'llm.summary.baseUrl',
+                'llm.image.provider',
+                'llm.image.model',
+                'llm.image.enabled',
+            ]),
+        ).toEqual({
+            'llm.summary.provider': 'anthropic',
+            'llm.summary.model': 'claude-haiku-5-5',
+            'llm.summary.baseUrl': '',
+            'llm.image.provider': 'anthropic',
+            'llm.image.model': 'claude-haiku-5-5',
+            'llm.image.enabled': false,
+        });
+    });
+
+    it('stores a local provider, and the model and base URL that go with it', async () => {
+        await setSetting('llm.summary.provider', 'openai-compatible', ADMIN_ID);
+        await setSetting('llm.summary.model', 'llama3.1:8b', ADMIN_ID);
+        await setSetting('llm.summary.baseUrl', 'http://ollama:11434/v1', ADMIN_ID);
+
+        expect(await getSettings(['llm.summary.provider', 'llm.summary.model', 'llm.summary.baseUrl'])).toEqual({
+            'llm.summary.provider': 'openai-compatible',
+            'llm.summary.model': 'llama3.1:8b',
+            'llm.summary.baseUrl': 'http://ollama:11434/v1',
+        });
+    });
+
+    it('refuses an unknown provider, an empty model and a base URL that is not http(s)', async () => {
+        await expect(setSetting('llm.summary.provider', 'openai', ADMIN_ID)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(setSetting('llm.summary.model', '  ', ADMIN_ID)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(setSetting('llm.summary.baseUrl', 'ftp://host', ADMIN_ID)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(setSetting('llm.summary.baseUrl', '', ADMIN_ID)).resolves.toBeDefined();
+    });
+
     it('accepts the range boundaries', async () => {
         await setSetting('trash.retentionDays', 1, ADMIN_ID);
         await setSetting('trash.retentionDays', 3650, ADMIN_ID);
@@ -89,13 +139,13 @@ describe('settings service', () => {
     });
 
     it('lists each setting with value, default, overridden flag and who changed it', async () => {
-        expect(await listSettings()).toEqual([
+        expect(await listTrashSetting()).toEqual([
             expect.objectContaining({ key: 'trash.retentionDays', value: 30, default: 30, overridden: false, updated_by: null }),
         ]);
 
         await setSetting('trash.retentionDays', 90, ADMIN_ID);
 
-        expect(await listSettings()).toEqual([
+        expect(await listTrashSetting()).toEqual([
             expect.objectContaining({
                 key: 'trash.retentionDays',
                 value: 90,

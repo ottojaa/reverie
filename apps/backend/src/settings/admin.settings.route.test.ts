@@ -6,7 +6,18 @@ const h = vi.hoisted(() => {
     const rows = new Map<string, { key: string; value: unknown; updated_at: Date; updated_by: string | null }>();
     const users = new Map<string, { role: string }>();
 
-    return { rows, users, env: { JWT_SECRET: 's'.repeat(32), JWT_ACCESS_EXPIRES: '15m', TRASH_RETENTION_DAYS: 30 } };
+    return {
+        rows,
+        users,
+        env: {
+            JWT_SECRET: 's'.repeat(32),
+            JWT_ACCESS_EXPIRES: '15m',
+            TRASH_RETENTION_DAYS: 30,
+            ANTHROPIC_SUMMARY_MODEL: 'claude-haiku-5-5',
+            ANTHROPIC_VISION_MODEL: 'claude-haiku-5-5',
+            LLM_VISION_ENABLED: false,
+        },
+    };
 });
 
 vi.mock('../config/env.js', () => ({ env: h.env }));
@@ -25,6 +36,10 @@ vi.mock('./settings.store.js', () => ({
     fetchSettingRows: async () => [...h.rows.values()],
     upsertSettingRow: async (key: string, value: unknown, updatedBy: string) => {
         h.rows.set(key, { key, value, updated_at: new Date(), updated_by: updatedBy });
+    },
+    applySettingRows: async (upserts: { key: string; value: unknown }[], deletes: string[], updatedBy: string) => {
+        for (const { key, value } of upserts) h.rows.set(key, { key, value, updated_at: new Date(), updated_by: updatedBy });
+        for (const key of deletes) h.rows.delete(key);
     },
     deleteSettingRow: async (key: string) => {
         h.rows.delete(key);
@@ -79,6 +94,10 @@ describe('admin settings routes', () => {
         expect((await app.inject({ method: 'GET', url: '/admin/settings', headers })).statusCode).toBe(403);
         expect((await app.inject({ method: 'PUT', url: URL, headers, payload: { value: 10 } })).statusCode).toBe(403);
         expect((await app.inject({ method: 'DELETE', url: URL, headers })).statusCode).toBe(403);
+        expect(
+            (await app.inject({ method: 'PUT', url: '/admin/settings', headers, payload: { set: { 'llm.summary.provider': 'openai-compatible' } } }))
+                .statusCode,
+        ).toBe(403);
         expect(h.rows.size).toBe(0);
     });
 
@@ -86,9 +105,10 @@ describe('admin settings routes', () => {
         const res = await asAdmin('GET', '/admin/settings');
 
         expect(res.statusCode).toBe(200);
-        expect(res.json().settings).toEqual([
+        expect(res.json().settings).toContainEqual(
             expect.objectContaining({ key: 'trash.retentionDays', value: 30, default: 30, overridden: false, updated_at: null, updated_by: null }),
-        ]);
+        );
+        expect(res.json().settings).toContainEqual(expect.objectContaining({ key: 'llm.summary.provider', value: 'anthropic', overridden: false }));
     });
 
     it('stores a valid value and the next backend read returns it', async () => {
@@ -131,5 +151,44 @@ describe('admin settings routes', () => {
         expect(res.statusCode).toBe(200);
         expect(res.json().setting).toMatchObject({ value: 30, overridden: false });
         expect(await getSetting('trash.retentionDays')).toBe(30);
+    });
+
+    describe('saving several settings at once', () => {
+        const LOCAL = { 'llm.summary.provider': 'openai-compatible', 'llm.summary.model': 'llama3.1:8b', 'llm.summary.baseUrl': 'http://ollama:11434/v1' };
+
+        it('writes the provider, model and URL together and answers with the new list', async () => {
+            const res = await asAdmin('PUT', '/admin/settings', { set: LOCAL });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.json().settings).toContainEqual(expect.objectContaining({ key: 'llm.summary.provider', value: 'openai-compatible', overridden: true }));
+            expect([...h.rows.keys()].sort()).toEqual(Object.keys(LOCAL).sort());
+        });
+
+        it('resets keys in the same change, so going back to Anthropic drops the local model name', async () => {
+            await asAdmin('PUT', '/admin/settings', { set: LOCAL });
+
+            const res = await asAdmin('PUT', '/admin/settings', {
+                set: { 'llm.summary.provider': 'anthropic' },
+                reset: ['llm.summary.model', 'llm.summary.baseUrl'],
+            });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.json().settings).toContainEqual(expect.objectContaining({ key: 'llm.summary.model', value: 'claude-haiku-5-5', overridden: false }));
+            expect([...h.rows.keys()]).toEqual(['llm.summary.provider']);
+        });
+
+        it('writes nothing when one value is refused', async () => {
+            const res = await asAdmin('PUT', '/admin/settings', { set: { ...LOCAL, 'llm.summary.baseUrl': 'ftp://host' } });
+
+            expect(res.statusCode).toBe(400);
+            expect(h.rows.size).toBe(0);
+        });
+
+        it('refuses an unknown key with 404 and a key that is both set and reset with 400, writing nothing', async () => {
+            expect((await asAdmin('PUT', '/admin/settings', { set: { 'nope.nothing': 1 } })).statusCode).toBe(404);
+            expect((await asAdmin('PUT', '/admin/settings', { set: LOCAL, reset: ['nope.nothing'] })).statusCode).toBe(404);
+            expect((await asAdmin('PUT', '/admin/settings', { set: LOCAL, reset: ['llm.summary.model'] })).statusCode).toBe(400);
+            expect(h.rows.size).toBe(0);
+        });
     });
 });

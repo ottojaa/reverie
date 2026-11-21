@@ -151,12 +151,18 @@ Each AI capability chooses its model independently, so you can mix per task:
 | Document summary & tags | `ANTHROPIC_SUMMARY_MODEL` | `claude-haiku-4-5` |
 | Image vision (opt-in)   | `ANTHROPIC_VISION_MODEL`  | `claude-haiku-4-5` |
 
-The env vars above are today's mechanism (set at boot). **Planned:** these settings move into the
-**admin UI, editable at runtime** — swap models or providers on the fly, no restart. A provider seam
-lets each capability target either Claude or a **local, self-hosted model** over an OpenAI-compatible
-endpoint (Ollama, llama.cpp, …) run as a **separate container** — e.g. a local model for summaries
-with Claude for the agent, fully local, or fully off — all with sensible defaults. See
-[ROADMAP.md](ROADMAP.md).
+The env vars above are the defaults. Each capability can also be pointed at a **local, self-hosted model**
+over an OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM, LM Studio) from the admin **Settings** page
+("AI providers"), live, with no restart: choose the provider, the model and the base URL (for Ollama,
+`http://host:11434/v1`), and use **Test connection** to send a tiny request before saving. The image
+capability also has a "model sees images" switch (the default is `LLM_VISION_ENABLED`) and needs a
+vision-capable model. If the server wants a key, set `LOCAL_LLM_API_KEY` in the environment (it is never
+stored in the database); `LOCAL_LLM_TIMEOUT_MS` (default 120000) limits one request.
+
+The rules about what may be sent are the same for every provider: photos, camera-EXIF images,
+images the classifier has not judged, private folders and the trash never reach the model, a local one
+included. A local server reports tokens when it can; its cost is recorded as unknown, never invented. The
+agent and `/mcp` are not part of this. See [ROADMAP.md](ROADMAP.md).
 
 ## In-app agent
 

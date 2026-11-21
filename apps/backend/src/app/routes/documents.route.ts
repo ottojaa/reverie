@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { db } from '../../db/kysely';
 import { type Document as DbDocument, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
+import { isVisionSwitchedOn } from '../../llm/provider-config';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
@@ -922,7 +923,10 @@ export default async function (fastify: FastifyInstance) {
             // Check eligibility
             const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: locks.isPrivate(document.folder_id) });
+            const eligibility = checkLlmEligibility(document, ocrResult, {
+                isPrivate: locks.isPrivate(document.folder_id),
+                vision: await isVisionSwitchedOn(),
+            });
 
             if (!eligibility.eligible) {
                 return {
@@ -1105,7 +1109,10 @@ export default async function (fastify: FastifyInstance) {
                 // Check eligibility
                 const ocrResult = await db.selectFrom('ocr_results').selectAll().where('document_id', '=', documentId).executeTakeFirst();
 
-                const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate: locks.isPrivate(document.folder_id) });
+                const eligibility = checkLlmEligibility(document, ocrResult, {
+                    isPrivate: locks.isPrivate(document.folder_id),
+                    vision: await isVisionSwitchedOn(),
+                });
 
                 if (!eligibility.eligible) {
                     skipped.push({ document_id: documentId, reason: eligibility.reason ?? 'not_eligible' });

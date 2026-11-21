@@ -88,14 +88,19 @@ async function main(): Promise<void> {
                 const entityNames = analysis.entities.map((entity) => entity.canonical_name);
                 const texts = [analysis.title ?? '', analysis.summary, ...analysis.topics, ...analysis.tags, ...entityNames];
 
+                const { usage } = analysis.call;
+
+                // This script compares Claude models: the Anthropic provider always reports usage.
+                if (!usage) throw new Error('Comparison needs token usage from the provider');
+
                 spent += analysis.call.costUsd ?? 0;
                 runs.push({
                     doc: doc.name,
                     outcomes: doc.properNouns.map((noun) => ({ noun, outcome: scoreProperNoun(noun, texts) })),
                     entityNames,
                     costUsd: analysis.call.costUsd,
-                    inputTokens: analysis.call.usage.input_tokens,
-                    outputTokens: analysis.call.usage.output_tokens,
+                    inputTokens: usage.input_tokens,
+                    outputTokens: usage.output_tokens,
                     stopReason: analysis.call.stopReason,
                 });
             } catch (error) {
