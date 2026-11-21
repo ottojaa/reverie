@@ -109,11 +109,14 @@ const envSchema = z.object({
     // above the median similarity the query gets across the library by sqrt(2 ln N) + *_MARGIN_Z robust standard deviations,
     // N being the library's embeddings (search/semantic-noise.ts). Raise a margin to drop more, lower it to keep more.
     // Defaults come from the real library: siglip2 image hits 0.10-0.17, bge-m3 plausible hits 0.45-0.66, bge-m3 noise tops out near 0.39.
+    // Margins from the probe on it (21 Nov, N = 485 text / 124 image vectors): a no-match query ("lumi talvi") peaked at z 2.3 (text)
+    // and 3.2 (image), while relevant hits sat at z 3.5-5.1 (image: evening photos, statement photos) and 4.2+ (text). 1.5 dropped most
+    // of them; these put the cut near z 4.0 (text) and 3.5 (image).
     // Each vector stream keeps at most SEMANTIC_TOP_K documents. Embedding the query gets SEMANTIC_TIMEOUT_MS, then search carries on with full text only.
     SEMANTIC_TEXT_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.35),
     SEMANTIC_IMAGE_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.06),
-    SEMANTIC_TEXT_MARGIN_Z: z.coerce.number().min(0).default(1.5),
-    SEMANTIC_IMAGE_MARGIN_Z: z.coerce.number().min(0).default(1.5),
+    SEMANTIC_TEXT_MARGIN_Z: z.coerce.number().min(0).default(0.5),
+    SEMANTIC_IMAGE_MARGIN_Z: z.coerce.number().min(0).default(0.4),
     SEMANTIC_TOP_K: z.coerce.number().int().positive().default(100),
     SEMANTIC_TIMEOUT_MS: z.coerce.number().int().positive().default(1_500),
 
