@@ -59,5 +59,9 @@ IMAGE_CANDIDATES: dict[str, ImageSpec] = {
     ),
 }
 
+# Texts per forward pass. 16 matches what the backend sends; a bigger request is split. Images are bounded by the
+# request cap instead (MAX_IMAGES in main.py): 16 images at 384 px need well under 1 GB of activations in fp16.
+TEXT_BATCH_SIZE = 16
+
 TEXT_SPEC = TEXT_CANDIDATES[os.environ.get("REVERIE_ML_TEXT_MODEL", "bge-m3")]
 IMAGE_SPEC = IMAGE_CANDIDATES[os.environ.get("REVERIE_ML_IMAGE_MODEL", "siglip2-so400m-384")]

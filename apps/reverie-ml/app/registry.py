@@ -8,7 +8,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from .embedders import ImageEmbedder, SiglipImageEmbedder, TextEmbedder, TransformersTextEmbedder, pick_device
+from .embedders import ImageEmbedder, SiglipImageEmbedder, TextEmbedder, TransformersTextEmbedder
+from .runtime import DeviceChoice, choose_device, log_startup, memory_summary
 from .specs import IMAGE_SPEC, TEXT_SPEC
 
 logger = logging.getLogger("reverie-ml")
@@ -20,6 +21,7 @@ RETRY_MAX_SECONDS = 600
 @dataclass
 class Registry:
     device: str
+    device_warning: str | None = None
     text: TextEmbedder | None = None
     image: ImageEmbedder | None = None
     error: str | None = None
@@ -48,6 +50,7 @@ class Registry:
                 if self.image is None:
                     self.image = load_image()
                 self.error = None
+                logger.info("Models loaded: %s", memory_summary(self.device))
                 return
             except Exception as error:  # surfaced on /health; retried below
                 logger.exception("Model load failed")
@@ -57,6 +60,7 @@ class Registry:
             sleep(min(RETRY_BASE_SECONDS * 2 ** (attempt - 1), RETRY_MAX_SECONDS))
 
     def start(self) -> None:
+        log_startup(DeviceChoice(self.device, self.device_warning))
         device = self.device
         thread = threading.Thread(
             target=self.load,
@@ -68,4 +72,5 @@ class Registry:
 
 
 def new_registry() -> Registry:
-    return Registry(device=pick_device())
+    choice = choose_device()
+    return Registry(device=choice.device, device_warning=choice.warning)

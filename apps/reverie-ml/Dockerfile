@@ -11,6 +11,8 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY app ./app
+# Fails the build when requirements.txt resolved a torch that is not a CUDA 12 build (the server driver is 535). Needs no GPU.
+RUN python -m app.runtime
 
 EXPOSE 8090
 # Weights are downloaded on first start into the HF_HOME volume; /health reports ready=false until they load.

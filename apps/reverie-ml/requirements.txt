@@ -1,6 +1,18 @@
-# Pinned runtime dependencies. The default torch wheel on x86_64 Linux carries CUDA, on macOS arm64 it is CPU-only,
-# so one file serves the GPU server, the CPU fallback and dev.
-torch==2.15.0
+# Pinned runtime dependencies.
+#
+# torch: the home server's NVIDIA driver is 535 (CUDA 12.2). PyPI's default Linux wheel is built for CUDA 13.x, which
+# that driver cannot run (torch.cuda.is_available() is False and the service silently falls back to the CPU). So on
+# Linux x86_64 torch comes from PyTorch's CUDA 12.6 index: 2.14.1 is the newest release that still has a CUDA 12.x
+# Linux wheel (cu129 stops at 2.13.0, cu132 and the PyPI default are CUDA 13). CUDA 12.x wheels run on any driver
+# >= 525 through minor-version compatibility.
+# Everywhere else (macOS dev, arm64 Linux) the plain PyPI build is pinned. It uses `===` on purpose: `==2.14.1` also
+# matches `2.14.1+cu126`, and pip would then pick the CUDA wheel from the extra index on arm64 Linux.
+# The extra index is searched for every package, so transitive dependencies (sympy, networkx, ...) may come from
+# either index; direct dependencies are exact pins. Bumping torch means checking the cu12x indexes first;
+# `python -m app.runtime` (run in the Docker build) fails the build if the installed torch is not a CUDA 12 build.
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.14.1+cu126; sys_platform == "linux" and platform_machine == "x86_64"
+torch===2.14.1; sys_platform != "linux" or platform_machine != "x86_64"
 transformers==5.23.0
 safetensors==0.8.0
 sentencepiece==0.2.3
