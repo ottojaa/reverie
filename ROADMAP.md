@@ -115,13 +115,13 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### Auth & security
 
-| Capability                                         | Immich      | Reverie              | Plan               |
-| -------------------------------------------------- | ----------- | -------------------- | ------------------ |
-| Password + OAuth                                   | OAuth2/OIDC | ⚠️ Google OAuth only | 🛠️ generalize OIDC |
-| Email verification (signup, password change/reset) | ✅          | ❌                   | 🛠️                 |
-| 2FA / TOTP                                         | ⚠️ recent   | ❌                   | 🧊                 |
-| Authenticated realtime socket                      | ✅          | ✅ JWT handshake     | ✅ (#60, #65)      |
-| Per-item lock (private items, re-prompt to open)   | —           | ✅ per-folder lock   | ✅ (#64)           |
+| Capability                                         | Immich      | Reverie              | Plan          |
+| -------------------------------------------------- | ----------- | -------------------- | ------------- |
+| Password + OAuth                                   | OAuth2/OIDC | ✅ any OIDC provider | ✅            |
+| Email verification (signup, password change/reset) | ✅          | ❌                   | 🛠️            |
+| 2FA / TOTP                                         | ⚠️ recent   | ❌                   | 🧊            |
+| Authenticated realtime socket                      | ✅          | ✅ JWT handshake     | ✅ (#60, #65) |
+| Per-item lock (private items, re-prompt to open)   | —           | ✅ per-folder lock   | ✅ (#64)      |
 
 ---
 
@@ -206,8 +206,9 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
   OpenAI-compatible endpoint (Ollama, llama.cpp, …) in a separate container, configured from the
   admin UI. Not on the critical path: local summaries are weak at the sizes that fit a 10 GB GPU
   shared with PaddleOCR, so Claude stays the default.
-- **Better auth** — generalize OAuth→OIDC (Google login), add email verification for signup and
-  password change/reset.
+- ✅ **Sign-in with any OpenID Connect provider** — Google, Authentik, Keycloak, Authelia, Microsoft and the
+  like by configuration alone (`OIDC_PROVIDERS`); the `GOOGLE_*` variables still give a `google` provider.
+- **Email verification** for signup and password change/reset — waits on a mail provider.
 
 ### 🧊 Deferred — build later, but capture the data _now_
 

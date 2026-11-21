@@ -2742,17 +2742,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fastify/oauth2@npm:^8.1.2":
-  version: 8.2.0
-  resolution: "@fastify/oauth2@npm:8.2.0"
-  dependencies:
-    "@fastify/cookie": "npm:^11.0.2"
-    fastify-plugin: "npm:^5.1.0"
-    simple-oauth2: "npm:^5.1.0"
-  checksum: 10c0/fe068f2c9cfc4a4d512a6604bfb793a74ad7b7e2d8334571e6916ad2feafd363670bf67dc507bb2f52f6d7f5fafb0cf22d3d8e8da20bb3b6b4e93b66f7fad56b
-  languageName: node
-  linkType: hard
-
 "@fastify/proxy-addr@npm:^5.0.0":
   version: 5.1.0
   resolution: "@fastify/proxy-addr@npm:5.1.0"
@@ -2907,22 +2896,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hapi/boom@npm:^10.0.1":
-  version: 10.0.1
-  resolution: "@hapi/boom@npm:10.0.1"
-  dependencies:
-    "@hapi/hoek": "npm:^11.0.2"
-  checksum: 10c0/e4ae8a69bb67c5687320d320a0706ac66e797a659c19fb1c9b909eaefe3b41780e4ecd4382de1297b10c33e9db81f79667324576b9153f57b0cf701293b908d0
-  languageName: node
-  linkType: hard
-
-"@hapi/bourne@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@hapi/bourne@npm:3.0.0"
-  checksum: 10c0/2e2df62f6bc6f32b980ba5bbdc09200c93c55c8306399ec0f2781da088a82aab699498c89fe94fec4acf770210f9aee28c75bfc2f04044849ac01b034134e717
-  languageName: node
-  linkType: hard
-
 "@hapi/formula@npm:^3.0.2":
   version: 3.0.2
   resolution: "@hapi/formula@npm:3.0.2"
@@ -2930,17 +2903,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hapi/hoek@npm:^11.0.2, @hapi/hoek@npm:^11.0.4, @hapi/hoek@npm:^11.0.7":
+"@hapi/hoek@npm:^11.0.2, @hapi/hoek@npm:^11.0.7":
   version: 11.0.7
   resolution: "@hapi/hoek@npm:11.0.7"
   checksum: 10c0/39a4a3ae9526ed66509f6d03c6eb43179a2590df6e98443328c966cfa5e7cbb9d340f61fdbe0afe092662d5377d5a611c3303c808fee26a9c9cfd6bd3737dc1c
-  languageName: node
-  linkType: hard
-
-"@hapi/hoek@npm:^9.0.0, @hapi/hoek@npm:^9.3.0":
-  version: 9.3.0
-  resolution: "@hapi/hoek@npm:9.3.0"
-  checksum: 10c0/a096063805051fb8bba4c947e293c664b05a32b47e13bc654c0dd43813a1cec993bdd8f29ceb838020299e1d0f89f68dc0d62a603c13c9cc8541963f0beca055
   languageName: node
   linkType: hard
 
@@ -2958,32 +2924,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hapi/topo@npm:^5.1.0":
-  version: 5.1.0
-  resolution: "@hapi/topo@npm:5.1.0"
-  dependencies:
-    "@hapi/hoek": "npm:^9.0.0"
-  checksum: 10c0/b16b06d9357947149e032bdf10151eb71aea8057c79c4046bf32393cb89d0d0f7ca501c40c0f7534a5ceca078de0700d2257ac855c15e59fe4e00bba2f25c86f
-  languageName: node
-  linkType: hard
-
 "@hapi/topo@npm:^6.0.2":
   version: 6.0.2
   resolution: "@hapi/topo@npm:6.0.2"
   dependencies:
     "@hapi/hoek": "npm:^11.0.2"
   checksum: 10c0/5a0079805e9a542bdb852912ce6ed3221ddd0a58569354b3900e165faabe50fb1d2d488067db97c494194835684b055828b6267be3064ac42cf2ce28db02edfc
-  languageName: node
-  linkType: hard
-
-"@hapi/wreck@npm:^18.0.0":
-  version: 18.1.2
-  resolution: "@hapi/wreck@npm:18.1.2"
-  dependencies:
-    "@hapi/boom": "npm:^10.0.1"
-    "@hapi/bourne": "npm:^3.0.0"
-    "@hapi/hoek": "npm:^11.0.2"
-  checksum: 10c0/6e2bbfb7f424f16c1182a29ac771d4428409c6e6370deb0a6505ba7897b3ba104c9772a1cde669894c3c4508ede9d7cbb2be4cd66e955440ba102109d89a5ea5
   languageName: node
   linkType: hard
 
@@ -6212,7 +6158,6 @@ __metadata:
     "@fastify/helmet": "npm:^13.0.2"
     "@fastify/jwt": "npm:^10.0.0"
     "@fastify/multipart": "npm:^9.0.1"
-    "@fastify/oauth2": "npm:^8.1.2"
     "@fastify/rate-limit": "npm:^10.3.0"
     "@fastify/sensible": "npm:~6.0.2"
     "@fastify/swagger": "npm:^9.4.2"
@@ -6237,6 +6182,7 @@ __metadata:
     ioredis: "npm:^5.9.2"
     kysely: "npm:^0.27.5"
     nanoid: "npm:^3.3.11"
+    openid-client: "npm:6.8.9"
     pdf-to-img: "npm:^5.0.0"
     pg: "npm:^8.13.1"
     pino-pretty: "npm:^13.1.3"
@@ -6817,29 +6763,6 @@ __metadata:
   version: 1.1.0
   resolution: "@rspack/lite-tapable@npm:1.1.0"
   checksum: 10c0/15059d1da73192b150339ceba3142a2d0073fa298dad9a497cc8c6037c597c3a982ed4c88dc50afa7b70d0757df1b47af7ae407cfe8acd31d333d524b84a7a4b
-  languageName: node
-  linkType: hard
-
-"@sideway/address@npm:^4.1.5":
-  version: 4.1.5
-  resolution: "@sideway/address@npm:4.1.5"
-  dependencies:
-    "@hapi/hoek": "npm:^9.0.0"
-  checksum: 10c0/638eb6f7e7dba209053dd6c8da74d7cc995e2b791b97644d0303a7dd3119263bcb7225a4f6804d4db2bc4f96e5a9d262975a014f58eae4d1753c27cbc96ef959
-  languageName: node
-  linkType: hard
-
-"@sideway/formula@npm:^3.0.1":
-  version: 3.0.1
-  resolution: "@sideway/formula@npm:3.0.1"
-  checksum: 10c0/3fe81fa9662efc076bf41612b060eb9b02e846ea4bea5bd114f1662b7f1541e9dedcf98aff0d24400bcb92f113964a50e0290b86e284edbdf6346fa9b7e2bf2c
-  languageName: node
-  linkType: hard
-
-"@sideway/pinpoint@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "@sideway/pinpoint@npm:2.0.0"
-  checksum: 10c0/d2ca75dacaf69b8fc0bb8916a204e01def3105ee44d8be16c355e5f58189eb94039e15ce831f3d544f229889ccfa35562a0ce2516179f3a7ee1bbe0b71e55b36
   languageName: node
   linkType: hard
 
@@ -12710,7 +12633,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fastify-plugin@npm:^5.0.0, fastify-plugin@npm:^5.0.1, fastify-plugin@npm:^5.1.0":
+"fastify-plugin@npm:^5.0.0, fastify-plugin@npm:^5.0.1":
   version: 5.1.0
   resolution: "fastify-plugin@npm:5.1.0"
   checksum: 10c0/61b330b8cb03a3581b796d745137499a782934abcf65dbf9a41d07248520cfd220b3ae8b16afeaf81af712e68e1ac24352895132cfeb2b372c66662c0170f365
@@ -14972,19 +14895,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"joi@npm:^17.6.4":
-  version: 17.13.4
-  resolution: "joi@npm:17.13.4"
-  dependencies:
-    "@hapi/hoek": "npm:^9.3.0"
-    "@hapi/topo": "npm:^5.1.0"
-    "@sideway/address": "npm:^4.1.5"
-    "@sideway/formula": "npm:^3.0.1"
-    "@sideway/pinpoint": "npm:^2.0.0"
-  checksum: 10c0/5addfef638e90eb6a45a72e3884128d8d9a80c487cb8bfcb949be179b875ad1095af347fa1bd05c4ebec2b2ccbc3f3db5f34501c8672ecd16100de2b77087122
-  languageName: node
-  linkType: hard
-
 "joi@npm:^18.2.1":
   version: 18.2.3
   resolution: "joi@npm:18.2.3"
@@ -15000,7 +14910,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jose@npm:^6.1.3":
+"jose@npm:^6.1.3, jose@npm:^6.2.15":
   version: 6.2.15
   resolution: "jose@npm:6.2.15"
   checksum: 10c0/0e72e53ead0e01adc4598438f889e753622043806a7ba0c802f7cd7da17466e5a6167a63b4b4e67490944c9f88eb0dd5c81c05aca2c38a72718443632a7b37b5
@@ -17160,6 +17070,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"oauth4webapi@npm:^3.8.8":
+  version: 3.8.8
+  resolution: "oauth4webapi@npm:3.8.8"
+  checksum: 10c0/1f7d35ba8d7d5aa9ce9ec5959a4611ed2b5dd7830172b1546749b91dda8c53f7934e669c6f81e912c64e3ae4fc681d4d6ce149b42cc9d17db97162bf8765e028
+  languageName: node
+  linkType: hard
+
 "object-assign@npm:^4, object-assign@npm:^4.1.1":
   version: 4.1.1
   resolution: "object-assign@npm:4.1.1"
@@ -17269,6 +17186,16 @@ __metadata:
   bin:
     opener: bin/opener-bin.js
   checksum: 10c0/dd56256ab0cf796585617bc28e06e058adf09211781e70b264c76a1dbe16e90f868c974e5bf5309c93469157c7d14b89c35dc53fe7293b0e40b4d2f92073bc79
+  languageName: node
+  linkType: hard
+
+"openid-client@npm:6.8.9":
+  version: 6.8.9
+  resolution: "openid-client@npm:6.8.9"
+  dependencies:
+    jose: "npm:^6.2.15"
+    oauth4webapi: "npm:^3.8.8"
+  checksum: 10c0/6ec85b68a9a153acfa23b1fe2a2130ab829c1e2be43e6a270d93bb9e550a0d21eac8d3ae47ba75cac9adbbae1e4cb7a714bfc3a836649cfd4ba8392ce860be4e
   languageName: node
   linkType: hard
 
@@ -19593,18 +19520,6 @@ __metadata:
     "@simple-git/argv-parser": "npm:^1.1.0"
     debug: "npm:^4.4.0"
   checksum: 10c0/4c22e57107535168f354e5abbbf6e618a7b39d76491ca225c70588520fbe86891f3b9a5c4f8a3fc0137e669aad2f0e11f6c6e677bfec07169cd18f29bf23cb77
-  languageName: node
-  linkType: hard
-
-"simple-oauth2@npm:^5.1.0":
-  version: 5.1.0
-  resolution: "simple-oauth2@npm:5.1.0"
-  dependencies:
-    "@hapi/hoek": "npm:^11.0.4"
-    "@hapi/wreck": "npm:^18.0.0"
-    debug: "npm:^4.3.4"
-    joi: "npm:^17.6.4"
-  checksum: 10c0/3ed7428540644363b93bac16941dfd869db1e8b43250e515130e28a7c94c537d363833ac53d22c3b8444f050953b45ef4d833815c7b704f249369747ef338537
   languageName: node
   linkType: hard
 

@@ -172,10 +172,14 @@ const envSchema = z.object({
     JWT_ACCESS_EXPIRES: z.string().default('15m'),
     JWT_REFRESH_EXPIRES: z.string().default('7d'),
 
-    // Google OAuth (optional)
+    // External sign-in through OpenID Connect (optional). OIDC_PROVIDERS is a JSON array of providers (see oidc/providers.ts);
+    // the three GOOGLE_* variables still work and add a `google` provider by themselves.
+    OIDC_PROVIDERS: z.string().optional(),
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     GOOGLE_CALLBACK_URL: z.string().url().optional(),
+    // Where browsers reach this API; a provider without its own redirectUri gets `<API_PUBLIC_URL>/auth/oidc/<id>/callback`.
+    API_PUBLIC_URL: z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional()),
 
     // File serving (signed URLs)
     FILE_URL_SECRET: z.string().min(32),

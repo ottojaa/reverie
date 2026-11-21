@@ -1,8 +1,10 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { KeyRoundIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { useSignInProviders } from '../lib/api/auth-api';
 import { useAuth } from '../lib/auth';
 
 export const Route = createFileRoute('/login')({
@@ -13,7 +15,8 @@ export const Route = createFileRoute('/login')({
 });
 
 function LoginPage() {
-    const { login, isAuthenticated } = useAuth();
+    const { login, loginWithProvider, isAuthenticated } = useAuth();
+    const { data: providers = [] } = useSignInProviders();
     const navigate = useNavigate();
     const { error: urlError } = useSearch({ from: '/login' });
 
@@ -53,10 +56,12 @@ function LoginPage() {
         switch (errorCode) {
             case 'unauthorized_access':
                 return 'Please sign in to continue.';
+            case 'oidc_account_not_linked':
             case 'google_account_not_linked':
-                return 'No account found for this Google account. Please contact an administrator.';
+                return 'No Reverie account matches this sign-in. Please contact an administrator.';
+            case 'oidc_auth_failed':
             case 'google_auth_failed':
-                return 'Google authentication failed. Please try again.';
+                return 'Sign-in with the provider failed. Please try again.';
             case 'invalid_credentials':
                 return 'Invalid email or password.';
             case 'account_disabled':
@@ -110,40 +115,59 @@ function LoginPage() {
                         <Button type="submit" className="w-full" disabled={isLoading}>
                             {isLoading ? 'Signing in...' : 'Sign in'}
                         </Button>
-
-                        {/* <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                            </div>
-                        </div>
-
-                        <Button type="button" variant="outline" className="w-full" onClick={loginWithGoogle} disabled={isLoading}>
-                            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                                <path
-                                    fill="currentColor"
-                                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                                />
-                                <path
-                                    fill="currentColor"
-                                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                                />
-                                <path
-                                    fill="currentColor"
-                                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                                />
-                                <path
-                                    fill="currentColor"
-                                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                                />
-                            </svg>
-                            Sign in with Google
-                        </Button> */}
                     </form>
+
+                    {providers.length > 0 && (
+                        <div className="mt-4 space-y-4">
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                                </div>
+                            </div>
+
+                            {providers.map((provider) => (
+                                <Button
+                                    key={provider.id}
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => loginWithProvider(provider.id)}
+                                    disabled={isLoading}
+                                >
+                                    {provider.id === 'google' ? <GoogleLogo /> : <KeyRoundIcon className="mr-2 h-4 w-4" />}
+                                    Sign in with {provider.name}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+function GoogleLogo() {
+    return (
+        <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+            />
+            <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+            />
+        </svg>
     );
 }

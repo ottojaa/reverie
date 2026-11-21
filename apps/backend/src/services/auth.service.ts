@@ -54,13 +54,6 @@ export class AuthService {
     }
 
     /**
-     * Find a user by Google ID
-     */
-    async findUserByGoogleId(googleId: string): Promise<User | undefined> {
-        return db.selectFrom('users').selectAll().where('google_id', '=', googleId).executeTakeFirst();
-    }
-
-    /**
      * Generate access and refresh tokens for a user
      */
     generateTokens(user: User): TokenPair {
@@ -174,26 +167,14 @@ export class AuthService {
             return null;
         }
 
-        // Update last login
-        await db.updateTable('users').set({ last_login_at: new Date() }).where('id', '=', user.id).execute();
-
-        const tokens = this.generateTokens(user);
-        await this.storeRefreshToken(tokens.refresh_token, user.id);
-
-        return { user, tokens };
+        return this.startSession(user);
     }
 
     /**
-     * Authenticate with Google (for existing users only)
+     * Sign a user in whose identity has been established (password checked, or an external provider vouched for them):
+     * stamps the login time and issues the token pair.
      */
-    async authenticateWithGoogle(googleId: string): Promise<AuthenticatedUser | null> {
-        const user = await this.findUserByGoogleId(googleId);
-
-        if (!user || !user.is_active) {
-            return null;
-        }
-
-        // Update last login
+    async startSession(user: User): Promise<AuthenticatedUser> {
         await db.updateTable('users').set({ last_login_at: new Date() }).where('id', '=', user.id).execute();
 
         const tokens = this.generateTokens(user);
@@ -223,19 +204,6 @@ export class AuthService {
         await db.updateTable('users').set({ password_hash: newHash }).where('id', '=', userId).execute();
 
         return true;
-    }
-
-    /**
-     * Link a Google account to an existing user
-     */
-    async linkGoogleAccount(userId: string, googleId: string): Promise<boolean> {
-        try {
-            await db.updateTable('users').set({ google_id: googleId }).where('id', '=', userId).execute();
-
-            return true;
-        } catch {
-            return false;
-        }
     }
 
     /**
