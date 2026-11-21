@@ -13,6 +13,7 @@ import { Route as TrashRouteImport } from './routes/trash'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DuplicatesRouteImport } from './routes/duplicates'
 import { Route as CanvasRouteImport } from './routes/canvas'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as AgentRouteImport } from './routes/agent'
@@ -42,6 +43,11 @@ const SearchRoute = SearchRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DuplicatesRoute = DuplicatesRouteImport.update({
+  id: '/duplicates',
+  path: '/duplicates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CanvasRoute = CanvasRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/agent': typeof AgentRoute
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
+  '/duplicates': typeof DuplicatesRoute
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent': typeof AgentRoute
   '/canvas': typeof CanvasRoute
+  '/duplicates': typeof DuplicatesRoute
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/agent': typeof AgentRoute
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
+  '/duplicates': typeof DuplicatesRoute
   '/login': typeof LoginRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/agent'
     | '/browse'
     | '/canvas'
+    | '/duplicates'
     | '/login'
     | '/search'
     | '/settings'
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent'
     | '/canvas'
+    | '/duplicates'
     | '/login'
     | '/search'
     | '/settings'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/agent'
     | '/browse'
     | '/canvas'
+    | '/duplicates'
     | '/login'
     | '/search'
     | '/settings'
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   AgentRoute: typeof AgentRoute
   BrowseRoute: typeof BrowseRouteWithChildren
   CanvasRoute: typeof CanvasRoute
+  DuplicatesRoute: typeof DuplicatesRoute
   LoginRoute: typeof LoginRouteWithChildren
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
@@ -235,6 +248,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/duplicates': {
+      id: '/duplicates'
+      path: '/duplicates'
+      fullPath: '/duplicates'
+      preLoaderRoute: typeof DuplicatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/canvas': {
@@ -338,6 +358,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentRoute: AgentRoute,
   BrowseRoute: BrowseRouteWithChildren,
   CanvasRoute: CanvasRoute,
+  DuplicatesRoute: DuplicatesRoute,
   LoginRoute: LoginRouteWithChildren,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,

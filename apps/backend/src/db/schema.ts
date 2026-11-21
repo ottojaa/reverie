@@ -198,6 +198,29 @@ export interface TaughtLabelLinkTable {
     created_at: ColumnType<Date, Date | undefined, never>;
 }
 
+// Near-duplicate detection (migration 023)
+export interface DuplicateEdgesTable {
+    /** The pair is stored once with doc_a < doc_b. */
+    doc_a: string;
+    doc_b: string;
+    /** Cosine similarity of the two image embeddings. */
+    similarity: number;
+}
+
+export interface DocumentDuplicateScansTable {
+    document_id: string;
+    /** The similarity threshold the scan used: pairs below it were not stored. */
+    threshold: number;
+    scanned_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+export interface DuplicateDismissalsTable {
+    user_id: string;
+    doc_a: string;
+    doc_b: string;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
 // Photo Metadata table
 export interface PhotoMetadataTable {
     id: Generated<string>;
@@ -421,4 +444,7 @@ export interface Database {
     taught_labels: TaughtLabelsTable;
     taught_label_examples: TaughtLabelLinkTable;
     taught_label_exclusions: TaughtLabelLinkTable;
+    duplicate_edges: DuplicateEdgesTable;
+    document_duplicate_scans: DocumentDuplicateScansTable;
+    duplicate_dismissals: DuplicateDismissalsTable;
 }

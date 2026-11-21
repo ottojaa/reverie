@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useVault } from '@/lib/vault';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { Bot, LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
+import { Bot, Copy, LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -215,6 +215,22 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                             aria-hidden
                         />
                         <span>Canvas</span>
+                    </Link>
+                    <Link
+                        to="/duplicates"
+                        onClick={onClose}
+                        className={cn(
+                            'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                            location.pathname.startsWith('/duplicates')
+                                ? 'bg-sidebar-accent text-sidebar-primary shadow-sm'
+                                : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
+                        )}
+                    >
+                        <Copy
+                            className={cn('size-4 shrink-0', location.pathname.startsWith('/duplicates') ? 'text-sidebar-primary' : 'text-muted-foreground')}
+                            aria-hidden
+                        />
+                        <span>Duplicates</span>
                     </Link>
                     <Link
                         to="/trash"

@@ -2,6 +2,7 @@ import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
 import { access } from 'fs/promises';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
+import { scanDuplicates } from '../duplicates/scan';
 import { readDocumentMedia } from '../media/media-read';
 import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/video-probe';
 import { isPipelineBusy, runBackfillPage, type BackfillStep } from '../embeddings/backfill';
@@ -32,6 +33,8 @@ type EmbedJob = Job<EmbedJobData | EmbedBackfillData>;
 /** What the embed worker needs beyond embedding: the image-kind step that follows an image embedding or a classify job. */
 export interface EmbedWorkerDeps extends EmbedDeps {
     settleKind: (documentId: string) => Promise<unknown>;
+    /** Stores the image's near-duplicate pairs from its embedding. */
+    scanDuplicates: (documentId: string) => Promise<unknown>;
     /** Probes a stored video by path, for the read-camera job (which reads a video's facts too). */
     probeVideo: (path: string, mimeType: string) => Promise<VideoProbe>;
 }
@@ -64,13 +67,14 @@ async function processEmbedJob(job: EmbedJob, ml: MlClient, token: string | unde
         readFile: (path) => getStorageService().readFile(path),
         probeVideo: probeStoredVideo,
         settleKind: (documentId) => settleImageKind(kindDeps, documentId),
+        scanDuplicates: (documentId) => scanDuplicates(documentId),
     };
 
     return runEmbedJob(deps, job.name, (job.data as EmbedJobData).documentId);
 }
 
 /**
- * One embed-text, embed-image, classify-image or read-camera job. An image job ends by settling the image's kind: classify it and,
+ * One embed-text, embed-image, classify-image, read-camera or scan-duplicates job. An image job ends by settling the image's kind: classify it and,
  * with the flip on, set its category and queue its LLM job. A refusal from reverie-ml (an undecodable image) is final;
  * everything else retries.
  */
@@ -82,9 +86,12 @@ export async function runEmbedJob(deps: EmbedWorkerDeps, name: string, documentI
 
         if (name === EMBED_JOBS.READ_CAMERA) return await readCameraAndSettle(deps, documentId);
 
+        if (name === EMBED_JOBS.SCAN_DUPLICATES) return await deps.scanDuplicates(documentId);
+
         const outcome = await embedDocumentImage(deps, documentId);
 
         await deps.settleKind(documentId);
+        await scanAfterEmbedding(deps, documentId);
 
         return outcome;
     } catch (error) {
@@ -92,6 +99,18 @@ export async function runEmbedJob(deps: EmbedWorkerDeps, name: string, documentI
         if (error instanceof MlRejectedError) throw new UnrecoverableError(error.message);
 
         throw error;
+    }
+}
+
+/**
+ * The new embedding joins the image to its duplicate groups. A failure here must not run the embedding again (it is stored), so it is only
+ * logged: the backfill's duplicates stage scans every image that has no scan yet.
+ */
+async function scanAfterEmbedding(deps: EmbedWorkerDeps, documentId: string): Promise<void> {
+    try {
+        await deps.scanDuplicates(documentId);
+    } catch (error) {
+        logger.error('Duplicate scan failed, the backfill will retry it', error instanceof Error ? error : new Error(String(error)), { documentId });
     }
 }
 

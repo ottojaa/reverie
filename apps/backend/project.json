@@ -23,7 +23,8 @@
                     "apps/backend/src/scripts/apply-image-kinds.ts",
                     "apps/backend/src/scripts/tune-image-kinds.ts",
                     "apps/backend/src/scripts/snapshot-image-kind-seeds.ts",
-                    "apps/backend/src/scripts/semantic-probe.ts"
+                    "apps/backend/src/scripts/semantic-probe.ts",
+                    "apps/backend/src/scripts/duplicate-probe.ts"
                 ],
                 "tsConfig": "apps/backend/tsconfig.app.json",
                 "skipTypeCheck": true,

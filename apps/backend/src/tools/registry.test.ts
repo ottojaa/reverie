@@ -5,7 +5,7 @@ vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { callTool, listTools } from './registry';
 
-const READ_TOOLS = ['search_documents', 'get_document', 'list_folders', 'list_folder_contents', 'get_library_overview'];
+const READ_TOOLS = ['search_documents', 'find_duplicates', 'get_document', 'list_folders', 'list_folder_contents', 'get_library_overview'];
 const WRITE_TOOLS = ['add_tags', 'remove_tags', 'move_documents', 'create_folder', 'rename_folder', 'rename_document', 'undo_write'];
 const ctx = { user: { id: '00000000-0000-4000-8000-000000000001' } };
 

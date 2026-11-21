@@ -2,6 +2,7 @@ import { ZodError } from 'zod';
 import { createFolder, renameFolder } from './folders-write';
 import { addTags, removeTags } from './tags';
 import { moveDocuments, renameDocument } from './documents-write';
+import { findDuplicates } from './duplicates';
 import { getDocument } from './get-document';
 import { listFolderContents, listFolders } from './folders-read';
 import { getLibraryOverview } from './overview';
@@ -17,6 +18,7 @@ import { undoWrite } from './undo';
 
 export const TOOLS: readonly ToolDefinition[] = [
     searchDocuments,
+    findDuplicates,
     getDocument,
     listFolders,
     listFolderContents,
