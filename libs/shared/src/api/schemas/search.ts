@@ -82,6 +82,10 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 // Search Results
 // ============================================================================
 
+// Why a document is in the results: its words match the query, only its meaning does, or both.
+export const MatchKindEnum = z.enum(['keywords', 'meaning', 'both']);
+export type MatchKind = z.infer<typeof MatchKindEnum>;
+
 // A single document hit. `result_type` is the discriminator for the unified SearchHit.
 export const DocumentSearchResultSchema = z.object({
     result_type: z.literal('document'),
@@ -117,9 +121,22 @@ export const DocumentSearchResultSchema = z.object({
 
     // Relevance (for text searches)
     relevance: z.number().nullable(),
+
+    // Why it matched; absent when search by meaning wasn't used for this query.
+    match: MatchKindEnum.nullable().optional(),
 });
 
 export type DocumentSearchResult = z.infer<typeof DocumentSearchResultSchema>;
+
+// Images nearest to a given image by look (GET /documents/:id/similar-images). `relevance` is the cosine similarity.
+export const SimilarImagesQuerySchema = PaginationQuerySchema;
+export type SimilarImagesQuery = z.infer<typeof SimilarImagesQuerySchema>;
+
+export const SimilarImagesResponseSchema = z.object({
+    total: z.number(),
+    results: z.array(DocumentSearchResultSchema),
+});
+export type SimilarImagesResponse = z.infer<typeof SimilarImagesResponseSchema>;
 
 // Back-compat alias: existing document-centric consumers refer to a document hit as `SearchResult`.
 export const SearchResultSchema = DocumentSearchResultSchema;

@@ -11,19 +11,21 @@ import type {
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
-import { getStorageService } from '../services/storage.service';
-import { formatDateOnly } from '../utils/date';
-import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
+import { fetchDocumentDetails } from './document-hydration';
 import { generateFacets } from './facets';
+import { placeFolders } from './folder-placement';
 import { buildPrefixTsQuery, documentJoins } from './filter-application';
-import { generateFilenameSnippet, generateSnippets, generateSummarySnippet } from './highlighter';
+import { generateSummarySnippet } from './highlighter';
+import { findRankedDocuments, type HybridContext, type RankedEntry } from './hybrid-search';
 import { buildSearchQuery, type SearchQueryOptions } from './query-builder';
 import { parseQuery, validateQuery } from './query-parser';
+import { getSemanticSearch, type SemanticMatches } from './semantic-rank';
 
 /**
  * Search Service
  *
  * Main orchestration layer for advanced search functionality.
+ * Which documents match, and in what order, is decided in hybrid-search.ts.
  */
 
 export interface SearchServiceOptions {
@@ -55,14 +57,16 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 
     // Private documents/folders are always excluded from search (#19).
     const privateFolderIds = await getPrivateFolderIds(options.userId);
+    const ctx: HybridContext = { userId: options.userId, privateFolderIds };
 
-    // Kick off facets in parallel with the main result query.
-    const facetsPromise = query.include_facets ? generateFacets(parsed, options.userId, privateFolderIds) : Promise.resolve(undefined);
+    // Meaning matches come first: the ranking and the facets are both computed over them. Falls back to none when ML is unavailable.
+    const semantic = await getSemanticSearch().load(parsed, ctx);
+    const facetsPromise = query.include_facets ? generateFacets(parsed, options.userId, privateFolderIds, semantic.ids) : Promise.resolve(undefined);
 
     // Collections/folders only join the results for plain text relevance searches (see shouldSearchFolders).
     const { results, total } = shouldSearchFolders(parsed, query)
-        ? await searchInterleaved(parsed, options.userId, queryOptions, privateFolderIds)
-        : await searchDocumentsPaged(parsed, options.userId, queryOptions, privateFolderIds);
+        ? await searchInterleaved(parsed, ctx, queryOptions, semantic)
+        : await searchDocumentsPaged(parsed, ctx, queryOptions, semantic);
 
     const facets = await facetsPromise;
     const endTime = performance.now();
@@ -112,138 +116,152 @@ function shouldSearchFolders(parsed: ParsedQuery, query: SearchQuery): boolean {
     return !hasDocumentFilters;
 }
 
-/** Documents-only path: existing behavior (browse, filters, non-relevance sorts). */
+/** Documents-only path: browse, filters, non-relevance sorts. */
 async function searchDocumentsPaged(
     parsed: ParsedQuery,
-    userId: string,
+    ctx: HybridContext,
     options: SearchQueryOptions,
-    privateFolderIds: string[],
+    semantic: SemanticMatches,
 ): Promise<{ results: SearchHit[]; total: number }> {
-    const idRows = await buildSearchQuery(documentJoins(), parsed, userId, options, privateFolderIds).select('d.id').execute();
-    const ids = (idRows as Array<{ id: string }>).map((r) => r.id);
+    const ranked = await findRankedDocuments(parsed, ctx, options, semantic);
+    const detailMap = await fetchDocumentDetails(
+        ctx.userId,
+        ranked.entries.map((entry) => entry.id),
+        parsed,
+    );
 
-    const [detailMap, total] = await Promise.all([fetchDocumentDetails(userId, ids, parsed), countDocuments(parsed, userId, privateFolderIds)]);
-
-    const results = ids.map((id) => detailMap.get(id)).filter((r): r is DocumentSearchResult => r !== undefined);
-
-    return { results, total };
+    return { results: toDocumentHits(ranked.entries, detailMap), total: ranked.total };
 }
 
-/**
- * Interleaved path: merge documents and matching folders into one relevance-ranked page.
- *
- * We fetch the top `offset + limit` lightweight (id, rank) rows from each stream — enough
- * to cover the requested window after merging — sort them together, slice the page, and
- * only then hydrate full details for the ids actually on the page.
- */
-async function searchInterleaved(
-    parsed: ParsedQuery,
-    userId: string,
-    options: SearchQueryOptions,
-    privateFolderIds: string[],
-): Promise<{ results: SearchHit[]; total: number }> {
-    const tsQuery = buildPrefixTsQuery(parsed.fullText!);
+/** The hydrated documents for `entries`, in order, each tagged with why it matched. */
+function toDocumentHits(entries: RankedEntry[], detailMap: Map<string, DocumentSearchResult>): DocumentSearchResult[] {
+    const hits: DocumentSearchResult[] = [];
 
-    if (!tsQuery) return searchDocumentsPaged(parsed, userId, options, privateFolderIds);
+    for (const entry of entries) {
+        const hit = detailMap.get(entry.id);
 
-    const { limit, offset, sortOrder } = options;
-    const window = offset + limit;
+        if (hit) hits.push(entry.match ? { ...hit, match: entry.match } : hit);
+    }
 
-    const docOrderRows = (await buildSearchQuery(
-        documentJoins(),
-        parsed,
-        userId,
-        { limit: window, offset: 0, sortBy: 'relevance', sortOrder },
-        privateFolderIds,
-    )
-        .select(['d.id', 'd.created_at', sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance')])
-        .execute()) as Array<{ id: string; created_at: Date; relevance: number }>;
+    return hits;
+}
 
-    // Matched folders, excluding any that are private (mirrors document privacy filtering).
-    const folderRows = await excludeTrashed(
+interface FolderRow {
+    id: string;
+    name: string;
+    path: string;
+    description: string | null;
+    emoji: string | null;
+    type: CollectionSearchResult['folder_type'];
+    created_at: Date;
+    relevance: number;
+    document_count: number | null;
+}
+
+function matchingFolders(userId: string, tsQuery: ReturnType<typeof buildPrefixTsQuery>, privateFolderIds: string[]) {
+    return excludeTrashed(
         db
             .selectFrom('folders as f')
             .where('f.user_id', '=', userId)
             .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
             .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds)),
         'f.',
-    )
-        .select([
-            'f.id',
-            'f.name',
-            'f.path',
-            'f.description',
-            'f.emoji',
-            'f.type',
-            'f.created_at',
-            sql<number>`COALESCE(ts_rank(f.search_vector, ${tsQuery}), 0)`.as('relevance'),
-            (eb) =>
-                excludeTrashed(
-                    eb
-                        .selectFrom('documents as dd')
-                        .select(sql<number>`count(*)::int`.as('count'))
-                        .whereRef('dd.folder_id', '=', 'f.id'),
-                    'dd.',
-                ).as('document_count'),
-        ])
-        .orderBy('relevance', 'desc')
-        .limit(window)
-        .execute();
+    );
+}
 
-    const [docTotal, folderTotalRow] = await Promise.all([
-        countDocuments(parsed, userId, privateFolderIds),
-        excludeTrashed(
-            db
-                .selectFrom('folders as f')
-                .where('f.user_id', '=', userId)
-                .where(sql<SqlBool>`f.search_vector @@ ${tsQuery}`)
-                .$if(privateFolderIds.length > 0, (qb) => qb.where('f.id', 'not in', privateFolderIds)),
-            'f.',
-        )
+/** Matched folders (never private ones, mirroring document privacy filtering) and how many there are in all. */
+async function fetchMatchingFolders(
+    userId: string,
+    tsQuery: NonNullable<ReturnType<typeof buildPrefixTsQuery>>,
+    privateFolderIds: string[],
+    window: number,
+): Promise<{ rows: FolderRow[]; total: number }> {
+    const [rows, totalRow] = await Promise.all([
+        matchingFolders(userId, tsQuery, privateFolderIds)
+            .select([
+                'f.id',
+                'f.name',
+                'f.path',
+                'f.description',
+                'f.emoji',
+                'f.type',
+                'f.created_at',
+                sql<number>`COALESCE(ts_rank(f.search_vector, ${tsQuery}), 0)`.as('relevance'),
+                (eb) =>
+                    excludeTrashed(
+                        eb
+                            .selectFrom('documents as dd')
+                            .select(sql<number>`count(*)::int`.as('count'))
+                            .whereRef('dd.folder_id', '=', 'f.id'),
+                        'dd.',
+                    ).as('document_count'),
+            ])
+            .orderBy('relevance', 'desc')
+            .limit(window)
+            .execute(),
+        matchingFolders(userId, tsQuery, privateFolderIds)
             .select(sql<number>`count(*)::int`.as('count'))
             .executeTakeFirst(),
     ]);
-    const total = docTotal + (folderTotalRow?.count ?? 0);
 
-    // Merge both streams by relevance (desc), newest first on ties, then take the page.
-    type OrderEntry = { type: 'document' | 'collection'; id: string; relevance: number; ts: number };
-    const entries: OrderEntry[] = [
-        ...docOrderRows.map((r) => ({ type: 'document' as const, id: r.id, relevance: Number(r.relevance ?? 0), ts: r.created_at.getTime() })),
-        ...folderRows.map((r) => ({ type: 'collection' as const, id: r.id, relevance: Number(r.relevance ?? 0), ts: r.created_at.getTime() })),
-    ];
-    entries.sort((a, b) => b.relevance - a.relevance || b.ts - a.ts);
-    const pageEntries = entries.slice(offset, offset + limit);
+    return { rows: rows as FolderRow[], total: totalRow?.count ?? 0 };
+}
 
-    const pageDocIds = pageEntries.filter((e) => e.type === 'document').map((e) => e.id);
-    const detailMap = await fetchDocumentDetails(userId, pageDocIds, parsed);
+function toCollectionHit(folder: FolderRow, parsed: ParsedQuery): CollectionSearchResult {
+    return {
+        result_type: 'collection',
+        id: folder.id,
+        name: folder.name,
+        path: folder.path,
+        description: folder.description,
+        emoji: folder.emoji,
+        folder_type: folder.type,
+        document_count: Number(folder.document_count ?? 0),
+        snippet: folder.description ? generateSummarySnippet(folder.description, parsed.fullText!) : null,
+        relevance: Number(folder.relevance ?? 0),
+    };
+}
 
-    const folderMap = new Map<string, CollectionSearchResult>(
-        folderRows.map((r) => [
-            r.id,
-            {
-                result_type: 'collection' as const,
-                id: r.id,
-                name: r.name,
-                path: r.path,
-                description: r.description,
-                emoji: r.emoji,
-                folder_type: r.type,
-                document_count: Number(r.document_count ?? 0),
-                snippet: r.description ? generateSummarySnippet(r.description, parsed.fullText!) : null,
-                relevance: Number(r.relevance ?? 0),
-            },
-        ]),
+/**
+ * Interleaved path: merge documents and matching folders into one relevance-ranked page.
+ *
+ * Documents come ranked (words and meaning) from findRankedDocuments, to the end of the requested
+ * window; the matching folders are merged into that order, the page is sliced, and only then do
+ * we hydrate full details for the documents actually on the page.
+ */
+async function searchInterleaved(
+    parsed: ParsedQuery,
+    ctx: HybridContext,
+    options: SearchQueryOptions,
+    semantic: SemanticMatches,
+): Promise<{ results: SearchHit[]; total: number }> {
+    const tsQuery = buildPrefixTsQuery(parsed.fullText!);
+
+    if (!tsQuery) return searchDocumentsPaged(parsed, ctx, options, semantic);
+
+    const { limit, offset } = options;
+    const window = offset + limit;
+    const [ranked, folders] = await Promise.all([
+        findRankedDocuments(parsed, ctx, { ...options, limit: window, offset: 0 }, semantic),
+        fetchMatchingFolders(ctx.userId, tsQuery, ctx.privateFolderIds, window),
+    ]);
+    const page = placeFolders(ranked.entries, folders.rows).slice(offset, offset + limit);
+    const pageDocs = page.flatMap((item) => (item.type === 'document' ? [item.entry] : []));
+    const detailMap = await fetchDocumentDetails(
+        ctx.userId,
+        pageDocs.map((entry) => entry.id),
+        parsed,
     );
-
+    const documentHits = new Map(toDocumentHits(pageDocs, detailMap).map((hit) => [hit.document_id, hit]));
     const results: SearchHit[] = [];
 
-    for (const entry of pageEntries) {
-        const hit = entry.type === 'document' ? detailMap.get(entry.id) : folderMap.get(entry.id);
+    for (const item of page) {
+        const hit = item.type === 'document' ? documentHits.get(item.entry.id) : toCollectionHit(item.folder, parsed);
 
         if (hit) results.push(hit);
     }
 
-    return { results, total };
+    return { results, total: ranked.total + folders.total };
 }
 
 /** Count matching documents (same filters, no pagination). */
@@ -265,144 +283,15 @@ export async function countDocuments(parsed: ParsedQuery, userId: string, privat
     return countResult?.count ?? 0;
 }
 
-interface DocumentRow {
-    id: string;
-    original_filename: string;
-    folder_id: string | null;
-    created_at: Date;
-    extracted_date: Date | null;
-    document_category: string | null;
-    mime_type: string;
-    size_bytes: number | string;
-    duration_seconds: number | null;
-    has_meaningful_text: boolean;
-    thumbnail_paths: unknown;
-    thumbnail_blurhash: string | null;
-    llm_summary: string | null;
-    llm_title: string | null;
-    llm_processing_type: string | null;
-    folder_path: string | null;
-    raw_text: string | null;
-    photo_city: string | null;
-    photo_country: string | null;
-    photo_taken_at: Date | null;
-    relevance?: number | null;
-}
-
-/** Hydrate full document results for a set of ids, keyed by id. */
-async function fetchDocumentDetails(userId: string, ids: string[], parsed: ParsedQuery): Promise<Map<string, DocumentSearchResult>> {
-    if (ids.length === 0) return new Map();
-
-    const base = excludeTrashed(documentJoins().where('d.user_id', '=', userId).where('d.id', 'in', ids), 'd.').select([
-        'd.id',
-        'd.original_filename',
-        'd.folder_id',
-        'd.created_at',
-        'd.extracted_date',
-        'd.document_category',
-        'd.mime_type',
-        'd.size_bytes',
-        'd.duration_seconds',
-        'd.has_meaningful_text',
-        'd.thumbnail_paths',
-        'd.thumbnail_blurhash',
-        'llm.summary as llm_summary',
-        sql<string | null>`llm.metadata->>'title'`.as('llm_title'),
-        sql<string | null>`llm.metadata->>'type'`.as('llm_processing_type'),
-        'f.path as folder_path',
-        'ocr.raw_text',
-        'pm.city as photo_city',
-        'pm.country as photo_country',
-        'pm.taken_at as photo_taken_at',
-    ]);
-
-    const tsQuery = parsed.fullText ? buildPrefixTsQuery(parsed.fullText) : null;
-    const query = tsQuery ? base.select(sql<number>`COALESCE(ts_rank(d.search_vector, ${tsQuery}), 0)`.as('relevance')) : base;
-
-    const rows = (await query.execute()) as unknown as DocumentRow[];
-    const enriched = await enrichDocumentRows(rows, parsed);
-
-    return new Map(enriched.map((r) => [r.document_id, r]));
-}
-
-/** Transform raw document rows into DocumentSearchResults (snippets, tags, thumbnails, display name). */
-async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Promise<DocumentSearchResult[]> {
-    const documentIds = rows.map((row) => row.id);
-
-    let snippetMap = new Map<string, string>();
-
-    if (parsed.fullText && documentIds.length > 0) {
-        snippetMap = await generateSnippets(documentIds, parsed.fullText);
-    }
-
-    const tagRows =
-        documentIds.length > 0 ? await db.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', documentIds).execute() : [];
-
-    const tagMap = new Map<string, string[]>();
-
-    for (const row of tagRows) {
-        const tags = tagMap.get(row.document_id) ?? [];
-
-        tags.push(row.tag);
-        tagMap.set(row.document_id, tags);
-    }
-
-    const storageService = getStorageService();
-
-    return Promise.all(
-        rows.map(async (row) => {
-            let snippet: string | null = null;
-
-            if (parsed.fullText) {
-                snippet = snippetMap.get(row.id) ?? null;
-
-                if (!snippet && row.llm_summary) {
-                    snippet = generateSummarySnippet(row.llm_summary, parsed.fullText);
-                }
-
-                if (!snippet) {
-                    snippet = generateFilenameSnippet(row.original_filename, parsed.fullText);
-                }
-            }
-
-            const format = mimeToExtension(row.mime_type);
-            const thumbnailPaths = row.thumbnail_paths as { sm: string; md: string; lg: string } | null;
-            const thumbnailUrls = await resolveThumbnailUrls(storageService, thumbnailPaths);
-            const displayName = computeDisplayName(row);
-
-            return {
-                result_type: 'document' as const,
-                document_id: row.id,
-                display_name: displayName,
-                filename: row.original_filename,
-                folder_path: row.folder_path,
-                folder_id: row.folder_id,
-                uploaded_at: row.created_at.toISOString(),
-                extracted_date: formatDateOnly(row.extracted_date),
-                category: row.document_category as DocumentSearchResult['category'],
-                mime_type: row.mime_type,
-                format,
-                snippet,
-                has_text: row.has_meaningful_text,
-                thumbnail_urls: thumbnailUrls,
-                blurhash: row.thumbnail_blurhash,
-                size_bytes: Number(row.size_bytes),
-                duration_seconds: row.duration_seconds,
-                tags: tagMap.get(row.id) ?? [],
-                relevance: row.relevance ?? null,
-            };
-        }),
-    );
-}
-
 /**
  * Get facets only (without full search results)
  */
 export async function getFacetsOnly(query: string, userId: string): Promise<SearchFacets> {
     const parsed = parseQuery(query);
     const privateFolderIds = await getPrivateFolderIds(userId);
+    const semantic = await getSemanticSearch().load(parsed, { userId, privateFolderIds });
 
-    return generateFacets(parsed, userId, privateFolderIds);
+    return generateFacets(parsed, userId, privateFolderIds, semantic.ids);
 }
 
 /**
@@ -570,111 +459,4 @@ async function suggestLocations(prefix: string, userId: string, limit: number, p
     }
 
     return Array.from(results).slice(0, limit);
-}
-
-/**
- * Compute a human-readable display name for a search result.
- *
- * Priority cascade:
- * 1. LLM-generated title (text_summary processing)
- * 2. EXIF location + date (photo_metadata)
- * 3. Vision description truncated to first sentence
- * 4. Category-based fallback with date
- * 5. Original filename
- */
-function computeDisplayName(row: {
-    original_filename: string;
-    document_category: string | null;
-    extracted_date: Date | null;
-    llm_title: string | null;
-    llm_summary: string | null;
-    llm_processing_type: string | null;
-    photo_city: string | null;
-    photo_country: string | null;
-    photo_taken_at: Date | null;
-}): string {
-    // 1. LLM title for text-processed documents
-    if (row.llm_title && row.llm_processing_type === 'text_summary') {
-        return row.llm_title;
-    }
-
-    // 2. EXIF location + date for photos
-    const isPhoto = row.document_category === 'photo' || row.document_category === 'screenshot' || row.document_category === 'graphic';
-
-    if (isPhoto && (row.photo_city || row.photo_country)) {
-        const location = row.photo_city ?? row.photo_country;
-        const date = row.photo_taken_at ?? row.extracted_date;
-
-        if (date) {
-            return `Photo in ${location}, ${formatShortDate(date)}`;
-        }
-
-        return `Photo in ${location}`;
-    }
-
-    if (isPhoto && (row.photo_taken_at || row.extracted_date)) {
-        const date = row.photo_taken_at ?? row.extracted_date!;
-
-        return `Photo, ${formatShortDate(date)}`;
-    }
-
-    // 3. Vision description (first sentence)
-    if (row.llm_summary && row.llm_processing_type === 'vision_describe') {
-        const firstSentence = row.llm_summary.split(/[.!?]\s/)[0];
-
-        if (firstSentence && firstSentence.length <= 60) {
-            return firstSentence;
-        }
-
-        if (firstSentence) {
-            return firstSentence.slice(0, 57) + '...';
-        }
-    }
-
-    // 4. Category-based fallback
-    const categoryLabels: Record<string, string> = {
-        screenshot: 'Screenshot',
-        receipt: 'Receipt',
-        invoice: 'Invoice',
-    };
-
-    const categoryLabel = row.document_category ? categoryLabels[row.document_category] : undefined;
-
-    if (categoryLabel) {
-        const date = row.extracted_date ?? row.photo_taken_at;
-
-        if (date) {
-            return `${categoryLabel}, ${formatShortDate(date)}`;
-        }
-
-        return categoryLabel;
-    }
-
-    // 5. Original filename
-    return row.original_filename;
-}
-
-function formatShortDate(date: Date): string {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/**
- * Convert MIME type to file extension
- */
-function mimeToExtension(mimeType: string): string {
-    const mapping: Record<string, string> = {
-        'application/pdf': 'pdf',
-        'image/jpeg': 'jpg',
-        'image/png': 'png',
-        'image/gif': 'gif',
-        'image/webp': 'webp',
-        'image/heic': 'heic',
-        'image/heif': 'heif',
-        'image/tiff': 'tiff',
-        'image/bmp': 'bmp',
-        'image/svg+xml': 'svg',
-        'text/plain': 'txt',
-    };
-
-    return mapping[mimeType] || mimeType.split('/').pop() || 'unknown';
 }

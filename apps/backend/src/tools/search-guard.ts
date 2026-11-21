@@ -17,7 +17,7 @@ import { shownDateSql, withholdsImageContentSql } from './photo';
  * - the `date:` filter reads a withheld image's capture date, not the date the model read from
  *   the picture.
  *
- * Not covered: sort order. Relevance (and date) ordering is still computed from the hidden text,
+ * Meaning search is stricter (see applySemanticGuard). Not covered: sort order. Relevance (and date) ordering is still computed from the hidden text,
  * which reveals nothing the agent can read back.
  */
 
@@ -61,6 +61,15 @@ export function applySearchGuard(base: SearchQueryBase, parsed: ParsedQuery): Se
     if (!tsQuery) return dated;
 
     return dated.where(sql<SqlBool>`(NOT ${withheld} OR ${visibleTextVector} @@ ${tsQuery})`);
+}
+
+/**
+ * The guard for the meaning streams and for similar images. A meaning match says "this picture looks like
+ * your words", which confirms what a withheld image shows as surely as a keyword hit would, and no visible
+ * text can excuse it. So withheld images never take part, whatever the query.
+ */
+export function applySemanticGuard(base: SearchQueryBase, parsed: ParsedQuery): SearchQueryBase {
+    return applyDateGuard(base, parsed).where(sql<SqlBool>`NOT ${withheld}`);
 }
 
 /** The query without its date range, which the guard applies itself. */

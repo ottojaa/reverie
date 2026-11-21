@@ -175,6 +175,12 @@ export const SearchResultItem = memo(function SearchResultItem({
                 <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground/80">
                     <span className="shrink-0">{getKindLabel(result.category, result.format)}</span>
 
+                    {result.match === 'meaning' && (
+                        <Chip variant="secondary" className="shrink-0" title="None of your words are in this document; it is close in meaning">
+                            Similar meaning
+                        </Chip>
+                    )}
+
                     {containingFolder && (
                         <>
                             <span aria-hidden className="text-muted-foreground/40">
