@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildFfmpegArgs, toFilterGraph, type CommandInput } from './ffmpeg-command';
 import { toSdrScaleArgs, toToneMap } from './hdr-filters';
 import { toProgressSeconds } from './ffmpeg-run';
+import type { Kysely } from 'kysely';
+import type { Database } from '../db/schema';
+import { parseFfprobe } from '../media/video-probe';
 import { decideLadder, type SourceFacts } from './ladder';
+import { loadSourceFacts } from './source-facts';
 
 const SOURCE: SourceFacts = {
     width: 1920,
@@ -114,7 +118,7 @@ describe('toFilterGraph', () => {
         const graph = toFilterGraph(toInput());
 
         expect(graph).toBe(
-            '[0:v:0]scale=1920:1080:flags=bicubic,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,split=3[c0][c1][c2];' +
+            '[0:v:0]fps=30/1,scale=1920:1080:flags=bicubic,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,split=3[c0][c1][c2];' +
                 '[c0]null[v0];[c1]scale=1280:720:flags=lanczos[v1];[c2]scale=852:480:flags=lanczos[v2]',
         );
     });
@@ -131,13 +135,80 @@ describe('toFilterGraph', () => {
         expect(toFilterGraph(toInput({}, { width: 640, height: 360 }))).toContain('null[c0];[c0]null[v0]');
     });
 
-    it('caps the frame rate before scaling when the source is faster than 60 fps', () => {
-        expect(toFilterGraph(toInput({}, { frameRate: 240 })).startsWith('[0:v:0]fps=60,scale=')).toBe(true);
+    it('sets a constant frame rate before scaling, capped at 60 fps', () => {
+        expect(toFilterGraph(toInput({}, { frameRate: 30 })).startsWith('[0:v:0]fps=30/1,scale=')).toBe(true);
+        expect(toFilterGraph(toInput({}, { frameRate: 240 })).startsWith('[0:v:0]fps=60/1,scale=')).toBe(true);
     });
 
     it('adds no rotation filter: ffmpeg turns a rotated clip upright when it reads it', () => {
         expect(toFilterGraph(toInput({}, { rotation: 90 }))).not.toMatch(/transpose/);
         expect(toFilterGraph(toInput({}, { rotation: 90 }))).toContain('scale=1080:1920');
+    });
+});
+
+/** What a phone screen recording looked like to ffprobe: audio first, and a nominal rate of 90000 for a video that averages about 25 fps. */
+const SCREEN_RECORDING_FFPROBE = {
+    format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', duration: '5.5', bit_rate: '2000000' },
+    streams: [
+        { index: 0, codec_type: 'audio', codec_name: 'aac', sample_rate: '48000', channels: 1 },
+        {
+            index: 1,
+            codec_type: 'video',
+            codec_name: 'h264',
+            width: 720,
+            height: 1584,
+            pix_fmt: 'yuv420p',
+            r_frame_rate: '90000/1',
+            avg_frame_rate: '2055000/82297',
+        },
+    ],
+};
+
+async function toRecordingArgs(encoder: 'cpu' | 'nvenc'): Promise<string[]> {
+    const noStoredRow = {
+        selectFrom: () => ({ selectAll: () => ({ where: () => ({ executeTakeFirst: async () => undefined }) }) }),
+    } as unknown as Kysely<Database>;
+    const source = await loadSourceFacts(noStoredRow, 'doc', async () => parseFfprobe(SCREEN_RECORDING_FFPROBE));
+
+    return buildFfmpegArgs({ inputPath: '/in/rec.mp4', outDir: '/out', ladder: decideLadder(source), hasAudio: source.hasAudio, toneMap: null, encoder });
+}
+
+describe('a variable-rate screen recording with audio as stream 0', () => {
+    it.each(['cpu', 'nvenc'] as const)('is encoded at a constant 25 fps on %s, not at its nominal 90000', async (encoder) => {
+        const args = await toRecordingArgs(encoder);
+
+        expect(valueOf(args, '-filter_complex').startsWith('[0:v:0]fps=25/1,')).toBe(true);
+        expect(valueOf(args, '-r')).toBe('25/1');
+        expect(valueOf(args, '-g')).toBe('100');
+        expect(args.join(' ')).not.toContain('90000');
+    });
+
+    it('maps streams by type: filter outputs and the first audio stream, never an index', async () => {
+        const args = await toRecordingArgs('cpu');
+        const maps = args.flatMap((arg, index) => (args[index - 1] === '-map' ? [arg] : []));
+
+        expect(maps.length).toBeGreaterThan(0);
+        expect(maps.every((map) => /^\[v\d+\]$/.test(map) || map === '0:a:0')).toBe(true);
+        expect(maps.some((map) => /^0:\d/.test(map))).toBe(false);
+        expect(valueOf(args, '-filter_complex')).toContain('[0:v:0]');
+    });
+});
+
+describe('a normal clip', () => {
+    it('keeps its own rate, and keyframes every 4 s', () => {
+        const args = buildFfmpegArgs(toInput());
+
+        expect(valueOf(args, '-r')).toBe('30/1');
+        expect(valueOf(args, '-g')).toBe('120');
+        expect(valueOf(args, '-force_key_frames')).toBe('expr:gte(t,n_forced*4)');
+        expect(valueOf(args, '-hls_time')).toBe('4');
+    });
+
+    it('keeps an NTSC rate exact and gives a whole-number GOP', () => {
+        const args = buildFfmpegArgs(toInput({}, { frameRate: 30000 / 1001 }));
+
+        expect(valueOf(args, '-r')).toBe('30000/1001');
+        expect(valueOf(args, '-g')).toBe('120');
     });
 });
 
