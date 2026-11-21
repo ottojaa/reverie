@@ -148,6 +148,14 @@ describe('oidc client', () => {
         await expect(oidc.completeAuthorization(query, flow)).resolves.toMatchObject({ emailVerified: false });
     });
 
+    it('signs in, without counting the email as verified, when the provider sends email_verified as a string', async () => {
+        mock.person = { sub: 'sub-3', email: 'x@example.test', email_verified: 'true' as unknown as boolean };
+
+        const { query, flow } = await signIn();
+
+        await expect(oidc.completeAuthorization(query, flow)).resolves.toMatchObject({ subject: 'sub-3', emailVerified: false });
+    });
+
     it('asks the userinfo endpoint for the email facts when the ID token has none', async () => {
         mock.next = { emailInUserinfoOnly: true };
 

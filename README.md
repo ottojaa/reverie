@@ -22,7 +22,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **Private folders**: Mark a collection or folder private and it gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
 - **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
-- **Auth**: JWT + rotating refresh tokens, optional sign-in with any OpenID Connect provider (Google, Authentik, Keycloak, Authelia, Microsoft, ...); multi-user with admin user management
+- **Auth**: JWT + rotating refresh tokens, optional sign-in with any OpenID Connect provider (Google, Authentik, Keycloak, Authelia, ...); multi-user with admin user management
 - **Clients**: Electron/React desktop app + Android (Kotlin, Jetpack Compose)
 
 ## Tech Stack
@@ -101,7 +101,7 @@ See [.env.example](.env.example) for the full reference. Key variables:
 ## Sign-in with OpenID Connect
 
 Password sign-in always works. To also offer "Sign in with ...", point Reverie at one or more standard
-OpenID Connect providers by configuration alone (Authentik, Keycloak, Authelia, Microsoft Entra, Google, ...).
+OpenID Connect providers by configuration alone (Authentik, Keycloak, Authelia, Google, ...).
 The login page lists whatever is configured.
 
 ```bash
@@ -131,7 +131,8 @@ Things to know:
 - **Trust:** Reverie believes each configured provider's `email_verified`. Only configure providers whose
   users cannot freely choose an email address they do not own (your own Authentik/Keycloak/Authelia, Google, ...),
   or an unrelated person could register your admin's address there and sign in as them.
-- A provider that never sends `email_verified` (Microsoft Entra) can only sign in people who are already linked.
+- A provider that never sends a boolean `email_verified` (Microsoft Entra, Cognito's string) cannot be used yet: nobody
+  can be linked by email, and there is no tool for recording a link by hand, so no one could sign in through it.
 - The provider must sign ID tokens with RS256 (the default everywhere) and `issuer` must be `https`; plain `http`
   is accepted only for `localhost`/`127.0.0.1` (a provider on the same machine).
 - Reverie's own email verification (sign-up, password reset) is not built yet: it needs a mail provider.

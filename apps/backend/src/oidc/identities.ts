@@ -24,14 +24,18 @@ export async function findUserForIdentity(providerId: string, identity: OidcIden
 
     if (!candidate?.is_active) return null;
 
-    // A concurrent sign-in may have recorded the same link a moment ago; that is the same outcome.
+    // A concurrent sign-in may have recorded this very link a moment ago; the conflict is targeted at (provider, subject) so
+    // that only that case passes quietly. Another subject racing to link the same user hits (user_id, provider) and throws.
     await db
         .insertInto('user_identities')
         .values({ user_id: candidate.id, provider: providerId, subject: identity.subject })
-        .onConflict((oc) => oc.doNothing())
+        .onConflict((oc) => oc.columns(['provider', 'subject']).doNothing())
         .execute();
 
-    return candidate;
+    // Whoever holds the link now must be this user (the same subject may have been linked to someone else in the meantime).
+    const owner = await findLinkedUser(providerId, identity.subject);
+
+    return owner?.id === candidate.id ? candidate : null;
 }
 
 function findLinkedUser(providerId: string, subject: string): Promise<User | undefined> {

@@ -23,11 +23,14 @@ export interface OidcClient {
 
 const FETCH_TIMEOUT_SECONDS = 10;
 
-/** The claims read from the ID token (and userinfo): a verified email is only ever a boolean `true`. */
+/**
+ * The claims read from the ID token (and userinfo). `email_verified` is read as-is: only the boolean `true` counts as
+ * verified, and a provider that sends the string "true" (Cognito) must still sign in people already linked by `sub`.
+ */
 const IdentityClaimsSchema = z.object({
     sub: z.string().min(1),
     email: z.string().optional(),
-    email_verified: z.boolean().optional(),
+    email_verified: z.unknown().optional(),
 });
 
 function isLoopbackHost(hostname: string): boolean {
