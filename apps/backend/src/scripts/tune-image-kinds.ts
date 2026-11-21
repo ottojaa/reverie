@@ -8,7 +8,9 @@
  *
  * Usage (cwd = apps/backend/dist in a container that reaches Postgres, reverie-ml and the storage volume):
  *   node apps/backend/src/scripts/tune-image-kinds.js --prompts <set.json> [--prompts <more.json> ...]
- * Prompt-set files are in apps/backend/scripts/image-kind-sets/.
+ * Prompt-set files are in apps/backend/scripts/image-kind-sets/ in the git checkout. The runtime image holds only
+ * `dist`, so bind-mount that folder into the container (`-v "$PWD/apps/backend/scripts/image-kind-sets:/sets:ro"`)
+ * and pass `--prompts /sets/<file>.json`.
  */
 import { readFile } from 'node:fs/promises';
 import { parsePromptArgs, parsePromptSet, type PromptSet } from '../image-kind/prompt-set.js';

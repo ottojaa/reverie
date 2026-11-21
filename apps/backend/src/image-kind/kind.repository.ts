@@ -1,7 +1,7 @@
 import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { ModelRef } from '../embeddings/embedding.repository';
-import type { CameraFact, KindFacts, KindVerdict } from './classifier';
+import { toCameraFacts, type KindFacts, type KindVerdict } from './classifier';
 import { KIND_CLASSIFIER_VERSION } from './classifier-config';
 import type { ImageKind } from './kinds';
 
@@ -48,15 +48,12 @@ export async function loadKindInputs(db: Kysely<Database>, documentId: string): 
 
     if (!row) return null;
 
-    const camera: CameraFact[] = [];
-
-    if (row.camera_make) camera.push('make');
-
-    if (row.camera_model) camera.push('model');
-
-    if (row.lens_model) camera.push('lens');
-
-    if (isCoordinate(row.latitude) && isCoordinate(row.longitude)) camera.push('gps');
+    const camera = toCameraFacts({
+        make: Boolean(row.camera_make),
+        model: Boolean(row.camera_model),
+        lens: Boolean(row.lens_model),
+        gps: isCoordinate(row.latitude) && isCoordinate(row.longitude),
+    });
 
     return {
         embedding: JSON.parse(row.embedding) as number[],

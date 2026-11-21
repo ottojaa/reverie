@@ -8,6 +8,11 @@ export type PromptEmbeddings = Record<ImageKind, number[][]>;
 /** Camera evidence: facts only a camera leaves. A capture date is not one: phone screenshots and app-saved images carry it too. */
 export type CameraFact = 'make' | 'model' | 'lens' | 'gps';
 
+/** The camera evidence an image has, from which camera fields are present: the one place that list is built. */
+export function toCameraFacts(present: { make: boolean; model: boolean; lens: boolean; gps: boolean }): CameraFact[] {
+    return (['make', 'model', 'lens', 'gps'] as const).filter((fact) => present[fact]);
+}
+
 export interface KindFacts {
     /** The camera evidence the image has, from EXIF. Empty for a screenshot or a scan. */
     camera: readonly CameraFact[];

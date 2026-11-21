@@ -92,11 +92,14 @@ export const V2_PROMPTS: Record<ImageKind, readonly string[]> = {
 
 /**
  * The committed classifier. Raw cosines, the best prompt per kind. Thresholds are in cosine units (image-text
- * cosines of the SigLIP2 model sit around 0.05 to 0.25), tuned from the tuning script's output on the real library
- * (see scripts/tune-image-kinds.ts), like the search floors in reverie-ml's README.
+ * cosines of the SigLIP2 model sit around 0.05 to 0.25).
+ *
+ * This is an untuned draft, deliberately versioned `v2-draft`: the winning prompt set from the tuning script
+ * (scripts/tune-image-kinds.ts, run on the library) replaces it with its explicit calibration numbers and the version
+ * `v2`, so verdicts made by the draft get re-classified by the backfill.
  */
 export const KIND_CLASSIFIER: KindClassifierConfig = {
-    version: 'v2',
+    version: 'v2-draft',
     prompts: V2_PROMPTS,
     aggregate: 'max',
     calibration: IDENTITY_CALIBRATION,

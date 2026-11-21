@@ -2,14 +2,15 @@
  * The tuning run: scores prompt sets against the stored image embeddings and prints, for each, the same report as the
  * comparison plus the flip bar over a margin grid. Read-only: the library is loaded in one READ ONLY transaction and
  * everything after it happens in memory, so no verdict is written. Prompt embeddings come from reverie-ml (a call, not
- * a write), and the EXIF of images whose camera columns are not read yet is read from the stored file in memory, so the
- * tables show what the backfilled library would give.
+ * a write). Every image's EXIF is read from its stored file in memory and fills the camera columns that are empty (a
+ * stored value wins), as the backfill would, so the tables show the backfilled library whether or not the backfill has
+ * run. It does not read `camera_read_at`, so it also runs on a database that has not had migration 020.
  */
 import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/schema.js';
 import type { MlClient } from '../embeddings/ml.client.js';
 import { extractExifMetadata, toPhotoMetadataValues } from '../ocr/exif-extractor.js';
-import { decideKind, scoreKinds, type CameraFact, type KindFacts, type PromptEmbeddings } from './classifier.js';
+import { decideKind, scoreKinds, toCameraFacts, type KindFacts, type PromptEmbeddings } from './classifier.js';
 import { buildReport, evaluateBar, type ComparisonRow } from './compare-report.js';
 import type { ImageKind } from './kinds.js';
 import { IMAGE_KINDS } from './kinds.js';
@@ -131,15 +132,7 @@ export async function loadLibrary(deps: TuneDeps): Promise<Library> {
 /** The classifier's camera facts for an image's capture facts: make, model, lens and GPS count, a lone date does not. */
 export function toKindFacts(image: Pick<LibraryImage, 'capture' | 'width' | 'height'>): KindFacts {
     const { capture } = image;
-    const camera: CameraFact[] = [];
-
-    if (capture.make) camera.push('make');
-
-    if (capture.model) camera.push('model');
-
-    if (capture.lens) camera.push('lens');
-
-    if (capture.gps) camera.push('gps');
+    const camera = toCameraFacts(capture);
 
     return { camera, captureDate: capture.takenAt, width: image.width, height: image.height };
 }

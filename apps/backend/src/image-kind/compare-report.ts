@@ -15,8 +15,8 @@ export interface ComparisonRow {
 
 const VISUAL_CATEGORIES = ['photo', 'screenshot', 'graphic'];
 
-/** The categories that are statements, which must read as `document` and not as a till slip. */
-const STATEMENT_CATEGORIES = ['bank_statement', 'stock_statement'];
+/** The categories of printed paper that must read as `document` and not as a till slip: statements, invoices, forms, letters. */
+const STATEMENT_CATEGORIES = ['bank_statement', 'stock_statement', 'invoice', 'form', 'letter', 'certificate', 'contract'];
 
 /**
  * Whether the current category is one the verdict would stand for. A receipt is a till slip, so it agrees only with
@@ -97,7 +97,7 @@ export function evaluateBar(rows: ComparisonRow[]): BarCheck[] {
             pass: screenshotHits.length * 9 >= screenshots.length * 8,
         },
         {
-            name: 'bank and stock statements read as document',
+            name: 'statements, invoices, forms and letters read as document',
             detail: `${statementHits.length} of ${statements.length}`,
             pass: statementHits.length === statements.length,
         },

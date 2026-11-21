@@ -107,7 +107,7 @@ describeDb('the tuning run', () => {
         expect(out).toContain('mean=');
         expect(out).toContain('margin 0.5');
         expect(out).toContain('margin 5');
-        expect(out).toContain('[pass] bank and stock statements read as document: 1 of 1');
+        expect(out).toContain('[pass] statements, invoices, forms and letters read as document: 1 of 1');
         expect(out).not.toContain('SECRET');
     });
 

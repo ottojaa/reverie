@@ -128,11 +128,17 @@ describe('evaluateBar', () => {
     const camera = { ...NO_CAPTURE, make: true };
     const screenshots = (hits: number, total: number) =>
         Array.from({ length: total }, (_, i) => row({ id: `s${i}`, category: 'screenshot', kind: i < hits ? 'screenshot' : 'photo' }));
-    const statement = (kind: 'document' | 'receipt') => row({ id: 'st-' + kind, category: 'bank_statement', kind, hasMeaningfulText: true });
+    const statement = (kind: 'document' | 'receipt', category = 'bank_statement') =>
+        row({ id: 'st-' + kind + category, category, kind, hasMeaningfulText: true });
     const passes = (rows: ComparisonRow[]) => evaluateBar(rows).map((check) => check.pass);
 
     it('passes when every check holds', () => {
         expect(passes([...screenshots(40, 45), row({ id: 'p', capture: camera }), statement('document')])).toEqual([true, true, true, true]);
+    });
+
+    it('fails when an invoice or a form reads as a receipt', () => {
+        expect(passes([statement('document'), statement('receipt', 'invoice')])[3]).toBe(false);
+        expect(passes([statement('document'), statement('document', 'form')])[3]).toBe(true);
     });
 
     it('fails the screenshot check below 40 of 45', () => {
