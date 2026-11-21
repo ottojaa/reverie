@@ -113,6 +113,8 @@ private fun fileTitle(document: DocumentDto): String {
 
 /** "4032 × 3024 px · 1:23" — dimensions and, for videos, duration; null when neither is known. */
 private fun fileSubtitle(document: DocumentDto): String? {
+    // A probed video's size and duration are in its own row above, so they are not repeated here.
+    if (document.video_metadata != null) return null
     val parts = buildList {
         if (document.width != null && document.height != null) add("${document.width} × ${document.height} px")
         document.duration_seconds?.let { add(formatDuration(it)) }

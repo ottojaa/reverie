@@ -236,7 +236,8 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                             {/* File facts as a scannable label/value grid (the filename is the toolbar heading, so it's not repeated here) */}
                             <Section delay={nextDelay()} className={cn('grid grid-cols-2 gap-x-6 gap-y-2.5', hasAiContent && 'border-t border-border/40 pt-3')}>
                                 <MetaCell label="Size" value={`${fileConfig.label} · ${formatFileSize(document.size_bytes)}`} title={document.mime_type} />
-                                {document.width != null && document.height != null && (
+                                {/* A probed video shows its size as "Resolution" below, so the poster frame's size is not repeated */}
+                                {document.width != null && document.height != null && !document.video_metadata && (
                                     <MetaCell label="Dimensions" value={`${document.width} × ${document.height} px`} />
                                 )}
                                 {document.extracted_date && <MetaCell label="Document date" value={document.extracted_date} />}
