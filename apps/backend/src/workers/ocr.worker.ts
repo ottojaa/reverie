@@ -1,4 +1,5 @@
 import { Job, Worker } from 'bullmq';
+import { sql } from 'kysely';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
 import { NonRetryableJobError } from '../jobs/job.types';
@@ -140,8 +141,13 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Sync has_meaningful_text from OCR result back to documents table
         await db.updateTable('documents').set({ has_meaningful_text: result.hasMeaningfulText }).where('id', '=', documentId).execute();
 
-        // From here the embed side may act on this OCR run: it waits for the marker.
-        await db.updateTable('documents').set({ ocr_facts_at: new Date() }).where('id', '=', documentId).execute();
+        // From here the embed side may act on this OCR run: it waits for the marker. The database's clock, not
+        // this process's, because the marker is compared with `processing_jobs.created_at`, which the database stamps.
+        await db
+            .updateTable('documents')
+            .set({ ocr_facts_at: sql<Date>`now()` })
+            .where('id', '=', documentId)
+            .execute();
 
         // With the image-kind flip on, the embed side queues an image's LLM job once the image has a kind.
         const handoff = isImage ? await decideLlmHandoff(isKindFlipActive(), getMlClient()) : 'ocr';

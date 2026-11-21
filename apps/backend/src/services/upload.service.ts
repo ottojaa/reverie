@@ -3,6 +3,7 @@ import { extname } from 'path';
 import { db } from '../db/kysely';
 import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { addOcrJob } from '../queues/ocr.queue';
+import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { getDeduplicatedFilename } from '../utils/filename';
 import type { UploadedFile } from '../utils/upload-files';
@@ -253,32 +254,26 @@ export class UploadService {
             if (sourceDoc) {
                 const sourceMetadata = await db
                     .selectFrom('photo_metadata')
-                    .select(['latitude', 'longitude', 'country', 'city', 'taken_at'])
+                    .select(['latitude', 'longitude', 'country', 'city', 'taken_at', 'camera_make', 'camera_model', 'lens_model'])
                     .where('document_id', '=', copyMetadataFromDocumentId)
                     .executeTakeFirst();
+                const exifValues = toPhotoMetadataValues(
+                    sourceMetadata && {
+                        latitude: sourceMetadata.latitude,
+                        longitude: sourceMetadata.longitude,
+                        city: sourceMetadata.city,
+                        country: sourceMetadata.country,
+                        takenAt: sourceMetadata.taken_at,
+                        cameraMake: sourceMetadata.camera_make,
+                        cameraModel: sourceMetadata.camera_model,
+                        lensModel: sourceMetadata.lens_model,
+                    },
+                );
 
-                if (
-                    sourceMetadata &&
-                    (sourceMetadata.latitude != null ||
-                        sourceMetadata.longitude != null ||
-                        sourceMetadata.city != null ||
-                        sourceMetadata.country != null ||
-                        sourceMetadata.taken_at != null)
-                ) {
-                    const exifValues = {
-                        ...(sourceMetadata.latitude != null && { latitude: sourceMetadata.latitude }),
-                        ...(sourceMetadata.longitude != null && { longitude: sourceMetadata.longitude }),
-                        ...(sourceMetadata.city != null && { city: sourceMetadata.city }),
-                        ...(sourceMetadata.country != null && { country: sourceMetadata.country }),
-                        ...(sourceMetadata.taken_at != null && { taken_at: sourceMetadata.taken_at }),
-                    };
-
+                if (exifValues) {
                     await db
                         .insertInto('photo_metadata')
-                        .values({
-                            document_id: document.id,
-                            ...exifValues,
-                        })
+                        .values({ document_id: document.id, ...exifValues })
                         .execute();
                 }
             }
