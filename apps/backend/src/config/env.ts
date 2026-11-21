@@ -98,11 +98,16 @@ const envSchema = z.object({
     // Backfill of the existing library: documents queued per page, and the pause between pages.
     EMBED_BACKFILL_BATCH: z.coerce.number().int().positive().default(50),
     EMBED_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(20_000),
-    // Search by meaning. A document counts as a meaning match only at or above its model's cosine-similarity floor
-    // (starting values from apps/reverie-ml/eval/RESULTS.md, tuned on synthetic data). Each vector stream keeps at most
-    // SEMANTIC_TOP_K documents. Embedding the query gets SEMANTIC_TIMEOUT_MS, then search carries on with full text only.
-    SEMANTIC_TEXT_FLOOR: z.coerce.number().min(0).max(1).default(0.53),
-    SEMANTIC_IMAGE_FLOOR: z.coerce.number().min(0).max(1).default(0.17),
+    // Search by meaning. A document counts as a meaning match when, for its model, its cosine similarity to the query is
+    // at least *_MIN_SIMILARITY (a low absolute floor, only there to stop pure noise) and stands out from the query's noise:
+    // above the median similarity the query gets across the library by sqrt(2 ln N) + *_MARGIN_Z robust standard deviations,
+    // N being the library's embeddings (search/semantic-noise.ts). Raise a margin to drop more, lower it to keep more.
+    // Defaults come from the real library: siglip2 image hits 0.10-0.17, bge-m3 plausible hits 0.45-0.66, bge-m3 noise tops out near 0.39.
+    // Each vector stream keeps at most SEMANTIC_TOP_K documents. Embedding the query gets SEMANTIC_TIMEOUT_MS, then search carries on with full text only.
+    SEMANTIC_TEXT_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.35),
+    SEMANTIC_IMAGE_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.06),
+    SEMANTIC_TEXT_MARGIN_Z: z.coerce.number().min(0).default(1.5),
+    SEMANTIC_IMAGE_MARGIN_Z: z.coerce.number().min(0).default(1.5),
     SEMANTIC_TOP_K: z.coerce.number().int().positive().default(100),
     SEMANTIC_TIMEOUT_MS: z.coerce.number().int().positive().default(1_500),
 

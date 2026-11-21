@@ -52,7 +52,15 @@ describeDb('search_documents by meaning', () => {
         ml = createFakeMl();
         ml.setTextVector(QUERY, unit(TEXT_DIMENSIONS, 1));
         ml.setImageTextVector(QUERY, unit(IMAGE_DIMENSIONS, 1));
-        setSemanticSearch(createSemanticSearch(ml, { textFloor: 0.53, imageFloor: 0.17, topK: 20, breakerMs: 60_000 }));
+        // Absolute floors only (a margin of -Infinity switches the relative test off); the relative test is covered in semantic-noise.test.ts.
+        setSemanticSearch(
+            createSemanticSearch(ml, {
+                text: { minSimilarity: 0.53, marginZ: -Infinity },
+                image: { minSimilarity: 0.17, marginZ: -Infinity },
+                topK: 20,
+                breakerMs: 60_000,
+            }),
+        );
 
         // Everything is a perfect meaning match, so only visibility decides what comes back.
         for (const id of Object.values(docs)) await embedImage(id);

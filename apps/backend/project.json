@@ -16,7 +16,11 @@
                 "format": ["cjs"],
                 "bundle": false,
                 "main": "apps/backend/src/main.ts",
-                "additionalEntryPoints": ["apps/backend/src/scripts/create-user.ts", "apps/backend/src/scripts/backfill-thumbnails.ts"],
+                "additionalEntryPoints": [
+                    "apps/backend/src/scripts/create-user.ts",
+                    "apps/backend/src/scripts/backfill-thumbnails.ts",
+                    "apps/backend/src/scripts/semantic-probe.ts"
+                ],
                 "tsConfig": "apps/backend/tsconfig.app.json",
                 "skipTypeCheck": true,
                 "assets": ["apps/backend/src/assets"],
