@@ -1,5 +1,5 @@
 import { join } from 'path';
-import type { Ladder, Rung } from './ladder';
+import type { FrameRate, Ladder, Rung } from './ladder';
 import { SDR_TAGS_FILTER, type ToneMap } from './hdr-filters';
 
 /** Segment length, and the spacing of the keyframes every rung is forced to have, so a player can switch rung at any segment. */
@@ -20,6 +20,10 @@ export interface CommandInput {
     sdrScaleArgs?: string;
 }
 
+function toRateArg({ num, den }: FrameRate): string {
+    return `${num}/${den}`;
+}
+
 export function toRungDir(rung: Rung): string {
     return `v${rung.name}`;
 }
@@ -36,7 +40,7 @@ export function toFilterGraph(input: Pick<CommandInput, 'ladder' | 'toneMap' | '
     if (!top) throw new Error('Ladder has no rungs');
 
     const base = [
-        ...(ladder.frameRateCap !== null ? [`fps=${ladder.frameRateCap}`] : []),
+        `fps=${toRateArg(ladder.frameRate)}`,
         `scale=${top.width}:${top.height}:flags=bicubic${toneMap ? '' : sdrScaleArgs}`,
         // An SDR source keeps its colours and gets the same tags; an HDR one is converted first.
         ...(toneMap ? [toneMap.chain] : ['format=yuv420p', SDR_TAGS_FILTER]),
@@ -48,8 +52,21 @@ export function toFilterGraph(input: Pick<CommandInput, 'ladder' | 'toneMap' | '
     return [`[0:v:0]${base},${split}`, '[c0]null[v0]', ...scaled].join(';');
 }
 
-function toVideoEncoderArgs(encoder: EncoderKind, rungs: Rung[]): string[] {
-    const common = ['-profile:v', 'high', '-pix_fmt', 'yuv420p', '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_SECONDS})`];
+function toVideoEncoderArgs(encoder: EncoderKind, rungs: Rung[], frameRate: FrameRate): string[] {
+    const gop = Math.round((frameRate.num / frameRate.den) * SEGMENT_SECONDS);
+    const common = [
+        '-profile:v',
+        'high',
+        '-pix_fmt',
+        'yuv420p',
+        // The constant rate is set on the output as well as in the graph, so the encoder never takes the source's nominal rate.
+        '-r',
+        toRateArg(frameRate),
+        '-g',
+        String(gop),
+        '-force_key_frames',
+        `expr:gte(t,n_forced*${SEGMENT_SECONDS})`,
+    ];
     const codec =
         encoder === 'nvenc'
             ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-rc', 'vbr', '-cq', '23', '-forced-idr', '1', '-no-scenecut', '1']
@@ -95,7 +112,7 @@ export function buildFfmpegArgs(input: CommandInput): string[] {
         toFilterGraph(input),
         ...videoMaps,
         ...audioMaps,
-        ...toVideoEncoderArgs(encoder, ladder.rungs),
+        ...toVideoEncoderArgs(encoder, ladder.rungs, ladder.frameRate),
         ...audioArgs,
         '-f',
         'hls',

@@ -1,6 +1,7 @@
 import { Job, Worker } from 'bullmq';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
+import { getJobService } from '../jobs/job.service';
 import { probeVideoFile } from '../media/video-probe';
 import { delayBackfillJob } from '../queues/backfill-gate';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -90,13 +91,32 @@ async function processBackfill(job: Job<TranscodeBackfillData>, token: string | 
     return rescheduleTranscodeBackfill(job, step, { pageMs: env.TRANSCODE_BACKFILL_INTERVAL_MS, reconcileMs: RECONCILE_MS }, token);
 }
 
-/** Once the retries are used up the video is 'failed'; its original is untouched and stays playable. */
+/**
+ * Once the retries are used up the video is 'failed'; its original is untouched and stays playable. BullMQ also gives up
+ * on a job that stalled more than once (the worker was killed mid-encode by deploys): that failure arrives with fewer
+ * attempts counted than allowed, so `finishedOn` (set only when the job is done for good) is what says it is final.
+ */
 export async function markFailedWhenFinal(job: Job<TranscodeJobData> | undefined, error: Error): Promise<void> {
     if (!job || job.name !== TRANSCODE_JOBS.TRANSCODE) return;
 
-    const isFinal = job.attemptsMade >= (job.opts.attempts ?? 1) || error.name === 'NonRetryableJobError';
+    const attempts = job.opts.attempts ?? 1;
+    const isNonRetryable = error.name === 'NonRetryableJobError';
+    const isFinal = job.finishedOn !== undefined || job.attemptsMade >= attempts || isNonRetryable;
 
     if (!isFinal) return;
+
+    // A stalled job never reached the tracking wrapper's catch, so its processing_jobs row is still live and would block a re-queue.
+    const gaveUpEarly = job.finishedOn !== undefined && job.attemptsMade < attempts;
+
+    if (gaveUpEarly && job.id)
+        await getJobService()
+            .markJobFailed(job.id, error.message, job.attemptsMade)
+            .catch((rowError: unknown) => {
+                logger.error('Could not mark the transcode job row failed', rowError instanceof Error ? rowError : new Error(String(rowError)), {
+                    documentId: job.data.documentId,
+                    jobId: job.id,
+                });
+            });
 
     await setTranscodeStatus(db, job.data.documentId, 'failed').catch((statusError: unknown) => {
         logger.error('Could not mark the transcode failed', statusError instanceof Error ? statusError : new Error(String(statusError)), {

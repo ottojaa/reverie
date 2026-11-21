@@ -11,6 +11,18 @@ export const RUNG_NAMES = [1080, 720, 480] as const;
 /** Output frame rates above this are capped: phones record 120 and 240 fps slow motion. */
 export const MAX_FRAME_RATE = 60;
 
+/** The rate for a source that reports none. */
+const DEFAULT_FRAME_RATE = 30;
+
+/** A rate as ffmpeg takes it (`fps=30000/1001`, `-r 30000/1001`). */
+export interface FrameRate {
+    num: number;
+    den: number;
+}
+
+const NTSC_RATES = [24, 30, 60];
+const NTSC_TOLERANCE = 0.01;
+
 export interface SourceFacts {
     /** The coded size; `rotation` says how a player turns it. */
     width: number;
@@ -44,8 +56,8 @@ export interface Ladder {
     rungs: Rung[];
     /** True when the picture is turned by ffmpeg; the output then carries no rotation. */
     rotated: boolean;
-    /** The output frame rate when the source's is above the cap; null to keep it. */
-    frameRateCap: number | null;
+    /** The constant output frame rate. A variable-rate source is converted to it, so no source rate reaches the encoder or the HLS muxer. */
+    frameRate: FrameRate;
 }
 
 /** Target bitrate by rung name, in bits per second (H.264 High, 8-bit). */
@@ -79,6 +91,23 @@ function toOwnSizeRung(shorter: number, longer: number, isPortrait: boolean): Ru
     return { ...rung, width, height };
 }
 
+/**
+ * The constant rate the renditions are encoded at: the source's, at most 60, at least 1 (a mostly still screen recording
+ * averages well under 1 fps and must not round to 0), and 30 when the source has none. `frameRate` is the stored average
+ * rate, not the container's nominal one, which is 90000 for some variable-rate phone recordings.
+ */
+export function decideFrameRate(frameRate: number | null): FrameRate {
+    if (frameRate === null || !Number.isFinite(frameRate) || frameRate <= 0) return { num: DEFAULT_FRAME_RATE, den: 1 };
+
+    const capped = Math.min(frameRate, MAX_FRAME_RATE);
+    // 23.976, 29.97 and 59.94 are kept exact so a standard clip loses no frames; any other rate is rounded to a whole number.
+    const ntsc = NTSC_RATES.find((rate) => Math.abs(capped - (rate * 1000) / 1001) < NTSC_TOLERANCE);
+
+    if (ntsc !== undefined) return { num: ntsc * 1000, den: 1001 };
+
+    return { num: Math.max(1, Math.round(capped)), den: 1 };
+}
+
 export function decideLadder(source: SourceFacts): Ladder {
     const turned = source.rotation === 90 || source.rotation === 270;
     const displayWidth = turned ? source.height : source.width;
@@ -93,6 +122,6 @@ export function decideLadder(source: SourceFacts): Ladder {
     return {
         rungs,
         rotated: source.rotation !== 0,
-        frameRateCap: source.frameRate !== null && source.frameRate > MAX_FRAME_RATE ? MAX_FRAME_RATE : null,
+        frameRate: decideFrameRate(source.frameRate),
     };
 }
