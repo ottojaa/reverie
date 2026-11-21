@@ -3,7 +3,7 @@
  * Read-only: shows what meaning search keeps and drops for some queries, to tune the cutoffs.
  *
  * For each query and each meaning stream (text, image) it prints the library's noise level for that query
- * (median similarity and spread over every embedding), the cutoff the rule derives from it, and the top
+ * (median similarity and spread over a fixed sample of the embeddings, at most 5000), the cutoff the rule derives from it, and the top
  * hits with their similarity, how many sigmas above the median they sit, and whether they were kept.
  * Only file names are printed, never document content. It embeds the queries through reverie-ml (ML_URL) and
  * reads the database; nothing is written or queued.

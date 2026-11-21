@@ -7,10 +7,13 @@ import { excludeTrashed } from '../services/privacy';
  * Where a query's noise ends, so a meaning match has to stand out instead of clearing one fixed number.
  *
  * Embedding models put unrelated text and images at very different similarity levels (siglip2 text-to-image
- * sits around 0.03 for noise and 0.13 for a good match, bge-m3 around 0.27 and 0.55), and the level moves with
+ * good matches score around 0.10-0.17, bge-m3 plausible ones 0.45-0.66; the noise levels below them are
+ * assumed to be roughly 0.03 and 0.27 until measured with `scripts/semantic-probe.ts`), and the level moves with
  * the language and the phrasing of the query. So a hit is judged against the similarities the same query gets
  * across the library: the library is almost entirely unrelated to any one query, so its middle is that
- * query's noise level and its spread is the noise width.
+ * query's noise level and its spread is the noise width. The rule leans on that: a query that matches a large
+ * share of the library (say "screenshot" when a third of the images are screenshots) moves the median and
+ * widens the spread, so the meaning stream keeps little for it and full text answers alone.
  *
  * Median and IQR / 1.349 (a normal distribution's sigma) stand in for mean and standard deviation because the
  * few real matches in the library pull a mean and a standard deviation upward but barely move a median and a
@@ -91,15 +94,7 @@ export interface NoiseScope {
     userId: string;
 }
 
-/**
- * The statistics over the user's embeddings of the model, the same whoever asks and however the query is filtered:
- * the noise level belongs to the model and the query, so a folder filter, an unlocked private folder or the agent's
- * photo guard must not move the cutoff (the vectors themselves are filtered as always, only these aggregates are not).
- *
- * A big library is cut to a fixed subset first (ordered by a hash of the document id, so it is the same on every
- * search and cheap: only the sampled vectors are compared with the query). `count(*) OVER ()` runs before the limit.
- * `sampleSize` is a parameter for tests.
- */
+/** Median and quartiles of the query's similarity to the sampled embeddings, with the full count taken before the sample was cut. */
 async function summarise(sampled: Expression<unknown>, literal: string, started: number): Promise<NoiseStats | null> {
     const result = await sql<StatsRow>`
         SELECT max(s.total) AS total, count(*)::int AS sample,
@@ -114,8 +109,19 @@ async function summarise(sampled: Expression<unknown>, literal: string, started:
 }
 
 const TOTAL = sql<number>`count(*) OVER ()::int`.as('total');
-const BY_SAMPLE_ORDER = sql`hashtext(e.document_id::text)`;
+/** Text embeddings are cut per chunk, not per document: a few long documents must not fill the whole sample. */
+const BY_CHUNK_ORDER = sql`hashtext(e.document_id::text || ':' || e.chunk_index::text)`;
+const BY_DOCUMENT_ORDER = sql`hashtext(e.document_id::text)`;
 
+/**
+ * The statistics over the user's embeddings of the model, the same whoever asks and however the query is filtered:
+ * the noise level belongs to the model and the query, so a folder filter, an unlocked private folder or the agent's
+ * photo guard must not move the cutoff (the vectors themselves are filtered as always, only these aggregates are not).
+ *
+ * A big library is cut to a fixed subset first (ordered by a hash, so it is the same on every search and cheap: only
+ * the sampled vectors are compared with the query). `count(*) OVER ()` runs before the limit. `sampleSize` is a
+ * parameter for tests.
+ */
 export function fetchTextNoise(ref: ModelRef, literal: string, scope: NoiseScope, sampleSize = NOISE_SAMPLE_SIZE): Promise<NoiseStats | null> {
     const sampled = excludeTrashed(db.selectFrom('documents as d'), 'd.')
         .innerJoin('document_text_embeddings as e', 'e.document_id', 'd.id')
@@ -123,13 +129,15 @@ export function fetchTextNoise(ref: ModelRef, literal: string, scope: NoiseScope
         .where('e.model', '=', ref.model)
         .where('e.model_version', '=', ref.version)
         .select(['e.embedding as embedding', TOTAL])
-        .orderBy(BY_SAMPLE_ORDER)
+        .orderBy(BY_CHUNK_ORDER)
         .orderBy('e.document_id')
+        .orderBy('e.chunk_index')
         .limit(sampleSize);
 
     return summarise(sampled, literal, Date.now());
 }
 
+/** Same statistics over the image embeddings (one per document). */
 export function fetchImageNoise(ref: ModelRef, literal: string, scope: NoiseScope, sampleSize = NOISE_SAMPLE_SIZE): Promise<NoiseStats | null> {
     const sampled = excludeTrashed(db.selectFrom('documents as d'), 'd.')
         .innerJoin('document_image_embeddings as e', 'e.document_id', 'd.id')
@@ -137,7 +145,7 @@ export function fetchImageNoise(ref: ModelRef, literal: string, scope: NoiseScop
         .where('e.model', '=', ref.model)
         .where('e.model_version', '=', ref.version)
         .select(['e.embedding as embedding', TOTAL])
-        .orderBy(BY_SAMPLE_ORDER)
+        .orderBy(BY_DOCUMENT_ORDER)
         .orderBy('e.document_id')
         .limit(sampleSize);
 

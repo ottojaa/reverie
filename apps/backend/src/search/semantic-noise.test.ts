@@ -244,6 +244,26 @@ describeDb('meaning cutoff against the database', () => {
         expect(again).toMatchObject({ median: first!.median, sigma: first!.sigma });
     });
 
+    it('spreads the sample over chunks of every document instead of filling it with a few long ones', async () => {
+        const owner = await seedUser(db, 'spread-owner');
+
+        await addChunks(
+            owner,
+            'low.pdf',
+            Array.from({ length: 60 }, () => 0.1),
+        );
+        await addChunks(
+            owner,
+            'high.pdf',
+            Array.from({ length: 60 }, () => 0.5),
+        );
+
+        const stats = await fetchTextNoise({ model: TEXT_MODEL.name, version: TEXT_MODEL.revision }, literal(TEXT_DIMENSIONS), { userId: owner }, 40);
+
+        // Taken from one whole document the spread would be ~0; from both it is about (0.5 - 0.1) / 1.349.
+        expect(stats!.sigma).toBeGreaterThan(0.1);
+    });
+
     it('has no statistics for a user without embeddings', async () => {
         const nobody = await seedUser(db, 'nobody');
 
