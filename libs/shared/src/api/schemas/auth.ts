@@ -41,13 +41,19 @@ export const ChangePasswordRequestSchema = z.object({
 
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 
-// Google OAuth callback query
-export const GoogleCallbackQuerySchema = z.object({
-    code: z.string(),
-    state: z.string().optional(),
+// External sign-in providers the login page offers (public: id and display name only)
+export const OidcProviderSchema = z.object({
+    id: z.string(),
+    name: z.string(),
 });
 
-export type GoogleCallbackQuery = z.infer<typeof GoogleCallbackQuerySchema>;
+export type OidcProvider = z.infer<typeof OidcProviderSchema>;
+
+export const OidcProvidersResponseSchema = z.object({
+    providers: z.array(OidcProviderSchema),
+});
+
+export type OidcProvidersResponse = z.infer<typeof OidcProvidersResponseSchema>;
 
 // Auth error response
 export const AuthErrorSchema = z.object({

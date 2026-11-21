@@ -8,35 +8,15 @@ import {
     RefreshTokenResponseSchema,
 } from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
 import type { User } from '../../db/schema.js';
+import { redeemOauthCode } from '../../oidc/oauth-code-store.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
 import { clearVaultCookie } from '../../services/folder-locks.js';
 
-const TTL_MS = 60_000;
-const oauthCodeStore = new Map<string, { access_token: string; expires_in: number; expiresAt: number }>();
-
-function cleanupExpiredCodes() {
-    const now = Date.now();
-
-    for (const [code, data] of oauthCodeStore.entries()) {
-        if (data.expiresAt < now) oauthCodeStore.delete(code);
-    }
-}
-
 // Simple success response schema
 const SuccessResponseSchema = z.object({ success: z.boolean() });
-
-// Google userinfo response type
-interface GoogleUserInfo {
-    id: string;
-    email: string;
-    verified_email: boolean;
-    name: string;
-    picture?: string;
-}
 
 // Serialize user for API response (exclude sensitive fields)
 function serializeUser(user: User) {
@@ -256,7 +236,7 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
-    // POST /auth/exchange-oauth-code - Exchange short-lived code for access token (OAuth callback flow)
+    // POST /auth/exchange-oauth-code - Exchange short-lived code for access token (external sign-in callback flow)
     fastify.post<{ Body: { code: string } }>(
         '/auth/exchange-oauth-code',
         {
@@ -264,7 +244,7 @@ export default async function (fastify: FastifyInstance) {
                 rateLimit: { max: 30, timeWindow: '15 minutes' },
             },
             schema: {
-                description: 'Exchange OAuth callback code for access token',
+                description: 'Exchange external sign-in callback code for access token',
                 tags: ['Auth'],
                 body: z.object({ code: z.string().min(1) }),
                 response: {
@@ -275,9 +255,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const { code } = request.body;
-            cleanupExpiredCodes();
-
-            const data = oauthCodeStore.get(code);
+            const data = redeemOauthCode(code);
 
             if (!data) {
                 return reply.status(400).send({
@@ -286,122 +264,10 @@ export default async function (fastify: FastifyInstance) {
                 });
             }
 
-            oauthCodeStore.delete(code);
-
             return {
                 access_token: data.access_token,
                 expires_in: data.expires_in,
             };
         },
     );
-
-    // GET /auth/google - Start Google OAuth (redirect to Google)
-    // Explicit route because the oauth2 plugin registers inside its encapsulated context and isn't visible here
-    if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_CALLBACK_URL) {
-        fastify.get(
-            '/auth/google',
-            {
-                schema: {
-                    description: 'Start Google OAuth flow (redirects to Google)',
-                    tags: ['Auth'],
-                },
-            },
-            async function (request, reply) {
-                const oauth2 = (fastify as unknown as { googleOAuth2?: { generateAuthorizationUri: (req: unknown, reply: unknown) => Promise<string> } })
-                    .googleOAuth2;
-
-                if (!oauth2) {
-                    return reply.status(500).send({
-                        error: 'google_oauth_not_configured',
-                        message: 'Google OAuth not configured',
-                    });
-                }
-
-                const authorizationUri = await oauth2.generateAuthorizationUri(request, reply);
-
-                return reply.redirect(authorizationUri);
-            },
-        );
-
-        // GET /auth/google/callback - Google OAuth callback
-        fastify.get<{ Querystring: { code?: string; error?: string } }>(
-            '/auth/google/callback',
-            {
-                schema: {
-                    description: 'Google OAuth callback',
-                    tags: ['Auth'],
-                },
-            },
-            async function (request, reply) {
-                try {
-                    // Get the OAuth2 plugin instance
-                    const oauth2 = (fastify as any).googleOAuth2;
-
-                    if (!oauth2) {
-                        return reply.status(500).send({
-                            error: 'google_account_not_linked',
-                            message: 'Google OAuth not configured',
-                        });
-                    }
-
-                    // Exchange code for token
-                    const tokenResponse = await oauth2.getAccessTokenFromAuthorizationCodeFlow(request);
-
-                    // Get user info from Google
-                    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                        headers: {
-                            Authorization: `Bearer ${tokenResponse.token.access_token}`,
-                        },
-                    });
-
-                    if (!userInfoResponse.ok) {
-                        return reply.status(401).send({
-                            error: 'invalid_credentials',
-                            message: 'Failed to get user info from Google',
-                        });
-                    }
-
-                    const googleUser = (await userInfoResponse.json()) as GoogleUserInfo;
-
-                    // Try to find user by Google ID
-                    const result = await authService.authenticateWithGoogle(googleUser.id);
-
-                    if (!result) {
-                        // User not found - redirect to error page
-                        // In production, redirect to frontend with error
-                        const errorUrl = `${env.CORS_ORIGIN}/login?error=google_account_not_linked`;
-
-                        return reply.redirect(errorUrl);
-                    }
-
-                    // Set refresh token as httpOnly cookie
-                    reply.setCookie('refresh_token', result.tokens.refresh_token, {
-                        httpOnly: true,
-                        secure: env.NODE_ENV === 'production',
-                        sameSite: 'lax',
-                        path: '/auth',
-                        maxAge: 7 * 24 * 60 * 60, // 7 days
-                    });
-
-                    // Use short-lived code instead of token in URL (avoids token in logs/history)
-                    const code = nanoid(32);
-                    oauthCodeStore.set(code, {
-                        access_token: result.tokens.access_token,
-                        expires_in: result.tokens.expires_in,
-                        expiresAt: Date.now() + TTL_MS,
-                    });
-                    cleanupExpiredCodes();
-
-                    const successUrl = `${env.CORS_ORIGIN}/login/callback?code=${code}`;
-
-                    return reply.redirect(successUrl);
-                } catch (err) {
-                    console.error('Google OAuth error:', err);
-                    const errorUrl = `${env.CORS_ORIGIN}/login?error=google_auth_failed`;
-
-                    return reply.redirect(errorUrl);
-                }
-            },
-        );
-    }
 }

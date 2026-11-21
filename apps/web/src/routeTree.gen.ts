@@ -19,7 +19,7 @@ import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BrowseIndexRouteImport } from './routes/browse.index'
-import { Route as LoginCallbackRouteImport } from './routes/login.callback'
+import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as DocumentIdRouteImport } from './routes/document.$id'
 import { Route as BrowseSectionIdRouteImport } from './routes/browse.$sectionId'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -76,9 +76,9 @@ const BrowseIndexRoute = BrowseIndexRouteImport.update({
   getParentRoute: () => BrowseRoute,
 } as any)
 const LoginCallbackRoute = LoginCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => LoginRoute,
+  id: '/login_/callback',
+  path: '/login/callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DocumentIdRoute = DocumentIdRouteImport.update({
   id: '/document/$id',
@@ -107,7 +107,7 @@ export interface FileRoutesByFullPath {
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
   '/duplicates': typeof DuplicatesRoute
-  '/login': typeof LoginRouteWithChildren
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
@@ -123,7 +123,7 @@ export interface FileRoutesByTo {
   '/agent': typeof AgentRoute
   '/canvas': typeof CanvasRoute
   '/duplicates': typeof DuplicatesRoute
-  '/login': typeof LoginRouteWithChildren
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
@@ -141,7 +141,7 @@ export interface FileRoutesById {
   '/browse': typeof BrowseRouteWithChildren
   '/canvas': typeof CanvasRoute
   '/duplicates': typeof DuplicatesRoute
-  '/login': typeof LoginRouteWithChildren
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
@@ -149,7 +149,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/browse/$sectionId': typeof BrowseSectionIdRoute
   '/document/$id': typeof DocumentIdRoute
-  '/login/callback': typeof LoginCallbackRoute
+  '/login_/callback': typeof LoginCallbackRoute
   '/browse/': typeof BrowseIndexRoute
 }
 export interface FileRouteTypes {
@@ -201,7 +201,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/browse/$sectionId'
     | '/document/$id'
-    | '/login/callback'
+    | '/login_/callback'
     | '/browse/'
   fileRoutesById: FileRoutesById
 }
@@ -211,13 +211,14 @@ export interface RootRouteChildren {
   BrowseRoute: typeof BrowseRouteWithChildren
   CanvasRoute: typeof CanvasRoute
   DuplicatesRoute: typeof DuplicatesRoute
-  LoginRoute: typeof LoginRouteWithChildren
+  LoginRoute: typeof LoginRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   TrashRoute: typeof TrashRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   DocumentIdRoute: typeof DocumentIdRoute
+  LoginCallbackRoute: typeof LoginCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -292,12 +293,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BrowseIndexRouteImport
       parentRoute: typeof BrowseRoute
     }
-    '/login/callback': {
-      id: '/login/callback'
-      path: '/callback'
+    '/login_/callback': {
+      id: '/login_/callback'
+      path: '/login/callback'
       fullPath: '/login/callback'
       preLoaderRoute: typeof LoginCallbackRouteImport
-      parentRoute: typeof LoginRoute
+      parentRoute: typeof rootRouteImport
     }
     '/document/$id': {
       id: '/document/$id'
@@ -343,29 +344,20 @@ const BrowseRouteChildren: BrowseRouteChildren = {
 const BrowseRouteWithChildren =
   BrowseRoute._addFileChildren(BrowseRouteChildren)
 
-interface LoginRouteChildren {
-  LoginCallbackRoute: typeof LoginCallbackRoute
-}
-
-const LoginRouteChildren: LoginRouteChildren = {
-  LoginCallbackRoute: LoginCallbackRoute,
-}
-
-const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentRoute: AgentRoute,
   BrowseRoute: BrowseRouteWithChildren,
   CanvasRoute: CanvasRoute,
   DuplicatesRoute: DuplicatesRoute,
-  LoginRoute: LoginRouteWithChildren,
+  LoginRoute: LoginRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   TrashRoute: TrashRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   DocumentIdRoute: DocumentIdRoute,
+  LoginCallbackRoute: LoginCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

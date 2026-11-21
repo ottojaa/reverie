@@ -1,6 +1,5 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
-import fastifyOauth2 from '@fastify/oauth2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { env } from '../../config/env.js';
@@ -32,7 +31,6 @@ declare module 'fastify' {
     interface FastifyInstance {
         authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
         authenticateAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-        googleOAuth2?: typeof fastifyOauth2;
     }
 }
 
@@ -61,23 +59,6 @@ export default fp(async function (fastify) {
             signed: true,
         },
     });
-
-    // Register Google OAuth2 if configured
-    if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_CALLBACK_URL) {
-        await fastify.register(fastifyOauth2, {
-            name: 'googleOAuth2',
-            scope: ['profile', 'email'],
-            credentials: {
-                client: {
-                    id: env.GOOGLE_CLIENT_ID,
-                    secret: env.GOOGLE_CLIENT_SECRET,
-                },
-                auth: fastifyOauth2.GOOGLE_CONFIGURATION,
-            },
-            startRedirectPath: '/auth/google',
-            callbackUri: env.GOOGLE_CALLBACK_URL,
-        });
-    }
 
     // Decorate fastify with authenticate function
     fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {

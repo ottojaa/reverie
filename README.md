@@ -22,7 +22,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **Private folders**: Mark a collection or folder private and it gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
 - **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
-- **Auth**: JWT + rotating refresh tokens, optional Google OAuth; multi-user with admin user management
+- **Auth**: JWT + rotating refresh tokens, optional sign-in with any OpenID Connect provider (Google, Authentik, Keycloak, Authelia, ...); multi-user with admin user management
 - **Clients**: Electron/React desktop app + Android (Kotlin, Jetpack Compose)
 
 ## Tech Stack
@@ -96,7 +96,46 @@ See [.env.example](.env.example) for the full reference. Key variables:
 - `ANTHROPIC_API_KEY`, `LLM_ENABLED` for AI features
 - `OCR_ENGINE` (paddleocr/tesseract), `OCR_DEVICE` (cpu / gpu:0)
 - `JWT_SECRET`, `FILE_URL_SECRET` (min 32 chars)
-- `GOOGLE_CLIENT_ID` etc. for OAuth
+- `OIDC_PROVIDERS`, `API_PUBLIC_URL`, or `GOOGLE_CLIENT_ID` etc. for external sign-in (see below)
+
+## Sign-in with OpenID Connect
+
+Password sign-in always works. To also offer "Sign in with ...", point Reverie at one or more standard
+OpenID Connect providers by configuration alone (Authentik, Keycloak, Authelia, Google, ...).
+The login page lists whatever is configured.
+
+```bash
+OIDC_PROVIDERS='[{"id":"authentik","name":"Authentik","issuer":"https://auth.example.com/application/o/reverie/","clientId":"...","clientSecret":"..."}]'
+API_PUBLIC_URL=https://api.example.com
+```
+
+Each entry has an `id` (lowercase letters, digits, dashes), a button label `name`, the `issuer` URL (Reverie
+discovers the rest from `<issuer>/.well-known/openid-configuration`), `clientId`, `clientSecret`, and optionally
+`scopes` (default `openid email profile`) and `redirectUri`. At the provider, register the redirect URI
+`<API_PUBLIC_URL>/auth/oidc/<id>/callback` (or whatever you put in `redirectUri`). Sign-in uses the authorization
+code flow with PKCE, `state` and `nonce`, and checks the ID token's signature, issuer, audience and expiry.
+
+Google keeps working from `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_CALLBACK_URL` alone: they become a
+provider with id `google` and issuer `https://accounts.google.com`, and `GOOGLE_CALLBACK_URL` stays the redirect URI.
+
+How an external sign-in finds its Reverie user (nobody is ever created by signing in; accounts are made by an admin):
+
+1. A person who signed in before is recognised by the provider's stable `sub`, whatever their email is now.
+2. A Google account already linked through `users.google_id` is matched as before, and the link is recorded.
+3. Otherwise the provider's email must match a user's email **and** the provider must say it is verified
+   (`email_verified: true`); that user is then linked. A user already linked to that provider under another `sub`
+   is never re-linked by email.
+
+Things to know:
+
+- **Trust:** Reverie believes each configured provider's `email_verified`. Only configure providers whose
+  users cannot freely choose an email address they do not own (your own Authentik/Keycloak/Authelia, Google, ...),
+  or an unrelated person could register your admin's address there and sign in as them.
+- A provider that never sends a boolean `email_verified` (Microsoft Entra, Cognito's string) cannot be used yet: nobody
+  can be linked by email, and there is no tool for recording a link by hand, so no one could sign in through it.
+- The provider must sign ID tokens with RS256 (the default everywhere) and `issuer` must be `https`; plain `http`
+  is accepted only for `localhost`/`127.0.0.1` (a provider on the same machine).
+- Reverie's own email verification (sign-up, password reset) is not built yet: it needs a mail provider.
 
 ## AI & Model Providers
 

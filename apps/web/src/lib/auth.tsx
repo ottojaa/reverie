@@ -17,7 +17,10 @@ interface AuthContextType extends AuthState {
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
     refreshToken: () => Promise<boolean>;
-    loginWithGoogle: () => void;
+    /** Leaves for the provider's sign-in page; the provider sends the browser back to /login/callback. */
+    loginWithProvider: (providerId: string) => void;
+    /** Starts the session of a user who has just come back from a provider: stores the token and loads the user it belongs to. */
+    completeProviderLogin: (accessToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -180,10 +183,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return promise;
     }, []);
 
-    const loginWithGoogle = () => {
-        // Redirect to Google OAuth endpoint
-        window.location.href = `${API_BASE}/auth/google`;
+    const loginWithProvider = (providerId: string) => {
+        window.location.href = `${API_BASE}/auth/oidc/${encodeURIComponent(providerId)}`;
     };
+
+    // useCallback: the callback page lists this as an effect dependency, and a new function every render would re-run it.
+    const completeProviderLogin = useCallback(async (accessToken: string) => {
+        const response = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+        if (!response.ok) throw new Error('Failed to load the signed-in user');
+
+        const data: { user: User } = await response.json();
+
+        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        setState({ user: data.user, accessToken, isLoading: false, isAuthenticated: true });
+    }, []);
 
     useEffect(() => {
         initApiAuth({
@@ -206,7 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 login,
                 logout,
                 refreshToken,
-                loginWithGoogle,
+                loginWithProvider,
+                completeProviderLogin,
             }}
         >
             {children}

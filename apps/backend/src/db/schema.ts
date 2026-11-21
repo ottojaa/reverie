@@ -314,6 +314,18 @@ export interface RefreshTokensTable {
 export type RefreshToken = Selectable<RefreshTokensTable>;
 export type NewRefreshToken = Insertable<RefreshTokensTable>;
 
+// External sign-in links: which provider account (OpenID Connect `sub`) signs in as which user.
+export interface UserIdentitiesTable {
+    id: Generated<string>;
+    user_id: string;
+    provider: string;
+    subject: string;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type UserIdentity = Selectable<UserIdentitiesTable>;
+export type NewUserIdentity = Insertable<UserIdentitiesTable>;
+
 // Server settings table (admin-editable overrides of the defaults in settings/registry.ts)
 export interface ServerSettingsTable {
     key: string;
@@ -443,6 +455,7 @@ export interface DocumentImageKindsTable {
 export interface Database {
     users: UsersTable;
     refresh_tokens: RefreshTokensTable;
+    user_identities: UserIdentitiesTable;
     folders: FoldersTable;
     documents: DocumentsTable;
     ocr_results: OcrResultsTable;

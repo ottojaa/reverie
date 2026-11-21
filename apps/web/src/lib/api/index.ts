@@ -1,5 +1,5 @@
 export { adminApi } from './admin';
-export { authApi } from './auth-api';
+export { authApi, useSignInProviders } from './auth-api';
 export {
     documentsApi,
     findCachedDocument,
