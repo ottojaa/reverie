@@ -36,7 +36,7 @@ import com.reverie.app.ui.screens.viewer.processingSummary
 /**
  * The AI-first document details, hosted by whatever container reveals it (a swipe-up pane or a
  * bottom sheet). This composable does no scrolling and applies no navigation-bar insets — the host
- * owns both. Order: AI summary (hero, card-less) → location/map → file facts → mentions & topics
+ * owns both. Order: AI summary (hero, card-less) → location/map → file facts → taught labels → mentions & topics
  * (collapsed) → processing (admin, collapsed).
  */
 @Composable
@@ -72,6 +72,8 @@ fun InsightPanelContent(
         LocationSection(document.photo_metadata)
 
         InsightFactsSection(document)
+
+        InsightLabelsSection(document.tags.filter { it.source == "taught" }.map { it.name })
 
         InsightTagsSection(metadata)
 

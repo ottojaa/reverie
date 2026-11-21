@@ -26,6 +26,8 @@ export interface FakeMl extends MlClient {
     setTextVector(text: string, vector: number[]): void;
     /** Pin the vector a query text embeds to through the image model's text tower. */
     setImageTextVector(text: string, vector: number[]): void;
+    /** Pin the vector an image embeds to, keyed by the bytes handed to embedImages, instead of the default one-hot vector. */
+    setImageVector(content: Buffer | string, vector: number[]): void;
     /** Make every text request take this long, to simulate a slow service. */
     setDelay(ms: number): void;
 }
@@ -54,6 +56,7 @@ export function createFakeMl(): FakeMl {
     let imageTextEmbedder = (_text: string, index: number) => unit(IMAGE_DIMENSIONS, index);
     const textVectors = new Map<string, number[]>();
     const imageTextVectors = new Map<string, number[]>();
+    const imageVectors = new Map<string, number[]>();
 
     const assertUp = () => {
         if (down) throw new MlUnavailableError('reverie-ml is unreachable: test');
@@ -72,6 +75,7 @@ export function createFakeMl(): FakeMl {
         setImageRevision: (revision) => void (imageModel = { ...IMAGE_MODEL, revision }),
         setTextVector: (text, vector) => void textVectors.set(text, vector),
         setImageTextVector: (text, vector) => void imageTextVectors.set(text, vector),
+        setImageVector: (content, vector) => void imageVectors.set(content.toString(), vector),
         setDelay: (ms) => void (delayMs = ms),
         async health() {
             assertUp();
@@ -104,7 +108,7 @@ export function createFakeMl(): FakeMl {
 
             fake.imageCalls += 1;
 
-            return { model: imageModel, embeddings: images.map((_, i) => unit(IMAGE_DIMENSIONS, i)) };
+            return { model: imageModel, embeddings: images.map((image, i) => imageVectors.get(image.toString()) ?? unit(IMAGE_DIMENSIONS, i)) };
         },
     };
 

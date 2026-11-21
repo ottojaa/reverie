@@ -1,9 +1,10 @@
+import { TeachLabelDialog } from '@/components/taught-labels/TeachLabelDialog';
 import { Button } from '@/components/ui/button';
 import { buildDownloadUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
 import { useRouter } from '@tanstack/react-router';
-import { ArrowLeft, Download, Edit3, Images, Pencil } from 'lucide-react';
+import { ArrowLeft, Download, Edit3, Images, Pencil, Tag } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { InsightTitle } from './insights/InsightTitle';
@@ -25,6 +26,7 @@ interface ViewerToolbarProps {
 export function ViewerToolbar({ document, fileUrl, isInsightsOpen, onToggleInsights, canEdit = false, isEditMode = false, onToggleEdit }: ViewerToolbarProps) {
     const router = useRouter();
     const [isSimilarOpen, setIsSimilarOpen] = useState(false);
+    const [isTeachOpen, setIsTeachOpen] = useState(false);
     const isImage = document.mime_type.startsWith('image/');
     const isTextLike = document.mime_type.startsWith('text/') || document.mime_type === 'application/json';
 
@@ -82,6 +84,17 @@ export function ViewerToolbar({ document, fileUrl, isInsightsOpen, onToggleInsig
                             <Images className="size-4" />
                         </Button>
                         <SimilarImagesDialog documentId={document.id} open={isSimilarOpen} onOpenChange={setIsSimilarOpen} />
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setIsTeachOpen(true)}
+                            title="Teach label…"
+                            aria-label="Teach label"
+                            className="text-muted-foreground"
+                        >
+                            <Tag className="size-4" />
+                        </Button>
+                        <TeachLabelDialog documentIds={[document.id]} open={isTeachOpen} onOpenChange={setIsTeachOpen} />
                     </>
                 )}
 
