@@ -8,11 +8,13 @@ export const IMAGE_KINDS = ['photo', 'screenshot', 'document', 'receipt', 'diagr
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
 /**
- * Shadow mode: verdicts are stored beside `document_category` and change nothing. A later, separate change sets this
- * to true once the verdicts have been compared with the real library. It is a constant, not an environment flag, so
- * switching it on is a reviewed change. See isKindFlipActive for the other condition.
+ * The flip: a stored verdict decides an image's `document_category`, and the embed worker (not OCR) queues the image's
+ * LLM job once it has a kind. Switching it is a reviewed change, so it is a constant, not an environment flag. It is
+ * active only with a local ML service (see isKindFlipActive): without one the OCR heuristics decide, as they did
+ * before verdicts existed. Setting it back to false returns to shadow mode, where verdicts are stored and change
+ * nothing; scripts/apply-image-kinds.ts --undo puts the heuristic categories back.
  */
-export const IMAGE_KIND_DECIDES_CATEGORY = false;
+export const IMAGE_KIND_DECIDES_CATEGORY = true;
 
 /** The kinds that read as paper. A camera image of paper is still held back from Claude by its EXIF. */
 export const PAPER_KINDS: readonly ImageKind[] = ['document', 'receipt'];

@@ -223,9 +223,9 @@ describeDb('image kind', () => {
         });
     });
 
-    describe('shadow mode (the production setting)', () => {
-        it('is what production runs', () => {
-            expect(isKindFlipActive(true)).toBe(false);
+    describe('shadow mode (flip off: no ML service, or the constant set back to false)', () => {
+        it('is active only with an ML service configured', () => {
+            expect(isKindFlipActive(true)).toBe(true);
             expect(isKindFlipActive(false)).toBe(false);
         });
 
