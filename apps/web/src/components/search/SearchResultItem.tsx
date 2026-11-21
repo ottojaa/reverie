@@ -76,6 +76,9 @@ export const SearchResultItem = memo(function SearchResultItem({
     const displayName = result.display_name;
     const date = result.extracted_date ?? result.uploaded_at;
     const containingFolder = getImmediateFolder(result.folder_path);
+    const taughtTags = new Set(result.taught_tags);
+    // Taught labels first: they are the owner's own, so they shouldn't be crowded out of the two slots
+    const rowTags = [...result.taught_tags, ...result.tags.filter((tag) => !taughtTags.has(tag))];
     const folderId = result.folder_id;
     const handleFolderClick =
         onFolderClick && folderId
@@ -209,10 +212,14 @@ export const SearchResultItem = memo(function SearchResultItem({
                         </>
                     )}
 
-                    {result.tags.length > 0 && (
+                    {rowTags.length > 0 && (
                         <span className="ml-auto hidden shrink-0 gap-1 sm:inline-flex">
-                            {result.tags.slice(0, MAX_ROW_TAGS).map((tag) => (
-                                <Chip key={tag} variant="secondary">
+                            {rowTags.slice(0, MAX_ROW_TAGS).map((tag) => (
+                                <Chip
+                                    key={tag}
+                                    variant={taughtTags.has(tag) ? 'taught' : 'secondary'}
+                                    title={taughtTags.has(tag) ? 'Added by a taught label' : undefined}
+                                >
                                     {tag}
                                 </Chip>
                             ))}

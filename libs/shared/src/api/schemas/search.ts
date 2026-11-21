@@ -118,6 +118,8 @@ export const DocumentSearchResultSchema = z.object({
     // Video length in seconds; null for non-video hits.
     duration_seconds: z.number().nullable(),
     tags: z.array(z.string()),
+    // The tags that a taught label put there (a subset of `tags`), so clients can style them apart.
+    taught_tags: z.array(z.string()),
 
     // Relevance (for text searches)
     relevance: z.number().nullable(),

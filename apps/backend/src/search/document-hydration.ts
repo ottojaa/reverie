@@ -81,15 +81,17 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
     }
 
     const tagRows =
-        documentIds.length > 0 ? await db.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', documentIds).execute() : [];
+        documentIds.length > 0
+            ? await db.selectFrom('document_tags').select(['document_id', 'tag', 'source']).where('document_id', 'in', documentIds).execute()
+            : [];
 
     const tagMap = new Map<string, string[]>();
+    const taughtMap = new Map<string, string[]>();
 
     for (const row of tagRows) {
-        const tags = tagMap.get(row.document_id) ?? [];
+        tagMap.set(row.document_id, [...(tagMap.get(row.document_id) ?? []), row.tag]);
 
-        tags.push(row.tag);
-        tagMap.set(row.document_id, tags);
+        if (row.source === 'taught') taughtMap.set(row.document_id, [...(taughtMap.get(row.document_id) ?? []), row.tag]);
     }
 
     const storageService = getStorageService();
@@ -134,6 +136,7 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
                 size_bytes: Number(row.size_bytes),
                 duration_seconds: row.duration_seconds,
                 tags: tagMap.get(row.id) ?? [],
+                taught_tags: taughtMap.get(row.id) ?? [],
                 relevance: row.relevance ?? null,
             };
         }),

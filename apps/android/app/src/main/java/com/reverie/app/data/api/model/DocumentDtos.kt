@@ -70,6 +70,16 @@ data class DocumentDto(
     val thumbnail_urls: ThumbnailUrls? = null,
     // Detail-only.
     val photo_metadata: DocumentPhotoMetadata? = null,
+    // Detail-only: every tag with where it came from. Taught labels have source "taught".
+    val tags: List<DocumentTagDto> = emptyList(),
+)
+
+@Serializable
+data class DocumentTagDto(
+    val name: String,
+    // "user", "auto" or "taught"; kept a string so a source added later doesn't fail decoding.
+    val source: String,
+    val label_id: String? = null,
 )
 
 /**

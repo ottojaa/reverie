@@ -1,6 +1,8 @@
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { sanitizeTag } from '../llm/tag-sanitizer';
+import { deleteExclusions, planExclusions, type Exclusion } from '../taught-labels/exclusions';
+import { addExclusions } from '../taught-labels/taught-labels.repository';
 import type { Undoer } from './undo-types';
 import { defineTool, ToolError } from './types';
 import { assertVisibleDocuments } from './visibility';
@@ -23,7 +25,7 @@ function toTags(raw: string[]): string[] {
 
 /** document id -> tags */
 type TagsByDocument = Record<string, string[]>;
-type RemovedTag = { tag: string; source: 'user' | 'auto' };
+type RemovedTag = { tag: string; source: 'user' | 'auto' | 'taught' };
 
 export interface AddTagsState {
     added: TagsByDocument;
@@ -31,6 +33,8 @@ export interface AddTagsState {
 
 export interface RemoveTagsState {
     removed: Record<string, RemovedTag[]>;
+    /** Taught-label exclusions the removal created (removing a taught label's tag keeps it from coming back); undo lifts them. */
+    exclusions?: Exclusion[];
 }
 
 function countTags(byDocument: Record<string, unknown[]>): number {
@@ -131,6 +135,20 @@ export const removeTags = defineTool({
 
                 for (const row of existing) removed[row.document_id] = [...(removed[row.document_id] ?? []), { tag: row.tag, source: row.source }];
 
+                const { exclusions, examples } = await planExclusions(
+                    trx,
+                    ctx.user.id,
+                    existing.map((row) => ({ document_id: row.document_id, tag: row.tag })),
+                );
+
+                if (examples.length > 0) {
+                    throw new ToolError(
+                        'Cannot remove a taught label from one of its example images: ' +
+                            examples[0]!.name +
+                            '. Remove the example in the Taught labels manager instead',
+                    );
+                }
+
                 const filenames = new Map(docs.map((doc) => [doc.id, doc.original_filename]));
 
                 return {
@@ -141,7 +159,7 @@ export const removeTags = defineTool({
                         sample: toSample(removed, filenames),
                     },
                     changes: countTags(removed),
-                    before: { removed } satisfies RemoveTagsState,
+                    before: { removed, exclusions } satisfies RemoveTagsState,
                     after: { removed: {} },
                     apply: async (t) => {
                         for (const [documentId, list] of Object.entries(removed)) {
@@ -156,6 +174,7 @@ export const removeTags = defineTool({
                                 .execute();
                         }
 
+                        await addExclusions(t, exclusions);
                         await rebuildSearchVectors(t, Object.keys(removed));
                     },
                 };
@@ -192,7 +211,7 @@ export const undoAddTags: Undoer = async (trx, vis, entry) => {
 };
 
 export const undoRemoveTags: Undoer = async (trx, vis, entry) => {
-    const { removed } = entry.before as RemoveTagsState;
+    const { removed, exclusions = [] } = entry.before as RemoveTagsState;
     const ids = Object.keys(removed);
     const docs = await assertVisibleDocuments(trx, vis, ids);
     const present = await trx.selectFrom('document_tags').select(['document_id', 'tag']).where('document_id', 'in', ids).execute();
@@ -212,6 +231,7 @@ export const undoRemoveTags: Undoer = async (trx, vis, entry) => {
             const rows = Object.entries(removed).flatMap(([document_id, list]) => list.map(({ tag, source }) => ({ document_id, tag, source })));
 
             await t.insertInto('document_tags').values(rows).execute();
+            await deleteExclusions(t, exclusions);
             await rebuildSearchVectors(t, ids);
         },
     };

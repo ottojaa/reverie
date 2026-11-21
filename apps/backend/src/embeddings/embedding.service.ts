@@ -11,6 +11,7 @@ import {
     upsertImageEmbedding,
     type ModelRef,
 } from './embedding.repository';
+import { propagateForDocument } from '../taught-labels/propagation';
 import type { MlClient, MlModelInfo } from './ml.client';
 import { chunkText } from './text-chunker';
 
@@ -95,11 +96,17 @@ export async function embedDocumentImage(deps: EmbedDeps, documentId: string): P
     const rendition = await readFile(source.thumbnailPath);
     const hash = md5(rendition);
 
-    if (await hasCurrentImageEmbedding(db, documentId, hash, current)) return 'unchanged';
+    // A retry after a failed propagation lands here, so the labels are applied on this path too.
+    if (await hasCurrentImageEmbedding(db, documentId, hash, current)) {
+        await propagateForDocument(db, documentId);
+
+        return 'unchanged';
+    }
 
     const result = await ml.embedImages([rendition]);
 
     await upsertImageEmbedding(db, documentId, hash, toModelRef(result.model), result.embeddings[0]!);
+    await propagateForDocument(db, documentId);
 
     return 'embedded';
 }

@@ -2,6 +2,18 @@ import { z } from 'zod';
 import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, UuidSchema } from './common.js';
 import { JobStatusEnum } from './jobs.js';
 
+/** Where a document's tag came from. `taught` tags come from a taught label and carry its id. */
+export const DocumentTagSourceEnum = z.enum(['user', 'auto', 'taught']);
+export type DocumentTagSource = z.infer<typeof DocumentTagSourceEnum>;
+
+export const DocumentTagSchema = z.object({
+    name: z.string(),
+    source: DocumentTagSourceEnum,
+    /** The taught label behind a `taught` tag; null for the other sources. */
+    label_id: UuidSchema.nullable(),
+});
+export type DocumentTag = z.infer<typeof DocumentTagSchema>;
+
 /**
  * Document categories - distinguishes between content types
  */
@@ -117,6 +129,8 @@ export const DocumentSchema = z.object({
     // Only populated on the document detail endpoint (GET /documents/:id);
     // omitted from list responses to avoid per-row joins.
     photo_metadata: DocumentPhotoMetadataSchema.nullable().optional(),
+    // Detail-only too: the document's tags with where each came from.
+    tags: z.array(DocumentTagSchema).optional(),
 });
 
 export type Document = z.infer<typeof DocumentSchema>;

@@ -45,11 +45,14 @@ class DtoSerializationTest {
               "updated_at": "2024-06-01T09:00:00.000Z",
               "file_url": "/files/x?e=1&s=y",
               "thumbnail_urls": {"sm":"/t/sm","md":"/t/md","lg":"/t/lg"},
-              "photo_metadata": {"latitude":34.0,"longitude":-118.7,"city":"Malibu","country":"US","taken_at":"2024-06-01"}
+              "photo_metadata": {"latitude":34.0,"longitude":-118.7,"city":"Malibu","country":"US","taken_at":"2024-06-01"},
+              "tags": [{"name":"lunamux","source":"taught","label_id":"22222222-2222-2222-2222-222222222222"},
+                       {"name":"beach","source":"auto","label_id":null}]
             }
         """.trimIndent()
 
         val doc = json.decodeFromString(DocumentDto.serializer(), payload)
+        assertEquals(listOf("lunamux"), doc.tags.filter { it.source == "taught" }.map { it.name })
         assertEquals("beach.jpg", doc.original_filename)
         assertEquals(DocumentCategory.PHOTO, doc.document_category)
         assertEquals(JobStatus.COMPLETE, doc.ocr_status)
