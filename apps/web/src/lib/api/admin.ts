@@ -4,11 +4,15 @@ import {
     ListServerSettingsResponseSchema,
     ListUsersResponseSchema,
     ServerSettingResponseSchema,
+    TestLlmConnectionResponseSchema,
     UpdateUserResponseSchema,
     type CreateUserRequest,
     type CreateUserResponse,
     type EmbeddingStatusResponse,
     type ServerSetting,
+    type TestLlmConnectionRequest,
+    type TestLlmConnectionResponse,
+    type UpdateServerSettingsRequest,
     type UpdateServerSettingRequest,
     type UpdateUserRequest,
     type User,
@@ -54,6 +58,19 @@ export const adminApi = {
         const { data } = await apiClient.delete(`/admin/settings/${encodeURIComponent(key)}`);
 
         return ServerSettingResponseSchema.parse(data).setting;
+    },
+
+    /** Writes and resets several settings in one transaction; answers with the whole list. */
+    async updateSettings(body: UpdateServerSettingsRequest): Promise<ServerSetting[]> {
+        const { data } = await apiClient.put('/admin/settings', body);
+
+        return ListServerSettingsResponseSchema.parse(data).settings;
+    },
+
+    async testLlmConnection(body: TestLlmConnectionRequest): Promise<TestLlmConnectionResponse> {
+        const { data } = await apiClient.post('/admin/llm/test', body);
+
+        return TestLlmConnectionResponseSchema.parse(data);
     },
 
     async getEmbeddingStatus(): Promise<EmbeddingStatusResponse> {

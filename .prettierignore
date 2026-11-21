@@ -27,3 +27,6 @@ tmp
 apps/reverie-ml/eval/results.json
 apps/reverie-ml/eval/RESULTS.md
 .pytest_cache
+
+# Recorded Anthropic request bodies (llm/anthropic-requests.test.ts); kept as recorded
+apps/backend/src/llm/fixtures/anthropic-requests.json

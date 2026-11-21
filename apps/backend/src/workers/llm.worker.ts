@@ -4,6 +4,7 @@ import { NonRetryableJobError } from '../jobs/job.types';
 import { checkLlmEligibility } from '../llm/eligibility';
 import { processDocument } from '../llm/llm.service';
 import { markLlmFailed } from '../llm/llm-store';
+import { isVisionSwitchedOn } from '../llm/provider-config';
 import { isDocumentPrivate } from '../services/privacy';
 import type { LlmJobData, LlmJobResult } from '../queues/llm.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -44,7 +45,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     // Check eligibility. The document may have been locked while this job waited, so privacy is
     // read now, and a private skip applies even when the job forces a processing type.
     const isPrivate = await isDocumentPrivate(document);
-    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });
+    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate, vision: await isVisionSwitchedOn() });
     const processingType = type || eligibility.processingType;
 
     // Private and trashed skips apply even when the job forces a processing type.
@@ -99,7 +100,7 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const result: LlmJobResult = {
         summary: llmResult.summary ?? null,
         enhancedMetadata: metadata,
-        tokenCount: llmResult.tokenCount ?? 0,
+        tokenCount: llmResult.tokenCount ?? null,
         skipped: llmResult.skipped,
         skipReason: llmResult.reason,
     };

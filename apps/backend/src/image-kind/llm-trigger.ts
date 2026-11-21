@@ -1,7 +1,7 @@
 import { sql, type Kysely } from 'kysely';
-import { env } from '../config/env';
 import type { Database } from '../db/schema';
 import { toLookKindFromVerdict } from '../llm/image-look';
+import { isVisionSwitchedOn } from '../llm/provider-config';
 import { shouldSkipLlmProcessing } from '../ocr/text-detector';
 import type { LlmJobData } from '../queues/llm.queue';
 import { isCameraBacked } from '../tools/photo';
@@ -20,12 +20,12 @@ interface Candidate {
 
 /**
  * A screenshot, document, receipt or diagram with no camera facts gets the image call whatever its OCR text says
- * (the call reads the pixels, so empty or poor OCR is no reason to skip it); it needs vision on. Anything else gets a
+ * (the call reads the pixels, so empty or poor OCR is no reason to skip it); it needs the "model sees images" switch on (`vision`). Anything else gets a
  * text summary when its text clears the OCR thresholds, as when the OCR worker queues the job, and otherwise nothing:
  * a photo is never sent. The LLM worker decides again when the job runs (decideImageLook).
  */
-function wantsLlmJob(candidate: Candidate, kind: ImageKind): boolean {
-    if (env.LLM_VISION_ENABLED && toLookKindFromVerdict(kind) !== null && !candidate.hasCameraFacts) return true;
+function wantsLlmJob(candidate: Candidate, kind: ImageKind, vision: boolean): boolean {
+    if (vision && toLookKindFromVerdict(kind) !== null && !candidate.hasCameraFacts) return true;
 
     return !shouldSkipLlmProcessing(candidate.confidence ?? 0, candidate.hasText);
 }
@@ -37,6 +37,8 @@ function wantsLlmJob(candidate: Candidate, kind: ImageKind): boolean {
  * so a reprocess (a new OCR run, a newer marker) is summarised again and a replay is not.
  */
 export async function queueLlmAfterKind(db: Kysely<Database>, addLlmJob: AddLlmJob, documentId: string, kind: ImageKind): Promise<LlmTriggerOutcome> {
+    // The admin's setting, read before the lock so the transaction stays short.
+    const vision = await isVisionSwitchedOn();
     const claim = await db.transaction().execute(async (trx) => {
         await sql`SELECT pg_advisory_xact_lock(hashtext(${'image-kind-llm:' + documentId}))`.execute(trx);
 
@@ -82,7 +84,7 @@ export async function queueLlmAfterKind(db: Kysely<Database>, addLlmJob: AddLlmJ
             hasCameraFacts: isCameraBacked(row),
         };
 
-        if (!wantsLlmJob(candidate, kind)) {
+        if (!wantsLlmJob(candidate, kind, vision)) {
             await trx.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
 
             return { outcome: 'skipped' as const };

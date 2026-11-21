@@ -15,14 +15,14 @@ import type { FileCategory, LlmEligibility, LlmSkipReason, SkippedMetadata } fro
  * `isPrivate` is the document's effective privacy (see isDocumentPrivate in services/privacy).
  * It is checked first and is final: a locked item never reaches the LLM, whatever else is true.
  *
- * With `vision` on, an image is eligible for the image call whatever its OCR text says (the call reads the pixels, so
+ * `vision` is the admin's "model sees images" switch (isVisionSwitchedOn), read by the caller. With it on, an image is eligible for the image call whatever its OCR text says (the call reads the pixels, so
  * missing or poor OCR does not rule it out). Whether it really gets the call is decided when the job runs
  * (decideImageLook); `vision: false` gives the text-only answer for an image that does not.
  */
 export function checkLlmEligibility(
     document: Document,
     ocrResult: OcrResult | null | undefined,
-    { isPrivate, vision = env.LLM_VISION_ENABLED }: { isPrivate: boolean; vision?: boolean },
+    { isPrivate, vision }: { isPrivate: boolean; vision: boolean },
 ): LlmEligibility {
     if (isPrivate) {
         return {

@@ -104,14 +104,14 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### Platform & integrations
 
-| Capability                                             | Immich              | Reverie                            | Plan                        |
-| ------------------------------------------------------ | ------------------- | ---------------------------------- | --------------------------- |
-| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)                       | ✅                          |
-| Published client SDK                                   | ✅ TS + Dart        | ❌                                 | 🧊 until traction           |
-| Per-user API keys                                      | ✅                  | ✅ revocable tokens (#73)          | ✅                          |
-| MCP server (expose library to LLM agents)              | ❌                  | ✅ `/mcp` (#73)                    | ✅                          |
-| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ❌ cloud (Anthropic) only          | 🛠️ optional, per-capability |
-| Runtime admin settings (change config without restart) | ✅ admin UI         | ✅ settings store + admin UI (#69) | ✅                          |
+| Capability                                             | Immich              | Reverie                                                                  | Plan              |
+| ------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------ | ----------------- |
+| REST API + OpenAPI spec                                | ✅                  | ✅ (`/docs`)                                                             | ✅                |
+| Published client SDK                                   | ✅ TS + Dart        | ❌                                                                       | 🧊 until traction |
+| Per-user API keys                                      | ✅                  | ✅ revocable tokens (#73)                                                | ✅                |
+| MCP server (expose library to LLM agents)              | ❌                  | ✅ `/mcp` (#73)                                                          | ✅                |
+| Local, self-hosted LLM providers (for self-hosters)    | ✅ own ML container | ✅ Claude by default, or a local OpenAI-compatible server per capability | ✅ shipped        |
+| Runtime admin settings (change config without restart) | ✅ admin UI         | ✅ settings store + admin UI (#69)                                       | ✅                |
 
 ### Auth & security
 
@@ -201,11 +201,12 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
       same registry via `/mcp`, for the admin only, with an Undo on every write. Replaced the organize-only
       chat (manual organize stays).
 
-- **Optional: pluggable local LLM providers** — for self-hosters who want no cloud AI at all. A
-  provider seam so a capability (summaries, vision) can target a local model over an
-  OpenAI-compatible endpoint (Ollama, llama.cpp, …) in a separate container, configured from the
-  admin UI. Not on the critical path: local summaries are weak at the sizes that fit a 10 GB GPU
-  shared with PaddleOCR, so Claude stays the default.
+- ✅ **Optional: pluggable local LLM providers** — for self-hosters who want no cloud AI at all. Each
+  capability (summaries, image understanding) targets Claude (the default, unchanged) or a local model
+  over an OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM, LM Studio), chosen on the admin settings
+  page with a "Test connection" button. The photo, private and camera-EXIF rules apply to every
+  provider. Not on the critical path: local summaries are weak at the sizes that fit a 10 GB GPU shared
+  with PaddleOCR, so Claude stays the default.
 - ✅ **Sign-in with any OpenID Connect provider** — Google, Authentik, Keycloak, Authelia, Microsoft and the
   like by configuration alone (`OIDC_PROVIDERS`); the `GOOGLE_*` variables still give a `google` provider.
 - **Email verification** for signup and password change/reset — waits on a mail provider.

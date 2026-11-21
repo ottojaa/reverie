@@ -15,10 +15,10 @@ import { rebuildSearchVector } from '../search/search-indexer';
 import { isDocumentPrivate } from '../services/privacy';
 import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
-import { isLlmAvailable, isVisionAvailable } from './anthropic.client';
 import { processImageUnderstanding } from './image-understanding';
 import { decideImageLook } from './image-look';
 import { updateSearchIndex, upsertLlmResult } from './llm-store';
+import { isCapabilityAvailable, isVisionAvailable, isVisionSwitchedOn } from './provider-config';
 import { analyzeOcrText } from './text-analysis';
 import type { DocumentLlmResult, EnhancedMetadata, StoredLlmProcessingType } from './types';
 
@@ -34,7 +34,7 @@ function shouldLogTimings(): boolean {
     return process.env.NODE_ENV !== 'production';
 }
 
-function logTimings(stage: string, documentId: string, durations: Record<string, number>): void {
+function logTimings(stage: string, documentId: string, durations: Record<string, number | null>): void {
     if (!shouldLogTimings()) return;
 
     console.info(`[LLMService] ${stage} timings`, JSON.stringify({ documentId, ...durations }));
@@ -78,7 +78,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 3. Check eligibility (unless type is explicitly provided)
     const eligibilityStart = Date.now();
-    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate });
+    const eligibility = checkLlmEligibility(document, ocrResult, { isPrivate, vision: await isVisionSwitchedOn() });
     const processingType = options.forceType || eligibility.processingType;
     const eligibilityMs = Date.now() - eligibilityStart;
 
@@ -114,7 +114,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
     if (processingType === 'image_understanding' || processingType === 'vision_describe') {
         // Decided now, not when the job was queued: a photo's pixels never reach Claude, whatever type the job carries,
         // and neither do any pixels once vision is switched off (a job queued while it was on may still be waiting).
-        const look = isVisionAvailable() ? await decideImageLook(document) : { call: false as const, heldBack: false };
+        const look = (await isVisionAvailable()) ? await decideImageLook(document) : { call: false as const, heldBack: false };
 
         if (look.call) return processImageUnderstanding(document, ocrResult, look.kind);
 
@@ -166,7 +166,7 @@ async function processTextSummary(
 ): Promise<DocumentLlmResult> {
     // No API key → no summary. Record an explicit skip (never a pseudo-summary
     // built from OCR scraps) so the document stays honest and retryable.
-    if (!isLlmAvailable()) {
+    if (!(await isCapabilityAvailable('summary'))) {
         const saveStart = Date.now();
 
         await upsertLlmResult(document.id, {
@@ -268,7 +268,7 @@ async function processTextSummary(
         success: true,
         summary,
         enhancedMetadata,
-        tokenCount,
+        tokenCount: tokenCount ?? undefined,
         truncated: prepared.truncated,
         samplingStrategy: prepared.samplingStrategy,
         originalTextLength: prepared.originalLength,
