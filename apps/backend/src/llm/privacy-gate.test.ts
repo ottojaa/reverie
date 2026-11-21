@@ -144,11 +144,13 @@ function seed(kind: 'folder' | 'collection' | 'public', mimeType: string) {
         file_path: 'files/doc-1',
         size_bytes: 100,
         has_meaningful_text: !isVisionImage,
-        document_category: null,
+        // A classified, non-photo image: the vision gate holds back photos and unclassified images.
+        document_category: isVisionImage ? 'screenshot' : null,
         original_filename: 'doc-1',
     } as unknown as Document;
 
     h.tables.documents = [document as unknown as Row];
+    h.tables.photo_metadata = [];
     h.tables.ocr_results = isVisionImage
         ? []
         : [{ document_id: 'doc-1', raw_text: 'Invoice from Acme Oy for consulting services', confidence_score: 95, has_meaningful_text: true }];
@@ -324,5 +326,75 @@ describe('trashed documents never reach Anthropic', () => {
         const document = { mime_type: 'application/pdf', has_meaningful_text: true, deleted_at: new Date() } as Document;
 
         expect(checkLlmEligibility(document, null, { isPrivate: false })).toMatchObject({ eligible: false, reason: 'trashed', processingType: 'skip' });
+    });
+});
+
+describe('photos never reach vision', () => {
+    const CAMERA_EXIF = { document_id: 'doc-1', taken_at: new Date('2024-06-01T10:00:00Z'), latitude: null, longitude: null };
+    const GPS_ONLY_EXIF = { document_id: 'doc-1', taken_at: null, latitude: 60.17, longitude: 24.94 };
+    const HELD_BACK = [
+        { label: "the 'photo' category", category: 'photo', exif: [] },
+        { label: 'camera EXIF with a capture date', category: 'screenshot', exif: [CAMERA_EXIF] },
+        { label: 'camera EXIF with a GPS position', category: 'screenshot', exif: [GPS_ONLY_EXIF] },
+        { label: 'no category yet', category: null, exif: [] },
+    ] as const;
+
+    function seedImage({ category, exif }: { category: string | null; exif: readonly Row[] }) {
+        seed('public', 'image/jpeg');
+        h.tables.documents = [{ ...h.tables.documents![0], document_category: category }];
+        h.tables.photo_metadata = [...exif];
+    }
+
+    function runVisionJob(type: LlmJobData['type']) {
+        createLlmWorker();
+
+        const job = { id: 'job-1', data: { documentId: 'doc-1', userId: USER, type }, opts: { attempts: 2 } } as unknown as Job<LlmJobData>;
+
+        return h.worker.processor!(job);
+    }
+
+    for (const held of HELD_BACK) {
+        for (const forceType of [undefined, 'vision_describe'] as const) {
+            const how = forceType ? 'a forced vision_describe' : 'the type eligibility picks';
+
+            it(`processDocument refuses ${held.label} with ${how}`, async () => {
+                seedImage(held);
+
+                const result = await processDocument('doc-1', { forceType });
+
+                expect(result).toMatchObject({ success: true, skipped: true, reason: 'photo' });
+                expectNoAnthropicCall();
+                expect(h.updates).toContainEqual({ table: 'documents', values: { llm_status: 'skipped' } });
+            });
+
+            it(`a queued job for ${held.label} (${how}) ends skipped with the photo reason, not failed`, async () => {
+                seedImage(held);
+
+                const result = await runVisionJob(forceType);
+
+                expect(result).toMatchObject({ skipped: true, skipReason: 'photo' });
+                expectNoAnthropicCall();
+                expect(h.jobService.markJobSkipped).toHaveBeenCalledTimes(1);
+                expect(h.jobService.markJobFailed).not.toHaveBeenCalled();
+                expect(h.updates).not.toContainEqual({ table: 'documents', values: { llm_status: 'failed' } });
+            });
+        }
+    }
+
+    it('still sends a screenshot to vision when a job is queued directly', async () => {
+        seedImage({ category: 'screenshot', exif: [] });
+
+        const result = await runVisionJob('vision_describe');
+
+        expect(result.skipped).toBeUndefined();
+        expect(h.anthropic.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('still sends a screenshot to vision when eligibility picks the type', async () => {
+        seedImage({ category: 'graphic', exif: [] });
+
+        await processDocument('doc-1');
+
+        expect(h.anthropic.create).toHaveBeenCalledTimes(1);
     });
 });

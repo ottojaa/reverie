@@ -16,6 +16,7 @@ import { rebuildSearchVector } from '../search/search-indexer';
 import { isDocumentPrivate } from '../services/privacy';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { isVisualCategory } from '../ocr/category-classifier';
+import { isHeldBackFromVision } from './photo-gate';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
 import { describeImage, isLlmAvailable } from './anthropic.client';
 import { getVisionPrompt } from './prompt-builder';
@@ -111,6 +112,13 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 4. Route to appropriate processor
     if (processingType === 'vision_describe') {
+        // The same kind of hard stop as privacy, ahead of any forced type: a photo's pixels never reach Claude.
+        if (await isHeldBackFromVision(document)) {
+            await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+
+            return { success: true, skipped: true, reason: 'photo' };
+        }
+
         return processVisionDocument(document, {
             fetchMs,
             eligibilityMs,
