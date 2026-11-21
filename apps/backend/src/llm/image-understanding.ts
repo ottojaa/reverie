@@ -19,6 +19,7 @@ import type { LookKind } from './image-look';
 import { buildImagePrompt } from './image-prompt';
 import type { LlmEntity } from './llm-response.schema';
 import { upsertLlmResult, updateSearchIndex } from './llm-store';
+import { sanitizeTag } from './tag-sanitizer';
 import { buildSpellingCorrector, correctText, type SpellingCorrector } from './spelling-corrector';
 import type { DocumentLlmResult, EnhancedMetadata } from './types';
 
@@ -43,9 +44,16 @@ export function toCategoryAfterLook(kind: LookKind, documentType: string | null)
 }
 
 /** The app or source goes in as an entity and as the first tag, so it is searchable like any other. */
-function addAppOrSource(app: string | null, entities: Entity[], tags: string[]): { entities: Entity[]; tags: string[] } {
-    const name = app?.trim();
+/**
+ * The app or source as it is stored: cleaned the way a tag is, so the metadata, the entity and the tag all hold the same
+ * text. One the tag rules reject (too long, too many words) is dropped everywhere, not kept in the metadata alone: the
+ * web chip searches by it as a tag.
+ */
+function toAppOrSource(raw: string | null): string | undefined {
+    return (raw === null ? null : sanitizeTag(raw)) ?? undefined;
+}
 
+function addAppOrSource(name: string | undefined, entities: Entity[], tags: string[]): { entities: Entity[]; tags: string[] } {
     if (!name) return { entities, tags };
 
     const known = entities.some((entity) => entity.canonical_name.toLowerCase() === name.toLowerCase());
@@ -95,7 +103,8 @@ export async function processImageUnderstanding(document: Document, ocrResult: O
     const prompt = buildImagePrompt({ filename: document.original_filename, kind: look, ocrResult: ocrResult ?? null });
     const { result, tokenCount } = await understandImage(image, prompt);
     const { entities: checked, fix } = checkAgainstOcr(result.entities, ocrResult);
-    const withApp = addAppOrSource(result.app_or_source, checked, result.tags.map(fix));
+    const appOrSource = toAppOrSource(result.app_or_source);
+    const withApp = addAppOrSource(appOrSource, checked, result.tags.map(fix));
     const summary = fix(result.summary);
     const topics = result.topics.map(fix);
     const title = result.title ? fix(result.title) : null;
@@ -108,7 +117,7 @@ export async function processImageUnderstanding(document: Document, ocrResult: O
         topics,
         documentType: result.document_type ?? undefined,
         extractedDate: result.extracted_date ?? undefined,
-        appOrSource: result.app_or_source?.trim() || undefined,
+        appOrSource,
         imageKind: result.kind,
     };
 

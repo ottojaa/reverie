@@ -7,7 +7,7 @@
  */
 import type { Document } from '../db/schema';
 import type { ImageKind } from '../image-kind/kinds';
-import { isHeldBackFromVision, loadKindVerdict, type KindGate } from './photo-gate';
+import { isHeldBackFromVision, loadKindVerdict } from './photo-gate';
 
 /** The kinds Claude may look at. A subset of the classifier's kinds: no photo, and no 'other'. */
 export const LOOK_KINDS = ['screenshot', 'document', 'receipt', 'diagram'] as const;
@@ -31,14 +31,12 @@ export function toLookKindFromVerdict(kind: ImageKind): LookKind | null {
  * heuristics call a phone photo a screenshot, so a category alone is never enough), and a verdict of `other`. A held
  * back image can be looked at later, once a verdict exists. Privacy and the trash are checked by the caller before this.
  */
-export async function decideImageLook(document: Document, kindGate?: KindGate): Promise<ImageLook> {
+export async function decideImageLook(document: Document, flip?: boolean): Promise<ImageLook> {
     if (!document.mime_type.startsWith('image/')) return { call: false, heldBack: false };
-
-    if (await isHeldBackFromVision(document, kindGate)) return { call: false, heldBack: true };
 
     const verdict = await loadKindVerdict(document.id);
 
-    if (verdict === undefined) return { call: false, heldBack: true };
+    if (verdict === undefined || (await isHeldBackFromVision(document, verdict, flip))) return { call: false, heldBack: true };
 
     const kind = toLookKindFromVerdict(verdict);
 

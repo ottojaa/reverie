@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { env } from '../config/env';
 import type { Document } from '../db/schema';
 import type { LlmJobData } from '../queues/llm.queue';
 import { createLlmWorker } from '../workers/llm.worker';
@@ -412,6 +413,19 @@ describe('photos never reach the image call', () => {
             expectNoAnthropicCall();
         },
     );
+
+    it.each(['image_understanding', 'vision_describe'] as const)('a queued %s job sends no image once vision is switched off', async (forceType) => {
+        seedImage({ category: 'screenshot', exif: [] });
+        env.LLM_VISION_ENABLED = false;
+
+        try {
+            await processDocument('doc-1', { forceType });
+        } finally {
+            env.LLM_VISION_ENABLED = true;
+        }
+
+        expectNoAnthropicCall();
+    });
 
     it('sends a diagram when eligibility picks the type', async () => {
         seedImage({ category: 'graphic', exif: [] });

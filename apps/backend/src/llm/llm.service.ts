@@ -15,7 +15,7 @@ import { rebuildSearchVector } from '../search/search-indexer';
 import { isDocumentPrivate } from '../services/privacy';
 import { isVisualCategory } from '../ocr/category-classifier';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
-import { isLlmAvailable } from './anthropic.client';
+import { isLlmAvailable, isVisionAvailable } from './anthropic.client';
 import { processImageUnderstanding } from './image-understanding';
 import { decideImageLook } from './image-look';
 import { updateSearchIndex, upsertLlmResult } from './llm-store';
@@ -112,8 +112,9 @@ export async function processDocument(documentId: string, options: ProcessDocume
     const timings = { fetchMs, eligibilityMs, totalStart };
 
     if (processingType === 'image_understanding' || processingType === 'vision_describe') {
-        // Decided now, not when the job was queued: a photo's pixels never reach Claude, whatever type the job carries.
-        const look = await decideImageLook(document);
+        // Decided now, not when the job was queued: a photo's pixels never reach Claude, whatever type the job carries,
+        // and neither do any pixels once vision is switched off (a job queued while it was on may still be waiting).
+        const look = isVisionAvailable() ? await decideImageLook(document) : { call: false as const, heldBack: false };
 
         if (look.call) return processImageUnderstanding(document, ocrResult, look.kind);
 

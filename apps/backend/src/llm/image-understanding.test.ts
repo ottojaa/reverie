@@ -136,6 +136,22 @@ describeDb('image call', () => {
         expect(tags.map((t) => t.tag)).toContain('Demo Terminal');
     });
 
+    it('drops an app or source the tag rules reject from the metadata, the entity and the tags alike', async () => {
+        h.parse.mockResolvedValue(answer({ app_or_source: 'A very long window title that is not an app name at all' }));
+
+        const { id, document, ocrResult } = await seedImage(fixtureOcr());
+
+        await processImageUnderstanding(document, ocrResult, 'screenshot');
+
+        const row = await db.selectFrom('llm_results').select('metadata').where('document_id', '=', id).executeTakeFirstOrThrow();
+        const metadata = row.metadata as { appOrSource?: string; entities: { canonical_name: string }[] };
+        const tags = await db.selectFrom('document_tags').select('tag').where('document_id', '=', id).where('source', '=', 'auto').execute();
+
+        expect(metadata.appOrSource).toBeUndefined();
+        expect(metadata.entities.map((entity) => entity.canonical_name)).not.toContain('A very long window title that is not an app name at all');
+        expect(tags.map((t) => t.tag)).not.toContain('A very long window title that is not an app name at all');
+    });
+
     it('updates the document: category, status, date, a fresh search text and a new text embedding', async () => {
         const { id, document, ocrResult } = await seedImage(fixtureOcr());
 
