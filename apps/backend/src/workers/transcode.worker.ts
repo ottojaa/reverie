@@ -111,7 +111,12 @@ export async function markFailedWhenFinal(job: Job<TranscodeJobData> | undefined
     if (gaveUpEarly && job.id)
         await getJobService()
             .markJobFailed(job.id, error.message, job.attemptsMade)
-            .catch(() => undefined);
+            .catch((rowError: unknown) => {
+                logger.error('Could not mark the transcode job row failed', rowError instanceof Error ? rowError : new Error(String(rowError)), {
+                    documentId: job.data.documentId,
+                    jobId: job.id,
+                });
+            });
 
     await setTranscodeStatus(db, job.data.documentId, 'failed').catch((statusError: unknown) => {
         logger.error('Could not mark the transcode failed', statusError instanceof Error ? statusError : new Error(String(statusError)), {

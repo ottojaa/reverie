@@ -117,6 +117,14 @@ describe('markFailedWhenFinal', () => {
         expect(markJobFailed).toHaveBeenCalledWith('job-1', 'job stalled more than allowable limit', 1);
     });
 
+    it('still marks the video failed when its tracking row cannot be written', async () => {
+        markJobFailed.mockRejectedValue(new Error('db down'));
+
+        await markFailedWhenFinal(transcodeJob(1, 3, Date.now()), new Error('job stalled more than allowable limit'));
+
+        expect(setStatus).toHaveBeenCalledWith(expect.anything(), 'doc-1', 'failed');
+    });
+
     it('leaves the tracking row alone when the last attempt was used up: the tracking wrapper already failed it', async () => {
         await markFailedWhenFinal(transcodeJob(3, 3, Date.now()), new Error('ffmpeg failed: boom'));
 
