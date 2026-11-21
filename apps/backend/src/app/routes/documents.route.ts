@@ -40,6 +40,7 @@ import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
 import { discardUploadedFiles, receiveUploadedFile } from '../../utils/upload-files';
 import { getJobService } from '../../jobs/job.service';
+import { loadDocumentTags } from '../../taught-labels/taught-labels.repository';
 import { formatDateOnly } from '../../utils/date';
 import { getDeduplicatedFilename } from '../../utils/filename';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
@@ -369,7 +370,9 @@ export default async function (fastify: FastifyInstance) {
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
             const photoMeta = await db.selectFrom('photo_metadata').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
-            return await serializeDocument(document, locks, llmResult, photoMeta ?? null);
+            const tags = await loadDocumentTags(db, request.user.id, request.params.id);
+
+            return { ...(await serializeDocument(document, locks, llmResult, photoMeta ?? null)), tags };
         },
     );
 

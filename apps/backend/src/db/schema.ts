@@ -5,7 +5,8 @@ import type { LlmMetadata } from '../llm/types';
 export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
 export type JobType = 'ocr' | 'thumbnail' | 'llm_summary' | 'video_trim';
 export type TargetType = 'document' | 'folder';
-export type TagSource = 'user' | 'auto';
+/** `taught`: put there by a label taught by example (see taught-labels/). */
+export type TagSource = 'user' | 'auto' | 'taught';
 
 // Users table
 export type UserRole = 'admin' | 'user';
@@ -169,6 +170,28 @@ export type DocumentTag = Selectable<DocumentTagsTable>;
 export type NewDocumentTag = Insertable<DocumentTagsTable>;
 export type DocumentTagUpdate = Updateable<DocumentTagsTable>;
 
+// Labels taught by example
+export interface TaughtLabelsTable {
+    id: Generated<string>;
+    user_id: string;
+    /** The tag text the label puts on images. */
+    name: string;
+    /** Cosine similarity to the nearest example an image must reach. */
+    threshold: number;
+    threshold_is_custom: Generated<boolean>;
+    created_at: ColumnType<Date, Date | undefined, never>;
+    updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+export type TaughtLabel = Selectable<TaughtLabelsTable>;
+
+/** Shared shape of the two label/document link tables. */
+export interface TaughtLabelLinkTable {
+    label_id: string;
+    document_id: string;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
 // Photo Metadata table
 export interface PhotoMetadataTable {
     id: Generated<string>;
@@ -308,4 +331,7 @@ export interface Database {
     agent_messages: AgentMessagesTable;
     document_text_embeddings: DocumentTextEmbeddingsTable;
     document_image_embeddings: DocumentImageEmbeddingsTable;
+    taught_labels: TaughtLabelsTable;
+    taught_label_examples: TaughtLabelLinkTable;
+    taught_label_exclusions: TaughtLabelLinkTable;
 }
