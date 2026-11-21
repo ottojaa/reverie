@@ -4,29 +4,26 @@
  * Main orchestration for LLM document processing:
  * - Check eligibility and route to appropriate processor
  * - Handle text summarization with sampling
- * - Handle vision processing for images
+ * - Handle screenshots and document images with the one call that sees the image and its OCR text
  * - Store results and update search indexes
  */
 
-import { Entity } from '@reverie/shared';
-import { env } from '../config/env';
 import { db } from '../db/kysely';
 import type { Document, OcrResult } from '../db/schema';
 import { enqueueTextEmbedding } from '../embeddings/enqueue';
 import { rebuildSearchVector } from '../search/search-indexer';
 import { isDocumentPrivate } from '../services/privacy';
-import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { isVisualCategory } from '../ocr/category-classifier';
-import { isHeldBackFromVision } from './photo-gate';
 import { buildSkipMetadata, checkLlmEligibility } from './eligibility';
-import { describeImage, isLlmAvailable } from './anthropic.client';
-import { getVisionPrompt } from './prompt-builder';
-import { sanitizeTags } from './tag-sanitizer';
+import { isLlmAvailable, isVisionAvailable } from './anthropic.client';
+import { processImageUnderstanding } from './image-understanding';
+import { decideImageLook } from './image-look';
+import { updateSearchIndex, upsertLlmResult } from './llm-store';
 import { analyzeOcrText } from './text-analysis';
-import type { DocumentLlmResult, EnhancedMetadata, LlmProcessingType, VisionResult } from './types';
+import type { DocumentLlmResult, EnhancedMetadata, StoredLlmProcessingType } from './types';
 
 interface ProcessDocumentOptions {
-    forceType?: LlmProcessingType | undefined;
+    forceType?: StoredLlmProcessingType | undefined;
     document?: Document | undefined;
     ocrResult?: OcrResult | null | undefined;
     /** Effective privacy when the caller already looked it up; otherwise it is looked up here. */
@@ -112,27 +109,51 @@ export async function processDocument(documentId: string, options: ProcessDocume
     }
 
     // 4. Route to appropriate processor
-    if (processingType === 'vision_describe') {
-        // The same kind of hard stop as privacy, ahead of any forced type: a photo's pixels never reach Claude.
-        if (await isHeldBackFromVision(document)) {
-            await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+    const timings = { fetchMs, eligibilityMs, totalStart };
 
-            return { success: true, skipped: true, reason: 'photo' };
-        }
+    if (processingType === 'image_understanding' || processingType === 'vision_describe') {
+        // Decided now, not when the job was queued: a photo's pixels never reach Claude, whatever type the job carries,
+        // and neither do any pixels once vision is switched off (a job queued while it was on may still be waiting).
+        const look = isVisionAvailable() ? await decideImageLook(document) : { call: false as const, heldBack: false };
 
-        return processVisionDocument(document, {
-            fetchMs,
-            eligibilityMs,
-            totalStart,
-        });
+        if (look.call) return processImageUnderstanding(document, ocrResult, look.kind);
+
+        return processImageWithoutCall(document, ocrResult, { heldBack: look.heldBack, isPrivate, timings });
     }
 
     // Text summary flow (default)
-    return processTextSummary(document, ocrResult!, {
-        fetchMs,
-        eligibilityMs,
-        totalStart,
+    return processTextSummary(document, ocrResult!, timings);
+}
+
+/**
+ * An image that does not get the image call. If it has OCR text it still gets the text summary (a photo of a sign is
+ * summarised from its text, never its pixels). Otherwise a photo is skipped without a stored result, so the job can
+ * run again if the classifier later says otherwise, and any other image gets a stored "nothing to summarise" skip.
+ */
+async function processImageWithoutCall(
+    document: Document,
+    ocrResult: OcrResult | null | undefined,
+    { heldBack, isPrivate, timings }: { heldBack: boolean; isPrivate: boolean; timings: { fetchMs: number; eligibilityMs: number; totalStart: number } },
+): Promise<DocumentLlmResult> {
+    const textEligibility = checkLlmEligibility(document, ocrResult, { isPrivate, vision: false });
+
+    if (textEligibility.eligible && ocrResult) return processTextSummary(document, ocrResult, timings);
+
+    if (heldBack) {
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', document.id).execute();
+
+        return { success: true, skipped: true, reason: 'photo' };
+    }
+
+    await upsertLlmResult(document.id, {
+        summary: null,
+        metadata: buildSkipMetadata(textEligibility.reason ?? 'no_text_content', ocrResult?.raw_text?.length, textEligibility.warnings),
+        token_count: null,
+        processing_type: 'text_summary',
     });
+    await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
+
+    return { success: true, skipped: true, reason: textEligibility.reason };
 }
 
 /**
@@ -252,141 +273,6 @@ async function processTextSummary(
         samplingStrategy: prepared.samplingStrategy,
         originalTextLength: prepared.originalLength,
     };
-}
-
-/**
- * Process an image document with vision API
- */
-async function processVisionDocument(document: Document, baseTimings: { fetchMs: number; eligibilityMs: number; totalStart: number }): Promise<VisionResult> {
-    if (!env.LLM_VISION_ENABLED) {
-        return {
-            success: true,
-            skipped: true,
-            reason: 'vision_disabled',
-        };
-    }
-
-    // Load image from storage
-    assertFitsInMemory(document.size_bytes, 'describe');
-
-    const storageStart = Date.now();
-    const storageService = getStorageService();
-    const imageBuffer = await storageService.getFile(document.file_path);
-    const storageLoadMs = Date.now() - storageStart;
-    const encodeStart = Date.now();
-    const base64Image = imageBuffer.toString('base64');
-    const encodeMs = Date.now() - encodeStart;
-
-    // Call vision API
-    const llmStart = Date.now();
-    const { result, tokenCount } = await describeImage(base64Image, document.mime_type, getVisionPrompt());
-    const llmMs = Date.now() - llmStart;
-
-    // Build enhanced metadata
-    const enhancedMetadata: EnhancedMetadata = {
-        type: 'vision_describe',
-        entities: [],
-        topics: [],
-        detectedObjects: result.detected_objects,
-        sceneType: result.scene_type,
-        hasPeople: result.has_people,
-    };
-
-    // Store LLM result
-    const dbWriteStart = Date.now();
-    await upsertLlmResult(document.id, {
-        summary: result.description,
-        metadata: enhancedMetadata,
-        token_count: tokenCount,
-        processing_type: 'vision_describe',
-    });
-
-    await db.updateTable('documents').set({ llm_status: 'complete' }).where('id', '=', document.id).execute();
-
-    // Index detected objects as tag candidates (topics fallback path in the sanitizer).
-    await updateSearchIndex(document.id, { tags: [], topics: result.detected_objects ?? [], entities: [] });
-
-    await rebuildSearchVector(db, document.id);
-    // The summary is part of the embedded text, so embed again now that it exists.
-    await enqueueTextEmbedding(document.id);
-
-    const dbWriteMs = Date.now() - dbWriteStart;
-    logTimings('vision_describe', document.id, {
-        ...baseTimings,
-        storageLoadMs,
-        encodeMs,
-        llmMs,
-        dbWriteMs,
-        tokenCount,
-        totalMs: Date.now() - baseTimings.totalStart,
-    });
-
-    return {
-        success: true,
-        description: result.description,
-        metadata: enhancedMetadata,
-        tokenCount,
-    };
-}
-
-/**
- * Upsert an LLM result for a document
- */
-async function upsertLlmResult(
-    documentId: string,
-    data: { summary: string | null; metadata: unknown; token_count: number | null; processing_type: string },
-): Promise<void> {
-    await db
-        .insertInto('llm_results')
-        .values({
-            document_id: documentId,
-            summary: data.summary,
-            metadata: data.metadata as any,
-            token_count: data.token_count,
-            processing_type: data.processing_type,
-        })
-        .onConflict((oc) =>
-            oc.column('document_id').doUpdateSet({
-                summary: data.summary,
-                metadata: data.metadata as any,
-                token_count: data.token_count,
-                processing_type: data.processing_type,
-            }),
-        )
-        .execute();
-}
-
-/**
- * Replace the document's auto-generated tags with a freshly sanitized set.
- *
- * This is the only writer of document_tags. Deleting existing source='auto' tags
- * before inserting new ones fixes tag accumulation across reprocesses; user tags
- * (source='user') are preserved and used as dedup targets. Tag candidates are the
- * LLM's proposed tags, with topics/entity names as fallbacks (see sanitizeTags).
- */
-async function updateSearchIndex(documentId: string, analysis: { tags: string[]; topics: string[]; entities: Entity[] }): Promise<void> {
-    await db.transaction().execute(async (trx) => {
-        const userTags = await trx.selectFrom('document_tags').select('tag').where('document_id', '=', documentId).where('source', '=', 'user').execute();
-
-        const tags = sanitizeTags({
-            proposedTags: analysis.tags,
-            topics: analysis.topics,
-            entities: analysis.entities,
-            existingTags: userTags.map((t) => t.tag),
-        });
-
-        await trx.deleteFrom('document_tags').where('document_id', '=', documentId).where('source', '=', 'auto').execute();
-
-        if (tags.length === 0) {
-            return;
-        }
-
-        await trx
-            .insertInto('document_tags')
-            .values(tags.map((tag) => ({ document_id: documentId, tag, source: 'auto' as const })))
-            .onConflict((oc) => oc.columns(['document_id', 'tag']).doNothing())
-            .execute();
-    });
 }
 
 /**

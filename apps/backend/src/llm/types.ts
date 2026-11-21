@@ -6,7 +6,14 @@ import { Entity } from '@reverie/shared';
 
 // ===== Processing Types =====
 
-export type LlmProcessingType = 'text_summary' | 'vision_describe' | 'skip';
+/**
+ * `image_understanding` is the one call that sees an image with its OCR text. `vision_describe` was its text-free
+ * predecessor: stored rows and jobs already queued may carry it, so it stays readable, but nothing writes it.
+ */
+export type LlmProcessingType = 'text_summary' | 'image_understanding' | 'skip';
+
+/** The processing types an old stored row or queued job may carry. */
+export type StoredLlmProcessingType = LlmProcessingType | 'vision_describe';
 
 export type LlmSkipReason =
     | 'llm_disabled' // LLM feature flag is off
@@ -82,17 +89,10 @@ export interface LlmSummaryResponse {
     extracted_date?: string | undefined;
 }
 
-export interface VisionResponse {
-    description: string;
-    detected_objects?: string[] | undefined;
-    scene_type?: 'outdoor' | 'indoor' | 'screenshot' | 'artwork' | 'other' | undefined;
-    has_people?: boolean | undefined;
-}
-
 // ===== Metadata Types =====
 
 export interface EnhancedMetadata {
-    type: 'text_summary' | 'vision_describe';
+    type: 'text_summary' | 'image_understanding';
     title?: string | undefined;
     language?: string | undefined;
     entities: Entity[];
@@ -107,10 +107,9 @@ export interface EnhancedMetadata {
     samplingStrategy?: SamplingStrategy | undefined;
     originalTextLength?: number | undefined;
     sampledSections?: number | undefined;
-    // Vision-specific
-    detectedObjects?: string[] | undefined;
-    sceneType?: string | undefined;
-    hasPeople?: boolean | undefined;
+    // Image understanding: the app, site or source the picture shows, and the kind Claude judged it to be.
+    appOrSource?: string | undefined;
+    imageKind?: string | undefined;
     // Index signature for kysely compatibility
     [key: string]: unknown;
 }
@@ -137,15 +136,6 @@ export interface DocumentLlmResult {
     truncated?: boolean | undefined;
     samplingStrategy?: SamplingStrategy | undefined;
     originalTextLength?: number | undefined;
-}
-
-export interface VisionResult {
-    success: boolean;
-    skipped?: boolean;
-    reason?: LlmSkipReason;
-    description?: string;
-    metadata?: EnhancedMetadata;
-    tokenCount?: number;
 }
 
 // ===== File Categories =====

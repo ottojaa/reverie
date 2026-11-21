@@ -1,0 +1,41 @@
+{
+    "note": "Hand-built from the documented Messages API request and response shapes. No real request was made (no API key in the build environment), and the OCR text below was typed to match the picture, not produced by an OCR run. The image is the synthetic screenshot next to this file (invented text, no library data); `source.data` is left out because the request carries that picture downscaled to JPEG. The token counts are estimates (about 1.2k for the image, 0.7k for the system prompt, the rest OCR and instructions). Replace it with a recorded pair when the call has run once for real.",
+    "input": {
+        "file": "synthetic-terminal-screenshot.png",
+        "filename": "Screenshot 2026-11-20 at 14.02.11.png",
+        "kind": "screenshot",
+        "ocr": {
+            "raw_text": "Demo Terminal - demo-project\n$ yarn test\nPASS src/cart.test.ts\nPASS src/checkout.test.ts\nWARN src/legacy.test.ts (skipped)\nTests: 12 passed, 1 skipped, 13 total\nTime: 3.2 s\n$ git status\nOn branch feature/demo-cart\nnothing to commit, working tree clean",
+            "confidence_score": 91
+        }
+    },
+    "request": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 10000,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    { "type": "image", "source": { "type": "base64", "media_type": "image/jpeg", "data": "<the screenshot downscaled to JPEG, omitted>" } },
+                    { "type": "text", "text": "<buildImagePrompt user text; compared by the test>" }
+                ]
+            }
+        ],
+        "output_config": { "format": { "type": "json_schema" }, "effort": "low" }
+    },
+    "response": {
+        "id": "msg_01SyntheticFixture000000000",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-haiku-5-5",
+        "content": [
+            {
+                "type": "text",
+                "text": "{\"kind\":\"screenshot\",\"app_or_source\":\"Demo Terminal\",\"title\":\"Test run and git status in demo-project\",\"summary\":\"A screenshot of a terminal window (Demo Terminal) in the demo-project folder. It shows a yarn test run with 12 passed and 1 skipped tests, followed by git status reporting a clean working tree on the feature/demo-cart branch.\",\"document_type\":\"other\",\"language\":\"en\",\"entities\":[{\"type\":\"product\",\"canonical_name\":\"demo-project\",\"raw_text\":\"demo-project\"},{\"type\":\"identifier\",\"canonical_name\":\"feature/demo-cart\",\"raw_text\":\"feature/demo-cart\"}],\"topics\":[\"software testing\",\"version control\"],\"tags\":[\"terminal\",\"yarn test\",\"git\"],\"extracted_date\":null}"
+            }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": { "input_tokens": 2046, "output_tokens": 262, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0 }
+    }
+}

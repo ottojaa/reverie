@@ -147,7 +147,7 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
  * Compute a human-readable display name for a search result.
  *
  * Priority cascade:
- * 1. LLM-generated title (text_summary processing)
+ * 1. LLM-generated title (text summary, or the image call)
  * 2. EXIF location + date (photo_metadata)
  * 3. Vision description truncated to first sentence
  * 4. Category-based fallback with date
@@ -164,8 +164,8 @@ function computeDisplayName(row: {
     photo_country: string | null;
     photo_taken_at: Date | null;
 }): string {
-    // 1. LLM title for text-processed documents
-    if (row.llm_title && row.llm_processing_type === 'text_summary') {
+    // 1. LLM title for text-processed documents and for images the image call has looked at
+    if (row.llm_title && (row.llm_processing_type === 'text_summary' || row.llm_processing_type === 'image_understanding')) {
         return row.llm_title;
     }
 
@@ -189,7 +189,7 @@ function computeDisplayName(row: {
         return `Photo, ${formatShortDate(date)}`;
     }
 
-    // 3. Vision description (first sentence)
+    // 3. Description from the retired vision call (first sentence); rows it wrote stay until the backfill replaces them
     if (row.llm_summary && row.llm_processing_type === 'vision_describe') {
         const firstSentence = row.llm_summary.split(/[.!?]\s/)[0];
 

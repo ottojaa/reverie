@@ -3,6 +3,7 @@ import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { checkLlmEligibility } from '../llm/eligibility';
 import { processDocument } from '../llm/llm.service';
+import { markLlmFailed } from '../llm/llm-store';
 import { isDocumentPrivate } from '../services/privacy';
 import type { LlmJobData, LlmJobResult } from '../queues/llm.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -16,8 +17,10 @@ const logger = createWorkerLogger('LLM');
  *
  * Routes to appropriate LLM processor based on document type:
  * - text_summary: For documents with meaningful text
- * - vision_describe: For images without text (when vision enabled)
+ * - image_understanding: For screenshots and document images (when vision enabled): one call that sees the image and its text
  * - skip: For ineligible documents
+ *
+ * A job queued before the image call existed may carry the old `vision_describe` type; it takes the same route.
  */
 async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const { documentId, type } = job.data;
@@ -123,7 +126,7 @@ async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResu
             },
         });
     } catch (error) {
-        await db.updateTable('documents').set({ llm_status: 'failed' }).where('id', '=', documentId).execute();
+        await markLlmFailed(documentId);
         throw error;
     }
 }

@@ -14,8 +14,16 @@ import type { FileCategory, LlmEligibility, LlmSkipReason, SkippedMetadata } fro
  *
  * `isPrivate` is the document's effective privacy (see isDocumentPrivate in services/privacy).
  * It is checked first and is final: a locked item never reaches the LLM, whatever else is true.
+ *
+ * With `vision` on, an image is eligible for the image call whatever its OCR text says (the call reads the pixels, so
+ * missing or poor OCR does not rule it out). Whether it really gets the call is decided when the job runs
+ * (decideImageLook); `vision: false` gives the text-only answer for an image that does not.
  */
-export function checkLlmEligibility(document: Document, ocrResult: OcrResult | null | undefined, { isPrivate }: { isPrivate: boolean }): LlmEligibility {
+export function checkLlmEligibility(
+    document: Document,
+    ocrResult: OcrResult | null | undefined,
+    { isPrivate, vision = env.LLM_VISION_ENABLED }: { isPrivate: boolean; vision?: boolean },
+): LlmEligibility {
     if (isPrivate) {
         return {
             eligible: false,
@@ -64,15 +72,12 @@ export function checkLlmEligibility(document: Document, ocrResult: OcrResult | n
         }
     }
 
-    // 3. Check for images without text
-    if (category === 'image' && !document.has_meaningful_text) {
-        if (env.LLM_VISION_ENABLED) {
-            return {
-                eligible: true,
-                processingType: 'vision_describe',
-            };
-        }
+    // 3. Images: with vision on they go to the image call; without it, an image with no text has nothing to summarise.
+    if (category === 'image' && vision) {
+        return { eligible: true, processingType: 'image_understanding' };
+    }
 
+    if (category === 'image' && !document.has_meaningful_text) {
         return {
             eligible: false,
             reason: 'no_text_no_vision',
@@ -84,14 +89,6 @@ export function checkLlmEligibility(document: Document, ocrResult: OcrResult | n
     const textLength = ocrResult?.raw_text?.length ?? 0;
 
     if (textLength === 0) {
-        // For images, try vision if available
-        if (category === 'image' && env.LLM_VISION_ENABLED) {
-            return {
-                eligible: true,
-                processingType: 'vision_describe',
-            };
-        }
-
         return {
             eligible: false,
             reason: 'no_text_content',

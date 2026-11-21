@@ -160,6 +160,19 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                             </Chip>
                                         )}
                                     </div>
+                                    {metadata?.appOrSource && (
+                                        // The app or source the image comes from. It is also a tag, so the chip searches by tag.
+                                        <div className="flex min-w-0 items-center gap-1.5">
+                                            <MicroLabel>From</MicroLabel>
+                                            <Chip
+                                                className="min-w-0 max-w-full truncate"
+                                                title="Search this app or source"
+                                                onClick={() => searchBy('tag', metadata.appOrSource!)}
+                                            >
+                                                <span className="truncate">{metadata.appOrSource}</span>
+                                            </Chip>
+                                        </div>
+                                    )}
                                     <p className="text-sm leading-relaxed text-foreground/90">{aiSummary}</p>
                                 </Section>
                             )}

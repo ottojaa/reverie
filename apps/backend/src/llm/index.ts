@@ -3,7 +3,7 @@
  *
  * LLM integration for document processing:
  * - Text summarization with smart sampling
- * - Vision processing for images
+ * - One call that sees an image together with its OCR text (screenshots and documents)
  * - Metadata enhancement
  */
 
@@ -35,6 +35,4 @@ export type {
     SamplingStrategy,
     SkippedMetadata,
     TableRow,
-    VisionResponse,
-    VisionResult,
 } from './types';

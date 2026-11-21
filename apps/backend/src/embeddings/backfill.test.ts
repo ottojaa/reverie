@@ -2,18 +2,20 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { EmbedBackfillCursor } from '../queues/embed.queue';
 import { dbProxy } from '../testing/db-proxy.js';
 import { createFakeMl, type FakeMl } from '../testing/fake-ml.js';
-import { seedDocument, seedUser } from '../testing/seed.js';
+import { seedDocument, seedFolder, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
 import { readDocumentCamera } from '../image-kind/camera-read';
 import { clearPromptCache } from '../image-kind/prompt-cache';
 import { classifyDocumentImage } from '../image-kind/service';
 import { PROMPT_ONLY_CLASSIFIER } from '../testing/kind-config.js';
+import type { LlmMetadata } from '../llm/types';
+import { UNDERSTAND_PAGE_SIZE, findImagesToUnderstand, queueUnderstanding } from '../llm/understand-backfill';
 import { runBackfillPage, type BackfillDeps, type BackfillStep } from './backfill';
 import { embedDocumentImage, embedDocumentText } from './embedding.service';
 
@@ -256,7 +258,8 @@ describeDb('embedding backfill', () => {
             await runToEnd();
             queued = [];
 
-            expect((await runBackfillPage(deps, { stage: 'kind', after: null })).kind).toBe('done');
+            // Nothing left to classify: the kind stage hands over to the understand stage.
+            expect(await runBackfillPage(deps, { stage: 'kind', after: null })).toEqual({ kind: 'next', cursor: { stage: 'understand', after: null } });
             expect(queued).toHaveLength(0);
 
             await db.updateTable('document_image_kinds').set({ prompt_version: 'older' }).execute();
@@ -348,6 +351,214 @@ describeDb('embedding backfill', () => {
             await runBackfillPage(deps, { stage: 'kind', after: null });
 
             expect(queued).toEqual([]);
+        });
+    });
+
+    describe('the understand stage (the image call over existing screenshots and document images)', () => {
+        let llmJobs: { documentId: string; userId: string; jobId: string }[];
+
+        beforeEach(() => {
+            llmJobs = [];
+            deps = {
+                ...deps,
+                batchSize: UNDERSTAND_PAGE_SIZE,
+                queueUnderstanding: (id) => queueUnderstanding(db, async (data, jobId) => void llmJobs.push({ ...data, jobId }), id),
+            };
+        });
+
+        async function seedClassified(name: string, kind: string, extra: { camera?: boolean; deleted?: boolean; summary?: string } = {}): Promise<string> {
+            const id = await seedDocument(db, {
+                userId,
+                name,
+                mime: 'image/png',
+                category: kind === 'photo' ? 'photo' : 'screenshot',
+                ...(extra.deleted && { deleted: true }),
+                ...(extra.camera && { photo: { cameraMake: 'Canon' } }),
+            });
+
+            await db
+                .insertInto('document_image_kinds')
+                .values({ document_id: id, kind, scores: '{}', signals: '{}', prompt_version: 'v', model: 'm', model_version: '1' })
+                .execute();
+
+            if (extra.summary) {
+                await db
+                    .insertInto('llm_results')
+                    .values({
+                        document_id: id,
+                        summary: extra.summary,
+                        metadata: toMetadata('image_understanding'),
+                        token_count: 1,
+                        processing_type: 'image_understanding',
+                    })
+                    .execute();
+            }
+
+            return id;
+        }
+
+        // What the image call (or the vision call before it) stored in llm_results.metadata; only `type` matters here.
+        const toMetadata = (type: string) => ({ type, entities: [], topics: [] }) as unknown as LlmMetadata;
+
+        const START_UNDERSTAND: EmbedBackfillCursor = { stage: 'understand', after: null };
+
+        it('comes after the kind stage, and finishes the whole backfill', async () => {
+            expect(await runBackfillPage(deps, { stage: 'kind', after: null })).toEqual({ kind: 'next', cursor: START_UNDERSTAND });
+            expect(await runBackfillPage(deps, START_UNDERSTAND)).toEqual({ kind: 'done' });
+        });
+
+        it('queues screenshots, documents, receipts and diagrams, in id order, a small page at a time', async () => {
+            const ids = [
+                await seedClassified('a.png', 'screenshot'),
+                await seedClassified('b.png', 'document'),
+                await seedClassified('c.png', 'receipt'),
+                await seedClassified('d.png', 'diagram'),
+                await seedClassified('e.png', 'screenshot'),
+                await seedClassified('f.png', 'screenshot'),
+            ].sort();
+
+            // A page is capped at UNDERSTAND_PAGE_SIZE however big the other stages' batches are.
+            deps = { ...deps, batchSize: 50 };
+
+            const first = await runBackfillPage(deps, START_UNDERSTAND);
+
+            expect(first).toEqual({ kind: 'next', cursor: { stage: 'understand', after: ids[UNDERSTAND_PAGE_SIZE - 1] } });
+            expect(llmJobs.map((job) => job.documentId)).toEqual(ids.slice(0, UNDERSTAND_PAGE_SIZE));
+            expect(llmJobs.every((job) => job.userId === userId)).toBe(true);
+            expect(await db.selectFrom('processing_jobs').select('id').where('job_type', '=', 'llm_summary').execute()).toHaveLength(UNDERSTAND_PAGE_SIZE);
+        });
+
+        it('never queues a photo, an image with camera evidence, a trashed image or a private one', async () => {
+            const folder = await seedFolder(db, userId, 'locked', { isPrivate: true });
+
+            await seedClassified('photo.png', 'photo');
+            await seedClassified('other.png', 'other');
+            await seedClassified('camera.png', 'document', { camera: true });
+            await seedClassified('trashed.png', 'screenshot', { deleted: true });
+
+            const priv = await seedClassified('private.png', 'screenshot');
+
+            await db.updateTable('documents').set({ folder_id: folder.id }).where('id', '=', priv).execute();
+            // Non-images keep the text path: an image-kind row never exists for a PDF, and a PDF is never picked.
+            await seedDocument(db, { userId, name: 'plain.pdf', ocrText: 'text', summary: 'old summary' });
+
+            await runBackfillPage(deps, START_UNDERSTAND);
+
+            expect(llmJobs).toEqual([]);
+        });
+
+        it('skips an image that already has an image summary, and replaces one the old vision call wrote', async () => {
+            const done = await seedClassified('done.png', 'screenshot', { summary: 'new style' });
+            const old = await seedClassified('old.png', 'screenshot');
+
+            await db
+                .insertInto('llm_results')
+                .values({
+                    document_id: old,
+                    summary: 'A screenshot.',
+                    metadata: toMetadata('vision_describe'),
+                    token_count: 1,
+                    processing_type: 'vision_describe',
+                })
+                .execute();
+
+            expect(await findImagesToUnderstand(db, null, 10)).toEqual([old]);
+            expect(done).not.toBe(old);
+        });
+
+        it('resumes: a restart queues only what has no job yet, and finished ones drop out', async () => {
+            const ids = [
+                await seedClassified('a.png', 'screenshot'),
+                await seedClassified('b.png', 'screenshot'),
+                await seedClassified('c.png', 'screenshot'),
+            ].sort();
+
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs).toHaveLength(3);
+
+            // A restart while those jobs are still pending queues nothing a second time.
+            llmJobs = [];
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs).toEqual([]);
+
+            // One finishes (summary stored, job complete); the other two are still in the queue. A fresh run adds nothing.
+            await db.updateTable('processing_jobs').set({ status: 'complete' }).where('target_id', '=', ids[0]!).execute();
+            await db
+                .insertInto('llm_results')
+                .values({
+                    document_id: ids[0]!,
+                    summary: 's',
+                    metadata: toMetadata('image_understanding'),
+                    token_count: 1,
+                    processing_type: 'image_understanding',
+                })
+                .execute();
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs).toEqual([]);
+
+            // The other two are interrupted (jobs lost and marked complete without a summary): they are queued again, the finished one is not.
+            await db.updateTable('processing_jobs').set({ status: 'complete' }).execute();
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs.map((job) => job.documentId)).toEqual([ids[1], ids[2]]);
+        });
+
+        it('resumes from the cursor and not from the start', async () => {
+            const ids = [
+                await seedClassified('a.png', 'screenshot'),
+                await seedClassified('b.png', 'screenshot'),
+                await seedClassified('c.png', 'screenshot'),
+            ].sort();
+
+            await runBackfillPage(deps, { stage: 'understand', after: ids[1]! });
+
+            expect(llmJobs.map((job) => job.documentId)).toEqual([ids[2]]);
+        });
+
+        it('does not retry an image whose job failed in the last day, and does after that', async () => {
+            const id = await seedClassified('bad.png', 'screenshot');
+            const job = await db
+                .insertInto('processing_jobs')
+                .values({ user_id: userId, job_type: 'llm_summary', target_type: 'document', target_id: id, status: 'failed' })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs).toEqual([]);
+
+            // created_at cannot be set through the typed update, so age the failure in SQL.
+            await sql`UPDATE processing_jobs SET created_at = now() - interval '48 hours' WHERE id = ${job.id}`.execute(db);
+            await runBackfillPage(deps, START_UNDERSTAND);
+            expect(llmJobs.map((queuedJob) => queuedJob.documentId)).toEqual([id]);
+        });
+
+        it('waits while the pipeline is busy, which is what rate-limits it', async () => {
+            await seedClassified('a.png', 'screenshot');
+            busy = true;
+
+            expect(await runBackfillPage(deps, START_UNDERSTAND)).toEqual({ kind: 'wait', reason: 'queues-busy' });
+            expect(llmJobs).toEqual([]);
+        });
+
+        it('leaves llm_status alone, so an existing summary stays shown while the new one is made', async () => {
+            const id = await seedClassified('a.png', 'screenshot', { summary: 'earlier' });
+
+            await db.deleteFrom('llm_results').where('document_id', '=', id).execute();
+            await db
+                .insertInto('llm_results')
+                .values({ document_id: id, summary: 'earlier', metadata: toMetadata('vision_describe'), token_count: 1, processing_type: 'vision_describe' })
+                .execute();
+            await runBackfillPage(deps, START_UNDERSTAND);
+
+            expect(llmJobs).toHaveLength(1);
+            expect((await db.selectFrom('documents').select('llm_status').where('id', '=', id).executeTakeFirstOrThrow()).llm_status).toBe('complete');
+        });
+
+        it('is skipped when the image call is off (no queueUnderstanding): the backfill just finishes', async () => {
+            await seedClassified('a.png', 'screenshot');
+
+            const { queueUnderstanding: _off, ...without } = deps;
+
+            expect(await runBackfillPage(without, START_UNDERSTAND)).toEqual({ kind: 'done' });
         });
     });
 });

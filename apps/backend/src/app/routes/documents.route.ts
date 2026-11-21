@@ -866,8 +866,10 @@ export default async function (fastify: FastifyInstance) {
         summary: z.string().nullable(),
         metadata: z
             .object({
-                type: z.enum(['text_summary', 'vision_describe']).optional(),
+                type: z.enum(['text_summary', 'image_understanding', 'vision_describe']).optional(),
                 title: z.string().optional(),
+                appOrSource: z.string().optional(),
+                imageKind: z.string().optional(),
                 entities: z.array(EntitySchema).optional(),
                 topics: z.array(z.string()).optional(),
                 documentType: z.string().optional(),

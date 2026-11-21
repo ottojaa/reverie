@@ -181,6 +181,16 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
       API tokens (made and revoked on the settings page), so Claude Code and other agents can work
       against a Reverie library directly.
 
+    - 🚧 **Image understanding** — screenshots and document images get one Haiku call that sees the
+      downscaled image together with its OCR text (which may be empty) and returns what it is, the app or
+      source (shown beside the summary, stored as an entity and a tag), a title, summary, entities and tags.
+      Photos and private items never reach it.
+      _Shipped:_ the local image-kind classifier (#87, #90), now deciding each image's category and which
+      images may be sent (with a one-off script that rewrites the existing library from the verdicts); the
+      call itself, its backfill over existing screenshots and document images, and the app/source display.
+      _Still to do:_ checking real values on the server after the deploy, and `LLM_VISION_ENABLED=true` in
+      production.
+
     - ✅ **In-app agent** — a chat window onto stock Claude Code in its own container, restricted to the
       same registry via `/mcp`, for the admin only, with an Undo on every write. Replaced the organize-only
       chat (manual organize stays).

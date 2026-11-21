@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { env } from '../config/env';
 import type { Document } from '../db/schema';
 import type { LlmJobData } from '../queues/llm.queue';
 import { createLlmWorker } from '../workers/llm.worker';
@@ -12,7 +13,7 @@ type JobProcessor = (job: Job<LlmJobData>) => Promise<{ skipped?: boolean; skipR
 const h = vi.hoisted(() => {
     const tables: Record<string, Row[]> = {};
     const updates: Array<{ table: string; values: Row }> = [];
-    const anthropic = { parse: vi.fn(), create: vi.fn() };
+    const anthropic = { parse: vi.fn() };
     const jobService = {
         markJobStarted: vi.fn(),
         markJobComplete: vi.fn(),
@@ -104,7 +105,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 vi.mock('../search/search-indexer', () => ({ rebuildSearchVector: vi.fn() }));
 vi.mock('../services/storage.service', () => ({
     assertFitsInMemory: vi.fn(),
-    getStorageService: () => ({ getFile: async () => Buffer.from('image-bytes') }),
+    getStorageService: () => ({ getFile: async () => Buffer.from(TINY_PNG_BASE64, 'base64') }),
 }));
 vi.mock('../queues/redis', () => ({
     getRedisConnectionOptions: () => ({}),
@@ -125,6 +126,8 @@ vi.mock('bullmq', () => ({
 }));
 
 const USER = 'user-1';
+// A real 1x1 PNG: the image call decodes and re-encodes the file with sharp before it sends it.
+const TINY_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 function seed(kind: 'folder' | 'collection' | 'public', mimeType: string) {
     const isVisionImage = mimeType.startsWith('image/');
@@ -151,6 +154,8 @@ function seed(kind: 'folder' | 'collection' | 'public', mimeType: string) {
 
     h.tables.documents = [document as unknown as Row];
     h.tables.photo_metadata = [];
+    // An image the classifier judged a screenshot. The image call needs a verdict: a category alone is not enough.
+    h.tables.document_image_kinds = isVisionImage ? [{ document_id: 'doc-1', kind: 'screenshot' }] : [];
     h.tables.ocr_results = isVisionImage
         ? []
         : [{ document_id: 'doc-1', raw_text: 'Invoice from Acme Oy for consulting services', confidence_score: 95, has_meaningful_text: true }];
@@ -169,19 +174,17 @@ function mockAnthropicSuccess() {
             topics: ['billing'],
             tags: ['invoice'],
             extracted_date: null,
+            // Only the image call reads these two; the text summary ignores them.
+            kind: 'screenshot',
+            app_or_source: 'Acme app',
         },
         usage: { input_tokens: 10, output_tokens: 5 },
         stop_reason: 'end_turn',
-    });
-    h.anthropic.create.mockResolvedValue({
-        content: [{ type: 'text', text: '{"description":"A cat","detected_objects":["cat"],"scene_type":"indoor","has_people":false}' }],
-        usage: { input_tokens: 10, output_tokens: 5 },
     });
 }
 
 function expectNoAnthropicCall() {
     expect(h.anthropic.parse).not.toHaveBeenCalled();
-    expect(h.anthropic.create).not.toHaveBeenCalled();
 }
 
 beforeEach(() => {
@@ -194,6 +197,8 @@ const PRIVATE_KINDS = ['folder', 'collection'] as const;
 const FORCED_TYPES = [
     { forceType: undefined, mimeType: 'application/pdf', label: 'no forced type' },
     { forceType: 'text_summary', mimeType: 'application/pdf', label: 'forced text_summary' },
+    { forceType: 'image_understanding', mimeType: 'image/jpeg', label: 'forced image_understanding' },
+    // Jobs queued before the image call existed carry the old type.
     { forceType: 'vision_describe', mimeType: 'image/jpeg', label: 'forced vision_describe' },
 ] as const;
 
@@ -230,12 +235,17 @@ describe('processDocument privacy gate', () => {
         expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
     });
 
-    it('calls the vision model for a public image', async () => {
+    it('sends a public screenshot to the image call: the image, then the text', async () => {
         seed('public', 'image/jpeg');
 
-        await processDocument('doc-1', { forceType: 'vision_describe' });
+        await processDocument('doc-1', { forceType: 'image_understanding' });
 
-        expect(h.anthropic.create).toHaveBeenCalledTimes(1);
+        expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+
+        const content = h.anthropic.parse.mock.calls[0]?.[0].messages[0].content;
+
+        expect(content.map((block: { type: string }) => block.type)).toEqual(['image', 'text']);
+        expect(content[0].source.media_type).toBe('image/jpeg');
     });
 });
 
@@ -329,7 +339,7 @@ describe('trashed documents never reach Anthropic', () => {
     });
 });
 
-describe('photos never reach vision', () => {
+describe('photos never reach the image call', () => {
     const CAMERA_EXIF = { document_id: 'doc-1', taken_at: new Date('2024-06-01T10:00:00Z'), latitude: null, longitude: null };
     const GPS_ONLY_EXIF = { document_id: 'doc-1', taken_at: null, latitude: 60.17, longitude: 24.94 };
     const HELD_BACK = [
@@ -354,8 +364,8 @@ describe('photos never reach vision', () => {
     }
 
     for (const held of HELD_BACK) {
-        for (const forceType of [undefined, 'vision_describe'] as const) {
-            const how = forceType ? 'a forced vision_describe' : 'the type eligibility picks';
+        for (const forceType of [undefined, 'image_understanding', 'vision_describe'] as const) {
+            const how = forceType ? `a forced ${forceType}` : 'the type eligibility picks';
 
             it(`processDocument refuses ${held.label} with ${how}`, async () => {
                 seedImage(held);
@@ -381,20 +391,125 @@ describe('photos never reach vision', () => {
         }
     }
 
-    it('still sends a screenshot to vision when a job is queued directly', async () => {
+    it('sends a screenshot with no OCR text to the image call when a job is queued directly', async () => {
         seedImage({ category: 'screenshot', exif: [] });
 
-        const result = await runVisionJob('vision_describe');
+        const result = await runVisionJob('image_understanding');
 
         expect(result.skipped).toBeUndefined();
-        expect(h.anthropic.create).toHaveBeenCalledTimes(1);
+        expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+        expect(h.anthropic.parse.mock.calls[0]?.[0].messages[0].content[1].text).toContain('none was found');
     });
 
-    it('still sends a screenshot to vision when eligibility picks the type', async () => {
+    it.each(['screenshot', 'graphic', 'invoice', 'receipt'])(
+        'an image in the %s category with no verdict gets no call, even with a forced type',
+        async (category) => {
+            seedImage({ category, exif: [] });
+            h.tables.document_image_kinds = [];
+
+            const result = await processDocument('doc-1', { forceType: 'image_understanding' });
+
+            expect(result).toMatchObject({ skipped: true, reason: 'photo' });
+            expectNoAnthropicCall();
+        },
+    );
+
+    it.each(['image_understanding', 'vision_describe'] as const)('a queued %s job sends no image once vision is switched off', async (forceType) => {
+        seedImage({ category: 'screenshot', exif: [] });
+        env.LLM_VISION_ENABLED = false;
+
+        try {
+            await processDocument('doc-1', { forceType });
+        } finally {
+            env.LLM_VISION_ENABLED = true;
+        }
+
+        expectNoAnthropicCall();
+    });
+
+    it('sends a diagram when eligibility picks the type', async () => {
         seedImage({ category: 'graphic', exif: [] });
+        h.tables.document_image_kinds = [{ document_id: 'doc-1', kind: 'diagram' }];
 
         await processDocument('doc-1');
 
-        expect(h.anthropic.create).toHaveBeenCalledTimes(1);
+        expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+    });
+
+    describe('with a kind verdict', () => {
+        const MAKE = { document_id: 'doc-1', taken_at: null, latitude: null, longitude: null, camera_make: 'Canon', camera_model: null, lens_model: null };
+
+        function seedVerdict(kind: string, exif: readonly Row[] = []) {
+            seedImage({ category: 'screenshot', exif });
+            h.tables.document_image_kinds = [{ document_id: 'doc-1', kind }];
+        }
+
+        it.each(['photo', 'other'])('a %s verdict gets no call, even in a screenshot category', async (kind) => {
+            seedVerdict(kind);
+
+            const result = await processDocument('doc-1', { forceType: 'image_understanding' });
+
+            expect(result.skipped).toBe(true);
+            expectNoAnthropicCall();
+        });
+
+        it.each(['document', 'receipt', 'screenshot', 'diagram'])('a %s verdict gets the call', async (kind) => {
+            seedVerdict(kind);
+
+            await processDocument('doc-1');
+
+            expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+        });
+
+        it('camera evidence gets no call, even with a document verdict', async () => {
+            seedVerdict('document', [MAKE]);
+
+            const result = await processDocument('doc-1', { forceType: 'image_understanding' });
+
+            expect(result).toMatchObject({ skipped: true, reason: 'photo' });
+            expectNoAnthropicCall();
+        });
+
+        it('a directly queued job for a camera-backed document image ends skipped, not failed', async () => {
+            seedVerdict('document', [MAKE]);
+
+            const result = await runVisionJob('image_understanding');
+
+            expect(result).toMatchObject({ skipped: true, skipReason: 'photo' });
+            expectNoAnthropicCall();
+            expect(h.jobService.markJobFailed).not.toHaveBeenCalled();
+        });
+
+        it('a private screenshot gets no call even with a screenshot verdict', async () => {
+            seed('folder', 'image/jpeg');
+            h.tables.document_image_kinds = [{ document_id: 'doc-1', kind: 'screenshot' }];
+
+            const result = await processDocument('doc-1', { forceType: 'image_understanding' });
+
+            expect(result).toMatchObject({ skipped: true, reason: 'private' });
+            expectNoAnthropicCall();
+        });
+    });
+
+    it('a PDF still gets the text summary, with no image in the request', async () => {
+        seed('public', 'application/pdf');
+
+        const result = await processDocument('doc-1');
+
+        expect(result.skipped).toBeUndefined();
+        expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+        expect(typeof h.anthropic.parse.mock.calls[0]?.[0].messages[0].content).toBe('string');
+    });
+
+    it('a photo with readable text still gets the text summary, never its pixels', async () => {
+        seedImage({ category: 'photo', exif: [] });
+        h.tables.documents = [{ ...h.tables.documents![0], has_meaningful_text: true }];
+        h.tables.ocr_results = [{ document_id: 'doc-1', raw_text: 'Opening hours 9-17 weekdays', confidence_score: 90 }];
+
+        await processDocument('doc-1');
+
+        const content = h.anthropic.parse.mock.calls[0]?.[0].messages[0].content;
+
+        expect(typeof content).toBe('string');
     });
 });

@@ -59,3 +59,23 @@ export const LlmAnalysisSchema = z.object({
 export type LlmAnalysis = z.infer<typeof LlmAnalysisSchema>;
 export type LlmEntity = z.infer<typeof LlmEntitySchema>;
 export type LlmDocumentType = z.infer<typeof LlmDocumentTypeSchema>;
+
+/**
+ * What the one image call returns. `kind` has no `photo`: a photo is never sent, and the model cannot move an image
+ * to photo. It may move among the other kinds, e.g. a "document" that is really a screenshot of a page.
+ */
+export const LlmImageUnderstandingSchema = z.object({
+    kind: z.enum(['screenshot', 'document', 'receipt', 'diagram']),
+    // The app, site or source the picture shows ("Lunamux terminal", "Gmail", "Nordea statement"); null when there is none.
+    app_or_source: z.string().nullable(),
+    title: z.string().nullable(),
+    summary: z.string(),
+    document_type: LlmDocumentTypeSchema.nullable(),
+    language: z.string().nullable(), // ISO 639-1
+    entities: z.array(LlmEntitySchema),
+    topics: z.array(z.string()),
+    tags: z.array(z.string()),
+    extracted_date: z.string().nullable(), // YYYY-MM-DD
+});
+
+export type LlmImageUnderstanding = z.infer<typeof LlmImageUnderstandingSchema>;

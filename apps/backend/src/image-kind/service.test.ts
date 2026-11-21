@@ -7,7 +7,8 @@ import { env } from '../config/env';
 import type { Database, Document } from '../db/schema';
 import { upsertImageEmbedding } from '../embeddings/embedding.repository';
 import { MlUnavailableError } from '../embeddings/ml.client';
-import { isHeldBackFromVision } from '../llm/photo-gate';
+import { decideImageLook } from '../llm/image-look';
+import { isHeldBackFromVision, loadKindVerdict } from '../llm/photo-gate';
 import { dbProxy } from '../testing/db-proxy.js';
 import { createFakeMl, IMAGE_DIMENSIONS, IMAGE_MODEL, type FakeMl } from '../testing/fake-ml.js';
 import { seedDocument, seedUser } from '../testing/seed.js';
@@ -223,9 +224,9 @@ describeDb('image kind', () => {
         });
     });
 
-    describe('shadow mode (the production setting)', () => {
-        it('is what production runs', () => {
-            expect(isKindFlipActive(true)).toBe(false);
+    describe('shadow mode (flip off: no ML service, or the constant set back to false)', () => {
+        it('is active only with an ML service configured', () => {
+            expect(isKindFlipActive(true)).toBe(true);
             expect(isKindFlipActive(false)).toBe(false);
         });
 
@@ -289,6 +290,35 @@ describeDb('image kind', () => {
             expect((await loadDocument(withVision)).document_category).toBe('graphic');
             expect(queued.map((job) => job.documentId)).toEqual([withVision]);
             expect((await loadDocument(withoutVision)).llm_status).toBe('skipped');
+        });
+
+        it('queues a screenshot or document whose OCR text is poor, because the image call reads the pixels', async () => {
+            VISION.LLM_VISION_ENABLED = true;
+
+            const poor = await seedImage({ weights: { screenshot: 0.5, photo: 0.1 }, text: true, ocrDone: true });
+            const empty = await seedImage({ weights: { document: 0.5, photo: 0.1 }, ocrDone: true });
+            const withoutVision = await seedImage({ weights: { screenshot: 0.5, photo: 0.1 }, text: true, ocrDone: true });
+
+            await db.updateTable('ocr_results').set({ confidence_score: 5 }).execute();
+            await settleImageKind(deps, poor);
+            await settleImageKind(deps, empty);
+            VISION.LLM_VISION_ENABLED = false;
+            await settleImageKind(deps, withoutVision);
+
+            expect(queued.map((job) => job.documentId).sort()).toEqual([poor, empty].sort());
+            // With vision off the text rule decides: poor OCR text is not summarised.
+            expect((await loadDocument(withoutVision)).llm_status).toBe('skipped');
+        });
+
+        it('queues nothing for a photo with readable text and poor OCR, whatever the vision setting', async () => {
+            VISION.LLM_VISION_ENABLED = true;
+
+            const photo = await seedImage({ weights: { photo: 0.5 }, text: true, ocrDone: true });
+
+            await db.updateTable('ocr_results').set({ confidence_score: 5 }).where('document_id', '=', photo).execute();
+            await settleImageKind(deps, photo);
+
+            expect(queued).toHaveLength(0);
         });
 
         it('queues nothing for a text-less photo, and nothing for a text-less image with camera facts', async () => {
@@ -416,11 +446,7 @@ describeDb('image kind', () => {
     });
 
     describe('the privacy gate', () => {
-        const gate = (flip: boolean, serving = true) => {
-            ml.setDown(!serving);
-
-            return { flip, ml };
-        };
+        const held = async (id: string, flip: boolean) => isHeldBackFromVision(await loadDocument(id), await loadKindVerdict(id), flip);
 
         it('holds back an image with a camera make or model even when it has no capture date, whatever its category', async () => {
             const makeOnly = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'screenshot', cameraRead: true });
@@ -428,8 +454,8 @@ describeDb('image kind', () => {
 
             await db.insertInto('photo_metadata').values({ document_id: lensOnly, lens_model: 'iPhone 15 back camera' }).execute();
 
-            expect(await isHeldBackFromVision(await loadDocument(makeOnly), gate(false))).toBe(true);
-            expect(await isHeldBackFromVision(await loadDocument(lensOnly), gate(true))).toBe(true);
+            expect(await held(makeOnly, false)).toBe(true);
+            expect(await held(lensOnly, true)).toBe(true);
         });
 
         it('lets a verdict, not the capture date, decide a date-only image once its camera columns have been read (flip on)', async () => {
@@ -445,8 +471,8 @@ describeDb('image kind', () => {
             await settleImageKind(deps, screenshot);
             await settleImageKind(deps, photo);
 
-            expect(await isHeldBackFromVision(await loadDocument(screenshot), gate(true))).toBe(false);
-            expect(await isHeldBackFromVision(await loadDocument(photo), gate(true))).toBe(true);
+            expect(await held(screenshot, true)).toBe(false);
+            expect(await held(photo, true)).toBe(true);
         });
 
         it('holds back a date-only image whose camera columns have not been read yet, flip on or off', async () => {
@@ -454,8 +480,45 @@ describeDb('image kind', () => {
 
             await classifyDocumentImage(deps, id);
 
-            expect(await isHeldBackFromVision(await loadDocument(id), gate(true))).toBe(true);
-            expect(await isHeldBackFromVision(await loadDocument(id), gate(false))).toBe(true);
+            expect(await held(id, true)).toBe(true);
+            expect(await held(id, false)).toBe(true);
+        });
+
+        it('holds back a date-only image the heuristics called a screenshot when reverie-ml is down, so there is no verdict to trust', async () => {
+            const id = await seedImage({ weights: null, photo: { takenAt: new Date('2026-01-02') }, category: 'screenshot', cameraRead: true });
+
+            expect(await held(id, true)).toBe(true);
+            expect(await decideImageLook(await loadDocument(id), true)).toEqual({ call: false, heldBack: true });
+        });
+
+        it('decides the image call from the gate, the verdict and the category, failing closed', async () => {
+            const screenshot = await seedImage({ weights: { screenshot: 0.5, photo: 0.1 }, category: 'screenshot', cameraRead: true });
+            const photo = await seedImage({ weights: { photo: 0.5 }, category: 'screenshot', cameraRead: true });
+            const camera = await seedImage({ weights: { document: 0.5, photo: 0.1 }, category: 'other', cameraRead: true, photo: { make: 'Canon' } });
+            const unknown = await seedImage({ weights: null, category: 'other', cameraRead: true });
+            const noVerdictPaper = await seedImage({ weights: null, category: 'invoice', cameraRead: true });
+            const noVerdictScreenshot = await seedImage({ weights: null, category: 'screenshot', cameraRead: true });
+
+            deps = { ...deps, flip: true };
+
+            for (const id of [screenshot, photo, camera]) await settleImageKind(deps, id);
+
+            const look = async (id: string, serving = true) => {
+                ml.setDown(!serving);
+
+                return decideImageLook(await loadDocument(id), true);
+            };
+
+            expect(await look(screenshot)).toEqual({ call: true, kind: 'screenshot' });
+            expect(await look(photo)).toEqual({ call: false, heldBack: true });
+            expect(await look(camera)).toEqual({ call: false, heldBack: true });
+            // No verdict means no call, whether reverie-ml has not judged it yet or is down: the category the OCR
+            // heuristics gave (screenshot, invoice, ...) is never enough, they call a phone photo a screenshot.
+            expect(await look(unknown)).toEqual({ call: false, heldBack: true });
+            expect(await look(unknown, false)).toEqual({ call: false, heldBack: true });
+            expect(await look(noVerdictPaper)).toEqual({ call: false, heldBack: true });
+            expect(await look(noVerdictPaper, false)).toEqual({ call: false, heldBack: true });
+            expect(await look(noVerdictScreenshot, false)).toEqual({ call: false, heldBack: true });
         });
 
         it('keeps holding back a date-only, text-free phone-sized image the heuristics called a screenshot while the flip is off', async () => {
@@ -468,7 +531,7 @@ describeDb('image kind', () => {
                 height: 3024,
             });
 
-            expect(await isHeldBackFromVision(await loadDocument(id), gate(false))).toBe(true);
+            expect(await held(id, false)).toBe(true);
         });
 
         it('holds back a camera image whatever its kind, with the flip off and on', async () => {
@@ -478,10 +541,8 @@ describeDb('image kind', () => {
             for (const id of [withDate, withGps]) {
                 await classifyDocumentImage(deps, id);
 
-                const doc = await loadDocument(id);
-
-                expect(await isHeldBackFromVision(doc, gate(false))).toBe(true);
-                expect(await isHeldBackFromVision(doc, gate(true))).toBe(true);
+                expect(await held(id, false)).toBe(true);
+                expect(await held(id, true)).toBe(true);
             }
 
             // On: the verdict sets the category to document ('other'), and the EXIF still holds the image back.
@@ -489,7 +550,7 @@ describeDb('image kind', () => {
             await settleImageKind(deps, withDate);
 
             expect(await kindOf(withDate)).toBe('document');
-            expect(await isHeldBackFromVision(await loadDocument(withDate), gate(true))).toBe(true);
+            expect(await held(withDate, true)).toBe(true);
         });
 
         it('holds back an image without a verdict while reverie-ml is serving, whatever category the heuristics gave', async () => {
@@ -498,26 +559,8 @@ describeDb('image kind', () => {
 
             await classifyDocumentImage(deps, withVerdict);
 
-            expect(await isHeldBackFromVision(await loadDocument(noVerdict), gate(true))).toBe(true);
-            expect(await isHeldBackFromVision(await loadDocument(withVerdict), gate(true))).toBe(false);
-        });
-
-        it("with the flip off, an image without a verdict is judged by today's rules", async () => {
-            const screenshot = await seedImage({ weights: null, category: 'screenshot' });
-            const uncategorised = await seedImage({ weights: null, category: null });
-            const photo = await seedImage({ weights: null, category: 'photo' });
-
-            expect(await isHeldBackFromVision(await loadDocument(screenshot), gate(false))).toBe(false);
-            expect(await isHeldBackFromVision(await loadDocument(uncategorised), gate(false))).toBe(true);
-            expect(await isHeldBackFromVision(await loadDocument(photo), gate(false))).toBe(true);
-        });
-
-        it("falls back to today's rules when reverie-ml is not serving", async () => {
-            const screenshot = await seedImage({ weights: null, category: 'screenshot' });
-            const camera = await seedImage({ weights: null, category: 'screenshot', photo: { takenAt: new Date('2025-06-01') } });
-
-            expect(await isHeldBackFromVision(await loadDocument(screenshot), gate(true, false))).toBe(false);
-            expect(await isHeldBackFromVision(await loadDocument(camera), gate(true, false))).toBe(true);
+            expect(await held(noVerdict, true)).toBe(true);
+            expect(await held(withVerdict, true)).toBe(false);
         });
 
         it('holds back an image the verdict calls a photo', async () => {
@@ -527,7 +570,7 @@ describeDb('image kind', () => {
 
             await settleImageKind(deps, id);
 
-            expect(await isHeldBackFromVision(await loadDocument(id), gate(true))).toBe(true);
+            expect(await held(id, true)).toBe(true);
         });
     });
 
