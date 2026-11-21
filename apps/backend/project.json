@@ -19,7 +19,8 @@
                 "additionalEntryPoints": [
                     "apps/backend/src/scripts/create-user.ts",
                     "apps/backend/src/scripts/backfill-thumbnails.ts",
-                    "apps/backend/src/scripts/compare-image-kinds.ts"
+                    "apps/backend/src/scripts/compare-image-kinds.ts",
+                    "apps/backend/src/scripts/semantic-probe.ts"
                 ],
                 "tsConfig": "apps/backend/tsconfig.app.json",
                 "skipTypeCheck": true,

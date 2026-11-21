@@ -5,10 +5,13 @@ import { db } from '../db/kysely';
 import { toVectorLiteral, type ModelRef } from '../embeddings/embedding.repository';
 import { createMlClient, MlUnavailableError, type MlClient, type MlModelInfo } from '../embeddings/ml.client';
 import { applySearchFilters, buildPrefixTsQuery, documentJoins, type SearchQueryBase } from './filter-application';
+import { fetchImageNoise, fetchTextNoise, toCutoff, type Cutoff, type CutoffRule, type NoiseStats } from './semantic-noise';
 
 /**
  * Search by meaning: embeds the query, asks pgvector for the nearest documents on two streams (text
  * by the text model, images by the image model's text tower) and fuses them with full-text ranking.
+ * A hit counts only when it stands out from what the same query scores across the library
+ * (semantic-noise.ts), so each query and model gets its own cutoff.
  *
  * Every vector query starts from the same filtered documents query as full text (user, private
  * folders, trash and every `type:`/`date:`/`folder:` filter), so a vector hit can never show what a
@@ -17,9 +20,9 @@ import { applySearchFilters, buildPrefixTsQuery, documentJoins, type SearchQuery
  */
 
 export interface SemanticConfig {
-    /** Cosine similarity a document must reach to count as a meaning match, per model. */
-    textFloor: number;
-    imageFloor: number;
+    /** What a document must reach to count as a meaning match, per model: an absolute floor and a margin above the query's noise. */
+    text: CutoffRule;
+    image: CutoffRule;
     /** Most documents kept per stream. */
     topK: number;
     /** After an ML failure, how long to skip ML entirely so searches don't each wait out the timeout. */
@@ -45,8 +48,29 @@ export interface SemanticScope {
     semanticBase?: SearchQueryBase;
 }
 
+export interface ScoredHit {
+    id: string;
+    /** Best cosine similarity of any of the document's vectors to the query. */
+    similarity: number;
+}
+
+/** One stream's candidates for a query and where its noise ends: the hits at or above `cutoff` are the stream's matches. */
+export interface StreamProbe {
+    noise: NoiseStats | null;
+    cutoff: Cutoff;
+    /** Nearest documents the stream looked at, most similar first, kept or not. */
+    hits: ScoredHit[];
+}
+
+export interface SemanticProbe {
+    text: StreamProbe;
+    image: StreamProbe;
+}
+
 export interface SemanticSearch {
     load(parsed: ParsedQuery, scope: SemanticScope): Promise<SemanticMatches>;
+    /** What `load` saw before cutting, for tuning the cutoffs. Null when meaning search can't answer this query now. */
+    probe(parsed: ParsedQuery, scope: SemanticScope): Promise<SemanticProbe | null>;
 }
 
 interface QueryVector {
@@ -79,23 +103,24 @@ function isEligible(parsed: ParsedQuery): boolean {
     return parsed.searchScope !== 'filename' && parsed.searchScope !== 'content' && parsed.searchScope !== 'summary';
 }
 
-/** Best similarity per document, at or above the floor, most similar first, at most `topK`. */
-function toRankedIds(rows: NearestRow[], floor: number, topK: number): string[] {
+/** Best similarity per document, most similar first. */
+function toBestPerDocument(rows: NearestRow[]): ScoredHit[] {
     const best = new Map<string, number>();
 
     for (const row of rows) {
         const similarity = 1 - row.distance;
 
-        if (similarity < floor) continue;
-
         if (similarity > (best.get(row.id) ?? -Infinity)) best.set(row.id, similarity);
     }
 
-    return [...best]
-        .sort(([idA, a], [idB, b]) => b - a || idA.localeCompare(idB))
-        .slice(0, topK)
-        .map(([id]) => id);
+    return [...best].map(([id, similarity]) => ({ id, similarity })).sort((a, b) => b.similarity - a.similarity || a.id.localeCompare(b.id));
 }
+
+const toMatchIds = (stream: StreamProbe, topK: number): string[] =>
+    stream.hits
+        .filter((hit) => hit.similarity >= stream.cutoff.similarity)
+        .slice(0, topK)
+        .map((hit) => hit.id);
 
 /**
  * Runs a vector query in a transaction with iterative index scans on. A filtered HNSW query otherwise
@@ -171,20 +196,37 @@ export function createSemanticSearch(ml: MlClient | null, config: SemanticConfig
         }
     }
 
+    /** Both streams for a query, or null when the query isn't eligible or ML can't answer now. */
+    async function probe(parsed: ParsedQuery, scope: SemanticScope): Promise<SemanticProbe | null> {
+        if (!isEligible(parsed)) return null;
+
+        const vectors = await embedQuery(parsed.fullText!);
+
+        if (!vectors) return null;
+
+        const noiseScope = { userId: scope.userId };
+        const [textRows, imageRows, textNoise, imageNoise] = await Promise.all([
+            nearestText(parsed, scope, vectors.text, config.topK * CHUNK_OVERFETCH),
+            nearestImage(parsed, scope, vectors.image, config.topK),
+            fetchTextNoise(vectors.text.ref, vectors.text.literal, noiseScope),
+            fetchImageNoise(vectors.image.ref, vectors.image.literal, noiseScope),
+        ]);
+
+        return {
+            text: { noise: textNoise, cutoff: toCutoff(config.text, textNoise), hits: toBestPerDocument(textRows) },
+            image: { noise: imageNoise, cutoff: toCutoff(config.image, imageNoise), hits: toBestPerDocument(imageRows) },
+        };
+    }
+
     return {
+        probe,
         async load(parsed, scope) {
-            if (!isEligible(parsed)) return toInactive(config.topK);
+            const found = await probe(parsed, scope);
 
-            const vectors = await embedQuery(parsed.fullText!);
+            if (!found) return toInactive(config.topK);
 
-            if (!vectors) return toInactive(config.topK);
-
-            const [textRows, imageRows] = await Promise.all([
-                nearestText(parsed, scope, vectors.text, config.topK * CHUNK_OVERFETCH),
-                nearestImage(parsed, scope, vectors.image, config.topK),
-            ]);
-            const text = toRankedIds(textRows, config.textFloor, config.topK);
-            const image = toRankedIds(imageRows, config.imageFloor, config.topK);
+            const text = toMatchIds(found.text, config.topK);
+            const image = toMatchIds(found.image, config.topK);
 
             return { active: true, text, image, ids: [...new Set([...text, ...image])], fullTextDepth: toFullTextDepth(config.topK) };
         },
@@ -229,8 +271,8 @@ let instance: SemanticSearch | undefined;
 /** The shared instance, built from the environment on first use. Without ML_URL it never matches anything. */
 export function getSemanticSearch(): SemanticSearch {
     instance ??= createSemanticSearch(env.ML_URL ? createMlClient(env.ML_URL, env.SEMANTIC_TIMEOUT_MS) : null, {
-        textFloor: env.SEMANTIC_TEXT_FLOOR,
-        imageFloor: env.SEMANTIC_IMAGE_FLOOR,
+        text: { minSimilarity: env.SEMANTIC_TEXT_MIN_SIMILARITY, marginZ: env.SEMANTIC_TEXT_MARGIN_Z },
+        image: { minSimilarity: env.SEMANTIC_IMAGE_MIN_SIMILARITY, marginZ: env.SEMANTIC_IMAGE_MARGIN_Z },
         topK: env.SEMANTIC_TOP_K,
         breakerMs: 10_000,
     });
