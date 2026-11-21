@@ -1,5 +1,6 @@
 import { createRevGeocoder } from '@webkitty/geo-rev';
 import exifr from 'exifr';
+import { EXPOSURE_AND_TIME_TAGS, readCaptureTime, readExposureFacts } from './exif-tags';
 import type { ExifMetadata } from './types';
 
 export type { ExifMetadata };
@@ -34,22 +35,49 @@ function toExifText(value: unknown): string | null {
     return text === '' ? null : text.slice(0, 200);
 }
 
-export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata> {
-    const result: ExifMetadata = {
+/** The city and country nearest a coordinate, from the bundled offline geocoder; nulls when none is close. */
+export async function lookupPlace(latitude: number, longitude: number): Promise<{ city: string | null; country: string | null }> {
+    const geocoder = await getGeocoder();
+    const geo = geocoder.lookup({ latitude, longitude });
+
+    if (!geo?.record) return { city: null, country: null };
+
+    return { city: geo.record.name, country: countryCodeToName(geo.record.countryCode) };
+}
+
+function emptyExifMetadata(): ExifMetadata {
+    return {
         latitude: null,
         longitude: null,
         city: null,
         country: null,
         takenAt: null,
+        takenAtOffset: null,
         cameraMake: null,
         cameraModel: null,
         lensModel: null,
+        iso: null,
+        fNumber: null,
+        exposureTime: null,
+        focalLength: null,
+        focalLength35mm: null,
+        flashFired: null,
+        orientation: null,
+        pixelWidth: null,
+        pixelHeight: null,
     };
+}
+
+export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata> {
+    const result = emptyExifMetadata();
 
     try {
+        // Nothing is translated or revived: orientation, flash and the sizes stay numbers, and the date stays the
+        // string the camera wrote, so its clock reading does not pass through the server's time zone.
         const exif = await exifr.parse(buffer, {
-            pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'CreateDate', 'Make', 'Model', 'LensModel'],
-            translateValues: true,
+            pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'Make', 'Model', 'LensModel', ...EXPOSURE_AND_TIME_TAGS],
+            translateValues: false,
+            reviveValues: false,
         });
 
         if (!exif) return result;
@@ -59,25 +87,18 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
         if (Number.isFinite(exif.latitude) && Number.isFinite(exif.longitude)) {
             result.latitude = exif.latitude;
             result.longitude = exif.longitude;
-
-            const geocoder = await getGeocoder();
-            const geo = geocoder.lookup({ latitude: exif.latitude, longitude: exif.longitude });
-
-            if (geo?.record) {
-                result.city = geo.record.name;
-                result.country = countryCodeToName(geo.record.countryCode);
-            }
+            Object.assign(result, await lookupPlace(exif.latitude, exif.longitude));
         }
 
         result.cameraMake = toExifText(exif.Make);
         result.cameraModel = toExifText(exif.Model);
         result.lensModel = toExifText(exif.LensModel);
 
-        const dateValue = exif.DateTimeOriginal ?? exif.CreateDate;
+        const time = readCaptureTime(exif);
 
-        if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
-            result.takenAt = dateValue;
-        }
+        result.takenAt = time.takenAt;
+        result.takenAtOffset = time.takenAtOffset;
+        Object.assign(result, readExposureFacts(exif));
     } catch {
         // EXIF parsing failures are non-fatal
     }
@@ -86,7 +107,7 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
 }
 
 /** The `photo_metadata` columns to write for an image's EXIF: only the fields it has, or null when it has none at all. */
-export function toPhotoMetadataValues(exif: ExifMetadata | null | undefined): Record<string, string | number | Date> | null {
+export function toPhotoMetadataValues(exif: ExifMetadata | null | undefined): Record<string, string | number | boolean | Date> | null {
     if (!exif) return null;
 
     const values = {
@@ -95,9 +116,19 @@ export function toPhotoMetadataValues(exif: ExifMetadata | null | undefined): Re
         ...(exif.city != null && { city: exif.city }),
         ...(exif.country != null && { country: exif.country }),
         ...(exif.takenAt != null && { taken_at: exif.takenAt }),
+        ...(exif.takenAtOffset != null && { taken_at_offset: exif.takenAtOffset }),
         ...(exif.cameraMake != null && { camera_make: exif.cameraMake }),
         ...(exif.cameraModel != null && { camera_model: exif.cameraModel }),
         ...(exif.lensModel != null && { lens_model: exif.lensModel }),
+        ...(exif.iso != null && { iso: exif.iso }),
+        ...(exif.fNumber != null && { f_number: exif.fNumber }),
+        ...(exif.exposureTime != null && { exposure_time: exif.exposureTime }),
+        ...(exif.focalLength != null && { focal_length: exif.focalLength }),
+        ...(exif.focalLength35mm != null && { focal_length_35mm: exif.focalLength35mm }),
+        ...(exif.flashFired != null && { flash_fired: exif.flashFired }),
+        ...(exif.orientation != null && { orientation: exif.orientation }),
+        ...(exif.pixelWidth != null && { pixel_width: exif.pixelWidth }),
+        ...(exif.pixelHeight != null && { pixel_height: exif.pixelHeight }),
     };
 
     return Object.keys(values).length === 0 ? null : values;

@@ -98,7 +98,7 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 | Capability                               | Immich      | Reverie                  | Plan                                               |
 | ---------------------------------------- | ----------- | ------------------------ | -------------------------------------------------- |
 | Video transcoding + adaptive streaming   | ✅ HW-accel | ❌ stream-copy trim only | 🛠️ "personal Netflix" — **ahead of photo editing** |
-| Rich EXIF capture (camera/lens/exposure) | ✅          | ⚠️ only GPS + `taken_at` | 🧊 capture now                                     |
+| Rich EXIF capture (camera/lens/exposure) | ✅          | ✅ captured + shown      | ✅ done                                            |
 | RAW / Live Photos / 360°                 | ✅          | ❌                       | 🧊                                                 |
 | EXIF editing                             | ✅          | ❌                       | 🧊                                                 |
 
@@ -216,14 +216,17 @@ they don't require a full reprocess later.
 
 #### Data to start capturing now
 
-To keep the 🧊 items cheap later, extend ingest to persist (beyond today's GPS + `taken_at`):
+Captured at ingest and backfilled for existing files (done); nothing is built on it yet:
 
-- **Full EXIF:** camera make/model, lens, ISO/aperture/shutter, focal length, orientation, precise
-  original capture timestamp.
-- **Video technical metadata:** codec, container, bitrate, resolution, frame rate (duration already
-  captured) — needed for transcoding decisions.
-- Keep everything in a metadata table so Timeline, map, and media features are a UI/query concern
-  later, not a re-processing job.
+- ✅ **Full EXIF:** camera make/model, lens, ISO/aperture/shutter, focal length (and 35mm
+  equivalent), flash, orientation, shot size, and the precise original capture time with its UTC
+  offset (`photo_metadata`, one column per fact).
+- ✅ **Video technical metadata:** container, video codec + profile, audio codec, bitrate,
+  resolution, frame rate, rotation, HDR/colour transfer, creation time (`video_metadata`, read in
+  the thumbnail worker's duration probe). A video's GPS and creation time feed the same place and
+  date fields photos use.
+- ✅ Everything lives in tables, so Timeline, map, and media features are a UI/query concern later,
+  not a re-processing job. Still to capture: nothing on this list.
 
 ### ❌ Not planned (for now)
 

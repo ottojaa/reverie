@@ -45,7 +45,8 @@ class DtoSerializationTest {
               "updated_at": "2024-06-01T09:00:00.000Z",
               "file_url": "/files/x?e=1&s=y",
               "thumbnail_urls": {"sm":"/t/sm","md":"/t/md","lg":"/t/lg"},
-              "photo_metadata": {"latitude":34.0,"longitude":-118.7,"city":"Malibu","country":"US","taken_at":"2024-06-01"},
+              "photo_metadata": {"latitude":34.0,"longitude":-118.7,"city":"Malibu","country":"US","taken_at":"2024-06-01","iso":100,"f_number":1.8,"exposure_time":0.008,"flash_fired":false},
+              "video_metadata": {"video_codec":"hevc","width":1920,"height":1080,"rotation":90,"is_hdr":true,"frame_rate":29.97,"bitrate":8000000},
               "tags": [{"name":"lunamux","source":"taught","label_id":"22222222-2222-2222-2222-222222222222"},
                        {"name":"beach","source":"auto","label_id":null}]
             }
@@ -58,6 +59,9 @@ class DtoSerializationTest {
         assertEquals(JobStatus.COMPLETE, doc.ocr_status)
         assertEquals(125.5, doc.duration_seconds!!, 0.0001)
         assertEquals(34.0, doc.photo_metadata?.latitude!!, 0.0001)
+        assertEquals(100, doc.photo_metadata?.iso)
+        assertEquals("hevc", doc.video_metadata?.video_codec)
+        assertEquals(true, doc.video_metadata?.is_hdr)
 
         val meta = LlmMetadata.from(json.parseToJsonElement(payload).jsonObject["llm_metadata"]?.jsonObject)
         assertNotNull(meta)

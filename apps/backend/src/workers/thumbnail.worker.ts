@@ -8,6 +8,8 @@ import { extname, join } from 'path';
 import sharp from 'sharp';
 import { db } from '../db/kysely';
 import { NonRetryableJobError } from '../jobs/job.types';
+import { saveVideoProbe } from '../media/video-metadata.repository';
+import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/video-probe';
 import { enqueueImageEmbedding } from '../embeddings/enqueue';
 import { decodeTextForPreview } from '../ocr/text-extractor';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -41,21 +43,13 @@ async function renderPdfFirstPage(pdfBuffer: Buffer): Promise<Buffer> {
     return firstPage;
 }
 
-const VIDEO_MIME_TO_EXT: Record<string, string> = {
-    'video/mp4': '.mp4',
-    'video/webm': '.webm',
-    'video/quicktime': '.mov',
-    'video/x-msvideo': '.avi',
-    'video/x-matroska': '.mkv',
-};
-
 /**
- * Extract a single frame from a video file using ffmpeg, and probe its duration with ffprobe
- * (both must be on PATH — they ship together). Duration is a best-effort extra: a probe failure
- * yields null rather than failing the whole thumbnail job.
+ * Extract a single frame from a video file using ffmpeg, and probe its technical facts (duration, codecs,
+ * rotation, place and date tags) with ffprobe (both must be on PATH — they ship together). The probe is a
+ * best-effort extra: a probe failure yields null rather than failing the whole thumbnail job.
  * Works on a file path so videos of any size are never loaded into memory.
  */
-async function renderVideoFrame(inputPath: string): Promise<{ frame: Buffer; durationSeconds: number | null }> {
+async function renderVideoFrame(inputPath: string): Promise<{ frame: Buffer; probe: VideoProbe | null }> {
     try {
         const chunks: Buffer[] = [];
         // Grab the poster frame at the shared offset so the client's video open can park its first
@@ -83,35 +77,12 @@ async function renderVideoFrame(inputPath: string): Promise<{ frame: Buffer; dur
             throw new NonRetryableJobError('ffmpeg produced no output');
         }
 
-        const durationSeconds = await probeVideoDuration(inputPath);
+        const probe = await probeVideoFile(inputPath).catch(() => null);
 
-        return { frame: out, durationSeconds };
+        return { frame: out, probe };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new NonRetryableJobError(`ffmpeg not found or failed to extract video frame: ${msg}`);
-    }
-}
-
-/** Probe a video's duration in seconds with ffprobe; null when it can't be determined. */
-async function probeVideoDuration(inputPath: string): Promise<number | null> {
-    try {
-        const chunks: Buffer[] = [];
-        const ffprobe = spawn('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', inputPath], {
-            stdio: ['ignore', 'pipe', 'ignore'],
-        });
-
-        ffprobe.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-        await new Promise<void>((resolve, reject) => {
-            ffprobe.on('error', (err) => reject(err));
-            ffprobe.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffprobe exited ${code}`))));
-        });
-
-        const value = Number.parseFloat(Buffer.concat(chunks).toString('utf8').trim());
-
-        return Number.isFinite(value) && value > 0 ? value : null;
-    } catch {
-        return null;
     }
 }
 
@@ -251,22 +222,27 @@ async function getImageBuffer(
     mimeType: string,
     filename: string,
     sizeBytes: number,
-): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number }; durationSeconds: number | null }> {
+): Promise<{ imageBuffer: Buffer; originalDimensions: { width: number; height: number }; durationSeconds: number | null; videoProbe: VideoProbe | null }> {
     const strategy = getThumbnailStrategy(mimeType, filename);
 
     if (strategy === 'video') {
         // Videos can be many GB: hand ffmpeg a file path instead of reading the video into memory
-        const localFile = await storageService.getLocalFilePath(filePath, VIDEO_MIME_TO_EXT[mimeType] ?? '');
+        const localFile = await storageService.getLocalFilePath(filePath, toVideoExtension(mimeType));
 
         try {
-            const { frame, durationSeconds } = await renderVideoFrame(localFile.path);
+            const { frame, probe } = await renderVideoFrame(localFile.path);
             const metadata = await sharp(frame).metadata();
 
             if (!metadata.width || !metadata.height) {
                 throw new NonRetryableJobError('Could not get video frame dimensions');
             }
 
-            return { imageBuffer: frame, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds };
+            return {
+                imageBuffer: frame,
+                originalDimensions: { width: metadata.width, height: metadata.height },
+                durationSeconds: probe?.durationSeconds ?? null,
+                videoProbe: probe,
+            };
         } finally {
             await localFile.cleanup().catch(() => {});
         }
@@ -290,7 +266,7 @@ async function getImageBuffer(
             throw new NonRetryableJobError('Could not get PDF page dimensions');
         }
 
-        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null, videoProbe: null };
     }
 
     if (strategy === 'text') {
@@ -301,7 +277,7 @@ async function getImageBuffer(
             throw new NonRetryableJobError('Could not render text preview');
         }
 
-        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
+        return { imageBuffer: pngBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null, videoProbe: null };
     }
 
     // Images: use the original buffer directly.
@@ -311,7 +287,7 @@ async function getImageBuffer(
         throw new NonRetryableJobError('Could not read image dimensions');
     }
 
-    return { imageBuffer: fileBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null };
+    return { imageBuffer: fileBuffer, originalDimensions: { width: metadata.width, height: metadata.height }, durationSeconds: null, videoProbe: null };
 }
 
 /**
@@ -333,7 +309,7 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     await publishJobProgress(job.id!, 10, documentId, job.data.sessionId, job.data.userId);
 
     // Get image buffer based on file type (renders PDF/office/text/video frame as needed)
-    const { imageBuffer, originalDimensions, durationSeconds } = await getImageBuffer(
+    const { imageBuffer, originalDimensions, durationSeconds, videoProbe } = await getImageBuffer(
         storageService,
         filePath,
         document.mime_type,
@@ -396,6 +372,13 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
         })
         .where('id', '=', documentId)
         .execute();
+
+    // The video's technical facts, place and date. Not worth failing the thumbnail for: the embed backfill reads any video this misses.
+    if (videoProbe) {
+        await saveVideoProbe(db, documentId, videoProbe).catch((error: unknown) =>
+            logger.warn('Could not store video metadata', { documentId, error: error instanceof Error ? error.message : String(error) }),
+        );
+    }
 
     // Every image, private ones included, is embedded from its thumbnail rendition (local only).
     if (document.mime_type.startsWith('image/')) await enqueueImageEmbedding(documentId);

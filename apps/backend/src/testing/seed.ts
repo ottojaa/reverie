@@ -20,7 +20,11 @@ export interface SeedDocument {
     tags?: string[];
     /** When the camera EXIF was read from the file (the documents.camera_read_at marker); null (not read yet) by default. */
     cameraReadAt?: Date | null;
+    /** When the full EXIF or video facts were read from the file (the documents.media_read_at marker); null (not read yet) by default. */
+    mediaReadAt?: Date | null;
     photo?: {
+        takenAtOffset?: string | null;
+        iso?: number | null;
         takenAt?: Date | null;
         latitude?: number | null;
         longitude?: number | null;
@@ -102,6 +106,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             search_vector: null,
             deleted_at: doc.deleted ? new Date() : null,
             ...(doc.cameraReadAt !== undefined && { camera_read_at: doc.cameraReadAt }),
+            ...(doc.mediaReadAt !== undefined && { media_read_at: doc.mediaReadAt }),
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -137,6 +142,8 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
                 country: doc.photo.country ?? null,
                 city: doc.photo.city ?? null,
                 taken_at: doc.photo.takenAt ?? null,
+                taken_at_offset: doc.photo.takenAtOffset ?? null,
+                iso: doc.photo.iso ?? null,
                 camera_make: doc.photo.cameraMake ?? null,
                 camera_model: doc.photo.cameraModel ?? null,
                 lens_model: doc.photo.lensModel ?? null,

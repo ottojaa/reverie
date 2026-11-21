@@ -10,16 +10,20 @@ import { createFakeMl, type FakeMl } from '../testing/fake-ml.js';
 import { seedDocument, seedFolder, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
-import { readDocumentCamera } from '../image-kind/camera-read';
+import { readDocumentMedia } from '../media/media-read';
 import { clearPromptCache } from '../image-kind/prompt-cache';
 import { classifyDocumentImage } from '../image-kind/service';
 import { PROMPT_ONLY_CLASSIFIER } from '../testing/kind-config.js';
 import type { LlmMetadata } from '../llm/types';
 import { UNDERSTAND_PAGE_SIZE, findImagesToUnderstand, queueUnderstanding } from '../llm/understand-backfill';
+import { parseFfprobe } from '../media/video-probe';
 import { runBackfillPage, type BackfillDeps, type BackfillStep } from './backfill';
 import { embedDocumentImage, embedDocumentText } from './embedding.service';
 
 const START: EmbedBackfillCursor = { stage: 'text', after: null };
+
+/** What probing a video that carries no facts returns. */
+const NO_VIDEO_FACTS = parseFfprobe({});
 
 describeDb('embedding backfill', () => {
     let database: TestDatabase;
@@ -62,7 +66,7 @@ describeDb('embedding backfill', () => {
         for (const { kind, id } of queued.splice(0)) {
             if (kind === 'embed-text') await embedDocumentText({ db, ml, readFile: read }, id);
             else if (kind === 'classify-image') await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
-            else if (kind === 'read-camera') await readDocumentCamera({ db, readFile: read }, id);
+            else if (kind === 'read-camera') await readDocumentMedia({ db, readFile: read, probeVideo: async () => NO_VIDEO_FACTS }, id);
             else await embedDocumentImage({ db, ml, readFile: read }, id);
         }
     };
@@ -280,7 +284,13 @@ describeDb('embedding backfill', () => {
 
     describe('the camera stage', () => {
         const unread = () =>
-            db.selectFrom('documents').select('id').where('camera_read_at', 'is', null).where('mime_type', 'like', 'image/%').orderBy('id').execute();
+            db
+                .selectFrom('documents')
+                .select('id')
+                .where('media_read_at', 'is', null)
+                .where((eb) => eb.or([eb('mime_type', 'like', 'image/%'), eb('mime_type', 'like', 'video/%')]))
+                .orderBy('id')
+                .execute();
 
         async function seedUnreadImages(count: number): Promise<string[]> {
             const ids: string[] = [];
@@ -304,10 +314,24 @@ describeDb('embedding backfill', () => {
             await runBackfillPage(deps, { stage: 'camera', after: ids[1]! });
             expect(queued.map((job) => job.id)).toEqual([ids[2]]);
 
-            for (const id of ids) await readDocumentCamera({ db, readFile: async () => Buffer.from('x') }, id);
+            for (const id of ids) await readDocumentMedia({ db, readFile: async () => Buffer.from('x'), probeVideo: async () => NO_VIDEO_FACTS }, id);
 
             expect(await unread()).toEqual([]);
             expect(await runBackfillPage(deps, { stage: 'camera', after: null })).toEqual({ kind: 'next', cursor: { stage: 'kind', after: null } });
+        });
+
+        it('queues videos too, and is idempotent: a finished library queues nothing more', async () => {
+            const photo = await seedDocument(db, { userId, name: 'p.jpg', mime: 'image/jpeg' });
+            const clip = await seedDocument(db, { userId, name: 'c.mp4', mime: 'video/mp4' });
+
+            await runBackfillPage(deps, { stage: 'camera', after: null });
+            expect(queued.map((job) => job.id).sort()).toEqual([photo, clip].sort());
+
+            await embedAll();
+            queued = [];
+            await runBackfillPage(deps, { stage: 'camera', after: null });
+            expect(queued).toEqual([]);
+            expect(await unread()).toEqual([]);
         });
 
         it('hands over to the kind stage once every image has been read, and resumes after an interruption', async () => {
@@ -318,7 +342,7 @@ describeDb('embedding backfill', () => {
             // Only the first queued read finishes before the "crash"; a restart queues the other three, not the finished one.
             const [finished] = queued.splice(0);
 
-            await readDocumentCamera({ db, readFile: async () => Buffer.from('x') }, finished!.id);
+            await readDocumentMedia({ db, readFile: async () => Buffer.from('x'), probeVideo: async () => NO_VIDEO_FACTS }, finished!.id);
             queued = [];
             await runBackfillPage(deps, { stage: 'camera', after: null });
             expect(queued.map((job) => job.id)).not.toContain(finished!.id);

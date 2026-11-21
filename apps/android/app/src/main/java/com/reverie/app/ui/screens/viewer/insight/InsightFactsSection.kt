@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +33,8 @@ import com.reverie.app.util.formatDuration
 import com.reverie.app.util.formatRelativeAge
 import com.reverie.app.util.formatShortDate
 import com.reverie.app.util.formatTimeOfDay
+import com.reverie.app.ui.screens.viewer.insight.cameraSummary
+import com.reverie.app.ui.screens.viewer.insight.videoSummary
 import java.time.Instant
 
 /**
@@ -67,6 +71,14 @@ private fun FactRows(document: DocumentDto) {
         FactRow(Icons.Outlined.PhotoCamera, subtle, formatDayDate(takenAt), "Taken" + (time?.let { " · $it" } ?: ""))
     }
 
+    document.photo_metadata?.let { photo -> cameraSummary(photo) }?.let { (primary, secondary) ->
+        FactRow(Icons.Outlined.CameraAlt, subtle, primary, secondary)
+    }
+
+    document.video_metadata?.let { video -> videoSummary(video, document.duration_seconds) }?.let { (primary, secondary) ->
+        FactRow(Icons.Outlined.Videocam, subtle, primary, secondary)
+    }
+
     val visual = fileTypeVisual(document.mime_type, document.original_filename)
     FactRow(visual.icon, visual.tint, fileTitle(document), fileSubtitle(document))
 
@@ -101,6 +113,8 @@ private fun fileTitle(document: DocumentDto): String {
 
 /** "4032 × 3024 px · 1:23" — dimensions and, for videos, duration; null when neither is known. */
 private fun fileSubtitle(document: DocumentDto): String? {
+    // A probed video's size and duration are in its own row above, so they are not repeated here.
+    if (document.video_metadata != null) return null
     val parts = buildList {
         if (document.width != null && document.height != null) add("${document.width} × ${document.height} px")
         document.duration_seconds?.let { add(formatDuration(it)) }

@@ -19,12 +19,13 @@ import {
     type Document,
     type DocumentListQuery,
     type DocumentPhotoMetadata,
+    type DocumentVideoMetadata,
     type MoveDocumentsRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { type Document as DbDocument, type LlmResult, type PhotoMetadata } from '../../db/schema';
+import { type Document as DbDocument, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
@@ -370,9 +371,11 @@ export default async function (fastify: FastifyInstance) {
             const llmResult = await db.selectFrom('llm_results').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
             const photoMeta = await db.selectFrom('photo_metadata').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
 
+            const videoMeta = await db.selectFrom('video_metadata').selectAll().where('document_id', '=', request.params.id).executeTakeFirst();
+
             const tags = await loadDocumentTags(db, request.user.id, request.params.id);
 
-            return { ...(await serializeDocument(document, locks, llmResult, photoMeta ?? null)), tags };
+            return { ...(await serializeDocument(document, locks, llmResult, photoMeta ?? null, videoMeta ?? null)), tags };
         },
     );
 
@@ -1139,13 +1142,19 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-// Detail-only (GET /documents/:id): pass `photoMeta ?? null` to include the
-// photo_metadata field (null when no row exists); omit the argument on list
-// endpoints to leave the field absent and avoid per-row joins.
+// Detail-only (GET /documents/:id): pass `photoMeta ?? null` (and `videoMeta ?? null`) to include the
+// photo_metadata (video_metadata) field, null when no row exists; omit the arguments on list
+// endpoints to leave the fields absent and avoid per-row joins.
 // Only documents whose folder lock is open reach this point (see loadOpenDocument and the list
 // handler), so signed URLs are always safe to produce. Built field by field, never by spreading the
 // row, so a column added to `documents` later is not exposed by accident.
-async function serializeDocument(doc: DbDocument, locks: FolderLocks, llmResult?: LlmResult | null, photoMeta?: PhotoMetadata | null): Promise<Document> {
+async function serializeDocument(
+    doc: DbDocument,
+    locks: FolderLocks,
+    llmResult?: LlmResult | null,
+    photoMeta?: PhotoMetadata | null,
+    videoMeta?: VideoMetadata | null,
+): Promise<Document> {
     const [fileUrl, thumbnailUrls] = await Promise.all([storageService.getFileUrl(doc.file_path), resolveThumbnailUrls(storageService, doc.thumbnail_paths)]);
 
     const serialized: Document = {
@@ -1181,7 +1190,28 @@ async function serializeDocument(doc: DbDocument, locks: FolderLocks, llmResult?
         return serialized;
     }
 
-    return { ...serialized, photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null };
+    return {
+        ...serialized,
+        photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null,
+        video_metadata: videoMeta ? toDocumentVideoMetadata(videoMeta) : null,
+    };
+}
+
+function toDocumentVideoMetadata(videoMeta: VideoMetadata): DocumentVideoMetadata {
+    return {
+        container: videoMeta.container,
+        video_codec: videoMeta.video_codec,
+        video_profile: videoMeta.video_profile,
+        audio_codec: videoMeta.audio_codec,
+        bitrate: videoMeta.bitrate,
+        width: videoMeta.width,
+        height: videoMeta.height,
+        frame_rate: videoMeta.frame_rate,
+        rotation: videoMeta.rotation,
+        color_transfer: videoMeta.color_transfer,
+        is_hdr: videoMeta.is_hdr,
+        creation_time: videoMeta.creation_time ? videoMeta.creation_time.toISOString() : null,
+    };
 }
 
 function toDocumentPhotoMetadata(photoMeta: PhotoMetadata): DocumentPhotoMetadata {
@@ -1193,5 +1223,18 @@ function toDocumentPhotoMetadata(photoMeta: PhotoMetadata): DocumentPhotoMetadat
         city: photoMeta.city || null,
         country: photoMeta.country || null,
         taken_at: photoMeta.taken_at ? photoMeta.taken_at.toISOString() : null,
+        taken_at_offset: photoMeta.taken_at_offset,
+        camera_make: photoMeta.camera_make,
+        camera_model: photoMeta.camera_model,
+        lens_model: photoMeta.lens_model,
+        iso: photoMeta.iso,
+        f_number: photoMeta.f_number,
+        exposure_time: photoMeta.exposure_time,
+        focal_length: photoMeta.focal_length,
+        focal_length_35mm: photoMeta.focal_length_35mm,
+        flash_fired: photoMeta.flash_fired,
+        orientation: photoMeta.orientation,
+        pixel_width: photoMeta.pixel_width,
+        pixel_height: photoMeta.pixel_height,
     };
 }
