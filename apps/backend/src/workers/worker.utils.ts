@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq';
-import type { JobStatus } from '../db/schema';
+import type { JobStatus, JobType } from '../db/schema';
 import { getJobService } from '../jobs/job.service';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { getRedisPublisher, JOB_EVENTS_CHANNEL } from '../queues/redis';
@@ -9,6 +9,7 @@ export interface JobEventPayload {
     job_id: string;
     // Owner of the target document; the subscriber routes each event to this user's room only.
     user_id?: string;
+    job_type?: JobType;
     document_id?: string;
     folder_id?: string;
     session_id?: string;
@@ -30,7 +31,7 @@ export async function publishJobEvent(event: JobEventPayload): Promise<void> {
 /**
  * Publish job started event
  */
-export async function publishJobStarted(jobId: string, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
+export async function publishJobStarted(jobId: string, documentId?: string, sessionId?: string, userId?: string, jobType?: JobType): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:started',
         job_id: jobId,
@@ -40,6 +41,8 @@ export async function publishJobStarted(jobId: string, documentId?: string, sess
     };
 
     if (userId) event.user_id = userId;
+
+    if (jobType) event.job_type = jobType;
 
     if (documentId) event.document_id = documentId;
 
@@ -51,7 +54,14 @@ export async function publishJobStarted(jobId: string, documentId?: string, sess
 /**
  * Publish job progress event
  */
-export async function publishJobProgress(jobId: string, progress: number, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
+export async function publishJobProgress(
+    jobId: string,
+    progress: number,
+    documentId?: string,
+    sessionId?: string,
+    userId?: string,
+    jobType?: JobType,
+): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:progress',
         job_id: jobId,
@@ -61,6 +71,8 @@ export async function publishJobProgress(jobId: string, progress: number, docume
     };
 
     if (userId) event.user_id = userId;
+
+    if (jobType) event.job_type = jobType;
 
     if (documentId) event.document_id = documentId;
 
@@ -79,6 +91,7 @@ export async function publishJobComplete(
     sessionId?: string,
     userId?: string,
     status: JobStatus = 'complete',
+    jobType?: JobType,
 ): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:complete',
@@ -89,6 +102,8 @@ export async function publishJobComplete(
     };
 
     if (userId) event.user_id = userId;
+
+    if (jobType) event.job_type = jobType;
 
     if (documentId) event.document_id = documentId;
 
@@ -102,7 +117,14 @@ export async function publishJobComplete(
 /**
  * Publish job failed event
  */
-export async function publishJobFailed(jobId: string, errorMessage: string, documentId?: string, sessionId?: string, userId?: string): Promise<void> {
+export async function publishJobFailed(
+    jobId: string,
+    errorMessage: string,
+    documentId?: string,
+    sessionId?: string,
+    userId?: string,
+    jobType?: JobType,
+): Promise<void> {
     const event: JobEventPayload = {
         type: 'job:failed',
         job_id: jobId,
@@ -113,6 +135,8 @@ export async function publishJobFailed(jobId: string, errorMessage: string, docu
     };
 
     if (userId) event.user_id = userId;
+
+    if (jobType) event.job_type = jobType;
 
     if (documentId) event.document_id = documentId;
 
@@ -128,6 +152,8 @@ function isSkippedResult(result: unknown): boolean {
 export interface TrackingOptions {
     /** Callback to store duration in the appropriate result table */
     storeDuration?: (documentId: string, durationMs: number) => Promise<void>;
+    /** Sent with every event so clients can tell what kind of job it was. */
+    jobType?: JobType;
 }
 
 /**
@@ -149,7 +175,7 @@ export async function processJobWithTracking<TData extends { documentId: string;
     try {
         // Mark job as started
         await jobService.markJobStarted(jobId);
-        await publishJobStarted(jobId, documentId, sessionId, userId);
+        await publishJobStarted(jobId, documentId, sessionId, userId, options?.jobType);
 
         // Process the job with timing
         const startTime = Date.now();
@@ -170,7 +196,7 @@ export async function processJobWithTracking<TData extends { documentId: string;
             await options.storeDuration(documentId, durationMs);
         }
 
-        await publishJobComplete(jobId, result, documentId, sessionId, userId, isSkipped ? 'skipped' : 'complete');
+        await publishJobComplete(jobId, result, documentId, sessionId, userId, isSkipped ? 'skipped' : 'complete', options?.jobType);
 
         return result;
     } catch (error) {
@@ -187,7 +213,7 @@ export async function processJobWithTracking<TData extends { documentId: string;
         if (!shouldRetry) {
             // Mark as failed (no more retries)
             await jobService.markJobFailed(jobId, errorMessage, attempts);
-            await publishJobFailed(jobId, errorMessage, documentId, sessionId, userId);
+            await publishJobFailed(jobId, errorMessage, documentId, sessionId, userId, options?.jobType);
         }
 
         // Re-throw to let BullMQ handle retry logic

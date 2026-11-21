@@ -11,6 +11,7 @@ import { NonRetryableJobError } from '../jobs/job.types';
 import { saveVideoProbe } from '../media/video-metadata.repository';
 import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/video-probe';
 import { enqueueImageEmbedding } from '../embeddings/enqueue';
+import { queueTranscode } from '../transcode/queue-transcode';
 import { decodeTextForPreview } from '../ocr/text-extractor';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
@@ -382,6 +383,9 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
 
     // Every image, private ones included, is embedded from its thumbnail rendition (local only).
     if (document.mime_type.startsWith('image/')) await enqueueImageEmbedding(documentId);
+
+    // Every video gets its HLS ladder, after the thumbnail so the poster and the probe are never waiting on an encode. Best effort: a miss stays 'pending' for the backfill.
+    if (document.mime_type.startsWith('video/')) await queueTranscode(db, documentId, document.user_id);
 
     logger.info('Thumbnail job completed', {
         documentId,

@@ -3,7 +3,7 @@ import type { LlmMetadata } from '../llm/types';
 
 // Enums
 export type JobStatus = 'pending' | 'processing' | 'complete' | 'failed' | 'skipped';
-export type JobType = 'ocr' | 'thumbnail' | 'llm_summary' | 'video_trim';
+export type JobType = 'ocr' | 'thumbnail' | 'llm_summary' | 'video_trim' | 'transcode';
 export type TargetType = 'document' | 'folder';
 /** `taught`: put there by a label taught by example (see taught-labels/). */
 export type TagSource = 'user' | 'auto' | 'taught';
@@ -75,6 +75,8 @@ export interface DocumentsTable {
     ocr_status: JobStatus;
     thumbnail_status: JobStatus;
     llm_status: JobStatus;
+    /** The HLS ladder's state. 'skipped' for anything that is not a video; videos start 'pending'. */
+    transcode_status: ColumnType<JobStatus, JobStatus | undefined, JobStatus>;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     /** When the OCR worker finished storing the text flag and EXIF; null while it runs, and for images that predate the column. */
     ocr_facts_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
@@ -250,6 +252,24 @@ export interface PhotoMetadataTable {
     pixel_width: number | null;
     pixel_height: number | null;
     processed_at: ColumnType<Date, Date | undefined, never>;
+}
+
+/** A finished set of HLS renditions, keyed by the content hash of the original (see migration 024). */
+export interface TranscodeSetsTable {
+    file_hash: string;
+    /** Every stored file's storage path, `master.m3u8` included. */
+    files: ColumnType<string[], string, string>;
+    rungs: ColumnType<TranscodeRungRecord[], string, string>;
+    encoder: string;
+    tone_map: string | null;
+    total_bytes: ColumnType<string | number, number, number>;
+    created_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export interface TranscodeRungRecord {
+    width: number;
+    height: number;
+    bytes: number;
 }
 
 // Video Metadata table: one row per video, from ffprobe. A video's GPS and capture date live in photo_metadata.
@@ -431,6 +451,7 @@ export interface Database {
     document_tags: DocumentTagsTable;
     photo_metadata: PhotoMetadataTable;
     video_metadata: VideoMetadataTable;
+    transcode_sets: TranscodeSetsTable;
     server_settings: ServerSettingsTable;
     tool_audit_log: ToolAuditLogTable;
     api_tokens: ApiTokensTable;
