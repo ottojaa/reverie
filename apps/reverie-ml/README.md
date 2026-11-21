@@ -33,7 +33,7 @@ and fix the numbers here.
 
 | Consumer                          | Estimate    | How it is bounded                                                        |
 | --------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| reverie-ml: bge-m3 (fp16)         | 1.4 GB      | fixed weights; max 64 texts x 512 tokens per request                     |
+| reverie-ml: bge-m3 (fp16)         | 1.4 GB      | fixed weights; the backend sends 16 chunks (<= 512 tokens) per request; the service accepts up to 64, which needs more temporary memory than the margin covers                     |
 | reverie-ml: SigLIP2 so400m (fp16) | 2.7 GB      | fixed weights; max 16 images per request                                 |
 | reverie-ml: CUDA context + cache  | ~0.6 GB     | one process                                                              |
 | PaddleOCR (backend container)     | <= 4.0 GB   | `FLAGS_gpu_memory_limit_mb=4096`, `FLAGS_allocator_strategy=auto_growth` |

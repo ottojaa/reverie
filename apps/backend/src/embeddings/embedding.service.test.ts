@@ -32,7 +32,7 @@ describeDb('embedding service', () => {
         userId = await seedUser(db, 'owner');
     }, 60_000);
     afterAll(async () => {
-        await database.close();
+        await database?.close();
     });
     beforeEach(() => {
         ml = createFakeMl();

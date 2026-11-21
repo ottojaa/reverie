@@ -31,7 +31,7 @@ describeDb('embedding backfill', () => {
         userId = await seedUser(db, 'owner');
     }, 60_000);
     afterAll(async () => {
-        await database.close();
+        await database?.close();
     });
     beforeEach(async () => {
         // Every test starts from an empty library.

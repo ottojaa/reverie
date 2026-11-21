@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.specs import IMAGE_SPEC, TEXT_SPEC
 
-SPEED_NOTE = "CPU throughput was measured on the machine that ran the eval (see `device` in results.json)."
+SPEED_NOTE = "CPU throughput was measured on the Apple Silicon Mac that ran the eval, so the home server's CPU fallback will differ."
 
 
 def _recall_table(models: dict, per_second_key: str, per_second_label: str) -> list[str]:
