@@ -67,7 +67,7 @@ const SCREEN_RESOLUTION_PAIRS: ReadonlyArray<readonly [number, number]> = [
 
 const SCREEN_RESOLUTIONS = new Set(SCREEN_RESOLUTION_PAIRS.map(([a, b]) => `${Math.min(a, b)}x${Math.max(a, b)}`));
 
-function matchesExactScreenResolution(width: number, height: number): boolean {
+export function matchesExactScreenResolution(width: number, height: number): boolean {
     return SCREEN_RESOLUTIONS.has(`${Math.min(width, height)}x${Math.max(width, height)}`);
 }
 

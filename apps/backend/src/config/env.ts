@@ -98,6 +98,12 @@ const envSchema = z.object({
     // Backfill of the existing library: documents queued per page, and the pause between pages.
     EMBED_BACKFILL_BATCH: z.coerce.number().int().positive().default(50),
     EMBED_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(20_000),
+    /** After the embedding backfill has covered the library it starts over this long later, to pick up images whose embed job gave up. */
+    EMBED_RECONCILE_INTERVAL_MS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(6 * 60 * 60 * 1000),
     // Search by meaning. A document counts as a meaning match when, for its model, its cosine similarity to the query is
     // at least *_MIN_SIMILARITY (a low absolute floor, only there to stop pure noise) and stands out from the query's noise:
     // above the median similarity the query gets across the library by sqrt(2 ln N) + *_MARGIN_Z robust standard deviations,

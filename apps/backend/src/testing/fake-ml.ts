@@ -18,6 +18,10 @@ export interface FakeMl extends MlClient {
     /** Make the next image request be refused as undecodable. */
     rejectImages(reject: boolean): void;
     setTextRevision(revision: string): void;
+    /** Decide the vector embedImageTexts returns for a text with no pinned vector (default: a distinct unit vector per position). */
+    setImageTextEmbedder(embedder: (text: string, index: number) => number[]): void;
+    /** Change the image model's revision, as a model upgrade in reverie-ml would. */
+    setImageRevision(revision: string): void;
     /** Pin the vector a query text embeds to (text model), instead of the default one-hot vector. */
     setTextVector(text: string, vector: number[]): void;
     /** Pin the vector a query text embeds to through the image model's text tower. */
@@ -48,6 +52,8 @@ export function createFakeMl(): FakeMl {
     let rejectImage = false;
     let delayMs = 0;
     let textModel = TEXT_MODEL;
+    let imageModel = IMAGE_MODEL;
+    let imageTextEmbedder = (_text: string, index: number) => unit(IMAGE_DIMENSIONS, index);
     const textVectors = new Map<string, number[]>();
     const imageTextVectors = new Map<string, number[]>();
     const imageVectors = new Map<string, number[]>();
@@ -57,6 +63,7 @@ export function createFakeMl(): FakeMl {
     };
 
     const wait = () => (delayMs ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve());
+
     const fake: FakeMl = {
         textCalls: [],
         imageTextCalls: [],
@@ -64,6 +71,8 @@ export function createFakeMl(): FakeMl {
         setDown: (value) => void (down = value),
         rejectImages: (value) => void (rejectImage = value),
         setTextRevision: (revision) => void (textModel = { ...TEXT_MODEL, revision }),
+        setImageTextEmbedder: (embedder) => void (imageTextEmbedder = embedder),
+        setImageRevision: (revision) => void (imageModel = { ...IMAGE_MODEL, revision }),
         setTextVector: (text, vector) => void textVectors.set(text, vector),
         setImageTextVector: (text, vector) => void imageTextVectors.set(text, vector),
         setImageVector: (content, vector) => void imageVectors.set(content.toString(), vector),
@@ -71,12 +80,12 @@ export function createFakeMl(): FakeMl {
         async health() {
             assertUp();
 
-            return { ready: true, device: 'cpu', error: null, models: { text: textModel, image: IMAGE_MODEL } };
+            return { ready: true, device: 'cpu', error: null, models: { text: textModel, image: imageModel } };
         },
         async readyModels() {
             assertUp();
 
-            return { text: textModel, image: IMAGE_MODEL };
+            return { text: textModel, image: imageModel };
         },
         async embedTexts(texts) {
             assertUp();
@@ -90,7 +99,7 @@ export function createFakeMl(): FakeMl {
             fake.imageTextCalls.push(texts);
             await wait();
 
-            return { model: IMAGE_MODEL, embeddings: texts.map((text, i) => imageTextVectors.get(text) ?? unit(IMAGE_DIMENSIONS, i)) };
+            return { model: imageModel, embeddings: texts.map((text, i) => imageTextVectors.get(text) ?? imageTextEmbedder(text, i)) };
         },
         async embedImages(images) {
             assertUp();
@@ -99,7 +108,7 @@ export function createFakeMl(): FakeMl {
 
             fake.imageCalls += 1;
 
-            return { model: IMAGE_MODEL, embeddings: images.map((image, i) => imageVectors.get(image.toString()) ?? unit(IMAGE_DIMENSIONS, i)) };
+            return { model: imageModel, embeddings: images.map((image, i) => imageVectors.get(image.toString()) ?? unit(IMAGE_DIMENSIONS, i)) };
         },
     };
 

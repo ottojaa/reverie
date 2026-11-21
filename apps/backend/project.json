@@ -19,6 +19,7 @@
                 "additionalEntryPoints": [
                     "apps/backend/src/scripts/create-user.ts",
                     "apps/backend/src/scripts/backfill-thumbnails.ts",
+                    "apps/backend/src/scripts/compare-image-kinds.ts",
                     "apps/backend/src/scripts/semantic-probe.ts"
                 ],
                 "tsConfig": "apps/backend/tsconfig.app.json",
@@ -62,6 +63,7 @@
         "worker:all": { "executor": "nx:run-commands", "options": { "command": "npx tsx apps/backend/src/workers/index.ts" } },
         "create-user": { "executor": "nx:run-commands", "options": { "command": "npx tsx apps/backend/src/scripts/create-user.ts" } },
         "backfill-thumbnails": { "executor": "nx:run-commands", "options": { "command": "npx tsx apps/backend/src/scripts/backfill-thumbnails.ts" } },
+        "compare-image-kinds": { "executor": "nx:run-commands", "options": { "command": "npx tsx apps/backend/src/scripts/compare-image-kinds.ts" } },
         "bench:ocr": { "executor": "nx:run-commands", "options": { "command": "python3 apps/backend/ocr_service/ocr_bench.py" } }
     }
 }
