@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.mediaAspectOrNull
+import com.reverie.app.data.repository.SignedUrls
 import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.ui.navigation.LocalSharedTransitionScope
 import com.reverie.app.ui.navigation.documentSharedBounds
@@ -134,7 +135,8 @@ fun DocumentPage(
     val isLocked = document == null && id in lockedDocuments
     // Signed URLs are stripped from the cache; fetch (once, cached) when this page enters composition.
     // The pager only composes the current page ± beyondViewportPageCount, so only nearby pages fetch.
-    val fileUrl by produceState<String?>(initialValue = null, id) { value = viewModel.fileUrl(id) }
+    val signedUrls by produceState<SignedUrls?>(initialValue = null, id) { value = viewModel.signedUrls(id) }
+    val fileUrl = signedUrls?.fileUrl
 
     BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // Until the (Room-cached, ~1 frame) document lands, assume the media treatment — the hero
@@ -220,6 +222,8 @@ fun DocumentPage(
                 DocumentViewerBody(
                     document = doc,
                     fileUrl = fileUrl,
+                    hlsUrl = signedUrls?.hlsUrl,
+                    refreshSignedUrls = { viewModel.refreshSignedUrls(id) },
                     loadFile = { onProgress -> viewModel.originalFile(id, onProgress) },
                     onMediaTap = onMediaTap,
                     onDownload = { if (downloadDocument(context, fileUrl, doc)) onDownloadStarted() },

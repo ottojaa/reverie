@@ -79,6 +79,7 @@ fun DocumentEntity.toDto(): DocumentDto = DocumentDto(
     created_at = createdAt,
     updated_at = updatedAt,
     file_url = null,
+    hls_url = null,
     thumbnail_urls = null,
     photo_metadata = photoMetadataJson?.let {
         runCatching { ApiJson.decodeFromString(DocumentPhotoMetadata.serializer(), it) }.getOrNull()

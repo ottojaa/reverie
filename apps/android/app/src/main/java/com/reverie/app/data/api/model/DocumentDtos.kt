@@ -93,6 +93,9 @@ data class DocumentDto(
     val updated_at: String,
     // Signed, short-lived URLs — never persist these.
     val file_url: String? = null,
+    // Master playlist of the video's HLS renditions; null until transcoding completes (and on S3
+    // storage), in which case the original file_url plays. The token in its path covers the whole set.
+    val hls_url: String? = null,
     val thumbnail_urls: ThumbnailUrls? = null,
     // Detail-only.
     val photo_metadata: DocumentPhotoMetadata? = null,

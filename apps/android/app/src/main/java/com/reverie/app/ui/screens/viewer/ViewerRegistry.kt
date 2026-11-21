@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.repository.SignedUrls
 import com.reverie.app.ui.screens.viewer.viewers.FallbackViewer
 import com.reverie.app.ui.screens.viewer.viewers.ImageViewer
 import com.reverie.app.ui.screens.viewer.viewers.PdfViewer
@@ -47,6 +48,10 @@ fun isVideoDocument(document: DocumentDto): Boolean = viewerTypeFor(document) ==
 fun DocumentViewerBody(
     document: DocumentDto,
     fileUrl: String?,
+    // The video's HLS master playlist, signed with [fileUrl]; null plays the original (video viewer only).
+    hlsUrl: String? = null,
+    // Fresh signed URLs after the stream's token was refused (video viewer only).
+    refreshSignedUrls: suspend () -> SignedUrls? = { null },
     loadFile: suspend (onProgress: (Float) -> Unit) -> File,
     onMediaTap: () -> Unit,
     onDownload: () -> Unit,
@@ -96,6 +101,8 @@ fun DocumentViewerBody(
         )
         ViewerType.VIDEO -> VideoViewer(
             fileUrl = fileUrl,
+            hlsUrl = hlsUrl,
+            refreshSignedUrls = refreshSignedUrls,
             mountSurface = mountVideoSurface,
             active = isSettledPage,
             posterSeekMs = videoPosterSeekMs,

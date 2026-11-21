@@ -12,6 +12,7 @@ import com.reverie.app.data.api.model.UserRole
 import com.reverie.app.data.local.FileCacheManager
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.DocumentRepository
+import com.reverie.app.data.repository.SignedUrls
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.data.settings.VideoBackground
@@ -111,6 +112,12 @@ class DocumentViewModel @Inject constructor(
     /** Signed URL for [id] — served from the repository's app-scoped cache (warmed on tap) or fetched. */
     suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(::absolute)
 
+    /** The original's and the HLS renditions' signed URLs for [id], made absolute; both from one fetch. */
+    suspend fun signedUrls(id: String): SignedUrls? = documentRepository.signedUrls(id)?.let(::absoluteUrls)
+
+    /** Fresh URLs after a 403/410 on the stream: a signature expired while the video played or sat paused. */
+    suspend fun refreshSignedUrls(id: String): SignedUrls? = documentRepository.refreshSignedUrls(id)?.let(::absoluteUrls)
+
     /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin grid. */
     fun onPageSettled(id: String) {
         if (id == currentId) return
@@ -186,6 +193,9 @@ class DocumentViewModel @Inject constructor(
             runCatching { documentRepository.fetchDocument(id) }.onFailure { onFetchFailed(id, it) }
         }
     }
+
+    private fun absoluteUrls(urls: SignedUrls): SignedUrls =
+        SignedUrls(absolute(urls.fileUrl), urls.hlsUrl?.let(::absolute))
 
     private fun absolute(url: String): String =
         if (url.startsWith("http")) url else serverUrlProvider.current().removeSuffix("/") + url

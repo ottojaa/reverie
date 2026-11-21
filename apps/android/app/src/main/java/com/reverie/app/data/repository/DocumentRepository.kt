@@ -23,6 +23,9 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
+data class SignedUrls(val fileUrl: String, val hlsUrl: String?)
+
 /** One page of a refresh: the server total and how many rows we've loaded so far. */
 data class PageResult(val total: Int, val loaded: Int) {
     val hasMore: Boolean get() = loaded < total
@@ -52,6 +55,10 @@ class DocumentRepository @Inject constructor(
     // open reaches ExoPlayer.prepare() with zero extra round-trips. Concurrent-safe: read/written
     // from IO coroutines.
     private val fileUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    // The HLS master URL signed alongside each cached file URL (same lifetime, same harvesting).
+    // Absent when the document has no renditions (yet).
+    private val hlsUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     // In-flight fileUrl fetches by id: the grid's tap-time prefetch and the viewer's compose-time
     // fetch race for the same URL — the loser awaits the winner's round-trip instead of issuing a
@@ -97,7 +104,12 @@ class DocumentRepository @Inject constructor(
         privateStore.remove(public.map { it.id })
         purger.purgeCachedCopies(private.map { it.id })
         // Harvest the per-row signed URLs (see fileUrls above) before Room strips them.
-        items.forEach { dto -> dto.file_url?.let { fileUrls[dto.id] = it } }
+        items.forEach { dto ->
+            val fileUrl = dto.file_url ?: return@forEach
+            fileUrls[dto.id] = fileUrl
+            val hlsUrl = dto.hls_url
+            if (hlsUrl != null) hlsUrls[dto.id] = hlsUrl else hlsUrls.remove(dto.id)
+        }
     }
 
     /** Fetch one page from the network into the cache. Throws [com.reverie.app.data.api.ReverieApiException]. */
@@ -139,11 +151,27 @@ class DocumentRepository @Inject constructor(
         }
     }
 
+    /** [fileUrl] and the HLS master URL signed with it, as one pair so a viewer never starts on the original and then switches. */
+    suspend fun signedUrls(id: String): SignedUrls? {
+        val fileUrl = fileUrl(id) ?: return null
+        return SignedUrls(fileUrl, hlsUrls[id])
+    }
+
+    /** Fetch the document again for fresh signatures: the cached ones expire while a video plays or sits paused. */
+    suspend fun refreshSignedUrls(id: String): SignedUrls? {
+        val dto = runCatching { fetchDocument(id) }.getOrNull() ?: return null
+        val fileUrl = dto.file_url ?: return null
+        return SignedUrls(fileUrl, dto.hls_url)
+    }
+
     suspend fun delete(ids: List<String>) = withContext(io) {
         documentsApi.deleteBatch(ids)
         documentDao.deleteByIds(ids)
         privateStore.remove(ids)
-        ids.forEach { fileUrls.remove(it) }
+        ids.forEach {
+            fileUrls.remove(it)
+            hlsUrls.remove(it)
+        }
     }
 
     suspend fun rename(id: String, filename: String): DocumentDto = withContext(io) {

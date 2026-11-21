@@ -166,6 +166,9 @@ export const DocumentSchema = z.object({
     updated_at: z.string().datetime(),
     // Signed URLs for secure file access
     file_url: z.string().nullable(),
+    // Signed master playlist of the video's HLS renditions (same lifetime and rules as file_url); null for
+    // anything that is not a video and for a video whose renditions are not all encoded yet: play file_url.
+    hls_url: z.string().nullable(),
     thumbnail_urls: ThumbnailUrlsSchema.nullable(),
     // Only populated on the document detail endpoint (GET /documents/:id);
     // omitted from list responses to avoid per-row joins.

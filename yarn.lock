@@ -6346,6 +6346,7 @@ __metadata:
     electron-builder: "npm:^26.4.0"
     fuse.js: "npm:^7.1.0"
     hash-wasm: "npm:^4.12.0"
+    hls.js: "npm:1.7.4"
     immer: "npm:^11.1.4"
     lucide-react: "npm:^0.562.0"
     motion: "npm:^12.29.2"
@@ -13728,6 +13729,13 @@ __metadata:
   version: 5.0.0
   resolution: "help-me@npm:5.0.0"
   checksum: 10c0/054c0e2e9ae2231c85ab5e04f75109b9d068ffcc54e58fb22079822a5ace8ff3d02c66fd45379c902ad5ab825e5d2e1451fcc2f7eab1eb49e7d488133ba4cacb
+  languageName: node
+  linkType: hard
+
+"hls.js@npm:1.7.4":
+  version: 1.7.4
+  resolution: "hls.js@npm:1.7.4"
+  checksum: 10c0/7c7534bddb262ad4067661f1db9120d7fb76626fd7f9de12d8cb1f5dddf5792a5fe9e7b1031351711d2657456a3e2b687ce3f95e332a24ebdbb56465a942f28a
   languageName: node
   linkType: hard
 
