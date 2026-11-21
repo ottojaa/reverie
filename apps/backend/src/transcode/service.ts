@@ -10,7 +10,7 @@ import { deleteTranscodeSetIfUnused, type TranscodeFileRemover } from './cleanup
 import type { FfmpegCapabilities } from './capabilities';
 import { buildFfmpegArgs, type EncoderKind } from './ffmpeg-command';
 import type { FfmpegRunner } from './ffmpeg-run';
-import { toHdrKind, toToneMap, type ToneMap, type ToneMapName } from './hdr-filters';
+import { toHdrKind, toSdrScaleArgs, toToneMap, type ToneMap, type ToneMapName } from './hdr-filters';
 import { decideLadder } from './ladder';
 import { findTranscodeSet, insertTranscodeSet, setTranscodeStatus, toMasterPath } from './repository';
 import { loadSourceFacts, UnusableSourceError } from './source-facts';
@@ -46,10 +46,18 @@ export interface TranscodeResult {
 type TranscodeSource = Pick<Document, 'id' | 'file_path' | 'file_hash' | 'mime_type' | 'duration_seconds' | 'deleted_at'>;
 
 /** The HDR to SDR chain for this source, or null for an SDR one. */
-function chooseToneMap(colorTransfer: string | null, capabilities: FfmpegCapabilities): ToneMap | null {
+function chooseToneMap(colorTransfer: string | null, zscale: boolean): ToneMap | null {
     const kind = toHdrKind(colorTransfer);
 
-    return kind ? toToneMap(kind, capabilities.zscale) : null;
+    return kind ? toToneMap(kind, zscale) : null;
+}
+
+export interface TranscodeOptions {
+    /**
+     * The last attempt: encode on the CPU and tone map with plain filters, whatever the machine reports. The GPU and zscale
+     * paths depend on the ffmpeg build, and a video must still get its ladder if they error on it.
+     */
+    safeMode?: boolean;
 }
 
 /** The set is shared by hash, so a set that is stored and whole is reused without encoding. */
@@ -75,7 +83,12 @@ function toProgressReporter(durationSeconds: number | null, report: (percent: nu
     };
 }
 
-async function encodeAndStore(deps: TranscodeDeps, document: TranscodeSource, report: (percent: number) => Promise<void>): Promise<TranscodeResult> {
+async function encodeAndStore(
+    deps: TranscodeDeps,
+    document: TranscodeSource,
+    report: (percent: number) => Promise<void>,
+    options: TranscodeOptions,
+): Promise<TranscodeResult> {
     const startedAt = Date.now();
 
     if (!(await deps.storage.fileExists(document.file_path))) throw new NonRetryableJobError('Original file is missing: ' + document.file_path);
@@ -87,12 +100,13 @@ async function encodeAndStore(deps: TranscodeDeps, document: TranscodeSource, re
         const source = await loadSourceFacts(deps.db, document.id, () => deps.probe(original.path));
         const ladder = decideLadder(source);
         const capabilities = await deps.capabilities();
-        const encoder: EncoderKind = capabilities.nvenc ? 'nvenc' : 'cpu';
-        const toneMap = chooseToneMap(source.colorTransfer, capabilities);
+        const encoder: EncoderKind = capabilities.nvenc && !options.safeMode ? 'nvenc' : 'cpu';
+        const toneMap = chooseToneMap(source.colorTransfer, capabilities.zscale && !options.safeMode);
+        const sdrScaleArgs = toSdrScaleArgs(source.colorSpace ?? null, source.pixelFormat ?? null);
 
         await Promise.all(ladder.rungs.map((rung) => mkdir(join(workDir, `v${rung.name}`), { recursive: true })));
         await deps.runFfmpeg(
-            buildFfmpegArgs({ inputPath: original.path, outDir: workDir, ladder, encoder, toneMap, hasAudio: source.hasAudio }),
+            buildFfmpegArgs({ inputPath: original.path, outDir: workDir, ladder, encoder, toneMap, sdrScaleArgs, hasAudio: source.hasAudio }),
             toProgressReporter(document.duration_seconds, report),
         );
 
@@ -133,7 +147,12 @@ async function encodeAndStore(deps: TranscodeDeps, document: TranscodeSource, re
  * Gives one video its HLS ladder. The original is only read. Status: processing while it encodes, complete at the end,
  * and left 'processing' on a throw (the worker marks it failed once the retries are used up, and the original stays playable).
  */
-export async function transcodeDocument(deps: TranscodeDeps, documentId: string, report: (percent: number) => Promise<void>): Promise<TranscodeResult> {
+export async function transcodeDocument(
+    deps: TranscodeDeps,
+    documentId: string,
+    report: (percent: number) => Promise<void>,
+    options: TranscodeOptions = {},
+): Promise<TranscodeResult> {
     const document = await deps.db
         .selectFrom('documents')
         .select(['id', 'file_path', 'file_hash', 'mime_type', 'duration_seconds', 'deleted_at'])
@@ -154,7 +173,7 @@ export async function transcodeDocument(deps: TranscodeDeps, documentId: string,
     await setTranscodeStatus(deps.db, documentId, 'processing');
 
     try {
-        const result = await encodeAndStore(deps, document, report);
+        const result = await encodeAndStore(deps, document, report, options);
 
         if (result.skipped) return result;
 

@@ -14,7 +14,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import type { Job } from 'bullmq';
 import { JobEventSchema } from '@reverie/shared';
 import { dirname, join } from 'path';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Database, VideoMetadata } from '../db/schema';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { parseFfprobe } from '../media/video-probe';
@@ -26,7 +26,7 @@ import { processJobWithTracking, publishJobProgress } from '../workers/worker.ut
 import { findVideosToTranscode, runTranscodeBackfillPage, type TranscodeBackfillDeps } from './backfill';
 import { deleteTranscodeSetIfUnused } from './cleanup';
 import { queueTranscode } from './queue-transcode';
-import { findTranscodeSet, toMasterPath } from './repository';
+import { findTranscodeSet, insertTranscodeSet, toMasterPath } from './repository';
 import { transcodeDocument, type TranscodeDeps } from './service';
 
 /** An in-memory stand-in for the storage service, with every delete recorded. */
@@ -191,6 +191,16 @@ describeDb('video transcoding', () => {
             expect(storage.files.has(toMasterPath('lost-files'))).toBe(true);
         });
 
+        it('lists the new files when a broken set is encoded again', async () => {
+            const hash = 'new-files';
+            const record = { files: ['transcode/new-files/master.m3u8'], rungs: [], encoder: 'cpu' as const, toneMap: null, totalBytes: 1 };
+
+            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/old-init.mp4', 'transcode/new-files/master.m3u8'] });
+            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/init_0.mp4', 'transcode/new-files/master.m3u8'] });
+
+            expect((await findTranscodeSet(db, hash))?.files).toEqual(['transcode/new-files/init_0.mp4', 'transcode/new-files/master.m3u8']);
+        });
+
         it('uses NVENC when the card works, and tone maps HDR with the zscale chain when the build has it', async () => {
             const id = await seedVideo({ facts: { is_hdr: true, color_transfer: 'arib-std-b67', video_codec: 'hevc' } });
 
@@ -209,6 +219,28 @@ describeDb('video transcoding', () => {
             capabilities = { nvenc: false, zscale: false };
 
             expect(await transcodeDocument(deps, id, async () => {})).toMatchObject({ toneMap: 'fallback-pq' });
+        });
+
+        it('takes the plain CPU path in safe mode, whatever the machine reports', async () => {
+            const id = await seedVideo({ facts: { is_hdr: true, color_transfer: 'arib-std-b67' } });
+
+            capabilities = { nvenc: true, zscale: true };
+
+            const result = await transcodeDocument(deps, id, async () => {}, { safeMode: true });
+
+            expect(result).toMatchObject({ encoder: 'cpu', toneMap: 'fallback-hlg' });
+            expect(ffmpeg.runs[0]).toContain('libx264');
+        });
+
+        it('converts an SDR source that is not BT.709 limited range, and leaves a BT.709 one alone', async () => {
+            const ntsc = await seedVideo({ facts: { color_space: 'smpte170m' } });
+            const plain = await seedVideo({ facts: { color_space: 'bt709' } });
+
+            await transcodeDocument(deps, ntsc, async () => {});
+            await transcodeDocument(deps, plain, async () => {});
+
+            expect(ffmpeg.runs[0]!.join(' ')).toContain('in_color_matrix=bt601:out_color_matrix=bt709:out_range=tv');
+            expect(ffmpeg.runs[1]!.join(' ')).not.toContain('out_color_matrix');
         });
 
         it('leaves an SDR source untouched by any tone map', async () => {
@@ -491,12 +523,14 @@ describeDb('video transcoding', () => {
             expect(await queueTranscode(db, id, userId, undefined, add)).toBe(true);
         });
 
-        it('never throws: a queue that is down leaves the video pending for the backfill', async () => {
+        it('never throws: a queue that is down leaves the video pending, with no job row, for the backfill', async () => {
             const id = await seedVideo();
             const down = async () => Promise.reject(new Error('Redis is down'));
 
             expect(await queueTranscode(db, id, userId, undefined, down)).toBe(false);
             expect(await statusOf(id)).toBe('pending');
+            expect(await db.selectFrom('processing_jobs').select('id').where('target_id', '=', id).execute()).toEqual([]);
+            expect((await findVideosToTranscode(db, null, 10)).map((row) => row.id)).toEqual([id]);
         });
     });
 
@@ -537,6 +571,15 @@ describeDb('video transcoding', () => {
             expect(found).toEqual([pending]);
             expect(found).not.toContain(photo);
             expect(found).not.toContain(trashed);
+        });
+
+        it('ignores a job row older than a week: a Redis that lost its queue does not hide the video for ever', async () => {
+            const id = await seedVideo();
+            const jobId = await insertJob(id, 'pending');
+
+            await sql`UPDATE processing_jobs SET created_at = now() - interval '8 days' WHERE id = ${jobId}`.execute(db);
+
+            expect((await findVideosToTranscode(db, null, 10)).map((row) => row.id)).toEqual([id]);
         });
 
         it('queues a batch per page, in id order, and says where to resume', async () => {

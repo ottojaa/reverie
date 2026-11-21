@@ -1,10 +1,11 @@
-import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
+import { Job, UnrecoverableError, Worker } from 'bullmq';
 import { access } from 'fs/promises';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import { scanDuplicates } from '../duplicates/scan';
 import { readDocumentMedia } from '../media/media-read';
 import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/video-probe';
+import { delayBackfillJob } from '../queues/backfill-gate';
 import { isPipelineBusy, runBackfillPage, type BackfillStep } from '../embeddings/backfill';
 import { embedDocumentImage, embedDocumentText, type EmbedDeps } from '../embeddings/embedding.service';
 import { isKindFlipActive, settleImageKind } from '../image-kind/service';
@@ -175,13 +176,9 @@ export async function rescheduleBackfill(
     delays: { pageMs: number; reconcileMs: number },
     token: string | undefined,
 ): Promise<void> {
-    if (step.kind === 'next') await job.updateData({ cursor: step.cursor });
+    const nextData = step.kind === 'next' ? { cursor: step.cursor } : step.kind === 'done' ? { cursor: BACKFILL_START } : null;
 
-    if (step.kind === 'done') await job.updateData({ cursor: BACKFILL_START });
-
-    await job.moveToDelayed(Date.now() + (step.kind === 'done' ? delays.reconcileMs : delays.pageMs), token);
-
-    throw new DelayedError();
+    await delayBackfillJob(job, nextData, step.kind === 'done' ? delays.reconcileMs : delays.pageMs, token);
 }
 
 /** Start the embed worker, and queue the backfill so a library that predates embeddings catches up. */

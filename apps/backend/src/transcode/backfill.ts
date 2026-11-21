@@ -3,6 +3,8 @@ import type { Database } from '../db/schema';
 import { getLlmQueue } from '../queues/llm.queue';
 import { getOcrQueue } from '../queues/ocr.queue';
 import { getThumbnailQueue } from '../queues/thumbnail.queue';
+import { LIVE_JOB_STATUSES, toLiveJobCutoff } from './queue-transcode';
+import { isQueuesBusy } from '../queues/backfill-gate';
 import { getTranscodeQueue } from '../queues/transcode.queue';
 
 export type TranscodeBackfillStep = { kind: 'next'; after: string } | { kind: 'wait' } | { kind: 'done' };
@@ -31,7 +33,8 @@ export async function findVideosToTranscode(db: Kysely<Database>, after: string 
                         .select('processing_jobs.id')
                         .whereRef('processing_jobs.target_id', '=', 'documents.id')
                         .where('processing_jobs.job_type', '=', 'transcode')
-                        .where('processing_jobs.status', 'in', ['pending', 'processing']),
+                        .where('processing_jobs.status', 'in', LIVE_JOB_STATUSES)
+                        .where('processing_jobs.created_at', '>', toLiveJobCutoff()),
                 ),
             ),
         )
@@ -58,14 +61,7 @@ export async function runTranscodeBackfillPage(deps: TranscodeBackfillDeps, afte
     return { kind: 'next', after: page[page.length - 1]!.id };
 }
 
-/** Counts waiting, prioritised and active jobs: BullMQ keeps prioritised jobs out of the "waiting" count. */
+/** Thumbnails, OCR, summaries and other transcodes come first: the backfill waits while any has work. */
 export async function isTranscodePipelineBusy(): Promise<boolean> {
-    const [ocr, thumbnail, llm, transcode] = await Promise.all(
-        [getOcrQueue(), getThumbnailQueue(), getLlmQueue(), getTranscodeQueue()].map((queue) => queue.getJobCounts('waiting', 'prioritized', 'active')),
-    );
-    const live = (counts: Record<string, number>) => (counts['waiting'] ?? 0) + (counts['prioritized'] ?? 0) + (counts['active'] ?? 0);
-    // The backfill job is itself active in the transcode queue, so it does not count as work.
-    const transcodeWork = (transcode!['waiting'] ?? 0) + (transcode!['prioritized'] ?? 0) + Math.max((transcode!['active'] ?? 0) - 1, 0);
-
-    return live(ocr!) + live(thumbnail!) + live(llm!) + transcodeWork > 0;
+    return isQueuesBusy([getOcrQueue(), getThumbnailQueue(), getLlmQueue()], getTranscodeQueue());
 }

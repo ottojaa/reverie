@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
+import { isQueuesBusy } from '../queues/backfill-gate';
 import { getLlmQueue } from '../queues/llm.queue';
 import { getOcrQueue } from '../queues/ocr.queue';
 import { findDocumentsMissingMediaRead } from '../media/media-read';
@@ -95,14 +96,7 @@ export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillC
     return { kind: 'next', cursor: { stage: cursor.stage, after: last } };
 }
 
-/** Counts waiting, prioritised and active jobs: BullMQ keeps prioritised jobs out of the "waiting" count. */
+/** Waits for OCR and summaries: the backfill leaves the machine to them. */
 export async function isPipelineBusy(): Promise<boolean> {
-    const [ocr, llm, embed] = await Promise.all(
-        [getOcrQueue(), getLlmQueue(), getEmbedQueue()].map((queue) => queue.getJobCounts('waiting', 'prioritized', 'active', 'delayed')),
-    );
-    const live = (counts: Record<string, number>) => (counts['waiting'] ?? 0) + (counts['prioritized'] ?? 0) + (counts['active'] ?? 0);
-    // The backfill job is itself active in the embed queue, so it does not count as work.
-    const embedWork = (embed!['waiting'] ?? 0) + (embed!['prioritized'] ?? 0) + Math.max((embed!['active'] ?? 0) - 1, 0);
-
-    return live(ocr!) + live(llm!) + embedWork > 0;
+    return isQueuesBusy([getOcrQueue(), getLlmQueue()], getEmbedQueue());
 }

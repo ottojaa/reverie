@@ -16,6 +16,8 @@ export interface CommandInput {
     /** The chain that turns an HDR source into SDR; null for an SDR source. */
     toneMap: ToneMap | null;
     encoder: EncoderKind;
+    /** Extra `scale` options for an SDR source that is not BT.709 limited range (see `toSdrScaleArgs`). */
+    sdrScaleArgs?: string;
 }
 
 export function toRungDir(rung: Rung): string {
@@ -27,15 +29,15 @@ export function toRungDir(rung: Rung): string {
  * scaled once to the top rung and tone mapped there, so an HDR source is tone mapped once, not once per rung, then split
  * and scaled down to the other rungs.
  */
-export function toFilterGraph(input: Pick<CommandInput, 'ladder' | 'toneMap'>): string {
-    const { ladder, toneMap } = input;
+export function toFilterGraph(input: Pick<CommandInput, 'ladder' | 'toneMap' | 'sdrScaleArgs'>): string {
+    const { ladder, toneMap, sdrScaleArgs = '' } = input;
     const [top, ...lower] = ladder.rungs;
 
     if (!top) throw new Error('Ladder has no rungs');
 
     const base = [
         ...(ladder.frameRateCap !== null ? [`fps=${ladder.frameRateCap}`] : []),
-        `scale=${top.width}:${top.height}:flags=bicubic`,
+        `scale=${top.width}:${top.height}:flags=bicubic${toneMap ? '' : sdrScaleArgs}`,
         // An SDR source keeps its colours and gets the same tags; an HDR one is converted first.
         ...(toneMap ? [toneMap.chain] : ['format=yuv420p', SDR_TAGS_FILTER]),
     ].join(',');

@@ -8,14 +8,21 @@ type AddJob = typeof addTranscodeJob;
 /** A pending or processing job older than this is a leftover (a Redis that lost its queue), not work in line. */
 export const LIVE_JOB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** The statuses, and the age cut-off, that make a processing_jobs row a job in line; the backfill and `queueTranscode` both use them. */
+export const LIVE_JOB_STATUSES = ['pending', 'processing'] as const;
+
+export function toLiveJobCutoff(): Date {
+    return new Date(Date.now() - LIVE_JOB_MAX_AGE_MS);
+}
+
 export async function hasLiveTranscodeJob(db: Kysely<Database>, documentId: string): Promise<boolean> {
     const row = await db
         .selectFrom('processing_jobs')
         .select('id')
         .where('job_type', '=', 'transcode')
         .where('target_id', '=', documentId)
-        .where('status', 'in', ['pending', 'processing'])
-        .where('created_at', '>', new Date(Date.now() - LIVE_JOB_MAX_AGE_MS))
+        .where('status', 'in', LIVE_JOB_STATUSES)
+        .where('created_at', '>', toLiveJobCutoff())
         .limit(1)
         .executeTakeFirst();
 
@@ -35,6 +42,8 @@ export async function queueTranscode(
     priority?: number,
     add: AddJob = addTranscodeJob,
 ): Promise<boolean> {
+    let rowId: string | null = null;
+
     try {
         if (await hasLiveTranscodeJob(db, documentId)) return false;
 
@@ -44,11 +53,20 @@ export async function queueTranscode(
             .returning('id')
             .executeTakeFirstOrThrow();
 
+        rowId = job.id;
         await setTranscodeStatus(db, documentId, 'pending');
         await add({ documentId, userId }, job.id, priority);
 
         return true;
     } catch (error) {
+        // No job was added, so the row must not stay: a 'pending' row with no job would keep the backfill from ever picking the video up.
+        if (rowId !== null)
+            await db
+                .deleteFrom('processing_jobs')
+                .where('id', '=', rowId)
+                .execute()
+                .catch(() => {});
+
         console.warn('[Transcode] Could not queue the transcode:', documentId, error instanceof Error ? error.message : String(error));
 
         return false;

@@ -43,17 +43,6 @@ describe('isTranscodePipelineBusy', () => {
             expect(await isTranscodePipelineBusy()).toBe(true);
         }
     });
-
-    it('holds the backfill back for another transcode, queued (including prioritised) or running', async () => {
-        counts.transcode = { waiting: 1, prioritized: 0, active: 1 };
-        expect(await isTranscodePipelineBusy()).toBe(true);
-
-        counts.transcode = { waiting: 0, prioritized: 2, active: 1 };
-        expect(await isTranscodePipelineBusy()).toBe(true);
-
-        counts.transcode = { waiting: 0, prioritized: 0, active: 2 };
-        expect(await isTranscodePipelineBusy()).toBe(true);
-    });
 });
 
 describe('backfill rescheduling', () => {
@@ -68,15 +57,6 @@ describe('backfill rescheduling', () => {
         expect(job.updateData).toHaveBeenCalledWith({ after: 'doc-9' });
         expect(job.moveToDelayed).toHaveBeenCalledWith(expect.any(Number), 'token');
         expect(job.moveToDelayed.mock.calls[0]![0]).toBeLessThan(Date.now() + 31_000);
-    });
-
-    it('waits without moving the cursor while the other queues have work', async () => {
-        const job = stubJob();
-
-        await expect(rescheduleTranscodeBackfill(job, { kind: 'wait' }, DELAYS, 'token')).rejects.toBeInstanceOf(DelayedError);
-
-        expect(job.updateData).not.toHaveBeenCalled();
-        expect(job.moveToDelayed).toHaveBeenCalledOnce();
     });
 
     it('starts over after the reconcile interval when the library is done', async () => {

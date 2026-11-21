@@ -26,6 +26,20 @@ const BT709_TAGS = 'setparams=color_primaries=bt709:color_trc=bt709:colorspace=b
 /** The tags every rung carries, HDR or not. */
 export const SDR_TAGS_FILTER = BT709_TAGS;
 
+/**
+ * Extra `scale` options that turn an SDR source that is not BT.709 limited range into it. Only what the probe says is
+ * not BT.709 limited range is converted: ffmpeg assumes BT.601 for a frame with no matrix tag, which would shift the
+ * colours of the many HD files that carry no tag.
+ */
+export function toSdrScaleArgs(colorSpace: string | null, pixelFormat: string | null): string {
+    const fromBt601 = colorSpace === 'smpte170m' || colorSpace === 'bt470bg' || colorSpace === 'smpte240m';
+    const fullRange = pixelFormat?.startsWith('yuvj') ?? false;
+
+    if (!fromBt601 && !fullRange) return '';
+
+    return [fromBt601 ? ':in_color_matrix=bt601' : '', fullRange ? ':in_range=pc' : '', ':out_color_matrix=bt709:out_range=tv'].join('');
+}
+
 export function toHdrKind(colorTransfer: string | null): HdrKind | null {
     if (colorTransfer === 'arib-std-b67') return 'hlg';
 

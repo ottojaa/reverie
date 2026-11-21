@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildFfmpegArgs, toFilterGraph, type CommandInput } from './ffmpeg-command';
-import { toToneMap } from './hdr-filters';
+import { toSdrScaleArgs, toToneMap } from './hdr-filters';
 import { toProgressSeconds } from './ffmpeg-run';
 import { decideLadder, type SourceFacts } from './ladder';
 
@@ -91,6 +91,15 @@ describe('buildFfmpegArgs', () => {
 });
 
 describe('toFilterGraph', () => {
+    it('converts an SDR source that is not BT.709 limited range while it scales', () => {
+        const graph = toFilterGraph(toInput({ sdrScaleArgs: toSdrScaleArgs('smpte170m', 'yuvj420p') }));
+
+        expect(graph).toContain('scale=1920:1080:flags=bicubic:in_color_matrix=bt601:in_range=pc:out_color_matrix=bt709:out_range=tv,format=yuv420p');
+        expect(toSdrScaleArgs('bt709', 'yuv420p')).toBe('');
+        expect(toSdrScaleArgs(null, null)).toBe('');
+        expect(toSdrScaleArgs('bt709', 'yuvj420p')).toBe(':in_range=pc:out_color_matrix=bt709:out_range=tv');
+    });
+
     it('scales once to the top rung, then splits and scales down for the others', () => {
         const graph = toFilterGraph(toInput());
 

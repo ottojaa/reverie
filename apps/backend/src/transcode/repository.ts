@@ -26,7 +26,10 @@ export async function findTranscodeSet(db: Kysely<Database>, fileHash: string): 
     return { files: row.files, rungs: row.rungs, encoder: row.encoder, toneMap: row.tone_map, totalBytes: Number(row.total_bytes) };
 }
 
-/** Written after every file of the set is stored, so a row means a complete set. A set that exists already is kept. */
+/**
+ * Written after every file of the set is stored, so a row means a complete set. A row that exists already is replaced:
+ * a set is only encoded again when the stored one is known to be broken, and the new row must list the new files.
+ */
 export async function insertTranscodeSet(db: Kysely<Database>, fileHash: string, set: TranscodeSetRecord): Promise<void> {
     await db
         .insertInto('transcode_sets')
@@ -39,7 +42,15 @@ export async function insertTranscodeSet(db: Kysely<Database>, fileHash: string,
             tone_map: set.toneMap,
             total_bytes: set.totalBytes,
         })
-        .onConflict((conflict) => conflict.column('file_hash').doNothing())
+        .onConflict((conflict) =>
+            conflict.column('file_hash').doUpdateSet({
+                files: JSON.stringify(set.files),
+                rungs: JSON.stringify(set.rungs),
+                encoder: set.encoder,
+                tone_map: set.toneMap,
+                total_bytes: set.totalBytes,
+            }),
+        )
         .execute();
 }
 

@@ -1,7 +1,8 @@
-import { DelayedError, Job, Worker } from 'bullmq';
+import { Job, Worker } from 'bullmq';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import { probeVideoFile } from '../media/video-probe';
+import { delayBackfillJob } from '../queues/backfill-gate';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
 import { addTranscodeBackfillJob, TRANSCODE_JOBS, type TranscodeBackfillData, type TranscodeJobData } from '../queues/transcode.queue';
@@ -32,9 +33,16 @@ function toDeps(): TranscodeDeps {
 async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<unknown> {
     const { documentId, userId } = job.data;
 
+    // On the last of several attempts the encode takes the plain CPU path (see `TranscodeOptions.safeMode`).
+    const attempts = job.opts.attempts ?? 1;
+    const safeMode = attempts > 1 && job.attemptsMade >= attempts - 1;
+
     return processJobWithTracking(
         job,
-        () => transcodeDocument(toDeps(), documentId, (percent) => publishJobProgress(job.id!, percent, documentId, undefined, userId, 'transcode')),
+        () =>
+            transcodeDocument(toDeps(), documentId, (percent) => publishJobProgress(job.id!, percent, documentId, undefined, userId, 'transcode'), {
+                safeMode,
+            }),
         { jobType: 'transcode' },
     );
 }
@@ -63,13 +71,9 @@ export async function rescheduleTranscodeBackfill(
     delays: { pageMs: number; reconcileMs: number },
     token: string | undefined,
 ): Promise<never> {
-    if (step.kind === 'next') await job.updateData({ after: step.after });
+    const nextData = step.kind === 'next' ? { after: step.after } : step.kind === 'done' ? { after: null } : null;
 
-    if (step.kind === 'done') await job.updateData({ after: null });
-
-    await job.moveToDelayed(Date.now() + (step.kind === 'done' ? delays.reconcileMs : delays.pageMs), token);
-
-    throw new DelayedError();
+    return delayBackfillJob(job, nextData, step.kind === 'done' ? delays.reconcileMs : delays.pageMs, token);
 }
 
 async function processBackfill(job: Job<TranscodeBackfillData>, token: string | undefined): Promise<never> {

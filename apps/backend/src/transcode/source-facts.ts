@@ -14,13 +14,15 @@ interface RawFacts {
     frameRate: number | null;
     isHdr: boolean;
     colorTransfer: string | null;
+    colorSpace: string | null;
+    pixelFormat: string | null;
     audioCodec: string | null;
 }
 
-function toSourceFacts({ width, height, rotation, frameRate, isHdr, colorTransfer, audioCodec }: RawFacts): SourceFacts {
+function toSourceFacts({ width, height, rotation, frameRate, isHdr, colorTransfer, colorSpace, pixelFormat, audioCodec }: RawFacts): SourceFacts {
     if (!width || !height) throw new UnusableSourceError('Video has no picture size');
 
-    return { width, height, rotation: rotation ?? 0, frameRate, isHdr, colorTransfer, hasAudio: audioCodec !== null };
+    return { width, height, rotation: rotation ?? 0, frameRate, isHdr, colorTransfer, colorSpace, pixelFormat, hasAudio: audioCodec !== null };
 }
 
 /**
@@ -38,6 +40,8 @@ export async function loadSourceFacts(db: Kysely<Database>, documentId: string, 
             frameRate: row.frame_rate,
             isHdr: row.is_hdr,
             colorTransfer: row.color_transfer,
+            colorSpace: row.color_space,
+            pixelFormat: row.pixel_format,
             audioCodec: row.audio_codec,
         });
     }
