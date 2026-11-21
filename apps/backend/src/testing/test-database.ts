@@ -48,7 +48,13 @@ async function migrate(db: Kysely<Database>): Promise<void> {
 }
 
 function toKysely(connectionString: string): Kysely<Database> {
-    return new Kysely<Database>({ dialect: new PostgresDialect({ pool: new Pool({ connectionString, max: 4 }) }) });
+    const pool = new Pool({ connectionString, max: 4 });
+
+    // An idle client dies when its database is dropped or the throwaway cluster stops. A pool without an
+    // error listener turns that into an unhandled error, which fails the whole vitest run after every test passed.
+    pool.on('error', () => undefined);
+
+    return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
 }
 
 function findPostgresBinDir(): string | null {

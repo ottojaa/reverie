@@ -1,13 +1,8 @@
 import { createRevGeocoder } from '@webkitty/geo-rev';
 import exifr from 'exifr';
+import type { ExifMetadata } from './types';
 
-export interface ExifMetadata {
-    latitude: number | null;
-    longitude: number | null;
-    city: string | null;
-    country: string | null;
-    takenAt: Date | null;
-}
+export type { ExifMetadata };
 
 let geocoderPromise: ReturnType<typeof createRevGeocoder> | null = null;
 
@@ -29,6 +24,16 @@ function countryCodeToName(code: string): string {
     }
 }
 
+/** An EXIF string field, trimmed; null when absent or blank (some devices write padding or empty tags). */
+function toExifText(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+
+    // eslint-disable-next-line no-control-regex
+    const text = value.replace(/[\u0000-\u001f]/g, '').trim();
+
+    return text === '' ? null : text.slice(0, 200);
+}
+
 export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata> {
     const result: ExifMetadata = {
         latitude: null,
@@ -36,11 +41,14 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
         city: null,
         country: null,
         takenAt: null,
+        cameraMake: null,
+        cameraModel: null,
+        lensModel: null,
     };
 
     try {
         const exif = await exifr.parse(buffer, {
-            pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'CreateDate'],
+            pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'CreateDate', 'Make', 'Model', 'LensModel'],
             translateValues: true,
         });
 
@@ -61,6 +69,10 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
             }
         }
 
+        result.cameraMake = toExifText(exif.Make);
+        result.cameraModel = toExifText(exif.Model);
+        result.lensModel = toExifText(exif.LensModel);
+
         const dateValue = exif.DateTimeOriginal ?? exif.CreateDate;
 
         if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
@@ -71,4 +83,22 @@ export async function extractExifMetadata(buffer: Buffer): Promise<ExifMetadata>
     }
 
     return result;
+}
+
+/** The `photo_metadata` columns to write for an image's EXIF: only the fields it has, or null when it has none at all. */
+export function toPhotoMetadataValues(exif: ExifMetadata | null | undefined): Record<string, string | number | Date> | null {
+    if (!exif) return null;
+
+    const values = {
+        ...(exif.latitude != null && { latitude: exif.latitude }),
+        ...(exif.longitude != null && { longitude: exif.longitude }),
+        ...(exif.city != null && { city: exif.city }),
+        ...(exif.country != null && { country: exif.country }),
+        ...(exif.takenAt != null && { taken_at: exif.takenAt }),
+        ...(exif.cameraMake != null && { camera_make: exif.cameraMake }),
+        ...(exif.cameraModel != null && { camera_model: exif.cameraModel }),
+        ...(exif.lensModel != null && { lens_model: exif.lensModel }),
+    };
+
+    return Object.keys(values).length === 0 ? null : values;
 }

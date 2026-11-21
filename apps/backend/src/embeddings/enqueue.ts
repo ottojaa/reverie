@@ -1,9 +1,9 @@
 import { env } from '../config/env';
-import { addEmbedJob, EMBED_JOBS } from '../queues/embed.queue';
+import { addEmbedJob, EMBED_JOBS, type EmbedJobKind } from '../queues/embed.queue';
 
-type Adder = (kind: typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE, documentId: string) => Promise<void>;
+type Adder = (kind: EmbedJobKind, documentId: string) => Promise<void>;
 
-async function enqueue(kind: typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE, documentId: string, add: Adder, enabled: boolean): Promise<void> {
+async function enqueue(kind: EmbedJobKind, documentId: string, add: Adder, enabled: boolean): Promise<void> {
     if (!enabled) return;
 
     try {
@@ -23,4 +23,9 @@ export function enqueueTextEmbedding(documentId: string, add: Adder = addEmbedJo
 /** Queue an image embed. Best effort: never throws. Does nothing when ML_URL is unset. */
 export function enqueueImageEmbedding(documentId: string, add: Adder = addEmbedJob, enabled = Boolean(env.ML_URL)): Promise<void> {
     return enqueue(EMBED_JOBS.IMAGE, documentId, add, enabled);
+}
+
+/** Queue a classification of an image's kind from its stored embedding. Best effort: never throws. Does nothing when ML_URL is unset. */
+export function enqueueImageKind(documentId: string, add: Adder = addEmbedJob, enabled = Boolean(env.ML_URL)): Promise<void> {
+    return enqueue(EMBED_JOBS.CLASSIFY, documentId, add, enabled);
 }

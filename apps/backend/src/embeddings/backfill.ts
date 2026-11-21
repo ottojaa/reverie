@@ -2,7 +2,8 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import { getLlmQueue } from '../queues/llm.queue';
 import { getOcrQueue } from '../queues/ocr.queue';
-import { getEmbedQueue, type EmbedBackfillCursor } from '../queues/embed.queue';
+import { findDocumentsMissingKind } from '../image-kind/kind.repository';
+import { getEmbedQueue, type EmbedBackfillCursor, type EmbedJobKind } from '../queues/embed.queue';
 import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings } from './embedding.repository';
 import { MlUnavailableError, type MlClient } from './ml.client';
 import { toModelRef } from './embedding.service';
@@ -17,17 +18,33 @@ export interface BackfillDeps {
     ml: MlClient;
     /** True while OCR, summaries or the embed queue itself have work, so the backfill does not compete with it. */
     isBusy: () => Promise<boolean>;
-    enqueue: (kind: 'embed-text' | 'embed-image', documentId: string) => Promise<void>;
+    enqueue: (kind: EmbedJobKind, documentId: string) => Promise<void>;
     batchSize: number;
 }
 
+const STAGES = {
+    text: { next: 'image', job: 'embed-text' },
+    image: { next: 'kind', job: 'embed-image' },
+    kind: { next: null, job: 'classify-image' },
+} as const;
+
+type ReadyModels = Awaited<ReturnType<MlClient['readyModels']>>;
+
+function findMissing(deps: BackfillDeps, stage: EmbedBackfillCursor['stage'], models: ReadyModels, after: string | null): Promise<string[]> {
+    if (stage === 'text') return findDocumentsMissingTextEmbeddings(deps.db, toModelRef(models.text), after, deps.batchSize);
+
+    if (stage === 'image') return findDocumentsMissingImageEmbeddings(deps.db, toModelRef(models.image), after, deps.batchSize);
+
+    return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize);
+}
+
 /**
- * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model.
- * Stateless apart from the cursor: a restart simply asks the database again, and finished documents no longer match.
- * Text first, then images; each stage ends when a page comes back empty.
+ * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, or an
+ * image kind verdict from the current classifier. Stateless apart from the cursor: a restart simply asks the database
+ * again, and finished documents no longer match. Text, then images, then kinds; each stage ends when a page comes back empty.
  */
 export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillCursor): Promise<BackfillStep> {
-    let models;
+    let models: ReadyModels;
 
     try {
         models = await deps.ml.readyModels();
@@ -39,14 +56,13 @@ export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillC
 
     if (await deps.isBusy()) return { kind: 'wait', reason: 'queues-busy' };
 
-    const isText = cursor.stage === 'text';
-    const find = isText ? findDocumentsMissingTextEmbeddings : findDocumentsMissingImageEmbeddings;
-    const ids = await find(deps.db, toModelRef(isText ? models.text : models.image), cursor.after, deps.batchSize);
+    const stage = STAGES[cursor.stage];
+    const ids = await findMissing(deps, cursor.stage, models, cursor.after);
     const last = ids.at(-1);
 
-    if (last === undefined) return isText ? { kind: 'next', cursor: { stage: 'image', after: null } } : { kind: 'done' };
+    if (last === undefined) return stage.next === null ? { kind: 'done' } : { kind: 'next', cursor: { stage: stage.next, after: null } };
 
-    for (const id of ids) await deps.enqueue(isText ? 'embed-text' : 'embed-image', id);
+    for (const id of ids) await deps.enqueue(stage.job, id);
 
     return { kind: 'next', cursor: { stage: cursor.stage, after: last } };
 }

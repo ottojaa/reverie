@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
@@ -10,6 +10,8 @@ import { createFakeMl, type FakeMl } from '../testing/fake-ml.js';
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
+import { clearPromptCache } from '../image-kind/prompt-cache';
+import { classifyDocumentImage } from '../image-kind/service';
 import { runBackfillPage, type BackfillDeps, type BackfillStep } from './backfill';
 import { embedDocumentImage, embedDocumentText } from './embedding.service';
 
@@ -36,6 +38,7 @@ describeDb('embedding backfill', () => {
     beforeEach(async () => {
         // Every test starts from an empty library.
         await db.deleteFrom('documents').execute();
+        clearPromptCache();
         ml = createFakeMl();
         queued = [];
         busy = false;
@@ -53,6 +56,7 @@ describeDb('embedding backfill', () => {
 
         for (const { kind, id } of queued.splice(0)) {
             if (kind === 'embed-text') await embedDocumentText({ db, ml, readFile: read }, id);
+            else if (kind === 'classify-image') await classifyDocumentImage({ db, ml }, id);
             else await embedDocumentImage({ db, ml, readFile: read }, id);
         }
     };
@@ -175,5 +179,95 @@ describeDb('embedding backfill', () => {
 
         expect(await runBackfillPage(deps, START)).toEqual({ kind: 'wait', reason: 'ml-not-ready' });
         expect(queued).toHaveLength(0);
+    });
+
+    describe('the kind stage', () => {
+        const kindIds = async () => (await db.selectFrom('document_image_kinds').select('document_id').execute()).map((row) => row.document_id).sort();
+
+        async function seedImages(count: number): Promise<string[]> {
+            const ids: string[] = [];
+
+            for (let i = 0; i < count; i++) {
+                const id = await seedDocument(db, { userId, name: `img${i}.jpg`, mime: 'image/jpeg' });
+
+                await db
+                    .updateTable('documents')
+                    .set({ thumbnail_paths: { sm: '/s', md: '/m', lg: '/l' } })
+                    .where('id', '=', id)
+                    .execute();
+                ids.push(id);
+            }
+
+            return ids;
+        }
+
+        it('fills a verdict for every embedded image after the embeddings, and never touches document_category', async () => {
+            const ids = await seedImages(5);
+            const steps = await runToEnd();
+
+            expect(steps.at(-1)).toEqual({ kind: 'done' });
+            expect(await kindIds()).toEqual([...ids].sort());
+            expect(await db.selectFrom('documents').select('document_category').where('id', 'in', ids).execute()).toEqual(
+                ids.map(() => ({ document_category: null })),
+            );
+        });
+
+        it('asks reverie-ml for the prompt embeddings once for the whole library', async () => {
+            await seedImages(5);
+            await runToEnd();
+
+            expect(ml.imageTextCalls).toHaveLength(1);
+        });
+
+        it('resumes from a cursor: images before it are left, images after it are queued, and finished ones are not queued again', async () => {
+            const ids = (await seedImages(4)).sort();
+
+            // Embeddings only: no verdicts yet.
+            for (const id of ids) await embedDocumentImage({ db, ml, readFile: async () => Buffer.from('x') }, id);
+
+            expect(await kindIds()).toEqual([]);
+
+            const first = await runBackfillPage(deps, { stage: 'kind', after: null });
+
+            expect(first.kind).toBe('next');
+            expect(queued.map((job) => job.kind)).toEqual(['classify-image', 'classify-image']);
+
+            // "Crash" after the first page: one job ran, the other did not. A restart from the beginning queues only the rest.
+            const [finished] = queued.splice(0);
+
+            await classifyDocumentImage({ db, ml }, finished!.id);
+            await runBackfillPage(deps, { stage: 'kind', after: null });
+
+            expect(queued.map((job) => job.id)).not.toContain(finished!.id);
+            expect(queued).toHaveLength(2);
+
+            queued = [];
+            await runToEnd({ stage: 'kind', after: ids[1]! });
+
+            expect((await kindIds()).filter((id) => id > ids[1]!)).toEqual(ids.filter((id) => id > ids[1]!));
+        });
+
+        it('classifies again after the classifier version or the image model changes', async () => {
+            await seedImages(2);
+            await runToEnd();
+            queued = [];
+
+            expect((await runBackfillPage(deps, { stage: 'kind', after: null })).kind).toBe('done');
+            expect(queued).toHaveLength(0);
+
+            await db.updateTable('document_image_kinds').set({ prompt_version: 'older' }).execute();
+            await runBackfillPage(deps, { stage: 'kind', after: null });
+
+            expect(queued.map((job) => job.kind)).toEqual(['classify-image', 'classify-image']);
+        });
+
+        it('leaves out trashed images and images without an embedding for the current model', async () => {
+            const [live, trashed] = await seedImages(2);
+
+            await db.updateTable('documents').set({ deleted_at: new Date() }).where('id', '=', trashed!).execute();
+            await runToEnd();
+
+            expect(await kindIds()).toEqual([live]);
+        });
     });
 });

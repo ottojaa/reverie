@@ -66,6 +66,10 @@ export interface ExifMetadata {
     city: string | null;
     country: string | null;
     takenAt: Date | null;
+    /** Camera make, model and lens from EXIF; null for screenshots and scans. */
+    cameraMake: string | null;
+    cameraModel: string | null;
+    lensModel: string | null;
 }
 
 /**

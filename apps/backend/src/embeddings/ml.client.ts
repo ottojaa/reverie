@@ -40,6 +40,8 @@ export interface MlClient {
     readyModels(): Promise<{ text: MlModelInfo; image: MlModelInfo }>;
     embedTexts(texts: string[], role: 'passage' | 'query'): Promise<MlEmbeddings>;
     embedImages(images: Buffer[]): Promise<MlEmbeddings>;
+    /** Texts embedded by the image model's text tower, so they compare with image embeddings (max 64 per request). */
+    embedImageTexts(texts: string[]): Promise<MlEmbeddings>;
 }
 
 type Fetch = typeof fetch;
@@ -80,6 +82,7 @@ export function createMlClient(baseUrl: string, timeoutMs: number, fetchImpl: Fe
         },
         embedTexts: (texts, role) => post<MlEmbeddings>('/embed/text', { texts, role }),
         embedImages: (images) => post<MlEmbeddings>('/embed/image', { images: images.map((image) => image.toString('base64')) }),
+        embedImageTexts: (texts) => post<MlEmbeddings>('/embed/image-text', { texts }),
     };
 }
 

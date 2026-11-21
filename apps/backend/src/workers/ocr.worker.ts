@@ -1,8 +1,13 @@
 import { Job, Worker } from 'bullmq';
 import { db } from '../db/kysely';
+import type { Document } from '../db/schema';
 import { NonRetryableJobError } from '../jobs/job.types';
-import { enqueueTextEmbedding } from '../embeddings/enqueue';
+import { enqueueImageKind, enqueueTextEmbedding } from '../embeddings/enqueue';
+import { getMlClient } from '../embeddings/ml.client';
+import { decideLlmHandoff, isKindFlipActive } from '../image-kind/service';
 import { isProcessableImage, isTextExtractable, processDocument, shouldQueueLlmJob } from '../ocr';
+import { toPhotoMetadataValues } from '../ocr/exif-extractor';
+import type { OcrProcessingResult } from '../ocr/types';
 import { addLlmJob } from '../queues/llm.queue';
 import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
@@ -11,6 +16,38 @@ import { rebuildSearchVector } from '../search/search-indexer';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('OCR');
+
+/** Queue the LLM job when the OCR result warrants one, else mark it skipped. */
+async function queueLlmFromOcr(document: Document, result: OcrProcessingResult, sessionId: string | undefined): Promise<void> {
+    const documentId = document.id;
+
+    if (!shouldQueueLlmJob(result)) {
+        await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
+        logger.info('Skipping LLM job', {
+            documentId,
+            reason: result.hasMeaningfulText ? 'low_confidence' : 'no_text',
+        });
+
+        return;
+    }
+
+    await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', documentId).execute();
+
+    const createdJob = await db
+        .insertInto('processing_jobs')
+        .values({
+            user_id: document.user_id,
+            job_type: 'llm_summary',
+            target_type: 'document',
+            target_id: documentId,
+            status: 'pending',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+    await addLlmJob({ documentId, userId: document.user_id, sessionId }, createdJob.id);
+    logger.info('Queued LLM job', { documentId, llmJobId: createdJob.id });
+}
 
 async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     const { documentId, forceReprocess } = job.data;
@@ -28,7 +65,8 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     await publishJobProgress(job.id!, 10, documentId, job.data.sessionId, job.data.userId);
 
     // Update document status to processing
-    await db.updateTable('documents').set({ ocr_status: 'processing' }).where('id', '=', documentId).execute();
+    // The marker says OCR has stored the text flag and EXIF; it is set again below once it has.
+    await db.updateTable('documents').set({ ocr_status: 'processing', ocr_facts_at: null }).where('id', '=', documentId).execute();
 
     try {
         // Check if file is processable: images go through OCR; PDF/TXT go through processDocument (handleNonImageFile)
@@ -72,20 +110,12 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         await publishJobProgress(job.id!, 80, documentId, job.data.sessionId, job.data.userId);
 
-        // Store EXIF metadata if extracted (skip when all fields are null - doUpdateSet
-        // with empty object produces invalid SQL: "syntax error at end of input")
+        // Store EXIF metadata if extracted (no values at all: skip, since doUpdateSet with an empty
+        // object produces invalid SQL: "syntax error at end of input")
         const exif = result.exifMetadata;
-        const hasExifData = exif && (exif.latitude != null || exif.longitude != null || exif.city != null || exif.country != null || exif.takenAt != null);
+        const exifValues = toPhotoMetadataValues(exif);
 
-        if (hasExifData) {
-            const exifValues = {
-                ...(exif.latitude != null && { latitude: exif.latitude }),
-                ...(exif.longitude != null && { longitude: exif.longitude }),
-                ...(exif.city != null && { city: exif.city }),
-                ...(exif.country != null && { country: exif.country }),
-                ...(exif.takenAt != null && { taken_at: exif.takenAt }),
-            };
-
+        if (exif && exifValues) {
             await db
                 .insertInto('photo_metadata')
                 .values({
@@ -110,38 +140,16 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         // Sync has_meaningful_text from OCR result back to documents table
         await db.updateTable('documents').set({ has_meaningful_text: result.hasMeaningfulText }).where('id', '=', documentId).execute();
 
-        // Queue LLM job if appropriate
-        if (shouldQueueLlmJob(result)) {
-            await db.updateTable('documents').set({ llm_status: 'pending' }).where('id', '=', documentId).execute();
+        // From here the embed side may act on this OCR run: it waits for the marker.
+        await db.updateTable('documents').set({ ocr_facts_at: new Date() }).where('id', '=', documentId).execute();
 
-            const createdJob = await db
-                .insertInto('processing_jobs')
-                .values({
-                    user_id: document.user_id,
-                    job_type: 'llm_summary',
-                    target_type: 'document',
-                    target_id: documentId,
-                    status: 'pending',
-                })
-                .returning('id')
-                .executeTakeFirstOrThrow();
+        // With the image-kind flip on, the embed side queues an image's LLM job once the image has a kind.
+        const handoff = isImage ? await decideLlmHandoff(isKindFlipActive(), getMlClient()) : 'ocr';
 
-            await addLlmJob(
-                {
-                    documentId,
-                    userId: document.user_id,
-                    sessionId: job.data.sessionId,
-                },
-                createdJob.id,
-            );
-            logger.info('Queued LLM job', { documentId, llmJobId: createdJob.id });
-        } else {
-            await db.updateTable('documents').set({ llm_status: 'skipped' }).where('id', '=', documentId).execute();
-            logger.info('Skipping LLM job', {
-                documentId,
-                reason: result.hasMeaningfulText ? 'low_confidence' : 'no_text',
-            });
-        }
+        if (handoff === 'ocr') await queueLlmFromOcr(document, result, job.data.sessionId);
+
+        // Classify again with the camera facts just stored: an earlier verdict may have been made without them.
+        if (isImage) await enqueueImageKind(documentId);
 
         // Rebuild unified search vector with OCR text + EXIF metadata.
         // Will be rebuilt again after LLM processing if queued.
