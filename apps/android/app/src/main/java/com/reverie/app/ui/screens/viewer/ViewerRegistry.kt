@@ -52,8 +52,8 @@ fun DocumentViewerBody(
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
     // Whether this document is the pager's settled page. Non-settled image pages reset their zoom so
-    // a zoomed-in image doesn't restore its transform when swiped back to. Defaults true for callers
-    // outside the pager.
+    // a zoomed-in image doesn't restore its transform when swiped back to; non-settled video pages
+    // don't buffer. Defaults true for callers outside the pager.
     isSettledPage: Boolean = true,
     // While the details pane is open the media is lifted out of the way; disable each viewer's own
     // zoom/scroll so it doesn't fight the pane's drag-to-close.
@@ -97,6 +97,7 @@ fun DocumentViewerBody(
         ViewerType.VIDEO -> VideoViewer(
             fileUrl = fileUrl,
             mountSurface = mountVideoSurface,
+            active = isSettledPage,
             posterSeekMs = videoPosterSeekMs,
             onChromeHidden = onChromeHidden,
             onFirstFrameRendered = onFirstFrameRendered,
