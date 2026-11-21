@@ -92,6 +92,13 @@ const envSchema = z.object({
     AGENT_SECRET: z.string().min(16).optional(),
     AGENT_SECRET_FILE: z.string().optional(),
 
+    // Local embedding service (reverie-ml). Unset or empty = embeddings off: nothing is queued and no worker starts.
+    ML_URL: z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional()),
+    ML_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+    // Backfill of the existing library: documents queued per page, and the pause between pages.
+    EMBED_BACKFILL_BATCH: z.coerce.number().int().positive().default(50),
+    EMBED_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(20_000),
+
     // LLM Processing
     LLM_ENABLED: envBoolean(true),
     LLM_MAX_INPUT_CHARS: z.coerce.number().default(25000),
@@ -120,6 +127,7 @@ const envSchema = z.object({
     JOB_CONCURRENCY_THUMBNAIL: z.coerce.number().default(4),
     JOB_CONCURRENCY_LLM: z.coerce.number().default(1),
     JOB_CONCURRENCY_TRIM: z.coerce.number().default(2),
+    JOB_CONCURRENCY_EMBED: z.coerce.number().int().positive().default(1),
     JOB_RETRY_ATTEMPTS: z.coerce.number().default(3),
     JOB_RETRY_BACKOFF_MS: z.coerce.number().default(5000),
 

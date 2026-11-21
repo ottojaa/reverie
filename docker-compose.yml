@@ -1,8 +1,11 @@
 version: '3.8'
 
 services:
+    # Postgres with pgvector (still Alpine/musl). Same Dockerfile as production.
     postgres:
-        image: postgres:16-alpine
+        build:
+            context: docker/postgres
+        image: reverie-postgres:16.16-pgvector0.8.1
         container_name: reverie-postgres
         environment:
             POSTGRES_USER: reverie
@@ -48,7 +51,21 @@ services:
         volumes:
             - agent_claude:/data/claude
 
+    # Local embedding models, CPU by default. The backend runs on the host, so the port is published on loopback:
+    # set ML_URL=http://127.0.0.1:8090 in the dev backend env. On an NVIDIA machine add the GPU override:
+    #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+    reverie-ml:
+        build:
+            context: apps/reverie-ml
+        image: reverie-ml:latest
+        container_name: reverie-ml
+        ports:
+            - '127.0.0.1:8090:8090'
+        volumes:
+            - ml_models:/models
+
 volumes:
     agent_claude:
+    ml_models:
     postgres_data:
     redis_data:

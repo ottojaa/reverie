@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
     LLM: 'llm-queue',
     TRIM: 'trim-queue',
     TRASH: 'trash-queue',
+    EMBED: 'embed-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -33,4 +34,5 @@ export const QUEUE_CONCURRENCY = {
     [QUEUE_NAMES.THUMBNAIL]: env.JOB_CONCURRENCY_THUMBNAIL,
     [QUEUE_NAMES.LLM]: env.JOB_CONCURRENCY_LLM,
     [QUEUE_NAMES.TRIM]: env.JOB_CONCURRENCY_TRIM,
+    [QUEUE_NAMES.EMBED]: env.JOB_CONCURRENCY_EMBED,
 };

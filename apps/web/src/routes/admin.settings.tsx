@@ -1,3 +1,4 @@
+import { EmbeddingStatusCard } from '@/components/admin/EmbeddingStatusCard';
 import { ServerSettingRow } from '@/components/admin/ServerSettingRow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { adminApi } from '@/lib/api/admin';
@@ -56,6 +57,8 @@ function AdminSettingsPage() {
                     ))}
                 </ul>
             </div>
+
+            <EmbeddingStatusCard enabled={!!accessToken && isAdmin} />
         </div>
     );
 }

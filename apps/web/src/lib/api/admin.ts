@@ -1,11 +1,13 @@
 import {
     CreateUserResponseSchema,
+    EmbeddingStatusResponseSchema,
     ListServerSettingsResponseSchema,
     ListUsersResponseSchema,
     ServerSettingResponseSchema,
     UpdateUserResponseSchema,
     type CreateUserRequest,
     type CreateUserResponse,
+    type EmbeddingStatusResponse,
     type ServerSetting,
     type UpdateServerSettingRequest,
     type UpdateUserRequest,
@@ -52,5 +54,11 @@ export const adminApi = {
         const { data } = await apiClient.delete(`/admin/settings/${encodeURIComponent(key)}`);
 
         return ServerSettingResponseSchema.parse(data).setting;
+    },
+
+    async getEmbeddingStatus(): Promise<EmbeddingStatusResponse> {
+        const { data } = await apiClient.get('/admin/embeddings');
+
+        return EmbeddingStatusResponseSchema.parse(data);
     },
 };

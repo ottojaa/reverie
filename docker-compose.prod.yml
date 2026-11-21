@@ -24,6 +24,13 @@ services:
             # working (the agent shows as unavailable) when the agent container is down. No depends_on on purpose.
             - AGENT_URL=http://reverie-agent:8080
             - AGENT_SECRET_FILE=/run/reverie-agent/secret
+            # Embeddings run in reverie-ml. The backend keeps working (and OCR keeps running) when it is down.
+            - ML_URL=http://reverie-ml:8090
+            # PaddleOCR shares the 10 GB card with reverie-ml. auto_growth stops Paddle from grabbing a fixed
+            # fraction up front, and the limit is a hard ceiling on what it may ever allocate. See the VRAM
+            # budget in apps/reverie-ml/README.md before changing either.
+            - FLAGS_allocator_strategy=auto_growth
+            - FLAGS_gpu_memory_limit_mb=4096
         ports:
             # Bind to loopback only — nginx on the host proxies to this port
             - '127.0.0.1:3000:3000'
@@ -67,8 +74,11 @@ services:
             - agent_secret:/run/reverie-agent:ro
         restart: unless-stopped
 
+    # Postgres with pgvector, still Alpine/musl so the existing data directory keeps its collation.
     postgres:
-        image: postgres:16-alpine
+        build:
+            context: docker/postgres
+        image: reverie-postgres:16.16-pgvector0.8.1
         container_name: reverie-postgres
         ports:
             - '127.0.0.1:5432:5432'
@@ -87,6 +97,35 @@ services:
             retries: 5
         restart: unless-stopped
 
+    # Local embedding models (text + image) on the same GPU. Reachable on the compose network only: no published
+    # port, and no library/NAS volume, because the backend sends the bytes it wants embedded.
+    reverie-ml:
+        build:
+            context: apps/reverie-ml
+        image: reverie-ml:latest
+        container_name: reverie-ml
+        environment:
+            - NVIDIA_VISIBLE_DEVICES=all
+            - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        volumes:
+            # Hugging Face weights (a few GB): downloaded once, kept across container recreates.
+            - ml_models:/models
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: 1
+                          capabilities: [gpu]
+        # Liveness only: the port answers while weights are still downloading (ready=false on /health).
+        healthcheck:
+            test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=4)"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 60s
+        restart: unless-stopped
+
     redis:
         image: redis:7-alpine
         container_name: reverie-redis
@@ -103,5 +142,6 @@ volumes:
     postgres_data:
     redis_data:
     ocr_models:
+    ml_models:
     agent_claude:
     agent_secret:

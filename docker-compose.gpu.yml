@@ -1,0 +1,15 @@
+# Dev override for machines with an NVIDIA GPU:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Production reserves the GPU in docker-compose.prod.yml; the base dev file stays CPU-only so it also runs on a Mac.
+services:
+    reverie-ml:
+        environment:
+            - NVIDIA_VISIBLE_DEVICES=all
+            - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: 1
+                          capabilities: [gpu]

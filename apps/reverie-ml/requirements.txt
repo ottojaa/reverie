@@ -1,0 +1,12 @@
+# Pinned runtime dependencies. The default torch wheel on x86_64 Linux carries CUDA, on macOS arm64 it is CPU-only,
+# so one file serves the GPU server, the CPU fallback and dev.
+torch==2.15.0
+transformers==5.23.0
+safetensors==0.8.0
+sentencepiece==0.2.3
+protobuf==7.36.2
+numpy==2.5.5
+pillow==13.0.0
+fastapi==0.165.0
+uvicorn==0.54.0
+pydantic==2.14.4
