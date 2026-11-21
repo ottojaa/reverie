@@ -12,6 +12,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OcrResultDialog } from '../OcrResultDialog';
 import { formatCategory, isFallbackLlmMetadata, parseLlmMetadata } from './insight-state';
+import { formatCaptureTime, toPhotoFacts, toVideoFacts } from './media-facts';
+import { MetaCell, MicroLabel } from './MetaCell';
 import { ProcessingFooter } from './ProcessingFooter';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -27,21 +29,6 @@ function Section({ delay, className, children }: { delay: number; className?: st
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.25, ease: EASE }} className={className}>
             {children}
         </motion.div>
-    );
-}
-
-function MicroLabel({ children }: { children: React.ReactNode }) {
-    return <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">{children}</p>;
-}
-
-function MetaCell({ label, value, title }: { label: string; value: string; title?: string }) {
-    return (
-        <div className="min-w-0">
-            <MicroLabel>{label}</MicroLabel>
-            <p className="mt-0.5 truncate text-xs text-foreground/80" title={title ?? value}>
-                {value}
-            </p>
-        </div>
     );
 }
 
@@ -87,6 +74,8 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
     const aiSummary = isFallbackLlmMetadata(document.llm_metadata) ? null : document.llm_summary;
     const hasAiContent = !!aiSummary || !!document.document_category || entities.length > 0 || topics.length > 0;
     const locationText = toLocationText(document.photo_metadata);
+    // Camera and exposure for a photo, codec and frame rate for a video: only what the file carried
+    const mediaFacts = [...toPhotoFacts(document.photo_metadata), ...toVideoFacts(document.video_metadata, document.duration_seconds)];
 
     // Close on Escape / click outside (but never underneath the OCR dialog,
     // the toolbar triggers, or portaled menu/dialog content)
@@ -251,11 +240,24 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                     <MetaCell label="Dimensions" value={`${document.width} × ${document.height} px`} />
                                 )}
                                 {document.extracted_date && <MetaCell label="Document date" value={document.extracted_date} />}
-                                {document.photo_metadata?.taken_at && <MetaCell label="Taken" value={formatDateTime(document.photo_metadata.taken_at)} />}
+                                {document.photo_metadata?.taken_at && (
+                                    <MetaCell
+                                        label="Taken"
+                                        value={formatCaptureTime(document.photo_metadata.taken_at, document.photo_metadata.taken_at_offset)}
+                                    />
+                                )}
                                 {locationText && <MetaCell label="Location" value={locationText} />}
                                 <MetaCell label="Uploaded" value={formatDateTime(document.created_at)} />
                                 <MetaCell label="Modified" value={formatDateTime(document.updated_at)} />
                             </Section>
+
+                            {mediaFacts.length > 0 && (
+                                <Section delay={nextDelay()} className="grid grid-cols-2 gap-x-6 gap-y-2.5 border-t border-border/40 pt-3">
+                                    {mediaFacts.map((fact) => (
+                                        <MetaCell key={fact.label} label={fact.label} value={fact.value} />
+                                    ))}
+                                </Section>
+                            )}
 
                             {/* Processing status + actions — admin tooling only */}
                             {isAdmin && (

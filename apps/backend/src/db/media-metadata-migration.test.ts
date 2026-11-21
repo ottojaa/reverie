@@ -51,7 +51,9 @@ describeDb('migration 022 (media metadata)', () => {
         await down(untyped());
         expect(await hasColumn('photo_metadata', 'iso')).toBe(false);
         expect(await hasColumn('documents', 'media_read_at')).toBe(false);
-        expect(await sql<{ found: boolean }>`SELECT to_regclass('video_metadata') IS NOT NULL AS found`.execute(database.db).then((r) => r.rows[0]!.found)).toBe(false);
+        expect(
+            await sql<{ found: boolean }>`SELECT to_regclass('video_metadata') IS NOT NULL AS found`.execute(database.db).then((r) => r.rows[0]!.found),
+        ).toBe(false);
         expect(await database.db.selectFrom('documents').select('id').where('id', '=', id).execute()).toHaveLength(1);
         expect(await database.db.selectFrom('photo_metadata').select(['city', 'camera_make']).where('document_id', '=', id).executeTakeFirst()).toEqual({
             city: 'Turku',

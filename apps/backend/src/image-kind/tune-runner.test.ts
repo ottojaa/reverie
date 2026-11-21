@@ -56,7 +56,7 @@ describeDb('the tuning run', () => {
 
             if (name.includes('camera')) return { Make: 'Apple', Model: 'iPhone' };
 
-            if (name.includes('date-only')) return { DateTimeOriginal: new Date('2026-01-02T00:00:00Z') };
+            if (name.includes('date-only')) return { DateTimeOriginal: '2026:01:02 00:00:00' };
 
             return undefined;
         });

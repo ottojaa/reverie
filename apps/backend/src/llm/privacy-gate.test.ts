@@ -13,6 +13,7 @@ type JobProcessor = (job: Job<LlmJobData>) => Promise<{ skipped?: boolean; skipR
 const h = vi.hoisted(() => {
     const tables: Record<string, Row[]> = {};
     const updates: Array<{ table: string; values: Row }> = [];
+    const reads: string[] = [];
     const anthropic = { parse: vi.fn() };
     const jobService = {
         markJobStarted: vi.fn(),
@@ -27,6 +28,7 @@ const h = vi.hoisted(() => {
     // `in`, so the real privacy cascade (folders -> collection) runs against it. Updates are
     // recorded; every other write is a no-op.
     function selectBuilder(table: string) {
+        reads.push(table);
         const filters: Array<(row: Row) => boolean> = [];
         const rows = () => (tables[table] ?? []).filter((row) => filters.every((matches) => matches(row)));
         const builder = {
@@ -71,7 +73,7 @@ const h = vi.hoisted(() => {
         transaction: () => ({ execute: async (run: (trx: unknown) => Promise<unknown>) => run(db) }),
     };
 
-    return { tables, updates, anthropic, jobService, worker, db };
+    return { tables, updates, reads, anthropic, jobService, worker, db };
 });
 
 vi.mock('../db/kysely', () => ({ db: h.db }));
@@ -190,6 +192,7 @@ function expectNoAnthropicCall() {
 beforeEach(() => {
     vi.clearAllMocks();
     h.updates.length = 0;
+    h.reads.length = 0;
     mockAnthropicSuccess();
 });
 
@@ -224,6 +227,16 @@ describe('processDocument privacy gate', () => {
 
         expect(result.skipped).toBeUndefined();
         expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not read the EXIF or video facts for the text summary of a document: only the image gate reads photo_metadata', async () => {
+        seed('public', 'application/pdf');
+
+        await processDocument('doc-1', { forceType: 'text_summary' });
+
+        expect(h.anthropic.parse).toHaveBeenCalledTimes(1);
+        expect(h.reads).not.toContain('photo_metadata');
+        expect(h.reads).not.toContain('video_metadata');
     });
 
     it('calls the text model for a public document inside a public folder of a public collection', async () => {

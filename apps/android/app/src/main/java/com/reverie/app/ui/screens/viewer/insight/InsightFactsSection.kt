@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +33,8 @@ import com.reverie.app.util.formatDuration
 import com.reverie.app.util.formatRelativeAge
 import com.reverie.app.util.formatShortDate
 import com.reverie.app.util.formatTimeOfDay
+import com.reverie.app.ui.screens.viewer.insight.cameraSummary
+import com.reverie.app.ui.screens.viewer.insight.videoSummary
 import java.time.Instant
 
 /**
@@ -65,6 +69,14 @@ private fun FactRows(document: DocumentDto) {
     document.photo_metadata?.taken_at?.let { takenAt ->
         val time = formatTimeOfDay(takenAt)
         FactRow(Icons.Outlined.PhotoCamera, subtle, formatDayDate(takenAt), "Taken" + (time?.let { " · $it" } ?: ""))
+    }
+
+    document.photo_metadata?.let { photo -> cameraSummary(photo) }?.let { (primary, secondary) ->
+        FactRow(Icons.Outlined.CameraAlt, subtle, primary, secondary)
+    }
+
+    document.video_metadata?.let { video -> videoSummary(video, document.duration_seconds) }?.let { (primary, secondary) ->
+        FactRow(Icons.Outlined.Videocam, subtle, primary, secondary)
     }
 
     val visual = fileTypeVisual(document.mime_type, document.original_filename)

@@ -59,7 +59,18 @@ describe('extractExifMetadata on fixture images', () => {
     it('leaves out whatever the camera did not write', async () => {
         const exif = await extractExifMetadata(await buildExifJpeg({ make: 'Canon', iso: 400 }));
 
-        expect(exif).toMatchObject({ cameraMake: 'Canon', iso: 400, fNumber: null, exposureTime: null, focalLength: null, flashFired: null, orientation: null, takenAt: null, takenAtOffset: null, latitude: null });
+        expect(exif).toMatchObject({
+            cameraMake: 'Canon',
+            iso: 400,
+            fNumber: null,
+            exposureTime: null,
+            focalLength: null,
+            flashFired: null,
+            orientation: null,
+            takenAt: null,
+            takenAtOffset: null,
+            latitude: null,
+        });
     });
 
     it('decodes the flash bit field: fired, and not fired', async () => {
@@ -74,7 +85,9 @@ describe('extractExifMetadata on fixture images', () => {
     });
 
     it('falls back to the digitised time and its own offset when there is no original time', async () => {
-        const exif = await extractExifMetadata(await buildExifJpeg({ dateTimeDigitized: '2023:12:31 23:59:59', offsetTimeDigitized: '-05:00', offsetTimeOriginal: '+09:00' }));
+        const exif = await extractExifMetadata(
+            await buildExifJpeg({ dateTimeDigitized: '2023:12:31 23:59:59', offsetTimeDigitized: '-05:00', offsetTimeOriginal: '+09:00' }),
+        );
 
         expect(exif.takenAt?.toISOString()).toBe('2023-12-31T23:59:59.000Z');
         expect(exif.takenAtOffset).toBe('-05:00');

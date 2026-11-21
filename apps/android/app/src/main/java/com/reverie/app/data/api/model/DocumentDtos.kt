@@ -29,6 +29,32 @@ data class DocumentPhotoMetadata(
     val city: String? = null,
     val country: String? = null,
     val taken_at: String? = null,
+    // Camera and exposure facts from the file's EXIF; absent on photos stored before they were read.
+    val camera_make: String? = null,
+    val camera_model: String? = null,
+    val lens_model: String? = null,
+    val iso: Int? = null,
+    val f_number: Double? = null,
+    val exposure_time: Double? = null,
+    val focal_length: Double? = null,
+    val focal_length_35mm: Double? = null,
+    val flash_fired: Boolean? = null,
+)
+
+/** A video's technical facts from ffprobe; only present on the document detail endpoint. */
+@Serializable
+data class DocumentVideoMetadata(
+    val container: String? = null,
+    val video_codec: String? = null,
+    val video_profile: String? = null,
+    val audio_codec: String? = null,
+    val bitrate: Long? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val frame_rate: Double? = null,
+    // Degrees clockwise a player turns the picture (0, 90, 180, 270).
+    val rotation: Int? = null,
+    val is_hdr: Boolean = false,
 )
 
 // @Immutable so the Files grid can skip recomposing unchanged tiles. All fields are `val`s over
@@ -70,6 +96,7 @@ data class DocumentDto(
     val thumbnail_urls: ThumbnailUrls? = null,
     // Detail-only.
     val photo_metadata: DocumentPhotoMetadata? = null,
+    val video_metadata: DocumentVideoMetadata? = null,
     // Detail-only: every tag with where it came from. Taught labels have source "taught".
     val tags: List<DocumentTagDto> = emptyList(),
 )

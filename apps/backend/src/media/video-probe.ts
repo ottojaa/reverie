@@ -196,9 +196,7 @@ export function parseIso6709(value: unknown): { latitude: number; longitude: num
 function readCapture(tags: Tags, creationTime: Date | null): VideoCapture {
     const place = parseIso6709(tags['com.apple.quicktime.location.ISO6709'] ?? tags['location']);
     const local = toLocalCreation(tags['com.apple.quicktime.creationdate']);
-    const capture = local
-        ? { takenAt: local.takenAt, takenAtOffset: local.offset }
-        : { takenAt: creationTime, takenAtOffset: creationTime ? '+00:00' : null };
+    const capture = local ? { takenAt: local.takenAt, takenAtOffset: local.offset } : { takenAt: creationTime, takenAtOffset: creationTime ? '+00:00' : null };
 
     return { ...capture, latitude: place?.latitude ?? null, longitude: place?.longitude ?? null };
 }

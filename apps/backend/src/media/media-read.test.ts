@@ -64,7 +64,8 @@ describeDb('reading EXIF and video facts from the stored file', () => {
     });
 
     const image = (name: string, extra: Partial<Parameters<typeof seedDocument>[1]> = {}) => seedDocument(db, { userId, name, mime: 'image/jpeg', ...extra });
-    const video = (name: string, extra: Partial<Parameters<typeof seedDocument>[1]> = {}) => seedDocument(db, { userId, name, mime: 'video/quicktime', ...extra });
+    const video = (name: string, extra: Partial<Parameters<typeof seedDocument>[1]> = {}) =>
+        seedDocument(db, { userId, name, mime: 'video/quicktime', ...extra });
     const metadata = (id: string) => db.selectFrom('photo_metadata').selectAll().where('document_id', '=', id).executeTakeFirst();
     const videoRow = (id: string) => db.selectFrom('video_metadata').selectAll().where('document_id', '=', id).executeTakeFirst();
     const markers = (id: string) => db.selectFrom('documents').select(['camera_read_at', 'media_read_at']).where('id', '=', id).executeTakeFirstOrThrow();
@@ -104,7 +105,14 @@ describeDb('reading EXIF and video facts from the stored file', () => {
 
             await readDocumentMedia(deps(), id);
 
-            expect(await metadata(id)).toMatchObject({ camera_make: 'Apple', taken_at: TAKEN, city: 'Stored city', iso: 1600, f_number: 1.78, latitude: expect.closeTo(60.1699, 3) });
+            expect(await metadata(id)).toMatchObject({
+                camera_make: 'Apple',
+                taken_at: TAKEN,
+                city: 'Stored city',
+                iso: 1600,
+                f_number: 1.78,
+                latitude: expect.closeTo(60.1699, 3),
+            });
         });
 
         it('is idempotent: a second read changes nothing', async () => {
@@ -139,6 +147,7 @@ describeDb('reading EXIF and video facts from the stored file', () => {
 
         it('treats a missing file as final: marked read, nothing stored', async () => {
             const id = await image('gone.jpg');
+
             const missing = async (): Promise<Buffer> => {
                 throw Object.assign(new Error('no such file'), { code: 'ENOENT' });
             };
@@ -154,6 +163,7 @@ describeDb('reading EXIF and video facts from the stored file', () => {
 
         it('lets any other read failure through for the queue to retry, and marks nothing', async () => {
             const id = await image('flaky.jpg');
+
             const broken = async (): Promise<Buffer> => {
                 throw new Error('disk on fire');
             };
@@ -201,7 +211,12 @@ describeDb('reading EXIF and video facts from the stored file', () => {
                 color_transfer: 'arib-std-b67',
                 is_hdr: true,
             });
-            expect(await metadata(id)).toMatchObject({ city: 'Helsinki', country: 'Finland', taken_at: new Date('2024-05-01T14:03:22Z'), taken_at_offset: '+03:00' });
+            expect(await metadata(id)).toMatchObject({
+                city: 'Helsinki',
+                country: 'Finland',
+                taken_at: new Date('2024-05-01T14:03:22Z'),
+                taken_at_offset: '+03:00',
+            });
             expect((await metadata(id))?.latitude).toBeCloseTo(60.1699, 4);
             expect(await markers(id)).toMatchObject({ camera_read_at: null });
             expect((await markers(id)).media_read_at).not.toBeNull();

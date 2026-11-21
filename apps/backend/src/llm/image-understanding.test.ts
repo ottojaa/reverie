@@ -122,6 +122,38 @@ describeDb('image call', () => {
         });
     });
 
+    it('sends no EXIF or video fact to Claude: the request holds the re-encoded pixels, the OCR text and the instructions only', async () => {
+        const { id, document, ocrResult } = await seedImage(fixtureOcr());
+
+        await db
+            .insertInto('photo_metadata')
+            .values({
+                document_id: id,
+                iso: 31337,
+                f_number: 7.77,
+                focal_length: 424242,
+                flash_fired: true,
+                orientation: 8,
+                taken_at_offset: '+05:45',
+                pixel_width: 6789,
+                pixel_height: 4321,
+            })
+            .execute();
+        await db.insertInto('video_metadata').values({ document_id: id, video_codec: 'sentinel-codec', bitrate: 987654321 }).execute();
+        await processImageUnderstanding(document, ocrResult, 'screenshot');
+
+        const request = h.parse.mock.calls[0]![0];
+        // The picture is base64; every other part of the request is text, and that is what is searched.
+        const text = JSON.stringify(request, (key, value: unknown) => (key === 'data' ? '' : value));
+
+        for (const sentinel of ['31337', '7.77', '424242', '6789', '4321', '+05:45', 'sentinel-codec', '987654321']) expect(text).not.toContain(sentinel);
+
+        // The image is re-encoded by sharp, which drops every EXIF tag.
+        const sent = request.messages[0].content[0].source.data as string;
+
+        expect((await sharp(Buffer.from(sent, 'base64')).metadata()).exif).toBeUndefined();
+    });
+
     it('stores the app or source as metadata, as an entity and as the first tag', async () => {
         const { id, document, ocrResult } = await seedImage(fixtureOcr());
 

@@ -171,7 +171,12 @@ function toTiff(fixture: ExifFixture): Buffer {
 
     const header = Buffer.from([0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08]);
 
-    return Buffer.concat([header, encodeIfd(ifd0Tags, 8), ...(hasExif ? [encodeIfd(exifTags, exifOffset)] : []), ...(hasGps ? [encodeIfd(gpsTags, gpsOffset)] : [])]);
+    return Buffer.concat([
+        header,
+        encodeIfd(ifd0Tags, 8),
+        ...(hasExif ? [encodeIfd(exifTags, exifOffset)] : []),
+        ...(hasGps ? [encodeIfd(gpsTags, gpsOffset)] : []),
+    ]);
 }
 
 /** A small valid JPEG carrying the given EXIF tags; with no tags at all it has no EXIF segment. */

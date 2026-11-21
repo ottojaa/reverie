@@ -59,7 +59,7 @@ function enqueueOne(deps: BackfillDeps, job: EmbedJobKind | null, id: string): P
 
 /**
  * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, a read of the stored file's EXIF or video facts, or an image kind verdict from the current classifier, then queue the image call for screenshots and document images that lack it. Stateless apart from the cursor: a restart simply asks the database
- * again, and finished documents no longer match. Text, then images, then camera reads (each ends with a new verdict), then kinds, then image summaries; each stage ends when a page comes back empty.
+ * again, and finished documents no longer match. Text, then images, then media reads (EXIF of images, ffprobe of videos; an image's ends with a new verdict), then kinds, then image summaries; each stage ends when a page comes back empty.
  */
 export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillCursor): Promise<BackfillStep> {
     let models: ReadyModels;

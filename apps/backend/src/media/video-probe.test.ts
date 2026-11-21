@@ -39,14 +39,21 @@ describe('parseFfprobe: HEVC MOV with rotation and GPS', () => {
     const probe = parseFfprobe(load('hevc-mov-rotated-gps'));
 
     it('reads the HEVC profile, the 29.97 frame rate and the QuickTime container', () => {
-        expect(probe.video).toMatchObject({ container: 'mov', videoCodec: 'hevc', videoProfile: 'Main 10', pixelFormat: 'yuv420p10le', frameRate: 30000 / 1001, audioCodec: 'aac' });
+        expect(probe.video).toMatchObject({
+            container: 'mov',
+            videoCodec: 'hevc',
+            videoProfile: 'Main 10',
+            pixelFormat: 'yuv420p10le',
+            frameRate: 30000 / 1001,
+            audioCodec: 'aac',
+        });
     });
 
     it('flags HLG as HDR and keeps the colour fields', () => {
         expect(probe.video).toMatchObject({ isHdr: true, colorTransfer: 'arib-std-b67', colorPrimaries: 'bt2020', colorSpace: 'bt2020nc' });
     });
 
-    it('turns ffprobe\'s counter-clockwise display matrix (90) into the 270 degrees clockwise a player applies', () => {
+    it("turns ffprobe's counter-clockwise display matrix (90) into the 270 degrees clockwise a player applies", () => {
         expect(probe.video.rotation).toBe(270);
     });
 
@@ -83,7 +90,15 @@ describe('parseFfprobe: odd input', () => {
 
     it('reads the legacy clockwise rotate tag and normalises negative angles', () => {
         const rotated = (tags: Record<string, string>, matrix?: number) =>
-            parseFfprobe({ streams: [{ codec_type: 'video', tags, ...(matrix === undefined ? {} : { side_data_list: [{ side_data_type: 'Display Matrix', rotation: matrix }] }) }] }).video.rotation;
+            parseFfprobe({
+                streams: [
+                    {
+                        codec_type: 'video',
+                        tags,
+                        ...(matrix === undefined ? {} : { side_data_list: [{ side_data_type: 'Display Matrix', rotation: matrix }] }),
+                    },
+                ],
+            }).video.rotation;
 
         expect(rotated({ rotate: '90' })).toBe(90);
         expect(rotated({}, -90)).toBe(90);
