@@ -30,8 +30,8 @@ the real library when search starts using the vectors.
 The home server's NVIDIA driver is 535 (CUDA 12.2). PyPI's default Linux torch wheel is built for CUDA 13.x, which that
 driver cannot run: `torch.cuda.is_available()` is False and the models quietly load on the CPU. So `requirements.txt`
 installs `torch==2.14.1+cu126` from PyTorch's CUDA 12.6 index on Linux x86_64 (the newest torch with a CUDA 12.x Linux
-wheel; cu129 stops at 2.13.0). CUDA 12.x wheels run on any driver >= 525. macOS and arm64 Linux get the plain PyPI wheel
-(no CUDA 12 build there; dev and the tests run on the CPU).
+wheel; cu129 stops at 2.13.0). CUDA 12.x wheels run on any driver >= 525. macOS and arm64 Linux get PyPI's own 2.14.1
+(dev and the tests run on the CPU; arm64 Linux is not a deploy target).
 
 - The Docker build runs `python -m app.runtime`, which fails the build unless `torch.version.cuda` starts with `12` on
   Linux x86_64. It needs no GPU.
