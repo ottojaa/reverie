@@ -13,7 +13,7 @@ import torch
 from PIL import Image, UnidentifiedImageError
 from transformers import AutoModel, AutoProcessor, AutoTokenizer
 
-from .specs import ImageSpec, TextSpec
+from .specs import TEXT_BATCH_SIZE, ImageSpec, TextSpec
 
 
 class ImageDecodeError(ValueError):
@@ -40,10 +40,6 @@ class ImageEmbedder(Protocol):
     def embed_images(self, images: Sequence[bytes]) -> list[list[float]]: ...
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]: ...
-
-
-def pick_device() -> str:
-    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def _dtype(device: str) -> torch.dtype:
@@ -76,8 +72,16 @@ class TransformersTextEmbedder:
         self.model = AutoModel.from_pretrained(spec.name, revision=spec.revision, dtype=_dtype(device)).to(device).eval()
         self.dimensions = int(self.model.config.hidden_size)
 
-    @torch.inference_mode()
     def embed(self, texts: Sequence[str], role: str) -> list[list[float]]:
+        # One request may carry up to 64 texts; forward passes stay at TEXT_BATCH_SIZE so peak activation memory
+        # stays inside the VRAM budget in the README.
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), TEXT_BATCH_SIZE):
+            vectors.extend(self._embed_batch(texts[start : start + TEXT_BATCH_SIZE], role))
+        return vectors
+
+    @torch.inference_mode()
+    def _embed_batch(self, texts: Sequence[str], role: str) -> list[list[float]]:
         prefix = self.spec.query_prefix if role == "query" else self.spec.passage_prefix
         batch = self.tokenizer(
             [prefix + text for text in texts],
