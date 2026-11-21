@@ -63,6 +63,12 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        // Media3 calls android.text.TextUtils from its pure-Kotlin/Java helpers (e.g. MimeTypes);
+        // let the JVM unit-test stubs return defaults instead of throwing "not mocked".
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

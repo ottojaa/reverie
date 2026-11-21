@@ -1,6 +1,9 @@
 package com.reverie.app.ui.screens.viewer.viewers
 
+import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Timeline
+import androidx.media3.common.TrackGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.LoadControl
@@ -8,6 +11,7 @@ import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.source.MediaSource.MediaPeriodId
 import androidx.media3.exoplayer.source.TrackGroupArray
 import androidx.media3.exoplayer.trackselection.ExoTrackSelection
+import androidx.media3.exoplayer.trackselection.FixedTrackSelection
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,13 +29,18 @@ class VideoLoadControlTest {
         androidx.media3.common.C.TIME_UNSET,
     )
 
+    private fun selectionOf(mimeType: String): ExoTrackSelection =
+        FixedTrackSelection(TrackGroup(Format.Builder().setSampleMimeType(mimeType).build()), 0)
+
     /** Fills the player's allocator the way a downloading high-bitrate file does. */
     private fun bufferedBytesWhenLoadingStops(loadControl: DefaultLoadControl): Int {
         loadControl.onPrepared(PlayerId.UNSET)
+        // A video and an audio track, like a phone recording: this is what makes ExoPlayer's own
+        // default byte target come out at ~144 MB (no tracks would give it its 13 MB floor).
         loadControl.onTracksSelected(
             parameters(0),
             TrackGroupArray.EMPTY,
-            emptyArray<ExoTrackSelection?>(),
+            arrayOf(selectionOf(MimeTypes.VIDEO_H265), selectionOf(MimeTypes.AUDIO_AAC)),
         )
         val allocator = loadControl.allocator
         val held = ArrayList<Any>()
