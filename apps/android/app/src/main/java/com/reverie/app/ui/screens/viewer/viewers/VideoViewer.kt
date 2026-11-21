@@ -6,31 +6,42 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.reverie.app.data.repository.SignedUrls
 import com.reverie.app.di.AuthedOkHttpEntryPoint
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.launch
 
 // Start/resume playback once this little is buffered. The DefaultLoadControl default (2500ms) read
 // as "pressed play, nothing happens" on WAN links — the first frame and play-start need far less
@@ -50,6 +61,22 @@ internal const val MAX_BUFFER_BYTES = 32 * 1024 * 1024
 // we leave their position alone. Generous enough to cover keyframe-snap on the initial seek, tight
 // enough that any real scrub lands outside it.
 private const val REWIND_TOLERANCE_MS = 900L
+
+// Signing again and reloading is tried this many times in a row when the stream's token is refused;
+// a successful frame resets the count. Past it we play the original instead of looping on a dead URL.
+private const val MAX_TOKEN_REFRESHES = 2
+
+private fun toStreamItem(hlsUrl: String): MediaItem =
+    MediaItem.Builder().setUri(hlsUrl).setMimeType(MimeTypes.APPLICATION_M3U8).build()
+
+/** Which source the player is on, and how often the stream's token was just refused. Not UI state. */
+private class StreamState {
+    var onOriginal = false
+    var refreshes = 0
+
+    // The original's URL from the latest signing; the composable's own fileUrl is as old as the page.
+    var freshFileUrl: String? = null
+}
 
 /**
  * The load control for the viewer's players: the default buffer durations, but with the byte cap
@@ -84,6 +111,12 @@ internal fun buildVideoLoadControl(): DefaultLoadControl =
 @Composable
 fun VideoViewer(
     fileUrl: String?,
+    // The HLS master playlist signed with [fileUrl]. When present the video streams its renditions
+    // (adaptive, with a quality choice); null — or a stream that fails — plays [fileUrl], the original.
+    hlsUrl: String? = null,
+    // Signs the URLs again after the stream's token was refused (403/410), so playback that outlives
+    // the token resumes in place instead of dropping to the original.
+    refreshSignedUrls: suspend () -> SignedUrls? = { null },
     modifier: Modifier = Modifier,
     // The ExoPlayer lives with this composable, so composing it early lets the media fetch/buffer
     // run through the open dive. The PlayerView surface only attaches while this is true — flipped
@@ -126,6 +159,16 @@ fun VideoViewer(
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
     val currentOnFirstFrame by rememberUpdatedState(onFirstFrameRendered)
     val currentPosterSeekMs by rememberUpdatedState(posterSeekMs)
+    val currentFileUrl by rememberUpdatedState(fileUrl)
+    val currentRefresh by rememberUpdatedState(refreshSignedUrls)
+    val scope = rememberCoroutineScope()
+    val stream = remember { StreamState() }
+
+    // The ladder's rungs and the viewer's choice (null = Auto), mirrored from the player's tracks.
+    var qualityLevels by remember { mutableStateOf<List<VideoQualityLevel>>(emptyList()) }
+    var pinnedQuality by remember { mutableStateOf<VideoQualityLevel?>(null) }
+    var playingQuality by remember { mutableStateOf<String?>(null) }
+    var qualityMenuOpen by remember { mutableStateOf(false) }
 
     // What PlayerView's controls drive. Wraps the ExoPlayer so we can intercept the user's FIRST
     // play and rewind to the start (see posterSeekMs) — but only while still parked at the poster
@@ -150,7 +193,8 @@ fun VideoViewer(
     // on first composition fileUrl is null. Load the media when it lands. Key on the path
     // (minus the ?e/?s signature) so a signature rotation from a realtime refresh or a
     // rename doesn't reset playback mid-watch.
-    val urlKey = fileUrl?.substringBefore('?')
+    // The HLS URL's token rotates the same way, so key on the set instead of the whole URL.
+    val urlKey = hlsUrl?.let(::toHlsSetKey) ?: fileUrl?.substringBefore('?')
     LaunchedEffect(urlKey, active) {
         if (fileUrl == null) return@LaunchedEffect
         if (!active) {
@@ -159,7 +203,10 @@ fun VideoViewer(
             return@LaunchedEffect
         }
         controllablePlayer.rearm()
-        player.setMediaItem(MediaItem.fromUri(fileUrl))
+        stream.onOriginal = hlsUrl == null
+        stream.refreshes = 0
+        stream.freshFileUrl = null
+        player.setMediaItem(hlsUrl?.let(::toStreamItem) ?: MediaItem.fromUri(fileUrl))
         player.prepare()
         player.playWhenReady = false
         // Park the first frame at the poster offset so the crossfade reveals a matching frame; the
@@ -170,7 +217,48 @@ fun VideoViewer(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
-            override fun onRenderedFirstFrame() { currentOnFirstFrame() }
+            override fun onRenderedFirstFrame() {
+                stream.refreshes = 0
+                currentOnFirstFrame()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) = syncQuality(tracks)
+
+            override fun onTrackSelectionParametersChanged(parameters: androidx.media3.common.TrackSelectionParameters) =
+                syncQuality(player.currentTracks)
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (stream.onOriginal) return
+                val position = player.currentPosition
+                val canRefresh = isTokenRefusal(error) && stream.refreshes < MAX_TOKEN_REFRESHES
+                if (!canRefresh) return fallBackToOriginal(stream.freshFileUrl ?: currentFileUrl, position)
+                stream.refreshes += 1
+                scope.launch {
+                    val fresh = currentRefresh()
+                    fresh?.let { stream.freshFileUrl = it.fileUrl }
+                    val freshHls = fresh?.hlsUrl ?: return@launch fallBackToOriginal(stream.freshFileUrl ?: currentFileUrl, position)
+                    player.setMediaItem(toStreamItem(freshHls), position)
+                    player.prepare()
+                }
+            }
+
+            private fun fallBackToOriginal(url: String?, position: Long) {
+                stream.onOriginal = true
+                url ?: return
+                player.setMediaItem(MediaItem.fromUri(url), position)
+                player.prepare()
+            }
+
+            private fun syncQuality(tracks: Tracks) {
+                val levels = toQualityLevels(tracks)
+                val override = player.trackSelectionParameters.overrides.values
+                    .firstOrNull { it.type == C.TRACK_TYPE_VIDEO }
+                qualityLevels = levels
+                playingQuality = toPlayingLabel(tracks)
+                pinnedQuality = override?.let { o ->
+                    levels.firstOrNull { l -> tracks.groups.getOrNull(l.groupIndex)?.mediaTrackGroup == o.mediaTrackGroup && l.trackIndex == o.trackIndices.firstOrNull() }
+                }
+            }
         }
         player.addListener(listener)
         onDispose {
@@ -237,6 +325,30 @@ fun VideoViewer(
                 },
                 update = { view -> view.setFullscreenButtonState(fullscreen) },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // Over the video with Media3's own controls (and while its menu is open, so the controls'
+        // auto-hide can't pull the menu away mid-choice). Only a stream with more than one rung has
+        // anything to choose.
+        if (mountSurface && qualityLevels.size > 1 && (controlsVisible || qualityMenuOpen)) {
+            QualityMenuButton(
+                levels = qualityLevels,
+                pinned = pinnedQuality,
+                playingLabel = playingQuality,
+                expanded = qualityMenuOpen,
+                onExpandedChange = { qualityMenuOpen = it },
+                onSelect = { level ->
+                    qualityMenuOpen = false
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                        if (level == null) {
+                            clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                            return@apply
+                        }
+                        val group = player.currentTracks.groups[level.groupIndex].mediaTrackGroup
+                        setOverrideForType(TrackSelectionOverride(group, level.trackIndex))
+                    }.build()
+                },
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
             )
         }
     }

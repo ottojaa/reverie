@@ -36,6 +36,7 @@ import { loadOpenDocument } from '../../services/document-access';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
 import { excludePrivateDocuments, excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
+import { buildHlsMasterUrl } from '../../services/hls-url';
 import { getStorageService } from '../../services/storage.service';
 import { getFileCategory } from '../../services/storage.service';
 import { getUploadService, type UploadedFile } from '../../services/upload.service';
@@ -1183,6 +1184,7 @@ async function serializeDocument(
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
+        hls_url: buildHlsMasterUrl(doc),
         thumbnail_urls: thumbnailUrls,
     };
 

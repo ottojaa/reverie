@@ -95,12 +95,12 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
 
 ### Media handling
 
-| Capability                               | Immich      | Reverie                                       | Plan                                               |
-| ---------------------------------------- | ----------- | --------------------------------------------- | -------------------------------------------------- |
-| Video transcoding + adaptive streaming   | ✅ HW-accel | 🚧 HLS ladder pipeline shipped; no player yet | 🛠️ "personal Netflix" — **ahead of photo editing** |
-| Rich EXIF capture (camera/lens/exposure) | ✅          | ✅ captured + shown                           | ✅ done                                            |
-| RAW / Live Photos / 360°                 | ✅          | ❌                                            | 🧊                                                 |
-| EXIF editing                             | ✅          | ❌                                            | 🧊                                                 |
+| Capability                               | Immich      | Reverie                                               | Plan                                               |
+| ---------------------------------------- | ----------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Video transcoding + adaptive streaming   | ✅ HW-accel | ✅ HLS ladder, served signed, played on web + Android | 🛠️ "personal Netflix" — **ahead of photo editing** |
+| Rich EXIF capture (camera/lens/exposure) | ✅          | ✅ captured + shown                                   | ✅ done                                            |
+| RAW / Live Photos / 360°                 | ✅          | ❌                                                    | 🧊                                                 |
+| EXIF editing                             | ✅          | ❌                                                    | 🧊                                                 |
 
 ### Platform & integrations
 
@@ -167,8 +167,11 @@ storage · per-folder locks for private folders · document-date-vs-photo-date d
   view groups them (no chains), suggests the copy to keep and moves the rest to the Trash, never deleting.
 - 🚧 **Video transcoding + adaptive streaming** — the "personal Netflix" use case, prioritized ahead of
   photo editing. Pipeline shipped: every video gets an H.264 HLS ladder (1080/720/480, fMP4, HDR tone
-  mapped to SDR) from a `transcode` worker, NVENC when the card has it, with a resumable backfill. Still
-  to do: serve it (routes, nginx) and play it in web and Android.
+  mapped to SDR) from a `transcode` worker, NVENC when the card has it, with a resumable backfill. The
+  ladder is served with a signed path token (`/files/hls/{exp}/{sig}/{hash}/…`, one token for the whole
+  set, nginx `secure_link`, the same access rules and expiry as file URLs) and the web app (hls.js, native
+  HLS where the browser has it) and Android (Media3) play it adaptively with a manual quality choice, the
+  original when no ladder exists. Still to do: tune the ladder against real playback on the server.
 - **Hybrid AI** — OCR, layout and embeddings run locally. Documents and screenshots get one Claude
   **Haiku** call each (summary, entities, tags). **Personal photos and locked items never go to
   Anthropic.**

@@ -1,5 +1,5 @@
 import { sql, type Kysely } from 'kysely';
-import type { Database } from '../db/schema';
+import type { Database, JobStatus } from '../db/schema';
 import type { LlmMetadata } from '../llm/types';
 
 /** Row builders for the integration tests. Each returns the new id. */
@@ -14,6 +14,8 @@ export interface SeedDocument {
     deleted?: boolean;
     /** SHA-256 stored as file_hash; random when not given. */
     hash?: string;
+    /** The HLS ladder's state; the column's own default ('skipped') when not given. */
+    transcodeStatus?: JobStatus;
     ocrText?: string;
     summary?: string;
     entities?: string[];
@@ -105,6 +107,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             has_meaningful_text: doc.ocrText !== undefined,
             search_vector: null,
             deleted_at: doc.deleted ? new Date() : null,
+            ...(doc.transcodeStatus !== undefined && { transcode_status: doc.transcodeStatus }),
             ...(doc.cameraReadAt !== undefined && { camera_read_at: doc.cameraReadAt }),
             ...(doc.mediaReadAt !== undefined && { media_read_at: doc.mediaReadAt }),
         })
