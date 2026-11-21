@@ -2,7 +2,7 @@ import type { ServerSetting as ServerSettingItem } from '@reverie/shared';
 import { NotFoundError, ValidationError } from '@reverie/shared';
 import type { ServerSetting } from '../db/schema.js';
 import { isSettingKey, settingsRegistry, type SettingKey, type SettingValue } from './registry.js';
-import { applySettingRows, deleteSettingRow, fetchSettingRow, fetchSettingRows, upsertSettingRow } from './settings.store.js';
+import { deleteSettingRow, fetchSettingRow, fetchSettingRows, upsertSettingRow } from './settings.store.js';
 
 function assertSettingKey(key: string): asserts key is SettingKey {
     if (!isSettingKey(key)) throw new NotFoundError('Setting ' + key);
@@ -46,14 +46,6 @@ export async function getSetting<K extends SettingKey>(key: K): Promise<SettingV
     return stored ?? settingsRegistry[key].getDefault();
 }
 
-/** Current values of several settings from one read: the admin override of each, else its default. */
-export async function getSettings<K extends SettingKey>(keys: readonly K[]): Promise<{ [P in K]: SettingValue<P> }> {
-    const rows = new Map((await fetchSettingRows()).map((row) => [row.key, row]));
-    const entries = keys.map((key) => [key, toStoredValue(key, rows.get(key)) ?? settingsRegistry[key].getDefault()] as const);
-
-    return Object.fromEntries(entries) as { [P in K]: SettingValue<P> };
-}
-
 export async function listSettings(): Promise<ServerSettingItem[]> {
     const rows = new Map((await fetchSettingRows()).map((row) => [row.key, row]));
 
@@ -70,30 +62,6 @@ export async function setSetting(key: string, value: unknown, updatedBy: string)
     await upsertSettingRow(key, parsed.data, updatedBy);
 
     return toItem(key, await fetchSettingRow(key));
-}
-
-/**
- * Sets and resets several settings at once, each value checked by its setting's schema first: nothing is written when
- * one is refused. A key in both lists is refused too, since the result would depend on the order.
- */
-export async function applySettings(changes: { set: Record<string, unknown>; reset: string[] }, updatedBy: string): Promise<ServerSettingItem[]> {
-    const upserts = Object.entries(changes.set).map(([key, value]) => {
-        assertSettingKey(key);
-
-        const parsed = settingsRegistry[key].schema.safeParse(value);
-
-        if (!parsed.success) throw new ValidationError(key + ': ' + parsed.error.issues.map((issue) => issue.message).join('; '));
-
-        return { key, value: parsed.data };
-    });
-
-    for (const key of changes.reset) assertSettingKey(key);
-
-    if (changes.reset.some((key) => key in changes.set)) throw new ValidationError('A setting cannot be set and reset in one change');
-
-    await applySettingRows(upserts, changes.reset, updatedBy);
-
-    return listSettings();
 }
 
 export async function resetSetting(key: string): Promise<ServerSettingItem> {

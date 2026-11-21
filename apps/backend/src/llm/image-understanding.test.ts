@@ -13,10 +13,7 @@ vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js
 vi.mock('./anthropic.client', async (importOriginal) => ({
     ...(await importOriginal<typeof import('./anthropic.client')>()),
     getAnthropicClient: () => ({ messages: { parse: h.parse } }),
-}));
-// The Anthropic provider is usable only with a key; the client itself is the stub above.
-vi.mock('../config/env', async (importOriginal) => ({
-    env: { ...(await importOriginal<typeof import('../config/env')>()).env, ANTHROPIC_API_KEY: 'test-key', LLM_ENABLED: true },
+    isLlmAvailable: () => true,
 }));
 vi.mock('../services/storage.service', () => ({
     assertFitsInMemory: () => undefined,
@@ -31,7 +28,7 @@ import { dbProxy } from '../testing/db-proxy.js';
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
-import { IMAGE_LONG_EDGE_PX, prepareImageForModel } from './image-call';
+import { IMAGE_LONG_EDGE_PX, prepareImageForClaude } from './image-call';
 import { processImageUnderstanding, toCategoryAfterLook } from './image-understanding';
 import { LlmImageUnderstandingSchema } from './llm-response.schema';
 import { markLlmFailed } from './llm-store';
@@ -280,7 +277,7 @@ describeDb('image call', () => {
 
         expect((await sharp(big).metadata()).exif).toBeDefined();
 
-        const sent = await prepareImageForModel(big);
+        const sent = await prepareImageForClaude(big);
         const meta = await sharp(Buffer.from(sent.base64, 'base64')).metadata();
 
         expect(Math.max(sent.width, sent.height)).toBe(IMAGE_LONG_EDGE_PX);
@@ -289,7 +286,7 @@ describeDb('image call', () => {
     });
 
     it('does not enlarge a small image', async () => {
-        expect(await prepareImageForModel(SCREENSHOT)).toMatchObject({ width: 1280, height: 720 });
+        expect(await prepareImageForClaude(SCREENSHOT)).toMatchObject({ width: 1280, height: 720 });
     });
 
     describe('when a run fails', () => {

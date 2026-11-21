@@ -1,5 +1,5 @@
 /**
- * Screenshots and document images: one call that sees the picture together with its OCR text (which may be
+ * Screenshots and document images: one Claude call that sees the picture together with its OCR text (which may be
  * empty), then the same storage steps as the text summary. The caller has checked privacy, the trash and
  * decideImageLook; this module never runs for a photo.
  */
@@ -12,13 +12,13 @@ import { KIND_TO_CATEGORY } from '../image-kind/kinds';
 import { rebuildSearchVector } from '../search/search-indexer';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { buildSkipMetadata } from './eligibility';
+import { isLlmAvailable } from './anthropic.client';
 import { groundEntities } from './entity-grounding';
-import { prepareImageForModel, understandImage } from './image-call';
+import { prepareImageForClaude, understandImage } from './image-call';
 import type { LookKind } from './image-look';
 import { buildImagePrompt } from './image-prompt';
 import type { LlmEntity } from './llm-response.schema';
 import { upsertLlmResult, updateSearchIndex } from './llm-store';
-import { isCapabilityAvailable } from './provider-config';
 import { sanitizeTag } from './tag-sanitizer';
 import { buildSpellingCorrector, correctText, type SpellingCorrector } from './spelling-corrector';
 import type { DocumentLlmResult, EnhancedMetadata } from './types';
@@ -94,12 +94,12 @@ async function recordSkip(document: Document, ocrResult: OcrResult | null | unde
 
 /** Runs the call for one image and stores the result: llm_results, category, date, tags, search text, embedding. */
 export async function processImageUnderstanding(document: Document, ocrResult: OcrResult | null | undefined, look: LookKind): Promise<DocumentLlmResult> {
-    // With the image provider unavailable (no API key, or a local server not set up) nothing is written over an existing summary.
-    if (!(await isCapabilityAvailable('image'))) return recordSkip(document, ocrResult);
+    // Without an API key nothing is written over an existing summary.
+    if (!isLlmAvailable()) return recordSkip(document, ocrResult);
 
     assertFitsInMemory(document.size_bytes, 'describe');
 
-    const image = await prepareImageForModel(await getStorageService().getFile(document.file_path));
+    const image = await prepareImageForClaude(await getStorageService().getFile(document.file_path));
     const prompt = buildImagePrompt({ filename: document.original_filename, kind: look, ocrResult: ocrResult ?? null });
     const { result, tokenCount } = await understandImage(image, prompt);
     const { entities: checked, fix } = checkAgainstOcr(result.entities, ocrResult);
@@ -136,5 +136,5 @@ export async function processImageUnderstanding(document: Document, ocrResult: O
     // The summary is part of the embedded text, so embed again now that it exists.
     await enqueueTextEmbedding(document.id);
 
-    return { success: true, summary, enhancedMetadata: metadata, tokenCount: tokenCount ?? undefined };
+    return { success: true, summary, enhancedMetadata: metadata, tokenCount };
 }

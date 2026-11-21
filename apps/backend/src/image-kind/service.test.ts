@@ -292,33 +292,6 @@ describeDb('image kind', () => {
             expect((await loadDocument(withoutVision)).llm_status).toBe('skipped');
         });
 
-        it('follows the admin setting, not the env default: setting on queues a text-less image, setting off skips it', async () => {
-            const withSetting = await seedImage({ weights: { diagram: 0.5, photo: 0.1 }, ocrDone: true });
-            const settingOff = await seedImage({ weights: { diagram: 0.5, photo: 0.1 }, ocrDone: true });
-
-            const setSwitch = async (value: boolean) => {
-                await db.deleteFrom('server_settings').where('key', '=', 'llm.image.enabled').execute();
-                await db
-                    .insertInto('server_settings')
-                    .values({ key: 'llm.image.enabled', value: JSON.stringify(value), updated_at: new Date(), updated_by: null })
-                    .execute();
-            };
-
-            try {
-                VISION.LLM_VISION_ENABLED = false;
-                await setSwitch(true);
-                await settleImageKind(deps, withSetting);
-                VISION.LLM_VISION_ENABLED = true;
-                await setSwitch(false);
-                await settleImageKind(deps, settingOff);
-            } finally {
-                await db.deleteFrom('server_settings').where('key', '=', 'llm.image.enabled').execute();
-            }
-
-            expect(queued.map((job) => job.documentId)).toEqual([withSetting]);
-            expect((await loadDocument(settingOff)).llm_status).toBe('skipped');
-        });
-
         it('queues a screenshot or document whose OCR text is poor, because the image call reads the pixels', async () => {
             VISION.LLM_VISION_ENABLED = true;
 

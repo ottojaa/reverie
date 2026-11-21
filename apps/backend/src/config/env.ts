@@ -85,11 +85,6 @@ const envSchema = z.object({
     // reasoning; raise it if spelling of proper nouns turns out worse than before.
     ANTHROPIC_SUMMARY_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
 
-    // Optional bearer token for a local OpenAI-compatible server (Ollama, llama.cpp, vLLM, LM Studio) that asks for one. The server's URL and
-    // model are admin settings; the key stays here, never in the database. A local model is slow, so its requests get a long timeout.
-    LOCAL_LLM_API_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().optional()),
-    LOCAL_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
-
     // In-app agent: the reverie-agent container (Claude Code, signed in with the admin's own plan).
     // Unset AGENT_URL = no agent configured; the UI then shows it as unavailable.
     AGENT_URL: z.string().url().optional(),

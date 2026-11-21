@@ -18,10 +18,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
     },
 }));
 
-import { AnthropicProvider } from './anthropic.provider';
-
-const summarizeDocument = (prompt: Parameters<AnthropicProvider['summarize']>[0], options?: Parameters<AnthropicProvider['summarize']>[1]) =>
-    new AnthropicProvider('claude-haiku-5-5').summarize(prompt, options);
+import { summarizeDocument } from './anthropic.client';
 
 const PROMPT = { system: 'sys', user: 'doc text', maxTokens: 2000 };
 const USAGE = { input_tokens: 10, output_tokens: 5 };

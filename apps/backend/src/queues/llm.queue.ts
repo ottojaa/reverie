@@ -23,8 +23,7 @@ export interface LlmJobResult {
         skipReason?: LlmSkipReason | undefined;
         [key: string]: unknown;
     };
-    /** Null when the provider (a local server) reported no token counts. */
-    tokenCount: number | null;
+    tokenCount: number;
     skipped?: boolean | undefined;
     skipReason?: LlmSkipReason | undefined;
 }

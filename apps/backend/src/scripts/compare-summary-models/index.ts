@@ -69,7 +69,6 @@ async function main(): Promise<void> {
     // Import after the env is set so env.ts (which validates + can exit) loads lazily.
     const { env } = await import('../../config/env.js');
     const { analyzeOcrText } = await import('../../llm/text-analysis.js');
-    const { AnthropicProvider } = await import('../../llm/anthropic.provider.js');
 
     if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set: export it or put it in .env');
 
@@ -85,19 +84,9 @@ async function main(): Promise<void> {
             if (spent > argv['max-cost']) throw new Error('Stopped: running cost passed --max-cost: ' + spent.toFixed(4));
 
             try {
-                const analysis = await analyzeOcrText(
-                    { original_filename: doc.filename },
-                    { raw_text: doc.text, confidence_score: null },
-                    variant,
-                    new AnthropicProvider(variant.model),
-                );
+                const analysis = await analyzeOcrText({ original_filename: doc.filename }, { raw_text: doc.text, confidence_score: null }, variant);
                 const entityNames = analysis.entities.map((entity) => entity.canonical_name);
                 const texts = [analysis.title ?? '', analysis.summary, ...analysis.topics, ...analysis.tags, ...entityNames];
-
-                const { usage } = analysis.call;
-
-                // This script compares Claude models: the Anthropic provider always reports usage.
-                if (!usage) throw new Error('Comparison needs token usage from the provider');
 
                 spent += analysis.call.costUsd ?? 0;
                 runs.push({
@@ -105,8 +94,8 @@ async function main(): Promise<void> {
                     outcomes: doc.properNouns.map((noun) => ({ noun, outcome: scoreProperNoun(noun, texts) })),
                     entityNames,
                     costUsd: analysis.call.costUsd,
-                    inputTokens: usage.input_tokens,
-                    outputTokens: usage.output_tokens,
+                    inputTokens: analysis.call.usage.input_tokens,
+                    outputTokens: analysis.call.usage.output_tokens,
                     stopReason: analysis.call.stopReason,
                 });
             } catch (error) {

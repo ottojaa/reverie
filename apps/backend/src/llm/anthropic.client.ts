@@ -1,12 +1,18 @@
 /**
- * Anthropic (Claude) client and the helpers its calls share: the SDK singleton, effort rules, usage and the cost log line.
- * The calls themselves are in anthropic.provider.ts.
+ * Anthropic (Claude) Client Wrapper
+ *
+ * Provides typed methods for calling the Anthropic Messages API for document
+ * processing. This is the single integration seam for all LLM features:
+ * - Per-document summarization / metadata extraction (Claude Haiku 5.5)
+ * - The image call (screenshots and documents) lives in image-call.ts and shares this client
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { env } from '../config/env';
-import { estimateCostUsd } from './llm-cost';
-import type { LlmCallUsage, LlmEffort } from './provider';
+import { estimateCostUsd, type LlmUsage } from './llm-cost';
+import { LlmAnalysisSchema, type LlmAnalysis } from './llm-response.schema';
+import type { LlmPrompt } from './types';
 
 let anthropicClient: Anthropic | null = null;
 
@@ -27,8 +33,39 @@ export function getAnthropicClient(): Anthropic {
     return anthropicClient;
 }
 
+/**
+ * Check if the LLM (Anthropic) is available.
+ */
+export function isLlmAvailable(): boolean {
+    return !!env.ANTHROPIC_API_KEY && env.LLM_ENABLED;
+}
+
+/**
+ * Check if vision processing is available.
+ */
+export function isVisionAvailable(): boolean {
+    return isLlmAvailable() && env.LLM_VISION_ENABLED;
+}
+
 export function totalTokens(usage: Anthropic.Usage): number {
     return usage.input_tokens + usage.output_tokens;
+}
+
+export type LlmEffort = 'low' | 'medium' | 'high';
+
+export interface LlmCallOptions {
+    /** Overrides the configured model (used by the model-comparison harness). */
+    model?: string;
+    /** Overrides the configured thinking effort. */
+    effort?: LlmEffort;
+}
+
+export interface LlmCallUsage {
+    model: string;
+    usage: LlmUsage;
+    stopReason: string | null;
+    /** Null when the model has no known price. */
+    costUsd: number | null;
 }
 
 /**
@@ -61,10 +98,74 @@ export function logCallCost(kind: string, call: LlmCallUsage, effort: LlmEffort 
         JSON.stringify({
             model: call.model,
             effort: effort ?? null,
-            inputTokens: call.usage?.input_tokens ?? null,
-            outputTokens: call.usage?.output_tokens ?? null,
+            inputTokens: call.usage.input_tokens,
+            outputTokens: call.usage.output_tokens,
             stopReason: call.stopReason,
             costUsd: call.costUsd,
         }),
     );
+}
+
+/**
+ * Call Claude for document text summarization / metadata extraction.
+ *
+ * Uses structured outputs: the response is constrained to LlmAnalysisSchema and
+ * validated by the SDK (`messages.parse`), so no tolerant text parsing is
+ * needed. No sampling parameters are sent (API version 2026-10-21 rejects them).
+ * On an unparseable result (or truncation) we retry once with identical params.
+ */
+export async function summarizeDocument(
+    prompt: LlmPrompt,
+    options: LlmCallOptions = {},
+): Promise<{ result: LlmAnalysis; tokenCount: number; call: LlmCallUsage }> {
+    const client = getAnthropicClient();
+    const model = options.model ?? env.ANTHROPIC_SUMMARY_MODEL;
+    const effort = isEffortCapable(model) ? (options.effort ?? env.ANTHROPIC_SUMMARY_EFFORT) : undefined;
+    const outputBudget = Math.max(256, Math.min(prompt.maxTokens, env.LLM_MAX_OUTPUT_TOKENS));
+    const maxOutputTokens = effort ? outputBudget + THINKING_HEADROOM_TOKENS : outputBudget;
+    const retries = 1;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const requestStart = Date.now();
+
+        try {
+            const message = await client.messages.parse({
+                model,
+                max_tokens: maxOutputTokens,
+                system: prompt.system,
+                messages: [{ role: 'user', content: prompt.user }],
+                output_config: { format: zodOutputFormat(LlmAnalysisSchema), ...(effort && { effort }) },
+            });
+            const call = toCallUsage(model, message);
+
+            logCallCost('text_summary', call, effort);
+
+            if (process.env.NODE_ENV !== 'production') {
+                console.info(
+                    '[Anthropic] text_summary timings',
+                    JSON.stringify({
+                        model,
+                        attempt: attempt + 1,
+                        retries,
+                        requestMs: Date.now() - requestStart,
+                        promptChars: prompt.system.length + prompt.user.length,
+                        maxOutputTokens,
+                        stopReason: message.stop_reason,
+                        usage: message.usage,
+                    }),
+                );
+            }
+
+            if (message.parsed_output) {
+                return { result: message.parsed_output, tokenCount: totalTokens(message.usage), call };
+            }
+
+            lastError = new Error('Anthropic returned unparseable structured output: ' + (message.stop_reason ?? 'unknown'));
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error('Anthropic request failed');
+        }
+    }
+
+    throw lastError ?? new Error('Anthropic request failed');
 }
