@@ -186,6 +186,9 @@ describeDb('the tuning run', () => {
             expect(out).toMatch(/screenshot\s+3 seed\(s\)/);
             expect(out).toMatch(/document\s+3 seed\(s\)/);
             expect(out).toMatch(/receipt\s+0 seed\(s\)\s+\(fewer than 3/);
+            expect(out).toMatch(/document\s+bank_statement 3/);
+            expect(out).toContain('screenshot seeds found by filename: 3, by screen size only: 0');
+            expect(out).not.toContain('SECRET');
             expect(out).toContain('Flip bar:');
             expect(ml.imageTextCalls).toEqual([]);
         });

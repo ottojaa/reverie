@@ -15,8 +15,8 @@ export interface ComparisonRow {
 
 const VISUAL_CATEGORIES = ['photo', 'screenshot', 'graphic'];
 
-/** The categories of printed paper that must read as `document` and not as a till slip: statements, invoices, forms, letters. */
-export const PAPER_CATEGORIES = ['bank_statement', 'stock_statement', 'invoice', 'form', 'letter', 'certificate', 'contract'];
+/** The categories of printed paper that must read as `document` and not as a till slip: statements, invoices, forms, letters, reports. */
+export const PAPER_CATEGORIES = ['bank_statement', 'stock_statement', 'invoice', 'form', 'letter', 'certificate', 'contract', 'report'];
 
 /**
  * Whether the current category is one the verdict would stand for. A receipt is a till slip, so it agrees only with
