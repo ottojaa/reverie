@@ -2,7 +2,8 @@ import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { ModelRef } from '../embeddings/embedding.repository';
 import type { CameraFact, KindFacts, KindVerdict } from './classifier';
-import { KIND_CLASSIFIER_VERSION, type ImageKind } from './kinds';
+import { KIND_CLASSIFIER_VERSION } from './classifier-config';
+import type { ImageKind } from './kinds';
 
 export interface KindInputs {
     embedding: number[];
@@ -57,12 +58,10 @@ export async function loadKindInputs(db: Kysely<Database>, documentId: string): 
 
     if (isCoordinate(row.latitude) && isCoordinate(row.longitude)) camera.push('gps');
 
-    if (row.taken_at) camera.push('capture_date');
-
     return {
         embedding: JSON.parse(row.embedding) as number[],
         model: { model: row.model, version: row.model_version },
-        facts: { camera, width: row.width, height: row.height },
+        facts: { camera, captureDate: row.taken_at !== null, width: row.width, height: row.height },
     };
 }
 

@@ -33,14 +33,17 @@ describeDb('image kind comparison', () => {
         await db.deleteFrom('documents').execute();
     });
 
-    async function seedImage(name: string, options: { category: string | null; kind?: 'photo' | 'document'; text?: string; takenAt?: Date }) {
+    async function seedImage(
+        name: string,
+        options: { category: string | null; kind?: 'photo' | 'document'; text?: string; takenAt?: Date; cameraMake?: string },
+    ) {
         const id = await seedDocument(db, {
             userId,
             name,
             mime: 'image/jpeg',
             category: options.category,
             ...(options.text ? { ocrText: options.text } : {}),
-            ...(options.takenAt ? { photo: { takenAt: options.takenAt } } : {}),
+            ...(options.takenAt || options.cameraMake ? { photo: { takenAt: options.takenAt, cameraMake: options.cameraMake } } : {}),
         });
 
         if (!options.kind) return id;
@@ -58,7 +61,7 @@ describeDb('image kind comparison', () => {
             {
                 kind: options.kind,
                 scores: { photo: 0.2, screenshot: 0.1, document: 0.5, receipt: 0.1, diagram: 0.1, other: 0.1 },
-                signals: { camera: [], screenResolution: false, runnerUp: 'document', margin: 0.3, requiredMargin: 0.02 },
+                signals: { camera: [], captureDate: false, screenResolution: false, runnerUp: 'document', margin: 0.3, requiredMargin: 0.02 },
             },
             MODEL,
         );
@@ -76,7 +79,7 @@ describeDb('image kind comparison', () => {
 
     it('prints the report for the seeded library, including the two privacy lists', async () => {
         await seedImage('agrees.jpg', { category: 'photo', kind: 'photo' });
-        await seedImage('camera-paper.jpg', { category: 'photo', kind: 'document', takenAt: new Date('2025-06-01') });
+        await seedImage('camera-paper.jpg', { category: 'photo', kind: 'document', cameraMake: 'Apple' });
         await seedImage('letter-scan.jpg', { category: 'letter', kind: 'document', text: 'SECRET WORDS' });
         await seedImage('not-embedded-yet.jpg', { category: 'screenshot' });
         await seedDocument(db, { userId, name: 'report.pdf', ocrText: 'not an image' });
@@ -84,12 +87,21 @@ describeDb('image kind comparison', () => {
         const out = await report();
 
         expect(out).toContain('images: 4  with verdict: 3');
-        expect(out).toContain('PRIVACY 1: camera EXIF (capture date or GPS), no meaningful text, non-photo verdict: 1');
+        expect(out).toContain('PRIVACY 1: camera evidence (make, model, lens or GPS), no meaningful text, non-photo verdict: 1');
         expect(out).toContain('PRIVACY 2: currently categorised photo, non-photo verdict: 1');
         expect(out).toContain('camera-paper.jpg');
         expect(out).toContain('All disagreements (verdict vs current category): 1');
         expect(out).toContain('Images without a verdict: 1');
         expect(out).not.toContain('report.pdf');
+    });
+
+    it('does not count a lone capture date as camera evidence', async () => {
+        await seedImage('Screenshot_1.jpg', { category: 'screenshot', kind: 'document', takenAt: new Date('2025-06-01') });
+
+        const out = await report();
+
+        expect(out).toContain('PRIVACY 1: camera evidence (make, model, lens or GPS), no meaningful text, non-photo verdict: 0');
+        expect(out).toContain('Date only: 1 verdict(s)');
     });
 
     it('prints no image or OCR content', async () => {

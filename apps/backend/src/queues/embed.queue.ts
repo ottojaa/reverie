@@ -2,16 +2,22 @@ import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
-export const EMBED_JOBS = { TEXT: 'embed-text', IMAGE: 'embed-image', CLASSIFY: 'classify-image', BACKFILL: 'embed-backfill' } as const;
+export const EMBED_JOBS = {
+    TEXT: 'embed-text',
+    IMAGE: 'embed-image',
+    CLASSIFY: 'classify-image',
+    READ_CAMERA: 'read-camera',
+    BACKFILL: 'embed-backfill',
+} as const;
 
-export type EmbedJobKind = typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE | typeof EMBED_JOBS.CLASSIFY;
+export type EmbedJobKind = typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE | typeof EMBED_JOBS.CLASSIFY | typeof EMBED_JOBS.READ_CAMERA;
 
 export interface EmbedJobData {
     documentId: string;
 }
 
 export interface EmbedBackfillCursor {
-    stage: 'text' | 'image' | 'kind';
+    stage: 'text' | 'image' | 'camera' | 'kind';
     /** Last document id handled in this stage; null at the start of a stage. */
     after: string | null;
 }

@@ -1,6 +1,7 @@
 import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
+import { readDocumentCamera } from '../image-kind/camera-read';
 import { isPipelineBusy, runBackfillPage, type BackfillStep } from '../embeddings/backfill';
 import { embedDocumentImage, embedDocumentText, type EmbedDeps } from '../embeddings/embedding.service';
 import { isKindFlipActive, settleImageKind } from '../image-kind/service';
@@ -48,7 +49,7 @@ async function processEmbedJob(job: EmbedJob, ml: MlClient, token: string | unde
 }
 
 /**
- * One embed-text, embed-image or classify-image job. An image job ends by settling the image's kind: classify it and,
+ * One embed-text, embed-image, classify-image or read-camera job. An image job ends by settling the image's kind: classify it and,
  * with the flip on, set its category and queue its LLM job. A refusal from reverie-ml (an undecodable image) is final;
  * everything else retries.
  */
@@ -57,6 +58,8 @@ export async function runEmbedJob(deps: EmbedWorkerDeps, name: string, documentI
         if (name === EMBED_JOBS.TEXT) return await embedDocumentText(deps, documentId);
 
         if (name === EMBED_JOBS.CLASSIFY) return await deps.settleKind(documentId);
+
+        if (name === EMBED_JOBS.READ_CAMERA) return await readCameraAndSettle(deps, documentId);
 
         const outcome = await embedDocumentImage(deps, documentId);
 
@@ -69,6 +72,15 @@ export async function runEmbedJob(deps: EmbedWorkerDeps, name: string, documentI
 
         throw error;
     }
+}
+
+/** Fills the image's camera columns from its file, then classifies it again: the verdict now has the camera facts. */
+async function readCameraAndSettle(deps: EmbedWorkerDeps, documentId: string): Promise<unknown> {
+    const outcome = await readDocumentCamera(deps, documentId);
+
+    if (outcome === 'read' || outcome === 'no-file') await deps.settleKind(documentId);
+
+    return outcome;
 }
 
 /**

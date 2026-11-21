@@ -78,6 +78,8 @@ export interface DocumentsTable {
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05
     /** When the OCR worker finished storing the text flag and EXIF; null while it runs, and for images that predate the column. */
     ocr_facts_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+    /** When the camera EXIF (make, model, lens, GPS) was read from the stored file into photo_metadata; null until it was. */
+    camera_read_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
     search_vector: unknown | null; // tsvector type — unified search index
     /** When the document went to the trash; null while live. */
     deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;

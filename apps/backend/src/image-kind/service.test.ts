@@ -13,7 +13,8 @@ import { createFakeMl, IMAGE_DIMENSIONS, IMAGE_MODEL, type FakeMl } from '../tes
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
-import { IMAGE_KINDS, KIND_PROMPTS, type ImageKind } from './kinds';
+import { KIND_CLASSIFIER, listPrompts } from './classifier-config';
+import { IMAGE_KINDS, type ImageKind } from './kinds';
 import { clearPromptCache } from './prompt-cache';
 import { classifyDocumentImage, decideLlmHandoff, isKindFlipActive, settleImageKind, type KindDeps } from './service';
 import { loadStoredKind } from './kind.repository';
@@ -22,7 +23,7 @@ const MODEL = { model: IMAGE_MODEL.name, version: IMAGE_MODEL.revision };
 
 /** Each kind's prompts sit on one axis, so an image's weight on that axis is its score for the kind. */
 function promptVector(text: string): number[] {
-    const kind = IMAGE_KINDS.find((candidate) => KIND_PROMPTS[candidate].includes(text))!;
+    const kind = listPrompts(KIND_CLASSIFIER).find((entry) => entry.text === text)!.kind;
 
     return axes({ [kind]: 1 });
 }
@@ -73,6 +74,8 @@ describeDb('image kind', () => {
         category?: string | null;
         text?: boolean;
         photo?: { takenAt?: Date; latitude?: number; longitude?: number; make?: string; model?: string };
+        /** The image's camera columns have been read from its file (documents.camera_read_at). */
+        cameraRead?: boolean;
         /** The OCR worker has stored the text flag and EXIF. */
         ocrDone?: boolean;
         width?: number;
@@ -90,7 +93,13 @@ describeDb('image kind', () => {
 
         await db
             .updateTable('documents')
-            .set({ ocr_facts_at: options.ocrDone ? new Date() : null, llm_status: 'pending', width: options.width ?? null, height: options.height ?? null })
+            .set({
+                ocr_facts_at: options.ocrDone ? new Date() : null,
+                camera_read_at: options.cameraRead ? new Date() : null,
+                llm_status: 'pending',
+                width: options.width ?? null,
+                height: options.height ?? null,
+            })
             .where('id', '=', id)
             .execute();
 
@@ -132,7 +141,7 @@ describeDb('image kind', () => {
             const stored = await loadStoredKind(db, id);
 
             expect(stored?.kind).toBe(kind);
-            expect(stored?.promptVersion).toBe('v1');
+            expect(stored?.promptVersion).toBe(KIND_CLASSIFIER.version);
             expect(stored?.model).toEqual(MODEL);
             expect(Object.keys(stored!.scores).sort()).toEqual([...IMAGE_KINDS].sort());
         });
@@ -174,7 +183,7 @@ describeDb('image kind', () => {
             for (const id of ids) await classifyDocumentImage(deps, id);
 
             expect(ml.imageTextCalls).toHaveLength(1);
-            expect(ml.imageTextCalls[0]).toEqual(IMAGE_KINDS.flatMap((kind) => KIND_PROMPTS[kind]));
+            expect(ml.imageTextCalls[0]).toEqual(listPrompts(KIND_CLASSIFIER).map((entry) => entry.text));
             expect(ml.imageCalls).toBe(0);
             expect(ml.textCalls).toHaveLength(0);
         });
@@ -295,6 +304,24 @@ describeDb('image kind', () => {
             expect((await loadDocument(photo)).document_category).toBe('photo');
         });
 
+        it('queues a text-less date-only image once its camera columns were read and the verdict says screenshot', async () => {
+            VISION.LLM_VISION_ENABLED = true;
+
+            const read = await seedImage({
+                weights: { screenshot: 0.5, photo: 0.1 },
+                ocrDone: true,
+                cameraRead: true,
+                photo: { takenAt: new Date('2026-01-02') },
+            });
+            const unread = await seedImage({ weights: { screenshot: 0.5, photo: 0.1 }, ocrDone: true, photo: { takenAt: new Date('2026-01-02') } });
+
+            await settleImageKind(deps, read);
+            await settleImageKind(deps, unread);
+
+            expect(queued.map((job) => job.documentId)).toEqual([read]);
+            expect((await loadDocument(unread)).llm_status).toBe('skipped');
+        });
+
         it('waits for OCR to finish storing its facts: no job and no skip before the marker', async () => {
             const id = await seedImage({ weights: { screenshot: 0.5 }, text: true, ocrDone: false });
 
@@ -393,12 +420,53 @@ describeDb('image kind', () => {
             return { flip, ml };
         };
 
-        it('does not count a camera make or model alone as capture facts: the image is judged by its category as before', async () => {
-            const makeOnly = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'screenshot' });
-            const labelledPhoto = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'photo' });
+        it('holds back an image with a camera make or model even when it has no capture date, whatever its category', async () => {
+            const makeOnly = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'screenshot', cameraRead: true });
+            const lensOnly = await seedImage({ weights: null, category: 'screenshot', cameraRead: true });
 
-            expect(await isHeldBackFromVision(await loadDocument(makeOnly), gate(false))).toBe(false);
-            expect(await isHeldBackFromVision(await loadDocument(labelledPhoto), gate(false))).toBe(true);
+            await db.insertInto('photo_metadata').values({ document_id: lensOnly, lens_model: 'iPhone 15 back camera' }).execute();
+
+            expect(await isHeldBackFromVision(await loadDocument(makeOnly), gate(false))).toBe(true);
+            expect(await isHeldBackFromVision(await loadDocument(lensOnly), gate(true))).toBe(true);
+        });
+
+        it('lets a verdict, not the capture date, decide a date-only image once its camera columns have been read (flip on)', async () => {
+            const screenshot = await seedImage({
+                weights: { screenshot: 0.5, photo: 0.1 },
+                photo: { takenAt: new Date('2026-01-02') },
+                category: 'screenshot',
+                cameraRead: true,
+            });
+            const photo = await seedImage({ weights: { photo: 0.5 }, photo: { takenAt: new Date('2026-01-02') }, category: 'screenshot', cameraRead: true });
+
+            deps = { ...deps, flip: true };
+            await settleImageKind(deps, screenshot);
+            await settleImageKind(deps, photo);
+
+            expect(await isHeldBackFromVision(await loadDocument(screenshot), gate(true))).toBe(false);
+            expect(await isHeldBackFromVision(await loadDocument(photo), gate(true))).toBe(true);
+        });
+
+        it('holds back a date-only image whose camera columns have not been read yet, flip on or off', async () => {
+            const id = await seedImage({ weights: { screenshot: 0.5, photo: 0.1 }, photo: { takenAt: new Date('2026-01-02') }, category: 'screenshot' });
+
+            await classifyDocumentImage(deps, id);
+
+            expect(await isHeldBackFromVision(await loadDocument(id), gate(true))).toBe(true);
+            expect(await isHeldBackFromVision(await loadDocument(id), gate(false))).toBe(true);
+        });
+
+        it('keeps holding back a date-only, text-free phone-sized image the heuristics called a screenshot while the flip is off', async () => {
+            const id = await seedImage({
+                weights: null,
+                photo: { takenAt: new Date('2026-01-02') },
+                category: 'screenshot',
+                cameraRead: true,
+                width: 4032,
+                height: 3024,
+            });
+
+            expect(await isHeldBackFromVision(await loadDocument(id), gate(false))).toBe(true);
         });
 
         it('holds back a camera image whatever its kind, with the flip off and on', async () => {
