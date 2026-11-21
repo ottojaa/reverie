@@ -25,6 +25,20 @@ export const PromptSetSchema = z.object({
     prompts: z.record(z.string(), z.array(z.string().min(1)).min(1)),
     /** Margins to try in the grid, in the calibrated units. Defaults by calibration. */
     margins: z.array(z.number()).optional(),
+    /**
+     * Scores kinds by similarity to library images known to be that kind (see prototypes.ts), alone or beside the
+     * prompts. Each source is z-scored by the run itself, so `calibration` must be `none` for such a set. `ks` and
+     * `promptWeights` add variants to the margin grid.
+     */
+    prototypes: z
+        .object({
+            method: z.enum(['centroid', 'knn']),
+            k: z.number().int().positive().optional(),
+            promptWeight: z.number().min(0),
+            ks: z.array(z.number().int().positive()).optional(),
+            promptWeights: z.array(z.number().min(0)).optional(),
+        })
+        .optional(),
 });
 
 export type PromptSet = Omit<z.infer<typeof PromptSetSchema>, 'calibration' | 'prompts'> & {
@@ -49,6 +63,8 @@ export function parsePromptSet(json: unknown): PromptSet {
     assertEveryKind(set.prompts, 'prompts');
 
     if (typeof set.calibration !== 'string') assertEveryKind(set.calibration, 'calibration');
+
+    if (set.prototypes && set.calibration !== 'none') throw new Error('Invalid prompt set: calibration must be none when prototypes are set');
 
     const count = Object.values(set.prompts).reduce((sum, list) => sum + list.length, 0);
 
@@ -100,7 +116,7 @@ const Z_MARGINS = [0.25, 0.5, 0.75, 1, 1.5];
 
 /** The margins the grid tries: the set's own, or a default that fits its units (z units after a z-score, cosine units otherwise). */
 export function marginsFor(set: PromptSet): number[] {
-    return set.margins ?? (set.calibration === 'zscore' ? Z_MARGINS : RAW_MARGINS);
+    return set.margins ?? (set.calibration === 'zscore' || set.prototypes ? Z_MARGINS : RAW_MARGINS);
 }
 
 /** The values after each `--prompts` flag of a command line. */

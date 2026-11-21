@@ -14,8 +14,10 @@ import { decideKind, scoreKinds, toCameraFacts, type KindFacts, type PromptEmbed
 import { buildReport, evaluateBar, type ComparisonRow } from './compare-report.js';
 import type { ImageKind } from './kinds.js';
 import { IMAGE_KINDS } from './kinds.js';
+import { IDENTITY_CALIBRATION, type KindCalibration } from './classifier-config.js';
 import { marginsFor, measureKindStats, resolveCalibration, toConfig, type KindStats, type PromptSet } from './prompt-set.js';
 import { embedPrompts } from './prompt-cache.js';
+import { promptWeightsOf, scoreVariants, type PrototypeSettings, type PrototypeVariant, type Raw } from './prototype-run.js';
 
 export interface TuneDeps {
     db: Kysely<Database>;
@@ -137,10 +139,8 @@ export function toKindFacts(image: Pick<LibraryImage, 'capture' | 'width' | 'hei
     return { camera, captureDate: capture.takenAt, width: image.width, height: image.height };
 }
 
-type Raw = Record<ImageKind, number>;
-
-function classifyAll(library: Library, raws: Raw[], set: PromptSet, stats: Record<ImageKind, KindStats>, margin?: number): ComparisonRow[] {
-    const config = toConfig(set, resolveCalibration(set.calibration, stats));
+function classifyAll(library: Library, raws: Raw[], set: PromptSet, calibration: Record<ImageKind, KindCalibration>, margin?: number): ComparisonRow[] {
+    const config = toConfig(set, calibration);
     const thresholds =
         margin === undefined
             ? config.thresholds
@@ -162,34 +162,68 @@ function classifyAll(library: Library, raws: Raw[], set: PromptSet, stats: Recor
     });
 }
 
-function gridLine(margin: number, rows: ComparisonRow[]): string {
+function gridLine(label: string, margin: number, rows: ComparisonRow[]): string {
     const checks = evaluateBar(rows);
     const mark = checks.every((check) => check.pass) ? 'MET' : 'no ';
 
-    return `  margin ${String(margin).padEnd(6)} ${mark}  ` + checks.map((check) => `${check.pass ? 'pass' : 'FAIL'}(${check.detail})`).join('  ');
+    return `  ${label}margin ${String(margin).padEnd(6)} ${mark}  ` + checks.map((check) => `${check.pass ? 'pass' : 'FAIL'}(${check.detail})`).join('  ');
 }
 
 const formatStats = (stats: Record<ImageKind, KindStats>) =>
     IMAGE_KINDS.map((kind) => `  ${kind.padEnd(12)}mean=${stats[kind].mean.toFixed(4)} std=${stats[kind].std.toFixed(4)}`);
 
-/** Scores one set over the library: its full report at its own thresholds, the library stats, and the margin grid. */
-export async function tuneSet(deps: TuneDeps, library: Library, set: PromptSet, model: { model: string; version: string }): Promise<string> {
+interface SetScores {
+    /** The base scoring first; the grid tries every one. */
+    variants: PrototypeVariant[];
+    /** Report lines about the scores: library stats for prompts, seed counts and the sources for prototypes. */
+    notes: string[];
+}
+
+type Model = { model: string; version: string };
+
+async function loadPromptRaws(deps: TuneDeps, library: Library, set: PromptSet, model: Model): Promise<Raw[]> {
     const prompts: PromptEmbeddings = await embedPrompts(deps.ml, model, set);
-    const raws = library.images.map((image) => scoreKinds(image.embedding, prompts, set.aggregate));
-    const stats = measureKindStats(raws);
-    const at = (margin?: number) => classifyAll(library, raws, set, stats, margin);
+
+    return library.images.map((image) => scoreKinds(image.embedding, prompts, set.aggregate));
+}
+
+async function scoreWithPrompts(deps: TuneDeps, library: Library, set: PromptSet, model: Model): Promise<SetScores> {
+    const raws = await loadPromptRaws(deps, library, set, model);
+    const notes = ['Raw score per kind over the library (what offset and zscore calibrate with):', ...formatStats(measureKindStats(raws))];
+
+    return { variants: [{ label: '', raws }], notes };
+}
+
+async function scoreWithPrototypes(deps: TuneDeps, library: Library, set: PromptSet, settings: PrototypeSettings, model: Model): Promise<SetScores> {
+    // The prompts are only embedded (a call to reverie-ml) when some variant gives them a weight.
+    const promptRaws = promptWeightsOf(settings).some((weight) => weight > 0) ? await loadPromptRaws(deps, library, set, model) : null;
+
+    return scoreVariants(library.images, promptRaws, settings);
+}
+
+/** Scores one set over the library: its full report at its own thresholds, its score notes, and the margin grid. */
+export async function tuneSet(deps: TuneDeps, library: Library, set: PromptSet, model: Model): Promise<string> {
+    const { variants, notes } = set.prototypes
+        ? await scoreWithPrototypes(deps, library, set, set.prototypes, model)
+        : await scoreWithPrompts(deps, library, set, model);
+    // A prototype set's scores are already z-scored and combined, so its calibration is the identity.
+    const calibrationOf = (raws: Raw[]) => (set.prototypes ? IDENTITY_CALIBRATION : resolveCalibration(set.calibration, measureKindStats(raws)));
+    const at = (variant: PrototypeVariant, margin?: number) => classifyAll(library, variant.raws, set, calibrationOf(variant.raws), margin);
+    const grid = variants.flatMap((variant) =>
+        marginsFor(set).map((margin) => gridLine(variant.label ? variant.label + '  ' : '', margin, at(variant, margin))),
+    );
 
     return [
         '='.repeat(80),
         `Prompt set: ${set.name}  aggregate=${set.aggregate}  calibration=${typeof set.calibration === 'string' ? set.calibration : 'explicit'}`,
         `thresholds: ${JSON.stringify(set.thresholds)}`,
-        'Raw score per kind over the library (what offset and zscore calibrate with):',
-        ...formatStats(stats),
+        ...notes,
         '',
-        buildReport(at()),
+        variants.length > 1 ? `Report for the base variant (${variants[0]!.label}); the grid below has them all.` : '',
+        buildReport(at(variants[0]!)),
         '',
         'Margin grid (cameraPrior, screenPrior and paperOnCameraMargin as in the set, paperOnCameraMargin raised to the margin if lower):',
-        ...marginsFor(set).map((margin) => gridLine(margin, at(margin))),
+        ...grid,
     ].join('\n');
 }
 

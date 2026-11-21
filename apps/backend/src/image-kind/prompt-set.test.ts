@@ -77,6 +77,26 @@ describe('calibration', () => {
     });
 });
 
+describe('prototype sets', () => {
+    const base = JSON.parse(readFileSync(join(__dirname, '../../scripts/image-kind-sets/d-centroid-alone.json'), 'utf8')) as Record<string, unknown>;
+
+    it('reads the prototype settings, and tries z-sized margins', () => {
+        const set = parsePromptSet(base);
+
+        expect(set.prototypes).toEqual({ method: 'centroid', promptWeight: 0 });
+        expect(marginsFor({ ...set, margins: undefined })).toEqual([0.25, 0.5, 0.75, 1, 1.5]);
+    });
+
+    it('wants calibration none, since the run z-scores each source itself', () => {
+        expect(() => parsePromptSet({ ...base, calibration: 'zscore' })).toThrow('calibration must be none when prototypes are set');
+    });
+
+    it('rejects an unknown method and a negative prompt weight', () => {
+        expect(() => parsePromptSet({ ...base, prototypes: { method: 'svm', promptWeight: 0 } })).toThrow('Invalid prompt set');
+        expect(() => parsePromptSet({ ...base, prototypes: { method: 'knn', promptWeight: -1 } })).toThrow('Invalid prompt set');
+    });
+});
+
 describe('parsePromptArgs', () => {
     it('collects every --prompts value and ignores the rest', () => {
         expect(parsePromptArgs(['--prompts', 'a.json', '--other', '--prompts', 'b.json'])).toEqual(['a.json', 'b.json']);

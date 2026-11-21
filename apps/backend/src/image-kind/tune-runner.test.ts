@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const parse = vi.hoisted(() => vi.fn());
 
@@ -161,6 +161,45 @@ describeDb('the tuning run', () => {
 
         expect(ml.imageTextCalls).toEqual([IMAGE_KINDS.map((kind) => `a ${kind}`)]);
         expect(ml.imageCalls).toBe(0);
+    });
+
+    describe('a prototype set', () => {
+        const PROTOTYPES = { ...SET, name: 'proto-set', prototypes: { method: 'centroid', promptWeight: 0 } };
+
+        async function seedLibrary() {
+            for (const n of [1, 2, 3]) await seedImage(`camera-${n}.jpg`, 0);
+
+            for (const n of [1, 2, 3]) await seedImage(`Screenshot_${n}.png`, 1);
+
+            for (const n of [1, 2, 3]) await seedImage(`statement-${n}.jpg`, 2, { category: 'bank_statement', ocrText: 'SECRET WORDS' });
+
+            await seedImage('mystery.jpg', 1);
+        }
+
+        it('prints the seeds it found and needs no prompt texts when the prompts are left out', async () => {
+            await seedLibrary();
+
+            const out = await tune([PROTOTYPES]);
+
+            expect(out).toContain('Prototypes, leave-one-out (centroid, prompt weight 0)');
+            expect(out).toMatch(/photo\s+3 seed\(s\)/);
+            expect(out).toMatch(/screenshot\s+3 seed\(s\)/);
+            expect(out).toMatch(/document\s+3 seed\(s\)/);
+            expect(out).toMatch(/receipt\s+0 seed\(s\)\s+\(fewer than 3/);
+            expect(out).toContain('Flip bar:');
+            expect(ml.imageTextCalls).toEqual([]);
+        });
+
+        it('asks for the prompt texts when they get a weight, and writes nothing', async () => {
+            await seedLibrary();
+
+            const before = await snapshot();
+
+            await tune([{ ...PROTOTYPES, prototypes: { method: 'knn', k: 2, ks: [1], promptWeight: 0.5, promptWeights: [0.25] } }]);
+
+            expect(ml.imageTextCalls).toEqual([IMAGE_KINDS.map((kind) => `a ${kind}`)]);
+            expect(await snapshot()).toEqual(before);
+        });
     });
 
     it('classifies nothing when no stored embedding is from the model reverie-ml serves now', async () => {
