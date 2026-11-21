@@ -31,14 +31,14 @@ Estimates from parameter counts (fp16 = 2 bytes per weight, +20% activations) pl
 not measurements: there is no GPU on the machine this was written on. Measure with `nvidia-smi` after the first deploy
 and fix the numbers here.
 
-| Consumer                          | Estimate    | How it is bounded                                                        |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| reverie-ml: bge-m3 (fp16)         | 1.4 GB      | fixed weights; the backend sends 16 chunks (<= 512 tokens) per request; the service accepts up to 64, which needs more temporary memory than the margin covers                     |
-| reverie-ml: SigLIP2 so400m (fp16) | 2.7 GB      | fixed weights; max 16 images per request                                 |
-| reverie-ml: CUDA context + cache  | ~0.6 GB     | one process                                                              |
-| PaddleOCR (backend container)     | <= 4.0 GB   | `FLAGS_gpu_memory_limit_mb=4096`, `FLAGS_allocator_strategy=auto_growth` |
-| PaddleOCR CUDA context            | ~0.4 GB     | one process                                                              |
-| **Total**                         | **~9.1 GB** | leaves ~0.9 GB of the card's 10 GB                                       |
+| Consumer                          | Estimate    | How it is bounded                                                                                                                                              |
+| --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| reverie-ml: bge-m3 (fp16)         | 1.4 GB      | fixed weights; the backend sends 16 chunks (<= 512 tokens) per request; the service accepts up to 64, which needs more temporary memory than the margin covers |
+| reverie-ml: SigLIP2 so400m (fp16) | 2.7 GB      | fixed weights; max 16 images per request                                                                                                                       |
+| reverie-ml: CUDA context + cache  | ~0.6 GB     | one process                                                                                                                                                    |
+| PaddleOCR (backend container)     | <= 4.0 GB   | `FLAGS_gpu_memory_limit_mb=4096`, `FLAGS_allocator_strategy=auto_growth`                                                                                       |
+| PaddleOCR CUDA context            | ~0.4 GB     | one process                                                                                                                                                    |
+| **Total**                         | **~9.1 GB** | leaves ~0.9 GB of the card's 10 GB                                                                                                                             |
 
 Paddle's flags are set on the backend service in `docker-compose.prod.yml` and reach the OCR subprocess because the
 backend spawns it with `...process.env`. If Paddle needs more than the cap, OCR fails with an out-of-memory error
