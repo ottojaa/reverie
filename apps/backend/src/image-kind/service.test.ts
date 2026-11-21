@@ -393,6 +393,14 @@ describeDb('image kind', () => {
             return { flip, ml };
         };
 
+        it('does not count a camera make or model alone as capture facts: the image is judged by its category as before', async () => {
+            const makeOnly = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'screenshot' });
+            const labelledPhoto = await seedImage({ weights: null, photo: { make: 'Apple', model: 'iPhone 15' }, category: 'photo' });
+
+            expect(await isHeldBackFromVision(await loadDocument(makeOnly), gate(false))).toBe(false);
+            expect(await isHeldBackFromVision(await loadDocument(labelledPhoto), gate(false))).toBe(true);
+        });
+
         it('holds back a camera image whatever its kind, with the flip off and on', async () => {
             const withDate = await seedImage({ weights: { document: 0.5, photo: 0.1 }, photo: { takenAt: new Date('2025-06-01') }, category: 'other' });
             const withGps = await seedImage({ weights: { receipt: 0.5, photo: 0.1 }, photo: { latitude: 60.1, longitude: 24.9 }, category: 'other' });
