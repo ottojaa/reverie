@@ -4,7 +4,17 @@ import { toSdrScaleArgs, toToneMap } from './hdr-filters';
 import { toProgressSeconds } from './ffmpeg-run';
 import { decideLadder, type SourceFacts } from './ladder';
 
-const SOURCE: SourceFacts = { width: 1920, height: 1080, rotation: 0, frameRate: 30, isHdr: false, colorTransfer: null, hasAudio: true };
+const SOURCE: SourceFacts = {
+    width: 1920,
+    height: 1080,
+    rotation: 0,
+    frameRate: 30,
+    isHdr: false,
+    colorTransfer: null,
+    colorSpace: null,
+    pixelFormat: null,
+    hasAudio: true,
+};
 
 function toInput(overrides: Partial<CommandInput> = {}, source: Partial<SourceFacts> = {}): CommandInput {
     return {

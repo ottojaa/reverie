@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { decideLadder, type SourceFacts } from './ladder';
 
-const SDR: SourceFacts = { width: 1920, height: 1080, rotation: 0, frameRate: 30, isHdr: false, colorTransfer: null, hasAudio: true };
+const SDR: SourceFacts = {
+    width: 1920,
+    height: 1080,
+    rotation: 0,
+    frameRate: 30,
+    isHdr: false,
+    colorTransfer: null,
+    colorSpace: null,
+    pixelFormat: null,
+    hasAudio: true,
+};
 
 const sizes = (source: Partial<SourceFacts>) => decideLadder({ ...SDR, ...source }).rungs.map((rung) => `${rung.width}x${rung.height}`);
 

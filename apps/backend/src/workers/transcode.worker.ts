@@ -30,12 +30,18 @@ function toDeps(): TranscodeDeps {
     };
 }
 
+/** True on the final try of a job that has more than one (`attemptsMade` counts the tries already used up). */
+export function isLastAttempt(job: Pick<Job, 'attemptsMade' | 'opts'>): boolean {
+    const attempts = job.opts.attempts ?? 1;
+
+    return attempts > 1 && job.attemptsMade >= attempts - 1;
+}
+
 async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<unknown> {
     const { documentId, userId } = job.data;
 
     // On the last of several attempts the encode takes the plain CPU path (see `TranscodeOptions.safeMode`).
-    const attempts = job.opts.attempts ?? 1;
-    const safeMode = attempts > 1 && job.attemptsMade >= attempts - 1;
+    const safeMode = isLastAttempt(job);
 
     return processJobWithTracking(
         job,

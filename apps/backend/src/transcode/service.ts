@@ -102,7 +102,7 @@ async function encodeAndStore(
         const capabilities = await deps.capabilities();
         const encoder: EncoderKind = capabilities.nvenc && !options.safeMode ? 'nvenc' : 'cpu';
         const toneMap = chooseToneMap(source.colorTransfer, capabilities.zscale && !options.safeMode);
-        const sdrScaleArgs = toSdrScaleArgs(source.colorSpace ?? null, source.pixelFormat ?? null);
+        const sdrScaleArgs = toSdrScaleArgs(source.colorSpace, source.pixelFormat);
 
         await Promise.all(ladder.rungs.map((rung) => mkdir(join(workDir, `v${rung.name}`), { recursive: true })));
         await deps.runFfmpeg(

@@ -28,29 +28,19 @@ export async function findTranscodeSet(db: Kysely<Database>, fileHash: string): 
 
 /**
  * Written after every file of the set is stored, so a row means a complete set. A row that exists already is replaced:
- * a set is only encoded again when the stored one is known to be broken, and the new row must list the new files.
+ * a set is only encoded again when the stored one is known to be broken. The files it listed stay listed alongside the
+ * new ones (some may be stored under names the new encode does not use), so a purge still removes all of them.
  */
 export async function insertTranscodeSet(db: Kysely<Database>, fileHash: string, set: TranscodeSetRecord): Promise<void> {
+    const previous = await findTranscodeSet(db, fileHash);
+    const files = [...new Set([...(previous?.files ?? []), ...set.files])];
+    // Stringified: pg would turn a JS array into a Postgres array, not JSON.
+    const record = { files: JSON.stringify(files), rungs: JSON.stringify(set.rungs), encoder: set.encoder, tone_map: set.toneMap, total_bytes: set.totalBytes };
+
     await db
         .insertInto('transcode_sets')
-        .values({
-            file_hash: fileHash,
-            // Stringified: pg would turn a JS array into a Postgres array, not JSON.
-            files: JSON.stringify(set.files),
-            rungs: JSON.stringify(set.rungs),
-            encoder: set.encoder,
-            tone_map: set.toneMap,
-            total_bytes: set.totalBytes,
-        })
-        .onConflict((conflict) =>
-            conflict.column('file_hash').doUpdateSet({
-                files: JSON.stringify(set.files),
-                rungs: JSON.stringify(set.rungs),
-                encoder: set.encoder,
-                tone_map: set.toneMap,
-                total_bytes: set.totalBytes,
-            }),
-        )
+        .values({ file_hash: fileHash, ...record })
+        .onConflict((conflict) => conflict.column('file_hash').doUpdateSet(record))
         .execute();
 }
 

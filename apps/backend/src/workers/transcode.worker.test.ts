@@ -21,7 +21,7 @@ vi.mock('../transcode/repository', async (importOriginal) => ({
 }));
 
 import { isTranscodePipelineBusy } from '../transcode/backfill';
-import { markFailedWhenFinal, rescheduleTranscodeBackfill } from './transcode.worker';
+import { isLastAttempt, markFailedWhenFinal, rescheduleTranscodeBackfill } from './transcode.worker';
 
 describe('isTranscodePipelineBusy', () => {
     beforeEach(() => {
@@ -66,6 +66,19 @@ describe('backfill rescheduling', () => {
 
         expect(job.updateData).toHaveBeenCalledWith({ after: null });
         expect(job.moveToDelayed.mock.calls[0]![0]).toBeGreaterThan(Date.now() + 3_500_000);
+    });
+});
+
+describe('isLastAttempt', () => {
+    const jobOn = (attemptsMade: number, attempts?: number) => ({ attemptsMade, opts: { attempts } });
+
+    it('is true only on the last try, which is the one before markFailedWhenFinal gives up', () => {
+        expect([0, 1, 2].map((made) => isLastAttempt(jobOn(made, 3)))).toEqual([false, false, true]);
+    });
+
+    it('is never true for a job with a single try', () => {
+        expect(isLastAttempt(jobOn(0, 1))).toBe(false);
+        expect(isLastAttempt(jobOn(0))).toBe(false);
     });
 });
 

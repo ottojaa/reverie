@@ -22,8 +22,8 @@ export interface SourceFacts {
     /** The stored transfer function (`arib-std-b67` for HLG, `smpte2084` for PQ); picks the tone-map chain, not the rungs. */
     colorTransfer: string | null;
     /** The stored matrix and pixel format; an SDR source that is not BT.709 limited range is converted to it. */
-    colorSpace?: string | null;
-    pixelFormat?: string | null;
+    colorSpace: string | null;
+    pixelFormat: string | null;
     /** False for a video with no audio stream, which has no audio to map. */
     hasAudio: boolean;
 }

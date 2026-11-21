@@ -191,14 +191,15 @@ describeDb('video transcoding', () => {
             expect(storage.files.has(toMasterPath('lost-files'))).toBe(true);
         });
 
-        it('lists the new files when a broken set is encoded again', async () => {
+        it('lists the old and the new files when a broken set is encoded again, so a purge removes all of them', async () => {
             const hash = 'new-files';
-            const record = { files: ['transcode/new-files/master.m3u8'], rungs: [], encoder: 'cpu' as const, toneMap: null, totalBytes: 1 };
+            const master = 'transcode/new-files/master.m3u8';
+            const record = { files: [master], rungs: [], encoder: 'cpu' as const, toneMap: null, totalBytes: 1 };
 
-            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/old-init.mp4', 'transcode/new-files/master.m3u8'] });
-            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/init_0.mp4', 'transcode/new-files/master.m3u8'] });
+            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/init.mp4', master] });
+            await insertTranscodeSet(db, hash, { ...record, files: ['transcode/new-files/init_0.mp4', master] });
 
-            expect((await findTranscodeSet(db, hash))?.files).toEqual(['transcode/new-files/init_0.mp4', 'transcode/new-files/master.m3u8']);
+            expect((await findTranscodeSet(db, hash))?.files.sort()).toEqual([master, 'transcode/new-files/init.mp4', 'transcode/new-files/init_0.mp4'].sort());
         });
 
         it('uses NVENC when the card works, and tone maps HDR with the zscale chain when the build has it', async () => {

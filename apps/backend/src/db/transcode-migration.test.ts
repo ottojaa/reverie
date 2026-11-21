@@ -3,9 +3,9 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { seedDocument, seedUser } from '../testing/seed';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database';
 import { describeDb } from '../testing/tool-world';
-import { down, up } from './migrations/023_transcode';
+import { down, up } from './migrations/024_transcode';
 
-describeDb('migration 023 (transcode)', () => {
+describeDb('migration 024 (transcode)', () => {
     let database: TestDatabase;
     // Migrations are written against an untyped Kysely.
     const untyped = () => database.db as unknown as Kysely<unknown>;
