@@ -4,7 +4,8 @@
  * library and stores it in `image_kind_seed_sets` / `image_kind_seeds` (the only writes). Until it has run, the
  * classifier classifies nothing for this version; once it has, the embed backfill classifies every image on its own.
  * A version that already has a set is refused unless `--replace` is given; replacing deletes that version's verdicts so
- * the backfill classifies those images again with the new set. Prints counts only.
+ * the backfill classifies those images again with the new set. Prints counts only, so the flip-bar numbers come from
+ * `compare-image-kinds` (read-only) once the backfill has classified every image. Needs a writable database connection.
  *
  * Usage (cwd = apps/backend/dist in a container that reaches Postgres, reverie-ml and the storage volume):
  *   node apps/backend/src/scripts/snapshot-image-kind-seeds.js [--replace]

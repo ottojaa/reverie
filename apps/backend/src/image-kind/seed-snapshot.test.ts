@@ -138,6 +138,32 @@ describeDb('the seed set of the committed classifier', () => {
         expect(await findDocumentsMissingKind(db, MODEL, null, 100)).not.toContain(ids.photo[0]);
     });
 
+    it('re-classifies a verdict made by the earlier classifier version once the set exists, and not again after', async () => {
+        const ids = await seedLibrary();
+        const id = ids.photo[0]!;
+
+        await db
+            .insertInto('document_image_kinds')
+            .values({
+                document_id: id,
+                kind: 'photo',
+                scores: JSON.stringify({}),
+                signals: JSON.stringify({}),
+                prompt_version: 'v1',
+                model: MODEL.model,
+                model_version: MODEL.version,
+            })
+            .execute();
+        await snapshot();
+
+        expect(await findDocumentsMissingKind(db, MODEL, null, 100)).toContain(id);
+
+        await classifyDocumentImage({ db, ml }, id);
+
+        expect((await loadStoredKind(db, id))?.promptVersion).toBe('v2');
+        expect(await findDocumentsMissingKind(db, MODEL, null, 100)).not.toContain(id);
+    });
+
     it('replacing the set deletes that version’s verdicts, so the backfill classifies them again', async () => {
         const ids = await seedLibrary();
 
