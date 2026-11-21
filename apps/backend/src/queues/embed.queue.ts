@@ -2,14 +2,16 @@ import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
-export const EMBED_JOBS = { TEXT: 'embed-text', IMAGE: 'embed-image', BACKFILL: 'embed-backfill' } as const;
+export const EMBED_JOBS = { TEXT: 'embed-text', IMAGE: 'embed-image', CLASSIFY: 'classify-image', BACKFILL: 'embed-backfill' } as const;
+
+export type EmbedJobKind = typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE | typeof EMBED_JOBS.CLASSIFY;
 
 export interface EmbedJobData {
     documentId: string;
 }
 
 export interface EmbedBackfillCursor {
-    stage: 'text' | 'image';
+    stage: 'text' | 'image' | 'kind';
     /** Last document id handled in this stage; null at the start of a stage. */
     after: string | null;
 }
@@ -43,7 +45,7 @@ export function getEmbedQueue(): Queue {
     return embedQueueInstance;
 }
 
-export async function addEmbedJob(kind: typeof EMBED_JOBS.TEXT | typeof EMBED_JOBS.IMAGE, documentId: string, priority?: number): Promise<void> {
+export async function addEmbedJob(kind: EmbedJobKind, documentId: string, priority?: number): Promise<void> {
     await getEmbedQueue().add(kind, { documentId } satisfies EmbedJobData, priority === undefined ? {} : { priority });
 }
 

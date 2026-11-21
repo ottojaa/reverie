@@ -98,6 +98,12 @@ const envSchema = z.object({
     // Backfill of the existing library: documents queued per page, and the pause between pages.
     EMBED_BACKFILL_BATCH: z.coerce.number().int().positive().default(50),
     EMBED_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(20_000),
+    /** After the embedding backfill has covered the library it starts over this long later, to pick up images whose embed job gave up. */
+    EMBED_RECONCILE_INTERVAL_MS: z.coerce
+        .number()
+        .int()
+        .positive()
+        .default(6 * 60 * 60 * 1000),
     // Search by meaning. A document counts as a meaning match only at or above its model's cosine-similarity floor
     // (starting values from apps/reverie-ml/eval/RESULTS.md, tuned on synthetic data). Each vector stream keeps at most
     // SEMANTIC_TOP_K documents. Embedding the query gets SEMANTIC_TIMEOUT_MS, then search carries on with full text only.
