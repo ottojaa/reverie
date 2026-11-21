@@ -192,6 +192,12 @@ fun DocumentPage(
             withFrameNanos { }
             settleFrameDrawn = true
         }
+        // A page the pager has moved off drops its video media, which blanks the player to black.
+        // Bring the poster cover back with it, so swiping back shows the poster until the
+        // re-prepared player renders its first frame.
+        LaunchedEffect(isSettledPage) {
+            if (!isSettledPage) videoFirstFrame = false
+        }
         val mountVideoSurface = !transitionActive && settleFrameDrawn
         val revealVideo = viewerType == ViewerType.VIDEO && !transitionActive && videoFirstFrame
         val posterAlpha by animateFloatAsState(

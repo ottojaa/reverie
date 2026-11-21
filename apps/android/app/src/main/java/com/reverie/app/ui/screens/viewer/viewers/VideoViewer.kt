@@ -38,11 +38,37 @@ import dagger.hilt.android.EntryPointAccessors
 private const val BUFFER_FOR_PLAYBACK_MS = 500
 private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1000
 
+// Upper bound on the bytes one player keeps buffered. ExoPlayer's own default is ~144 MB for a
+// video + audio file (DefaultLoadControl.DEFAULT_VIDEO_BUFFER_SIZE + DEFAULT_AUDIO_BUFFER_SIZE),
+// and that buffer lives on the Java heap, which is only ~192-256 MB per app. A multi-minute
+// high-bitrate phone video filled it and the app died with an OutOfMemoryError about a second
+// after opening. 32 MB is still ~20 s of a 12 Mbps video and ~2.5 s of 100 Mbps 4K.
+internal const val MAX_BUFFER_BYTES = 32 * 1024 * 1024
+
 // The first-play rewind (see posterSeekMs) only fires while the player is still parked at the
 // poster frame — if the current position has moved more than this from it, the user scrubbed and
 // we leave their position alone. Generous enough to cover keyframe-snap on the initial seek, tight
 // enough that any real scrub lands outside it.
 private const val REWIND_TOLERANCE_MS = 900L
+
+/**
+ * The load control for the viewer's players: the default buffer durations, but with the byte cap
+ * [MAX_BUFFER_BYTES]. A byte target set explicitly replaces the size-by-track-type default, and
+ * because time doesn't take priority over size (the default), loading stops at the byte cap even
+ * when less than the maximum buffer duration is buffered.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun buildVideoLoadControl(): DefaultLoadControl =
+    DefaultLoadControl.Builder()
+        .setBufferDurationsMs(
+            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+            BUFFER_FOR_PLAYBACK_MS,
+            BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+        )
+        .setTargetBufferBytes(MAX_BUFFER_BYTES)
+        .setPrioritizeTimeOverSizeThresholds(false)
+        .build()
 
 /**
  * HTML5-style video playback against the signed URL, with Media3's built-in controls.
@@ -64,6 +90,11 @@ fun VideoViewer(
     // on one frame after the dive settles (inflation never hitches the morph) and off the instant
     // a dive-back starts (the shrink never composes a live surface).
     mountSurface: Boolean = true,
+    // Only the page the pager has settled on may buffer. A pager composes its neighbours too, and
+    // each preparing player would otherwise pull its own buffer of the file into the app's heap.
+    // A page that stops being active drops its media (and the buffer with it); coming back
+    // prepares it afresh, so playback restarts from the start.
+    active: Boolean = true,
     // When set, the player parks its FIRST rendered frame at this position (ms) instead of t=0, so
     // it matches the thumbnail poster DocumentPage holds over it (the backend grabs the poster at
     // this same offset) — the poster→video crossfade then reveals an identical frame. On the user's
@@ -87,17 +118,9 @@ fun VideoViewer(
         val okHttpClient = EntryPointAccessors
             .fromApplication(context.applicationContext, AuthedOkHttpEntryPoint::class.java)
             .okHttpClient()
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                BUFFER_FOR_PLAYBACK_MS,
-                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
-            )
-            .build()
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(okHttpClient)))
-            .setLoadControl(loadControl)
+            .setLoadControl(buildVideoLoadControl())
             .build()
     }
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
@@ -109,28 +132,7 @@ fun VideoViewer(
     // frame, so a scrub-then-play keeps the user's chosen position. The init seek below runs on the
     // wrapped player directly, so it never counts as a play.
     val controllablePlayer = remember(player) {
-        object : ForwardingPlayer(player) {
-            private var rewound = false
-
-            override fun play() {
-                rewindToStartOnce()
-                super.play()
-            }
-
-            override fun setPlayWhenReady(playWhenReady: Boolean) {
-                if (playWhenReady) rewindToStartOnce()
-                super.setPlayWhenReady(playWhenReady)
-            }
-
-            private fun rewindToStartOnce() {
-                if (rewound) return
-                rewound = true
-                val poster = currentPosterSeekMs ?: return
-                if (kotlin.math.abs(currentPosition - poster) <= REWIND_TOLERANCE_MS) {
-                    player.seekTo(0)
-                }
-            }
-        }
+        RewindOnFirstPlayPlayer(player) { currentPosterSeekMs }
     }
 
     // Controller auto-show is disabled (see the factory below), so the controls start hidden and
@@ -149,8 +151,14 @@ fun VideoViewer(
     // (minus the ?e/?s signature) so a signature rotation from a realtime refresh or a
     // rename doesn't reset playback mid-watch.
     val urlKey = fileUrl?.substringBefore('?')
-    LaunchedEffect(urlKey) {
+    LaunchedEffect(urlKey, active) {
         if (fileUrl == null) return@LaunchedEffect
+        if (!active) {
+            player.stop()
+            player.clearMediaItems()
+            return@LaunchedEffect
+        }
+        controllablePlayer.rearm()
         player.setMediaItem(MediaItem.fromUri(fileUrl))
         player.prepare()
         player.playWhenReady = false
@@ -230,6 +238,41 @@ fun VideoViewer(
                 update = { view -> view.setFullscreenButtonState(fullscreen) },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+/**
+ * Rewinds to the start on the first play, if the player is still parked at the poster frame (see
+ * [VideoViewer]'s posterSeekMs). [rearm] makes the next play rewind again — used when the viewer
+ * loads the media afresh and parks at the poster again.
+ */
+private class RewindOnFirstPlayPlayer(
+    private val player: Player,
+    private val posterSeekMs: () -> Long?,
+) : ForwardingPlayer(player) {
+    private var rewound = false
+
+    fun rearm() {
+        rewound = false
+    }
+
+    override fun play() {
+        rewindToStartOnce()
+        super.play()
+    }
+
+    override fun setPlayWhenReady(playWhenReady: Boolean) {
+        if (playWhenReady) rewindToStartOnce()
+        super.setPlayWhenReady(playWhenReady)
+    }
+
+    private fun rewindToStartOnce() {
+        if (rewound) return
+        rewound = true
+        val poster = posterSeekMs() ?: return
+        if (kotlin.math.abs(currentPosition - poster) <= REWIND_TOLERANCE_MS) {
+            player.seekTo(0)
         }
     }
 }
