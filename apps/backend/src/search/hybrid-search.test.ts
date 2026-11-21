@@ -17,7 +17,13 @@ import { parseQuery } from './query-parser';
 import { search } from './search.service';
 import { createSemanticSearch, setSemanticSearch, type SemanticConfig, type SemanticMatches } from './semantic-rank';
 
-const CONFIG: SemanticConfig = { textFloor: 0.53, imageFloor: 0.17, topK: 5, breakerMs: 60_000 };
+// Absolute floors only (a margin of -Infinity switches the relative test off), so these tests control which hits survive; the relative test is covered in semantic-noise.test.ts.
+const CONFIG: SemanticConfig = {
+    text: { minSimilarity: 0.53, marginZ: -Infinity },
+    image: { minSimilarity: 0.17, marginZ: -Infinity },
+    topK: 5,
+    breakerMs: 60_000,
+};
 const NO_MEANING: SemanticMatches = { active: false, text: [], image: [], ids: [], fullTextDepth: 70 };
 
 describeDb('hybrid search', () => {
