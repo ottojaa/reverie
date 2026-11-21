@@ -13,6 +13,10 @@ import { executeNearest } from './semantic-rank';
  * not trashed), and only from the model and version the source was embedded with: vectors from different
  * models can't be compared. No similarity floor: the caller asked for "the nearest", so a page is
  * always filled while the library has images.
+ *
+ * The index scan is approximate, so asking for a later page repeats the scan for `offset + limit` rows and slices
+ * it: neighbours near a page boundary can repeat or be skipped between two pages. One page is exact enough for a
+ * "look at these" view; callers that must enumerate everything should not page this.
  */
 
 export interface SimilarImage {
@@ -78,8 +82,8 @@ export async function findSimilarImages(
         executeNearest(
             candidatesOf(source, documentId, userId, privateFolderIds, base, filters)
                 .select(['d.id', distance.as('distance')])
+                // Distance alone: a second sort key would stop the planner from reading the HNSW index in distance order.
                 .orderBy('distance')
-                .orderBy('d.id')
                 .limit(options.offset + options.limit),
         ),
         candidatesOf(source, documentId, userId, privateFolderIds, base, filters)

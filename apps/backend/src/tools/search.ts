@@ -167,7 +167,7 @@ async function runSearch(input: SearchInput, vis: Visibility) {
 export const searchDocuments = defineTool({
     name: 'search_documents',
     description:
-        "Search the library by words and by meaning, with filters. A document that matches the words ranks first; others join when they are close in meaning, and a row's `match` says which ('keywords', 'meaning' or 'both'). Returns one page of compact rows, the total, and a selection_id that stands for the keyword matches (selection_total of them): pass it to a write tool instead of listing ids. Meaning-only matches are left out of the selection, so name those by id. Set `similar_to` to an image id to find images that look like it. Photos show filename, date, place and tags only.",
+        "Search the library by words and by meaning, with filters. A document that matches the words ranks first; others join when they are close in meaning, and a row's `match` says which ('keywords', 'meaning' or 'both'). Returns one page of compact rows, the total, and a selection_id that stands for the keyword matches (selection_total of them): pass it to a write tool instead of listing ids. Meaning-only matches are left out of the selection, so name those by id. Set `similar_to` to an image id to find images that look like it (nearest first; later pages are approximate, so take what you need from the first page). Photos show filename, date, place and tags only.",
     access: 'read',
     inputSchema: searchSchema,
     handler: async (input, ctx) => {

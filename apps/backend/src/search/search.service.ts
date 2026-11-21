@@ -13,6 +13,7 @@ import { db } from '../db/kysely';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { fetchDocumentDetails } from './document-hydration';
 import { generateFacets } from './facets';
+import { placeFolders } from './folder-placement';
 import { buildPrefixTsQuery, documentJoins } from './filter-application';
 import { generateSummarySnippet } from './highlighter';
 import { findRankedDocuments, type HybridContext, type RankedEntry } from './hybrid-search';
@@ -157,32 +158,6 @@ interface FolderRow {
     document_count: number | null;
 }
 
-type PageEntry = { type: 'document'; entry: RankedEntry } | { type: 'collection'; folder: FolderRow };
-
-/**
- * Folders are placed by word rank, as they always were: before the first document whose word rank is
- * lower (newest first on a tie). Folders take no part in the fusion, and a document only the meaning
- * found has word rank 0, so it never displaces a folder.
- */
-function placeFolders(docs: RankedEntry[], folders: FolderRow[]): PageEntry[] {
-    const placed: PageEntry[] = [];
-    let next = 0;
-
-    for (const entry of docs) {
-        while (next < folders.length && precedes(folders[next]!, entry)) placed.push({ type: 'collection', folder: folders[next++]! });
-
-        placed.push({ type: 'document', entry });
-    }
-
-    return [...placed, ...folders.slice(next).map((folder): PageEntry => ({ type: 'collection', folder }))];
-}
-
-function precedes(folder: FolderRow, doc: RankedEntry): boolean {
-    const relevance = Number(folder.relevance ?? 0);
-
-    return relevance > doc.wordRank || (relevance === doc.wordRank && folder.created_at.getTime() > doc.createdAt);
-}
-
 function matchingFolders(userId: string, tsQuery: ReturnType<typeof buildPrefixTsQuery>, privateFolderIds: string[]) {
     return excludeTrashed(
         db
@@ -314,8 +289,9 @@ export async function countDocuments(parsed: ParsedQuery, userId: string, privat
 export async function getFacetsOnly(query: string, userId: string): Promise<SearchFacets> {
     const parsed = parseQuery(query);
     const privateFolderIds = await getPrivateFolderIds(userId);
+    const semantic = await getSemanticSearch().load(parsed, { userId, privateFolderIds });
 
-    return generateFacets(parsed, userId, privateFolderIds);
+    return generateFacets(parsed, userId, privateFolderIds, semantic.ids);
 }
 
 /**

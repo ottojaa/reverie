@@ -200,8 +200,9 @@ export interface FusionInput {
 
 /**
  * Weighted reciprocal-rank fusion. Scores are integers so ties are exact; a tie goes to the document
- * the words match, then to the better full-text rank. A document no word matches therefore never passes
- * the best word match unless that match is itself absent from the meaning streams.
+ * the words match, then to the better full-text rank. Full text counts double, so a document only the meaning
+ * found (at most 2/61 from its two streams) can at best tie the top word match, and loses the tie. What can happen is
+ * that a weaker word match that both meaning streams rank highly (2/62 + 2/61) passes the top word match.
  * `wordMatches` holds every document the words match, including ones too deep in `fullText` to be listed.
  */
 export function fuseRankings(input: FusionInput, wordMatches: ReadonlySet<string>): string[] {
