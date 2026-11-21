@@ -2,6 +2,8 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import { getLlmQueue } from '../queues/llm.queue';
 import { getOcrQueue } from '../queues/ocr.queue';
+import { findDocumentsMissingCameraRead } from '../image-kind/camera-read';
+import type { KindClassifierConfig } from '../image-kind/classifier-config';
 import { findDocumentsMissingKind } from '../image-kind/kind.repository';
 import { getEmbedQueue, type EmbedBackfillCursor, type EmbedJobKind } from '../queues/embed.queue';
 import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings } from './embedding.repository';
@@ -20,11 +22,14 @@ export interface BackfillDeps {
     isBusy: () => Promise<boolean>;
     enqueue: (kind: EmbedJobKind, documentId: string) => Promise<void>;
     batchSize: number;
+    /** The classifier whose verdicts the kind stage fills in. Defaults to the committed one. */
+    classifier?: KindClassifierConfig;
 }
 
 const STAGES = {
     text: { next: 'image', job: 'embed-text' },
-    image: { next: 'kind', job: 'embed-image' },
+    image: { next: 'camera', job: 'embed-image' },
+    camera: { next: 'kind', job: 'read-camera' },
     kind: { next: null, job: 'classify-image' },
 } as const;
 
@@ -35,13 +40,15 @@ function findMissing(deps: BackfillDeps, stage: EmbedBackfillCursor['stage'], mo
 
     if (stage === 'image') return findDocumentsMissingImageEmbeddings(deps.db, toModelRef(models.image), after, deps.batchSize);
 
-    return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize);
+    if (stage === 'camera') return findDocumentsMissingCameraRead(deps.db, after, deps.batchSize);
+
+    return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize, deps.classifier);
 }
 
 /**
- * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, or an
- * image kind verdict from the current classifier. Stateless apart from the cursor: a restart simply asks the database
- * again, and finished documents no longer match. Text, then images, then kinds; each stage ends when a page comes back empty.
+ * One page of the backfill: queue the next `batchSize` documents that lack an embedding for the current model, a camera
+ * read of the stored file, or an image kind verdict from the current classifier. Stateless apart from the cursor: a restart simply asks the database
+ * again, and finished documents no longer match. Text, then images, then camera reads (each ends with a new verdict), then kinds; each stage ends when a page comes back empty.
  */
 export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillCursor): Promise<BackfillStep> {
     let models: ReadyModels;

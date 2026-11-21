@@ -55,6 +55,8 @@
         "create-user": "node apps/backend/src/scripts/create-user.js",
         "reprocess": "node apps/backend/src/scripts/reprocess.js",
         "backfill-thumbnails": "node apps/backend/src/scripts/backfill-thumbnails.js",
-        "compare-image-kinds": "node apps/backend/src/scripts/compare-image-kinds.js"
+        "compare-image-kinds": "node apps/backend/src/scripts/compare-image-kinds.js",
+        "tune-image-kinds": "node apps/backend/src/scripts/tune-image-kinds.js",
+        "snapshot-image-kind-seeds": "node apps/backend/src/scripts/snapshot-image-kind-seeds.js"
     }
 }

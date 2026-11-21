@@ -1,0 +1,54 @@
+{
+    "name": "b-v2-mean-zscore",
+    "aggregate": "mean",
+    "calibration": "zscore",
+    "thresholds": {
+        "cameraPrior": 0.75,
+        "screenPrior": 0.5,
+        "margin": 0.5,
+        "paperOnCameraMargin": 1
+    },
+    "prompts": {
+        "photo": [
+            "a photo taken with a camera",
+            "a photograph of people, a place or an object",
+            "a snapshot of an everyday scene",
+            "a candid photo of a person or a pet",
+            "a landscape or a travel photo",
+            "a photo of food on a table"
+        ],
+        "screenshot": [
+            "a screenshot of a phone screen with an app",
+            "a screenshot of a mobile chat conversation with message bubbles",
+            "a screenshot of a phone settings screen or a notification",
+            "a screenshot of a desktop computer window with a toolbar and menus",
+            "a screenshot of a web page in a browser",
+            "a screenshot of a terminal window with command line text",
+            "a screenshot of a code editor showing source code"
+        ],
+        "document": [
+            "a scan of a printed document",
+            "a photo of a sheet of paper with printed text",
+            "a bank statement with a table of transactions and account details",
+            "an investment statement with holdings, quantities and values",
+            "a letter with a sender address, a date and paragraphs of text",
+            "a filled-in form with fields and boxes",
+            "a certificate or a diploma",
+            "an invoice with a table of line items and a company letterhead",
+            "a page of a book or a magazine"
+        ],
+        "receipt": [
+            "a narrow shop receipt from a cash register",
+            "a crumpled till receipt with a short list of items and a total",
+            "a thermal paper receipt lying on a table"
+        ],
+        "diagram": [
+            "a diagram with boxes and arrows",
+            "a flowchart or an architecture diagram",
+            "a bar chart or a line graph with labelled axes",
+            "an infographic",
+            "a logo or a vector illustration"
+        ],
+        "other": ["a meme with text over a picture", "a cartoon or a drawing", "an abstract pattern or a texture", "a product picture on a plain background"]
+    }
+}

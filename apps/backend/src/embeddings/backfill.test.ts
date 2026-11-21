@@ -10,8 +10,10 @@ import { createFakeMl, type FakeMl } from '../testing/fake-ml.js';
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
+import { readDocumentCamera } from '../image-kind/camera-read';
 import { clearPromptCache } from '../image-kind/prompt-cache';
 import { classifyDocumentImage } from '../image-kind/service';
+import { PROMPT_ONLY_CLASSIFIER } from '../testing/kind-config.js';
 import { runBackfillPage, type BackfillDeps, type BackfillStep } from './backfill';
 import { embedDocumentImage, embedDocumentText } from './embedding.service';
 
@@ -48,6 +50,7 @@ describeDb('embedding backfill', () => {
             isBusy: async () => busy,
             enqueue: async (kind, id) => void queued.push({ kind, id }),
             batchSize: 2,
+            classifier: PROMPT_ONLY_CLASSIFIER,
         };
     });
 
@@ -56,7 +59,8 @@ describeDb('embedding backfill', () => {
 
         for (const { kind, id } of queued.splice(0)) {
             if (kind === 'embed-text') await embedDocumentText({ db, ml, readFile: read }, id);
-            else if (kind === 'classify-image') await classifyDocumentImage({ db, ml }, id);
+            else if (kind === 'classify-image') await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
+            else if (kind === 'read-camera') await readDocumentCamera({ db, readFile: read }, id);
             else await embedDocumentImage({ db, ml, readFile: read }, id);
         }
     };
@@ -235,7 +239,7 @@ describeDb('embedding backfill', () => {
             // "Crash" after the first page: one job ran, the other did not. A restart from the beginning queues only the rest.
             const [finished] = queued.splice(0);
 
-            await classifyDocumentImage({ db, ml }, finished!.id);
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, finished!.id);
             await runBackfillPage(deps, { stage: 'kind', after: null });
 
             expect(queued.map((job) => job.id)).not.toContain(finished!.id);
@@ -268,6 +272,82 @@ describeDb('embedding backfill', () => {
             await runToEnd();
 
             expect(await kindIds()).toEqual([live]);
+        });
+    });
+
+    describe('the camera stage', () => {
+        const unread = () =>
+            db.selectFrom('documents').select('id').where('camera_read_at', 'is', null).where('mime_type', 'like', 'image/%').orderBy('id').execute();
+
+        async function seedUnreadImages(count: number): Promise<string[]> {
+            const ids: string[] = [];
+
+            for (let i = 0; i < count; i++) ids.push(await seedDocument(db, { userId, name: `cam${i}.jpg`, mime: 'image/jpeg' }));
+
+            return ids.sort();
+        }
+
+        it('comes after the image stage and before the kind stage, and queues a read for every unread image', async () => {
+            const ids = await seedUnreadImages(3);
+
+            expect(await runBackfillPage(deps, { stage: 'image', after: null })).toEqual({ kind: 'next', cursor: { stage: 'camera', after: null } });
+
+            const page = await runBackfillPage(deps, { stage: 'camera', after: null });
+
+            expect(page).toEqual({ kind: 'next', cursor: { stage: 'camera', after: ids[1] } });
+            expect(queued).toEqual(ids.slice(0, 2).map((id) => ({ kind: 'read-camera', id })));
+
+            queued = [];
+            await runBackfillPage(deps, { stage: 'camera', after: ids[1]! });
+            expect(queued.map((job) => job.id)).toEqual([ids[2]]);
+
+            for (const id of ids) await readDocumentCamera({ db, readFile: async () => Buffer.from('x') }, id);
+
+            expect(await unread()).toEqual([]);
+            expect(await runBackfillPage(deps, { stage: 'camera', after: null })).toEqual({ kind: 'next', cursor: { stage: 'kind', after: null } });
+        });
+
+        it('hands over to the kind stage once every image has been read, and resumes after an interruption', async () => {
+            const ids = await seedUnreadImages(4);
+
+            await runBackfillPage(deps, { stage: 'camera', after: null });
+
+            // Only the first queued read finishes before the "crash"; a restart queues the other three, not the finished one.
+            const [finished] = queued.splice(0);
+
+            await readDocumentCamera({ db, readFile: async () => Buffer.from('x') }, finished!.id);
+            queued = [];
+            await runBackfillPage(deps, { stage: 'camera', after: null });
+            expect(queued.map((job) => job.id)).not.toContain(finished!.id);
+
+            queued = [];
+            await runToEnd({ stage: 'camera', after: null });
+            expect(await unread()).toEqual([]);
+            expect(await runBackfillPage(deps, { stage: 'camera', after: null })).toEqual({ kind: 'next', cursor: { stage: 'kind', after: null } });
+            expect(ids).toHaveLength(4);
+        });
+
+        it('re-classifies a verdict made by the earlier classifier version', async () => {
+            const id = await seedDocument(db, { userId, name: 'v1.jpg', mime: 'image/jpeg', cameraReadAt: new Date() });
+
+            await db
+                .updateTable('documents')
+                .set({ thumbnail_paths: { sm: '/s', md: '/m', lg: '/l' } })
+                .where('id', '=', id)
+                .execute();
+            await embedDocumentImage({ db, ml, readFile: async () => Buffer.from('x') }, id);
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
+            await db.updateTable('document_image_kinds').set({ prompt_version: 'older-version' }).where('document_id', '=', id).execute();
+
+            await runBackfillPage(deps, { stage: 'kind', after: null });
+
+            expect(queued).toEqual([{ kind: 'classify-image', id }]);
+
+            queued = [];
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
+            await runBackfillPage(deps, { stage: 'kind', after: null });
+
+            expect(queued).toEqual([]);
         });
     });
 });

@@ -1,0 +1,45 @@
+{
+    "name": "c-alt-max-zscore",
+    "aggregate": "max",
+    "calibration": "zscore",
+    "thresholds": {
+        "cameraPrior": 0.75,
+        "screenPrior": 0.5,
+        "margin": 0.5,
+        "paperOnCameraMargin": 1
+    },
+    "prompts": {
+        "photo": [
+            "a photo of a person",
+            "a photo of a landscape",
+            "a photo of a building or a street",
+            "a photo of an animal",
+            "a photo of food",
+            "a photo of a room or an object at home",
+            "a selfie"
+        ],
+        "screenshot": [
+            "a screenshot of a smartphone screen",
+            "a screenshot of an android app",
+            "a screenshot of a chat app",
+            "a screenshot of a desktop with open windows",
+            "a screenshot of a website",
+            "a screenshot of a terminal with white text on a dark background",
+            "a screenshot of source code in an editor",
+            "a screenshot of a spreadsheet or a dashboard"
+        ],
+        "document": [
+            "a photo of a printed document on a desk",
+            "a scanned page of a bank statement",
+            "a scanned page of an account statement with a table of numbers",
+            "a scanned letter",
+            "a scanned form with boxes to fill in",
+            "a printed certificate",
+            "a scanned invoice",
+            "a page of text with a heading and many lines"
+        ],
+        "receipt": ["a long narrow store receipt", "a photo of a shop receipt with prices and a total", "a printed till slip"],
+        "diagram": ["a diagram", "a flowchart with arrows", "a chart with axes and a legend", "a vector logo", "an illustration"],
+        "other": ["a meme", "a cartoon", "a pattern or a texture", "a product photo on a white background"]
+    }
+}

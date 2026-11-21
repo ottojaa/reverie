@@ -18,7 +18,18 @@ export interface SeedDocument {
     summary?: string;
     entities?: string[];
     tags?: string[];
-    photo?: { takenAt?: Date | null; latitude?: number | null; longitude?: number | null; city?: string | null; country?: string | null };
+    /** When the camera EXIF was read from the file (the documents.camera_read_at marker); null (not read yet) by default. */
+    cameraReadAt?: Date | null;
+    photo?: {
+        takenAt?: Date | null;
+        latitude?: number | null;
+        longitude?: number | null;
+        city?: string | null;
+        country?: string | null;
+        cameraMake?: string | null;
+        cameraModel?: string | null;
+        lensModel?: string | null;
+    };
 }
 
 export async function seedUser(db: Kysely<Database>, label: string): Promise<string> {
@@ -90,6 +101,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             has_meaningful_text: doc.ocrText !== undefined,
             search_vector: null,
             deleted_at: doc.deleted ? new Date() : null,
+            ...(doc.cameraReadAt !== undefined && { camera_read_at: doc.cameraReadAt }),
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -125,6 +137,9 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
                 country: doc.photo.country ?? null,
                 city: doc.photo.city ?? null,
                 taken_at: doc.photo.takenAt ?? null,
+                camera_make: doc.photo.cameraMake ?? null,
+                camera_model: doc.photo.cameraModel ?? null,
+                lens_model: doc.photo.lensModel ?? null,
             })
             .execute();
     }

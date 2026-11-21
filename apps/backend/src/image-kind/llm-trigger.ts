@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import type { Database } from '../db/schema';
 import { shouldSkipLlmProcessing } from '../ocr/text-detector';
 import type { LlmJobData } from '../queues/llm.queue';
+import { isCameraBacked } from '../tools/photo';
 import type { ImageKind } from './kinds';
 
 export type AddLlmJob = (data: LlmJobData, jobId: string) => Promise<void>;
@@ -19,7 +20,7 @@ interface Candidate {
 /**
  * Text that clears the OCR thresholds gets a text summary, as it does when the OCR worker queues the job. An image
  * without text gets a look from Claude only when vision is on and it is not a photo: the verdict says so, and the
- * LLM worker's photo gate checks the camera EXIF again.
+ * LLM worker's photo gate checks the camera evidence again.
  */
 function wantsLlmJob(candidate: Candidate, kind: ImageKind): boolean {
     if (!shouldSkipLlmProcessing(candidate.confidence ?? 0, candidate.hasText)) return true;
@@ -41,7 +42,19 @@ export async function queueLlmAfterKind(db: Kysely<Database>, addLlmJob: AddLlmJ
             .selectFrom('documents as d')
             .leftJoin('ocr_results as o', 'o.document_id', 'd.id')
             .leftJoin('photo_metadata as pm', 'pm.document_id', 'd.id')
-            .select(['d.user_id', 'd.ocr_facts_at', 'd.has_meaningful_text', 'o.confidence_score', 'pm.taken_at', 'pm.latitude', 'pm.longitude'])
+            .select([
+                'd.user_id',
+                'd.ocr_facts_at',
+                'd.camera_read_at',
+                'd.has_meaningful_text',
+                'o.confidence_score',
+                'pm.taken_at',
+                'pm.latitude',
+                'pm.longitude',
+                'pm.camera_make',
+                'pm.camera_model',
+                'pm.lens_model',
+            ])
             .where('d.id', '=', documentId)
             .where('d.deleted_at', 'is', null)
             .executeTakeFirst();
@@ -64,7 +77,7 @@ export async function queueLlmAfterKind(db: Kysely<Database>, addLlmJob: AddLlmJ
             userId: row.user_id,
             hasText: row.has_meaningful_text,
             confidence: row.confidence_score,
-            hasCameraFacts: row.taken_at !== null || row.latitude !== null || row.longitude !== null,
+            hasCameraFacts: isCameraBacked(row),
         };
 
         if (!wantsLlmJob(candidate, kind)) {

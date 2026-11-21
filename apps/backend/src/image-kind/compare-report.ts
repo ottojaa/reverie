@@ -15,7 +15,14 @@ export interface ComparisonRow {
 
 const VISUAL_CATEGORIES = ['photo', 'screenshot', 'graphic'];
 
-/** Whether the current category is one the verdict would stand for: paper-like kinds match any non-visual category. */
+/** The categories of printed paper that must read as `document` and not as a till slip: statements, invoices, forms, letters, reports. */
+export const PAPER_CATEGORIES = ['bank_statement', 'stock_statement', 'invoice', 'form', 'letter', 'certificate', 'contract', 'report'];
+
+/**
+ * Whether the current category is one the verdict would stand for. A receipt is a till slip, so it agrees only with
+ * the `receipt` category: a bank statement or an invoice with a receipt verdict is a disagreement. `document` stands
+ * for every other text category.
+ */
 export function agrees(kind: ImageKind, category: string | null): boolean {
     if (category === null) return false;
 
@@ -25,12 +32,17 @@ export function agrees(kind: ImageKind, category: string | null): boolean {
 
     if (kind === 'diagram') return category === 'graphic';
 
+    if (kind === 'receipt') return category === 'receipt';
+
+    if (kind === 'document') return !VISUAL_CATEGORIES.includes(category) && category !== 'receipt';
+
     return !VISUAL_CATEGORIES.includes(category);
 }
 
-const hasCameraDate = (row: ComparisonRow) => row.capture.takenAt || row.capture.gps;
+/** Camera evidence: make, model, lens or GPS. A capture date alone is not (Android writes one into screenshots). */
+export const hasCameraEvidence = (row: ComparisonRow) => row.capture.gps || row.capture.make || row.capture.model || row.capture.lens;
 
-const hasMakeOrModel = (row: ComparisonRow) => row.capture.make || row.capture.model;
+const hasDateOnly = (row: ComparisonRow) => row.capture.takenAt && !hasCameraEvidence(row);
 
 function formatScores(scores: Record<string, number> | null): string {
     if (!scores) return '-';
@@ -60,6 +72,63 @@ function matrix(rows: ComparisonRow[]): string[] {
     return [header, ...lines];
 }
 
+interface BarCheck {
+    name: string;
+    detail: string;
+    pass: boolean;
+}
+
+/** The four checks the flip needs. Pure over the rows, so the tuner prints the same block for every prompt set. */
+export function evaluateBar(rows: ComparisonRow[]): BarCheck[] {
+    const judged = rows.filter((row) => row.kind !== null);
+    const privacy1 = judged.filter((row) => row.kind !== 'photo' && hasCameraEvidence(row) && !row.hasMeaningfulText);
+    const cameraPhotos = judged.filter((row) => row.kind !== 'photo' && row.category === 'photo' && hasCameraEvidence(row));
+    const screenshots = rows.filter((row) => row.category === 'screenshot');
+    const screenshotHits = screenshots.filter((row) => row.kind === 'screenshot');
+    const statements = rows.filter((row) => row.category !== null && PAPER_CATEGORIES.includes(row.category));
+    const statementHits = statements.filter((row) => row.kind === 'document');
+
+    return [
+        { name: 'no camera image without text left photo (the first privacy list)', detail: `${privacy1.length} image(s)`, pass: privacy1.length === 0 },
+        { name: 'no current photo with camera evidence left photo', detail: `${cameraPhotos.length} image(s)`, pass: cameraPhotos.length === 0 },
+        {
+            name: 'at least 8 in 9 screenshots stay screenshot (40 of 45)',
+            detail: `${screenshotHits.length} of ${screenshots.length}`,
+            pass: screenshotHits.length * 9 >= screenshots.length * 8,
+        },
+        {
+            name: 'statements, invoices, forms and letters read as document',
+            detail: `${statementHits.length} of ${statements.length}`,
+            pass: statementHits.length === statements.length,
+        },
+    ];
+}
+
+/** The verdict counts for each text category: shows at a glance whether paper reads as document or receipt. */
+function paperByCategory(rows: ComparisonRow[]): string[] {
+    const paper = rows.filter((row) => row.kind !== null && row.category !== null && !VISUAL_CATEGORIES.includes(row.category));
+    const categories = [...new Set(paper.map((row) => row.category!))].sort();
+
+    return categories.map((category) => {
+        const counts = IMAGE_KINDS.map((kind) => [kind, paper.filter((row) => row.category === category && row.kind === kind).length] as const)
+            .filter(([, count]) => count > 0)
+            .map(([kind, count]) => `${kind}=${count}`);
+
+        return `  ${category.padEnd(18)}${counts.join(' ')}`;
+    });
+}
+
+export function formatBar(rows: ComparisonRow[]): string[] {
+    const checks = evaluateBar(rows);
+
+    return [
+        `Flip bar: ${checks.every((check) => check.pass) ? 'MET' : 'NOT MET'}`,
+        ...checks.map((check) => `  [${check.pass ? 'pass' : 'FAIL'}] ${check.name}: ${check.detail}`),
+        'Paper categories by verdict:',
+        ...paperByCategory(rows),
+    ];
+}
+
 /**
  * The shadow-mode comparison: verdicts against today's categories. Pure, so it is tested on fixed rows.
  * The privacy lists are the ones to read first: a camera image with no text, or a current photo, that got a
@@ -69,9 +138,9 @@ export function buildReport(rows: ComparisonRow[]): string {
     const judged = rows.filter((row) => row.kind !== null);
     const unjudged = rows.filter((row) => row.kind === null);
     const disagreements = judged.filter((row) => !agrees(row.kind!, row.category));
-    const cameraNoText = judged.filter((row) => row.kind !== 'photo' && hasCameraDate(row) && !row.hasMeaningfulText);
+    const cameraNoText = judged.filter((row) => row.kind !== 'photo' && hasCameraEvidence(row) && !row.hasMeaningfulText);
     const currentPhotos = judged.filter((row) => row.kind !== 'photo' && row.category === 'photo');
-    const uncaptured = judged.filter((row) => hasCameraDate(row) && !hasMakeOrModel(row));
+    const dateOnly = judged.filter(hasDateOnly);
     const versions = [...new Set(judged.map((row) => row.classifierVersion))].join(', ') || '-';
 
     return [
@@ -80,12 +149,13 @@ export function buildReport(rows: ComparisonRow[]): string {
         `classifier version(s): ${versions}`,
         '',
         ...matrix(judged),
-        ...section('PRIVACY 1: camera EXIF (capture date or GPS), no meaningful text, non-photo verdict', cameraNoText),
+        '',
+        ...formatBar(rows),
+        ...section('PRIVACY 1: camera evidence (make, model, lens or GPS), no meaningful text, non-photo verdict', cameraNoText),
         ...section('PRIVACY 2: currently categorised photo, non-photo verdict', currentPhotos),
         ...section('All disagreements (verdict vs current category)', disagreements),
         '',
-        `Caveat: ${uncaptured.length} verdict(s) have a capture date or GPS but no camera make or model. Those columns are only filled for images`,
-        'OCR-processed after this change, so older images were classified with a weaker camera prior than new uploads get.',
+        `Date only: ${dateOnly.length} verdict(s) have a capture date but no make, model, lens or GPS. A date alone is not camera evidence.`,
         ...section('Images without a verdict', unjudged),
     ].join('\n');
 }

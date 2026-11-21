@@ -17,9 +17,13 @@ export const DOCUMENT_ROW_COLUMNS = [
     'd.document_category',
     'd.extracted_date',
     'f.path as folder_path',
+    'd.camera_read_at as camera_read_at',
     'pm.taken_at as taken_at',
     'pm.latitude as latitude',
     'pm.longitude as longitude',
+    'pm.camera_make as camera_make',
+    'pm.camera_model as camera_model',
+    'pm.lens_model as lens_model',
     'pm.city as city',
     'pm.country as country',
 ] as const;
@@ -31,9 +35,13 @@ export interface DocumentRowSource {
     document_category: string | null;
     extracted_date: Date | null;
     folder_path: string | null;
+    camera_read_at: Date | null;
     taken_at: Date | null;
     latitude: number | null;
     longitude: number | null;
+    camera_make: string | null;
+    camera_model: string | null;
+    lens_model: string | null;
     city: string | null;
     country: string | null;
 }
