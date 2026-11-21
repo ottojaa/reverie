@@ -39,6 +39,9 @@ export interface PrototypeVariant {
 
 const DEFAULT_K = 3;
 
+/** The seed rules an image matches (the first decides), from its filename, category, text, camera evidence and size. */
+export const toSeedRules = (image: PrototypeImage) => matchSeedRules({ ...image, camera: toCameraFacts(image.capture) });
+
 /** The prompt weights a set tries, base first. */
 export const promptWeightsOf = (settings: PrototypeSettings): number[] => [settings.promptWeight, ...(settings.promptWeights ?? [])];
 
@@ -52,10 +55,7 @@ export function scoreVariants(
     promptRaws: readonly Raw[] | null,
     settings: PrototypeSettings,
 ): { variants: PrototypeVariant[]; notes: string[] } {
-    const seeded = images.map((image) => ({
-        embedding: image.embedding,
-        rules: matchSeedRules({ ...image, camera: toCameraFacts(image.capture) }),
-    }));
+    const seeded = images.map((image) => ({ embedding: image.embedding, rules: toSeedRules(image) }));
     const zero = images.map(() => Object.fromEntries(IMAGE_KINDS.map((kind) => [kind, 0])) as Raw);
     const variants: PrototypeVariant[] = [];
     let notes: string[] = [];

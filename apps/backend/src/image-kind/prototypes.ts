@@ -88,13 +88,18 @@ function centroidCosine(gram: number[][], i: number, seeds: readonly number[]): 
     return along / (norm || 1);
 }
 
-function neighbourCosine(gram: number[][], i: number, seeds: readonly number[], k: number): number {
-    const top = seeds
-        .map((j) => gram[i]![j]!)
-        .sort((a, b) => b - a)
-        .slice(0, Math.max(1, k));
+/** The mean of the `k` largest similarities (at least one). */
+export function meanOfTop(similarities: readonly number[], k: number): number {
+    const top = [...similarities].sort((a, b) => b - a).slice(0, Math.max(1, k));
 
     return top.reduce((sum, value) => sum + value, 0) / top.length;
+}
+
+function neighbourCosine(gram: number[][], i: number, seeds: readonly number[], k: number): number {
+    return meanOfTop(
+        seeds.map((j) => gram[i]![j]!),
+        k,
+    );
 }
 
 /** Each image's similarity to the prototype of each seed kind, leave-one-out. Embeddings are normalised to unit length here. */
@@ -136,12 +141,26 @@ export function scorePrototypes(images: readonly { embedding: number[]; rules: r
     };
 }
 
-function toZ(values: readonly (number | null)[]): (number | null)[] {
+export interface ColumnStats {
+    mean: number;
+    std: number;
+}
+
+/** Mean and population standard deviation of the present values; a flat column has std 1 so a z-score is just the difference. */
+export function measureColumn(values: readonly (number | null)[]): ColumnStats {
     const present = values.filter((value): value is number => value !== null);
     const mean = present.reduce((sum, value) => sum + value, 0) / (present.length || 1);
     const std = Math.sqrt(present.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (present.length || 1)) || 1;
 
-    return values.map((value) => (value === null ? null : (value - mean) / std));
+    return { mean, std };
+}
+
+export const toZScore = (value: number, { mean, std }: ColumnStats): number => (value - mean) / std;
+
+function toZ(values: readonly (number | null)[]): (number | null)[] {
+    const stats = measureColumn(values);
+
+    return values.map((value) => (value === null ? null : toZScore(value, stats)));
 }
 
 /**

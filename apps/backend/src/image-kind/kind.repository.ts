@@ -2,7 +2,8 @@ import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { ModelRef } from '../embeddings/embedding.repository';
 import { toCameraFacts, type KindFacts, type KindVerdict } from './classifier';
-import { KIND_CLASSIFIER_VERSION } from './classifier-config';
+import { KIND_CLASSIFIER, type KindClassifierConfig } from './classifier-config';
+import { hasSeedSet } from './seed-set.repository';
 import type { ImageKind } from './kinds';
 
 export interface KindInputs {
@@ -76,12 +77,18 @@ export async function loadStoredKind(db: Kysely<Database>, documentId: string): 
     };
 }
 
-export async function upsertKind(db: Kysely<Database>, documentId: string, verdict: KindVerdict, model: ModelRef): Promise<void> {
+export async function upsertKind(
+    db: Kysely<Database>,
+    documentId: string,
+    verdict: KindVerdict,
+    model: ModelRef,
+    config: KindClassifierConfig = KIND_CLASSIFIER,
+): Promise<void> {
     const values = {
         kind: verdict.kind,
         scores: JSON.stringify(verdict.scores),
         signals: JSON.stringify(verdict.signals),
-        prompt_version: KIND_CLASSIFIER_VERSION,
+        prompt_version: config.version,
         model: model.model,
         model_version: model.version,
         classified_at: new Date(),
@@ -96,9 +103,18 @@ export async function upsertKind(db: Kysely<Database>, documentId: string, verdi
 
 /**
  * Live images with an embedding from the current image model and no verdict from the current classifier version for
- * that embedding, in id order after `after`. Images without an embedding are the image stage's job.
+ * that embedding, in id order after `after`. Images without an embedding are the image stage's job. A version that
+ * scores by seeds finds nothing until its seed set exists for this image model: there is nothing to classify with.
  */
-export async function findDocumentsMissingKind(db: Kysely<Database>, current: ModelRef, after: string | null, limit: number): Promise<string[]> {
+export async function findDocumentsMissingKind(
+    db: Kysely<Database>,
+    current: ModelRef,
+    after: string | null,
+    limit: number,
+    config: KindClassifierConfig = KIND_CLASSIFIER,
+): Promise<string[]> {
+    if (config.prototypes && !(await hasSeedSet(db, config.version, current))) return [];
+
     const rows = await db
         .selectFrom('documents as d')
         .innerJoin('document_image_embeddings as e', 'e.document_id', 'd.id')
@@ -112,7 +128,7 @@ export async function findDocumentsMissingKind(db: Kysely<Database>, current: Mo
         .where((eb) =>
             eb.or([
                 eb('k.document_id', 'is', null),
-                eb('k.prompt_version', '<>', KIND_CLASSIFIER_VERSION),
+                eb('k.prompt_version', '<>', config.version),
                 eb('k.model', '<>', current.model),
                 eb('k.model_version', '<>', current.version),
             ]),

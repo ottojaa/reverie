@@ -13,6 +13,7 @@ import { describeDb } from '../testing/tool-world.js';
 import { readDocumentCamera } from '../image-kind/camera-read';
 import { clearPromptCache } from '../image-kind/prompt-cache';
 import { classifyDocumentImage } from '../image-kind/service';
+import { PROMPT_ONLY_CLASSIFIER } from '../testing/kind-config.js';
 import { runBackfillPage, type BackfillDeps, type BackfillStep } from './backfill';
 import { embedDocumentImage, embedDocumentText } from './embedding.service';
 
@@ -49,6 +50,7 @@ describeDb('embedding backfill', () => {
             isBusy: async () => busy,
             enqueue: async (kind, id) => void queued.push({ kind, id }),
             batchSize: 2,
+            classifier: PROMPT_ONLY_CLASSIFIER,
         };
     });
 
@@ -57,7 +59,7 @@ describeDb('embedding backfill', () => {
 
         for (const { kind, id } of queued.splice(0)) {
             if (kind === 'embed-text') await embedDocumentText({ db, ml, readFile: read }, id);
-            else if (kind === 'classify-image') await classifyDocumentImage({ db, ml }, id);
+            else if (kind === 'classify-image') await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
             else if (kind === 'read-camera') await readDocumentCamera({ db, readFile: read }, id);
             else await embedDocumentImage({ db, ml, readFile: read }, id);
         }
@@ -237,7 +239,7 @@ describeDb('embedding backfill', () => {
             // "Crash" after the first page: one job ran, the other did not. A restart from the beginning queues only the rest.
             const [finished] = queued.splice(0);
 
-            await classifyDocumentImage({ db, ml }, finished!.id);
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, finished!.id);
             await runBackfillPage(deps, { stage: 'kind', after: null });
 
             expect(queued.map((job) => job.id)).not.toContain(finished!.id);
@@ -334,15 +336,15 @@ describeDb('embedding backfill', () => {
                 .where('id', '=', id)
                 .execute();
             await embedDocumentImage({ db, ml, readFile: async () => Buffer.from('x') }, id);
-            await classifyDocumentImage({ db, ml }, id);
-            await db.updateTable('document_image_kinds').set({ prompt_version: 'v1' }).where('document_id', '=', id).execute();
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
+            await db.updateTable('document_image_kinds').set({ prompt_version: 'older-version' }).where('document_id', '=', id).execute();
 
             await runBackfillPage(deps, { stage: 'kind', after: null });
 
             expect(queued).toEqual([{ kind: 'classify-image', id }]);
 
             queued = [];
-            await classifyDocumentImage({ db, ml }, id);
+            await classifyDocumentImage({ db, ml, config: PROMPT_ONLY_CLASSIFIER }, id);
             await runBackfillPage(deps, { stage: 'kind', after: null });
 
             expect(queued).toEqual([]);

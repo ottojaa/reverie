@@ -26,8 +26,19 @@ export interface KindThresholds {
     paperOnCameraMargin: number;
 }
 
+/**
+ * Scoring by similarity to a frozen set of the library's own confident examples (see seed-set.ts), beside the prompts.
+ * Each kind's score is z(mean similarity to its `k` nearest seeds) + `promptWeight` * z(prompt score), with the z
+ * statistics frozen in the seed set. The calibration of such a config is the identity.
+ */
+export interface PrototypeConfig {
+    k: number;
+    promptWeight: number;
+}
+
 export interface KindClassifierConfig {
     version: string;
+    prototypes?: PrototypeConfig;
     prompts: Record<ImageKind, readonly string[]>;
     aggregate: KindAggregate;
     calibration: Record<ImageKind, KindCalibration>;
@@ -91,19 +102,20 @@ export const V2_PROMPTS: Record<ImageKind, readonly string[]> = {
 };
 
 /**
- * The committed classifier. Raw cosines, the best prompt per kind. Thresholds are in cosine units (image-text
- * cosines of the SigLIP2 model sit around 0.05 to 0.25).
- *
- * This is an untuned draft, deliberately versioned `v2-draft`: the winning prompt set from the tuning script
- * (scripts/tune-image-kinds.ts, run on the library) replaces it with its explicit calibration numbers and the version
- * `v2`, so verdicts made by the draft get re-classified by the backfill.
+ * The committed classifier: the winning candidate of the tuning rounds on the real library (set g: nearest 3 seeds
+ * plus the prompts at weight 0.25, scoring 0 privacy leaks, 40 of 45 screenshots and 12 of 12 paper at margin 0.5,
+ * the strictest margin that passed). Thresholds are in z units. The seeds and the z statistics are not here: they
+ * come from the seed set stored for this version (`image_kind_seed_sets`, taken once on the server by
+ * scripts/snapshot-image-kind-seeds.ts), so a verdict never moves as the library grows. Without a seed set for this
+ * version and image model nothing is classified.
  */
 export const KIND_CLASSIFIER: KindClassifierConfig = {
-    version: 'v2-draft',
+    version: 'v2',
     prompts: V2_PROMPTS,
     aggregate: 'max',
     calibration: IDENTITY_CALIBRATION,
-    thresholds: { cameraPrior: 0.03, screenPrior: 0.03, margin: 0.02, paperOnCameraMargin: 0.04 },
+    prototypes: { k: 3, promptWeight: 0.25 },
+    thresholds: { cameraPrior: 0.75, screenPrior: 0.5, margin: 0.5, paperOnCameraMargin: 1 },
 };
 
 export const KIND_CLASSIFIER_VERSION = KIND_CLASSIFIER.version;

@@ -13,17 +13,18 @@ import { createFakeMl, IMAGE_DIMENSIONS, IMAGE_MODEL, type FakeMl } from '../tes
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
-import { KIND_CLASSIFIER, listPrompts } from './classifier-config';
+import { listPrompts } from './classifier-config';
 import { IMAGE_KINDS, type ImageKind } from './kinds';
 import { clearPromptCache } from './prompt-cache';
 import { classifyDocumentImage, decideLlmHandoff, isKindFlipActive, settleImageKind, type KindDeps } from './service';
 import { loadStoredKind } from './kind.repository';
+import { PROMPT_ONLY_CLASSIFIER } from '../testing/kind-config.js';
 
 const MODEL = { model: IMAGE_MODEL.name, version: IMAGE_MODEL.revision };
 
 /** Each kind's prompts sit on one axis, so an image's weight on that axis is its score for the kind. */
 function promptVector(text: string): number[] {
-    const kind = listPrompts(KIND_CLASSIFIER).find((entry) => entry.text === text)!.kind;
+    const kind = listPrompts(PROMPT_ONLY_CLASSIFIER).find((entry) => entry.text === text)!.kind;
 
     return axes({ [kind]: 1 });
 }
@@ -61,6 +62,7 @@ describeDb('image kind', () => {
             db,
             ml,
             flip: false,
+            config: PROMPT_ONLY_CLASSIFIER,
             addLlmJob: async (data, jobId) => void queued.push({ documentId: data.documentId, userId: data.userId, jobId }),
         };
     });
@@ -141,7 +143,7 @@ describeDb('image kind', () => {
             const stored = await loadStoredKind(db, id);
 
             expect(stored?.kind).toBe(kind);
-            expect(stored?.promptVersion).toBe(KIND_CLASSIFIER.version);
+            expect(stored?.promptVersion).toBe(PROMPT_ONLY_CLASSIFIER.version);
             expect(stored?.model).toEqual(MODEL);
             expect(Object.keys(stored!.scores).sort()).toEqual([...IMAGE_KINDS].sort());
         });
@@ -183,7 +185,7 @@ describeDb('image kind', () => {
             for (const id of ids) await classifyDocumentImage(deps, id);
 
             expect(ml.imageTextCalls).toHaveLength(1);
-            expect(ml.imageTextCalls[0]).toEqual(listPrompts(KIND_CLASSIFIER).map((entry) => entry.text));
+            expect(ml.imageTextCalls[0]).toEqual(listPrompts(PROMPT_ONLY_CLASSIFIER).map((entry) => entry.text));
             expect(ml.imageCalls).toBe(0);
             expect(ml.textCalls).toHaveLength(0);
         });

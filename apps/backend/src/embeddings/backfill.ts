@@ -3,6 +3,7 @@ import type { Database } from '../db/schema';
 import { getLlmQueue } from '../queues/llm.queue';
 import { getOcrQueue } from '../queues/ocr.queue';
 import { findDocumentsMissingCameraRead } from '../image-kind/camera-read';
+import type { KindClassifierConfig } from '../image-kind/classifier-config';
 import { findDocumentsMissingKind } from '../image-kind/kind.repository';
 import { getEmbedQueue, type EmbedBackfillCursor, type EmbedJobKind } from '../queues/embed.queue';
 import { findDocumentsMissingImageEmbeddings, findDocumentsMissingTextEmbeddings } from './embedding.repository';
@@ -21,6 +22,8 @@ export interface BackfillDeps {
     isBusy: () => Promise<boolean>;
     enqueue: (kind: EmbedJobKind, documentId: string) => Promise<void>;
     batchSize: number;
+    /** The classifier whose verdicts the kind stage fills in. Defaults to the committed one. */
+    classifier?: KindClassifierConfig;
 }
 
 const STAGES = {
@@ -39,7 +42,7 @@ function findMissing(deps: BackfillDeps, stage: EmbedBackfillCursor['stage'], mo
 
     if (stage === 'camera') return findDocumentsMissingCameraRead(deps.db, after, deps.batchSize);
 
-    return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize);
+    return findDocumentsMissingKind(deps.db, toModelRef(models.image), after, deps.batchSize, deps.classifier);
 }
 
 /**
