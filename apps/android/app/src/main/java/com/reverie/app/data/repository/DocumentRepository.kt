@@ -23,10 +23,10 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One page of a refresh: the server total and how many rows we've loaded so far. */
 /** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
 data class SignedUrls(val fileUrl: String, val hlsUrl: String?)
 
+/** One page of a refresh: the server total and how many rows we've loaded so far. */
 data class PageResult(val total: Int, val loaded: Int) {
     val hasMore: Boolean get() = loaded < total
 }

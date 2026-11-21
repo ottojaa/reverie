@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.HttpDataSource
 
@@ -75,6 +77,18 @@ internal fun toPlayingLabel(tracks: Tracks): String? {
     val index = (0 until group.length).firstOrNull { group.isTrackSelected(it) } ?: return null
 
     return toQualityLabel(group.getTrackFormat(index).width, group.getTrackFormat(index).height)
+}
+
+/** Pins [level], or hands the choice back to bandwidth (Auto) for null. */
+internal fun selectQuality(player: Player, level: VideoQualityLevel?) {
+    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+        if (level == null) {
+            clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            return@apply
+        }
+        val group = player.currentTracks.groups[level.groupIndex].mediaTrackGroup
+        setOverrideForType(TrackSelectionOverride(group, level.trackIndex))
+    }.build()
 }
 
 /**

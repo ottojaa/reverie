@@ -31,7 +31,6 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
-import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -76,6 +75,10 @@ private class StreamState {
 
     // The original's URL from the latest signing; the composable's own fileUrl is as old as the page.
     var freshFileUrl: String? = null
+
+    // The rung (by shorter side) the viewer pinned, kept across a reload: signing again builds new
+    // track groups, so the override itself no longer matches and is re-applied from this height.
+    var pinnedHeight: Int? = null
 }
 
 /**
@@ -206,6 +209,7 @@ fun VideoViewer(
         stream.onOriginal = hlsUrl == null
         stream.refreshes = 0
         stream.freshFileUrl = null
+        stream.pinnedHeight = null
         player.setMediaItem(hlsUrl?.let(::toStreamItem) ?: MediaItem.fromUri(fileUrl))
         player.prepare()
         player.playWhenReady = false
@@ -257,6 +261,11 @@ fun VideoViewer(
                 playingQuality = toPlayingLabel(tracks)
                 pinnedQuality = override?.let { o ->
                     levels.firstOrNull { l -> tracks.groups.getOrNull(l.groupIndex)?.mediaTrackGroup == o.mediaTrackGroup && l.trackIndex == o.trackIndices.firstOrNull() }
+                }
+                // A reloaded stream (fresh signature) has new track groups: put the viewer's rung back.
+                val wanted = stream.pinnedHeight
+                if (pinnedQuality == null && wanted != null) {
+                    levels.firstOrNull { it.height == wanted }?.let { selectQuality(player, it) }
                 }
             }
         }
@@ -339,14 +348,8 @@ fun VideoViewer(
                 onExpandedChange = { qualityMenuOpen = it },
                 onSelect = { level ->
                     qualityMenuOpen = false
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                        if (level == null) {
-                            clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-                            return@apply
-                        }
-                        val group = player.currentTracks.groups[level.groupIndex].mediaTrackGroup
-                        setOverrideForType(TrackSelectionOverride(group, level.trackIndex))
-                    }.build()
+                    stream.pinnedHeight = level?.height
+                    selectQuality(player, level)
                 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
             )
