@@ -1,6 +1,8 @@
 package com.reverie.app.ui.screens.viewer.insight
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -42,6 +44,35 @@ fun InsightTagsSection(metadata: LlmMetadata?) {
             if (topics.isNotEmpty()) {
                 MicroLabel("TOPICS")
                 ChipFlow(topics, emphasized = false)
+            }
+        }
+    }
+}
+
+/**
+ * Labels taught by example (web-only to teach, read-only here). Outlined chips so they read as
+ * "yours", like the dashed chips on the web. Hidden when the document has none.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun InsightLabelsSection(labels: List<String>) {
+    if (labels.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MicroLabel("TAUGHT LABELS")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            labels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
             }
         }
     }

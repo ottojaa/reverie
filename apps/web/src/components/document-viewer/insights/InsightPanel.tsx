@@ -1,11 +1,13 @@
+import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { useRemoveLabelMatch } from '@/lib/api/taught-labels';
 import { useUser } from '@/lib/api/users';
 import { formatDateTime, formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import { addFilter, type Document } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OcrResultDialog } from '../OcrResultDialog';
@@ -70,6 +72,8 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
     const isAdmin = user?.role === 'admin';
 
     const navigate = useNavigate();
+    const removeMatch = useRemoveLabelMatch();
+    const taughtTags = (document.tags ?? []).filter((tag) => tag.source === 'taught');
 
     // Jump to search filtered by the clicked chip. Topics have no `topic:` filter, so they map to tags.
     const searchBy = (key: 'category' | 'entity' | 'tag', value: string) => {
@@ -191,6 +195,37 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
                                             <Chip key={topic} variant="secondary" title="Search this topic" onClick={() => searchBy('tag', topic)}>
                                                 {topic}
                                             </Chip>
+                                        ))}
+                                    </div>
+                                </Section>
+                            )}
+
+                            {/* Labels taught by example: dashed chips; × takes one off and keeps the label from coming back */}
+                            {taughtTags.length > 0 && (
+                                <Section delay={nextDelay()} className="space-y-1.5">
+                                    <MicroLabel>Taught labels</MicroLabel>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {taughtTags.map((tag) => (
+                                            <span key={tag.name} className="inline-flex items-center gap-0.5">
+                                                <Chip variant="taught" title="Search this label" onClick={() => searchBy('tag', tag.name)}>
+                                                    <Tag className="size-3 shrink-0" />
+                                                    <span className="max-w-48 truncate">{tag.name}</span>
+                                                </Chip>
+                                                {tag.label_id && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        className="size-5 text-muted-foreground"
+                                                        disabled={removeMatch.isPending}
+                                                        aria-label={`Remove the label ${tag.name} from this document`}
+                                                        title="Remove this label from this document (it won't come back)"
+                                                        onClick={() => removeMatch.mutate({ id: tag.label_id!, documentId: document.id })}
+                                                    >
+                                                        <X className="size-3" />
+                                                    </Button>
+                                                )}
+                                            </span>
                                         ))}
                                     </div>
                                 </Section>
