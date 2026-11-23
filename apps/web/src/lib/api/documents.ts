@@ -10,6 +10,7 @@ import {
     type CheckContentResult,
     type CheckDuplicatesResponse,
     type Document,
+    type DocumentKind,
     type DocumentOcrResult,
     type FolderWithChildren,
 } from '@reverie/shared';
@@ -19,6 +20,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { apiClient } from './client';
 import { useAuth } from '../auth';
+import { folderCountDecrements, withoutDocuments, type DocumentsCache } from './document-cache';
 
 export type DocumentsResponse = {
     items: Document[];
@@ -31,19 +33,28 @@ interface UseDocumentsOptions {
     folderId?: string | null;
     limit?: number;
     offset?: number;
+    /** Only documents of this kind (by MIME type); `total` of the response is then that kind's total. */
+    kind?: DocumentKind | undefined;
+}
+
+/** The query string of `GET /documents`: `kind` is sent only when set, so an omitted kind is exactly today's request. */
+export function toDocumentListParams(options: UseDocumentsOptions): Record<string, string> {
+    const params: Record<string, string> = {};
+
+    if (options.folderId) params.folder_id = options.folderId;
+
+    if (options.limit) params.limit = String(options.limit);
+
+    if (options.offset !== undefined && options.offset > 0) params.offset = String(options.offset);
+
+    if (options.kind) params.kind = options.kind;
+
+    return params;
 }
 
 export const documentsApi = {
     async list(options: UseDocumentsOptions = {}): Promise<DocumentsResponse> {
-        const params: Record<string, string> = {};
-
-        if (options.folderId) params.folder_id = options.folderId;
-
-        if (options.limit) params.limit = String(options.limit);
-
-        if (options.offset !== undefined && options.offset > 0) params.offset = String(options.offset);
-
-        const { data } = await apiClient.get('/documents', { params });
+        const { data } = await apiClient.get('/documents', { params: toDocumentListParams(options) });
 
         return DocumentListResponseSchema.parse(data);
     },
@@ -158,19 +169,39 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
 
 const DEFAULT_PAGE_SIZE = 24;
 
+/** What identifies one infinite list: its folder, page size and (when filtered) kind. */
+type InfiniteDocumentsOptions = { folderId: string | null; limit: number; kind?: DocumentKind };
+
+/** The folder, page size and kind an infinite list is cached under. */
+export function toInfiniteDocumentsOptions(options: Pick<UseDocumentsOptions, 'folderId' | 'limit' | 'kind'>): InfiniteDocumentsOptions {
+    return {
+        folderId: options.folderId ?? null,
+        limit: options.limit ?? DEFAULT_PAGE_SIZE,
+        // Left out when unset: an unfiltered list keeps the key it had before kinds existed (canvas, sidebar prefetch).
+        ...(options.kind && { kind: options.kind }),
+    };
+}
+
+/** The one place the infinite list's query key is built (hook and prefetch share it). */
+export function infiniteDocumentsKey(options: InfiniteDocumentsOptions) {
+    return ['documents', 'infinite', options] as const;
+}
+
+/** The server's total for the list, from its own first page (every page carries it; the first is the freshest). */
+export function firstPageTotal(data: InfiniteData<DocumentsResponse> | undefined): number {
+    return data?.pages[0]?.total ?? 0;
+}
+
 /**
  * Infinite scroll documents (offset-based pagination, use in Browse)
  */
 export function useInfiniteDocuments(options: UseDocumentsOptions & { enabled?: boolean } = {}) {
     const { isAuthenticated } = useAuth();
 
-    const stableOptions = {
-        folderId: options.folderId ?? null,
-        limit: options.limit ?? DEFAULT_PAGE_SIZE,
-    };
+    const stableOptions = toInfiniteDocumentsOptions(options);
 
     return useInfiniteQuery({
-        queryKey: ['documents', 'infinite', stableOptions],
+        queryKey: infiniteDocumentsKey(stableOptions),
         queryFn: ({ pageParam }) =>
             documentsApi.list({
                 ...stableOptions,
@@ -196,9 +227,9 @@ export function usePrefetchInfiniteDocuments() {
 
     return useCallback(
         (folderId: string) => {
-            const stableOptions = { folderId, limit: DEFAULT_PAGE_SIZE };
+            const stableOptions = toInfiniteDocumentsOptions({ folderId });
             queryClient.prefetchInfiniteQuery({
-                queryKey: ['documents', 'infinite', stableOptions],
+                queryKey: infiniteDocumentsKey(stableOptions),
                 queryFn: ({ pageParam }) => documentsApi.list({ ...stableOptions, offset: pageParam as number }),
                 initialPageParam: 0,
             });
@@ -376,51 +407,13 @@ export function useDeleteDocuments() {
             const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
             const previousSections = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
-            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | InfiniteData<DocumentsResponse> | undefined) => {
-                if (!old) return old;
-
-                const infinite = old as { pages?: DocumentsResponse[]; pageParams?: unknown[] };
-
-                if (infinite.pages) {
-                    const pages = infinite.pages.map((page) => ({
-                        ...page,
-                        items: page.items.filter((d) => !ids.includes(d.id)),
-                    }));
-
-                    if (pages[0]) {
-                        pages[0].total = Math.max(0, (infinite.pages[0]?.total ?? 0) - ids.length);
-                    }
-
-                    return { ...infinite, pages };
-                }
-
-                const single = old as DocumentsResponse;
-
-                return {
-                    ...single,
-                    items: single.items.filter((d) => !ids.includes(d.id)),
-                    total: single.total - ids.length,
-                };
-            });
+            queryClient.setQueriesData<DocumentsCache>({ queryKey: ['documents'] }, (old) => (old ? withoutDocuments(old, ids) : old));
 
             if (previousSections) {
-                const decrements = new Map<string, number>();
-
-                for (const [, data] of previous) {
-                    const res = data as DocumentsResponse | InfiniteData<DocumentsResponse> | undefined;
-                    const items = !res
-                        ? []
-                        : 'pages' in res && Array.isArray(res.pages)
-                          ? (res as InfiniteData<DocumentsResponse>).pages.flatMap((p) => p.items)
-                          : ((res as DocumentsResponse).items ?? []);
-
-                    for (const id of ids) {
-                        const doc = items.find((d) => d.id === id);
-                        const fid = doc?.folder_id ?? null;
-
-                        if (fid) decrements.set(fid, (decrements.get(fid) ?? 0) + 1);
-                    }
-                }
+                const decrements = folderCountDecrements(
+                    previous.map(([, data]) => data as DocumentsCache | undefined),
+                    ids,
+                );
 
                 if (decrements.size > 0) {
                     const decrementFolderCount = (nodes: FolderWithChildren[]): FolderWithChildren[] =>

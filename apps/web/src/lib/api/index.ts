@@ -3,6 +3,7 @@ export { authApi, useSignInProviders } from './auth-api';
 export {
     documentsApi,
     findCachedDocument,
+    firstPageTotal,
     useDeleteDocuments,
     useDocument,
     useDocuments,

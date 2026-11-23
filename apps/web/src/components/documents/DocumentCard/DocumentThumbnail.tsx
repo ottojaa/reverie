@@ -1,3 +1,4 @@
+import { formatDuration } from '@/components/document-viewer/insights/media-facts';
 import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { ImageLoader } from '@/components/ui/image-loader';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
@@ -45,6 +46,12 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
             ) : (
                 <div className={cn('flex h-full w-full items-center justify-center', fileConfig.bgColor)}>
                     <FileTypeIcon mimeType={document.mime_type} filename={document.original_filename} size="xl" className="opacity-80" />
+                </div>
+            )}
+
+            {document.mime_type.startsWith('video/') && document.duration_seconds != null && (
+                <div className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">
+                    {formatDuration(document.duration_seconds)}
                 </div>
             )}
 

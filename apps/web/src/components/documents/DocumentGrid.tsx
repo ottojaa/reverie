@@ -1,3 +1,5 @@
+import { buildGridRows } from '@/lib/browse/document-months';
+import { useFetchNearEnd } from '@/lib/hooks/useFetchNearEnd';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
 import { useUpload } from '@/lib/upload';
@@ -10,6 +12,7 @@ import { DocumentCard } from './DocumentCard';
 const GAP = 16; // gap-4 = 1rem = 16px
 const COL_DEBOUNCE_MS = 80;
 const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
+const MONTH_HEADER_HEIGHT = 32;
 const CONTENT_PADDING_X = 24; // Browse wraps the grid in p-6 (24px each side); cold-start width fallback only
 
 // Module-scoped so they survive unmount: on a back-navigation remount they seed the exact
@@ -50,9 +53,13 @@ interface DocumentGridProps {
     isLoading?: boolean;
     fetchNextPage?: () => void;
     hasNextPage?: boolean;
+    /** Put a month header (label only) before each run of documents from one month. */
+    groupByMonth?: boolean;
+    /** Open at the scroll position the router remembered; false when the list is a different one than that was kept for. */
+    restoreScroll?: boolean;
 }
 
-export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage }: DocumentGridProps) {
+export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage, groupByMonth = false, restoreScroll = true }: DocumentGridProps) {
     const scrollContainerRef = useScrollContainer();
     const gridRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
@@ -146,7 +153,12 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
     // --- Virtualizer ---
 
-    const rowCount = Math.ceil(documents.length / columnCount);
+    const currentYear = new Date().getFullYear();
+    const rows = useMemo(
+        () => buildGridRows(documents, { columns: columnCount, groupByMonth, currentYear }),
+        [documents, columnCount, groupByMonth, currentYear],
+    );
+    const rowCount = rows.length;
 
     // Widest synchronous width source, most precise first: the mounted grid, the cached width
     // from a previous mount, the persistent <main> minus padding, then the window.
@@ -164,7 +176,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         return typeof window !== 'undefined' ? window.innerWidth : 0;
     }, [scrollContainerRef]);
 
-    const estimateRowHeight = useCallback(() => {
+    const estimateCardRowHeight = useCallback(() => {
         const containerWidth = resolveGridWidth();
 
         if (!containerWidth) return 350;
@@ -174,6 +186,11 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         // aspect-4/3 thumbnail + ~48px footer
         return colWidth * 0.75 + 80;
     }, [columnCount, resolveGridWidth]);
+
+    const estimateRowHeight = useCallback(
+        (index: number) => (rows[index]?.type === 'header' ? MONTH_HEADER_HEIGHT : estimateCardRowHeight()),
+        [rows, estimateCardRowHeight],
+    );
 
     // Read <main>'s cached scroll position so the virtualizer renders the
     // correct rows immediately (before the router restores scrollTop).
@@ -187,10 +204,11 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         count: rowCount,
         getScrollElement: () => scrollContainerRef.current,
         estimateSize: estimateRowHeight,
+        getItemKey: (index) => rows[index]?.key ?? index,
         overscan: 1,
         scrollMargin,
         gap: GAP,
-        initialOffset: scrollEntry?.scrollY,
+        initialOffset: restoreScroll ? scrollEntry?.scrollY : undefined,
         paddingEnd: 60,
     });
 
@@ -199,16 +217,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
     const virtualItems = virtualizer.getVirtualItems();
     const lastVirtualItemIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
 
-    useEffect(() => {
-        if (!hasNextPage || !fetchNextPage) return;
-
-        if (lastVirtualItemIndex < 0) return;
-
-        // Trigger when within 2 rows of the bottom
-        if (lastVirtualItemIndex >= rowCount - 2) {
-            fetchNextPage();
-        }
-    }, [lastVirtualItemIndex, hasNextPage, fetchNextPage, rowCount]);
+    useFetchNearEnd({ lastRowIndex: lastVirtualItemIndex, rowCount, hasNextPage, fetchNextPage });
 
     if (isLoading) {
         return (
@@ -224,20 +233,23 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         <div ref={gridRef}>
             <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
                 {virtualItems.map((virtualRow) => {
-                    const startIdx = virtualRow.index * columnCount;
-                    const rowDocs = documents.slice(startIdx, startIdx + columnCount);
+                    const row = rows[virtualRow.index];
+
+                    if (!row) return null;
+
+                    const style = { top: virtualRow.start - scrollMargin, height: virtualRow.size, gap: GAP };
+
+                    if (row.type === 'header') {
+                        return (
+                            <h2 key={virtualRow.key} className="absolute left-0 right-0 flex items-end text-lg font-semibold tracking-tight" style={style}>
+                                {row.label}
+                            </h2>
+                        );
+                    }
 
                     return (
-                        <div
-                            key={virtualRow.key}
-                            className="absolute left-0 right-0 flex"
-                            style={{
-                                top: virtualRow.start - scrollMargin,
-                                height: virtualRow.size,
-                                gap: GAP,
-                            }}
-                        >
-                            {rowDocs.map((doc) => (
+                        <div key={virtualRow.key} className="absolute left-0 right-0 flex" style={style}>
+                            {row.documents.map((doc) => (
                                 <div key={doc.id} style={{ flex: `1 1 0%`, minWidth: 0 }}>
                                     <DocumentCard
                                         document={doc}
@@ -248,8 +260,8 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
                                 </div>
                             ))}
                             {/* Fill empty slots in the last row to maintain consistent card widths */}
-                            {rowDocs.length < columnCount &&
-                                Array.from({ length: columnCount - rowDocs.length }).map((_, i) => (
+                            {row.documents.length < columnCount &&
+                                Array.from({ length: columnCount - row.documents.length }).map((_, i) => (
                                     <div key={`empty-${i}`} style={{ flex: `1 1 0%`, minWidth: 0 }} />
                                 ))}
                         </div>
