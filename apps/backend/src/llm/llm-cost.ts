@@ -19,8 +19,13 @@ interface Rates {
     output: number;
 }
 
-/** Model id prefix -> rates. First matching prefix wins. */
+/**
+ * Model id prefix -> rates. First matching prefix wins, so list a longer prefix before any shorter one it starts with
+ * (a future `claude-opus-5` row goes after `claude-opus-5-5`).
+ */
 const RATES: Array<{ prefix: string; rates: Rates }> = [
+    { prefix: 'claude-opus-5-5', rates: { input: 4, output: 20 } },
+    { prefix: 'claude-sonnet-5-5', rates: { input: 2, output: 10 } },
     { prefix: 'claude-haiku-5-5', rates: { input: 0.1, output: 0.5 } },
     { prefix: 'claude-haiku-4-5', rates: { input: 1, output: 5 } },
 ];

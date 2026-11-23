@@ -1,4 +1,12 @@
-import type { LlmCapability, LlmProvider, ServerSetting, TestLlmConnectionRequest, UpdateServerSettingsRequest } from '@reverie/shared';
+import {
+    CLAUDE_MODELS,
+    type ClaudeModelOption,
+    type LlmCapability,
+    type LlmProvider,
+    type ServerSetting,
+    type TestLlmConnectionRequest,
+    type UpdateServerSettingsRequest,
+} from '@reverie/shared';
 
 /** What the admin sees and edits for one capability; `enabled` ("model sees images") exists for images only. */
 export interface CapabilityDraft {
@@ -107,4 +115,16 @@ export function buildCapabilityChanges(capability: LlmCapability, draft: Capabil
 
 export function toTestRequest(capability: LlmCapability, draft: CapabilityDraft): TestLlmConnectionRequest {
     return { capability, provider: draft.provider, model: draft.model.trim(), base_url: draft.provider === 'anthropic' ? '' : draft.baseUrl.trim() };
+}
+
+/**
+ * The Claude models the picker offers. A saved model outside the supported list (the env can still point at an older
+ * one as a rollback) gets its own entry, so opening and saving the card never swaps it for another model.
+ */
+export function toModelChoices(model: string): ClaudeModelOption[] {
+    const saved = model.trim();
+
+    if (!saved || CLAUDE_MODELS.some((option) => option.id === saved)) return [...CLAUDE_MODELS];
+
+    return [...CLAUDE_MODELS, { id: saved, label: saved, hint: 'Not in the supported list' }];
 }
