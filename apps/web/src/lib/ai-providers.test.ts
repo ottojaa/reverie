@@ -8,6 +8,7 @@ import {
     loadCapabilityDefaults,
     loadCapabilityDraft,
     switchProvider,
+    toModelChoices,
     toTestRequest,
 } from './ai-providers';
 
@@ -156,5 +157,28 @@ describe('testing a draft', () => {
             base_url: 'http://ollama:11434/v1',
         });
         expect(toTestRequest('summary', { provider: 'anthropic', model: 'claude-haiku-5-5', baseUrl: 'stale', enabled: false }).base_url).toBe('');
+    });
+});
+
+describe('the Claude model choices', () => {
+    it('offers Haiku, Sonnet and Opus 5.5, with the saved one among them', () => {
+        expect(toModelChoices('claude-sonnet-5-5').map((choice) => choice.id)).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5']);
+    });
+
+    it('keeps a saved model outside the list as its own entry, so saving never changes it', () => {
+        const choices = toModelChoices('claude-haiku-4-5');
+
+        expect(choices.map((choice) => choice.id)).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-4-5']);
+        expect(choices.at(-1)?.label).toBe('claude-haiku-4-5');
+    });
+
+    it('does not invent an entry for an empty model', () => {
+        expect(toModelChoices('')).toHaveLength(3);
+    });
+
+    it('switching to Claude from a local model name selects the default model', () => {
+        const local = loadCapabilityDraft(LOCAL_SETTINGS, 'summary');
+
+        expect(switchProvider(local, 'anthropic', loadCapabilityDefaults(LOCAL_SETTINGS, 'summary')).model).toBe('claude-haiku-5-5');
     });
 });

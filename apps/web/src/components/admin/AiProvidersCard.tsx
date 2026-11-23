@@ -1,3 +1,4 @@
+import { AiModelField } from '@/components/admin/AiModelField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -141,12 +142,13 @@ function CapabilityForm({
                     <label htmlFor={id + '-model'} className="text-sm font-medium">
                         Model
                     </label>
-                    <Input
+                    <AiModelField
                         id={id + '-model'}
+                        provider={draft.provider}
                         value={draft.model}
                         placeholder={isLocal ? 'e.g. llama3.1:8b' : defaults.model}
                         disabled={isBusy}
-                        onChange={(e) => edit({ ...draft, model: e.target.value })}
+                        onChange={(model) => edit({ ...draft, model })}
                     />
                 </div>
                 {isLocal && (
