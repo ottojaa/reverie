@@ -27,6 +27,8 @@ data class TabCursor(
     /** The last row of the last page, in the tab's order; null when the server said the tab is empty. */
     val frontier: SortKey? = null,
     val isLoading: Boolean = false,
+    /** True when the last attempt at the first page failed, until the next attempt starts. */
+    val failed: Boolean = false,
 ) {
     val hasMore: Boolean get() = fetched && offset < total
 }
@@ -39,6 +41,8 @@ data class TabDocuments(
     val isLoading: Boolean = false,
     /** True once the server has answered for this tab, so an empty list means the tab is empty. */
     val fetched: Boolean = false,
+    /** True when the first page could not be fetched (offline, say): an empty list is then all there is to show. */
+    val failed: Boolean = false,
 )
 
 /** Epoch milliseconds of an ISO instant; null when it is absent or doesn't parse. */
@@ -74,9 +78,17 @@ object BrowseTabs {
     }
 
     private fun toTabDocuments(keyed: List<Pair<SortKey, DocumentDto>>, cursor: TabCursor): TabDocuments {
-        if (!cursor.fetched) return TabDocuments(keyed.map { it.second }, total = keyed.size, isLoading = cursor.isLoading)
-        val frontier = cursor.frontier ?: return TabDocuments(total = cursor.total, isLoading = cursor.isLoading, fetched = true)
-        val shown = keyed.takeWhile { it.first >= frontier }.map { it.second }
-        return TabDocuments(shown, total = cursor.total, hasMore = cursor.hasMore, isLoading = cursor.isLoading, fetched = true)
+        if (!cursor.fetched) {
+            return TabDocuments(keyed.map { it.second }, total = keyed.size, isLoading = cursor.isLoading, failed = cursor.failed)
+        }
+        // A tab that has read everything (an empty one included) has no unread gaps, so every cached row
+        // of its kind belongs to it, uploads that arrived since included. Its total is what it holds.
+        if (!cursor.hasMore) {
+            val all = keyed.map { it.second }
+            return TabDocuments(all, total = all.size, isLoading = cursor.isLoading, fetched = true)
+        }
+        val frontier = cursor.frontier
+        val shown = (if (frontier == null) keyed else keyed.takeWhile { it.first >= frontier }).map { it.second }
+        return TabDocuments(shown, total = cursor.total, hasMore = true, isLoading = cursor.isLoading, fetched = true)
     }
 }

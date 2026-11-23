@@ -45,13 +45,11 @@ data class BrowseUiState(
     /** The open tab's server total, for the subtitle ("168 photos"). */
     val total: Int = 0,
     val folder: FolderDto? = null,
-    val isLoading: Boolean = false,
     /** False until the last-used tab has been read, so the pager opens on the right page. */
     val ready: Boolean = false,
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
     val error: String? = null,
-    val hasMore: Boolean = false,
     val processingCount: Int = 0,
     val selectedIds: Set<String> = emptySet(),
     /** Set when the server refused the list with FOLDER_LOCKED: the lock that must be opened first. */
@@ -160,17 +158,15 @@ class BrowseViewModel @Inject constructor(
             tabs = tabs.tabs,
             total = current.total,
             folder = folder,
-            isLoading = !tabs.ready || (current.isLoading && current.documents.isEmpty()),
             ready = tabs.ready,
             isRefreshing = tabs.isRefreshing,
             isOffline = !online,
             error = ctrl.error,
-            hasMore = current.hasMore,
             processingCount = processing,
             selectedIds = tabs.selectedIds,
             lockedFolderId = ctrl.lockedFolderId,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState(isLoading = true))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState())
 
     init {
         processingTracker.refresh()
@@ -233,6 +229,8 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { documentRepository.delete(ids) }
             clearSelection()
+            // The subtitle counts what the server holds for the tab, so read its first page again.
+            refresh(initial = true)
         }
     }
 

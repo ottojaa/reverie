@@ -180,6 +180,7 @@ class BrowseTabsModelTest {
         assertEquals(1, f.failures.size)
         // Nothing was fetched for Videos, so it still shows only what the All page had cached.
         assertFalse(f.model.state.value.tabs.getValue(BrowseTab.VIDEOS).fetched)
+        assertTrue(f.model.state.value.tabs.getValue(BrowseTab.VIDEOS).failed)
         assertEquals(listOf("v3"), f.ids(BrowseTab.VIDEOS))
         f.model.refresh(initial = true)
         f.model.loadMore()

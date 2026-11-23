@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -38,12 +39,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.mediaAspectOrNull
@@ -95,12 +100,15 @@ fun BrowseScreen(
     val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
 
     val onUploadClick: () -> Unit = { showUploadActions = true }
+    val latestOnDocumentClick by rememberUpdatedState(onDocumentClick)
     // Media (images + videos) size the dive transform to their aspect — the morph box is the
     // content rect the poster grows into. Other file types morph a full-screen stand-in instead
     // (see DocumentPage).
-    val openDocument: (DocumentDto) -> Unit = { document ->
-        val isMedia = isImageDocument(document) || isVideoDocument(document)
-        onDocumentClick(document.id, if (isMedia) document.mediaAspectOrNull() else null)
+    val openDocument: (DocumentDto) -> Unit = remember {
+        { document ->
+            val isMedia = isImageDocument(document) || isVideoDocument(document)
+            latestOnDocumentClick(document.id, if (isMedia) document.mediaAspectOrNull() else null)
+        }
     }
 
     // The header slides away on scroll down and returns on a small scroll up. No bar is placed, so
@@ -111,7 +119,18 @@ fun BrowseScreen(
     val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
     val layoutMode by viewModel.gridLayoutMode.collectAsStateWithLifecycle()
     val featureEvery by viewModel.mosaicFeatureEvery.collectAsStateWithLifecycle()
-    val today = remember { LocalDate.now() }
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    // Browse can stay open past midnight: take the date again whenever the screen comes back to the foreground.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { today = LocalDate.now() }
+    }
+    // Uploads land in the cache on their own; once they have all finished, read the first page again so the total catches up.
+    var wasUploading by remember { mutableStateOf(false) }
+    LaunchedEffect(activeUploads) {
+        if (activeUploads == 0 && wasUploading) viewModel.refresh(initial = true)
+        wasUploading = activeUploads > 0
+    }
     val zone = remember { ZoneId.systemDefault() }
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
 
@@ -122,23 +141,28 @@ fun BrowseScreen(
     val density = LocalDensity.current
     val bandPx = WindowInsets.statusBars.getTop(density) + with(density) { BAND_HEIGHT.roundToPx() }
 
-    val actions = RowActions(
-        selected = { document -> document.id in state.selectedIds },
-        onClick = { document ->
-            if (state.inSelectionMode) {
-                viewModel.toggleSelect(document.id)
-            } else {
-                // Publish this tab's order so the viewer swipes through it, then warm the signed URL and
-                // full-res image so it is ready when the dive transition finishes.
-                viewModel.prepareSequence()
-                viewModel.prefetch(document)
-                openDocument(document)
-            }
-        },
-        onLongClick = { document ->
-            if (state.inSelectionMode) viewModel.toggleSelect(document.id) else viewModel.enterSelection(document.id)
-        },
-    )
+    val latestState by rememberUpdatedState(state)
+    // One instance for the life of the screen, reading the current state when called, so a change that
+    // does not touch a tab's documents leaves its rows alone.
+    val actions = remember(viewModel) {
+        RowActions(
+            selected = { document -> document.id in latestState.selectedIds },
+            onClick = { document ->
+                if (latestState.inSelectionMode) {
+                    viewModel.toggleSelect(document.id)
+                } else {
+                    // Publish this tab's order so the viewer swipes through it, then warm the signed URL and
+                    // full-res image so it is ready when the dive transition finishes.
+                    viewModel.prepareSequence()
+                    viewModel.prefetch(document)
+                    openDocument(document)
+                }
+            },
+            onLongClick = { document ->
+                if (latestState.inSelectionMode) viewModel.toggleSelect(document.id) else viewModel.enterSelection(document.id)
+            },
+        )
+    }
 
     // Pull-to-refresh wraps the whole Scaffold so its indicator floats over the header.
     ReverieRefreshBox(
@@ -162,7 +186,8 @@ fun BrowseScreen(
                 BrowseBody(
                     state = state,
                     listStates = listStates,
-                    contentPadding = PaddingValues(top = with(density) { headerPx.toDp() }, bottom = bottomBarInset() + 12.dp),
+                    contentPadding = PaddingValues(bottom = bottomBarInset() + 12.dp),
+                    modifier = Modifier.belowHeader(headerPx = { headerPx }, heightOffset = { scrollBehavior.state.heightOffset }),
                     layout = layout,
                     actions = actions,
                     inFolder = viewModel.folderId != null,
@@ -313,11 +338,11 @@ private fun BrowseBody(
     viewModel: BrowseViewModel,
     onHeading: (FeedItem.Header?) -> Unit,
     onUpload: () -> Unit,
-) {
-    val belowHeader = Modifier.padding(top = contentPadding.calculateTopPadding()).fillMaxSize()
+    modifier: Modifier = Modifier,
+) = Box(modifier) {
     when {
         !state.ready -> LoadingGrid(contentPadding)
-        state.lockedFolderId != null -> Box(belowHeader) {
+        state.lockedFolderId != null -> Box(Modifier.fillMaxSize()) {
             EmptyState(
                 icon = Icons.Outlined.Lock,
                 title = "This folder is private",
@@ -326,7 +351,7 @@ private fun BrowseBody(
                 onAction = { viewModel.unlocker.request(state.lockedFolderId, state.folder?.name) },
             )
         }
-        state.error != null && state.documents.isEmpty() -> Box(belowHeader) {
+        state.error != null && state.documents.isEmpty() -> Box(Modifier.fillMaxSize()) {
             ErrorState(message = state.error, onRetry = { viewModel.refresh(initial = true) })
         }
         else -> {
@@ -351,6 +376,18 @@ private fun BrowseBody(
             )
         }
     }
+}
+
+/**
+ * Places the body under the header, following it as it slides away: the body is as tall as the room
+ * the header leaves, so a drag that is hiding the header moves the list with the finger. (The scroll
+ * behaviour hands the whole drag to the header while it moves; a list with a fixed top gap would stand still.)
+ */
+internal fun Modifier.belowHeader(headerPx: () -> Int, heightOffset: () -> Float): Modifier = layout { measurable, constraints ->
+    val top = (headerPx() + heightOffset()).roundToInt().coerceIn(0, constraints.maxHeight)
+    val height = constraints.maxHeight - top
+    val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, top) }
 }
 
 /** One list state per tab, kept above the pager so a tab remembers its scroll while it is off screen. */

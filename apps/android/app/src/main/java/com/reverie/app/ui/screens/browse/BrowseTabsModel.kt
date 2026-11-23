@@ -124,7 +124,7 @@ class BrowseTabsModel(
     private fun fetch(tab: BrowseTab, offset: Int, refreshing: Boolean) {
         if (control.value.cursor(tab).isLoading) return
         control.update {
-            it.withCursor(tab) { cursor -> cursor.copy(isLoading = true) }
+            it.withCursor(tab) { cursor -> cursor.copy(isLoading = true, failed = false) }
                 .copy(isRefreshing = refreshing)
         }
         scope.launch {
@@ -134,7 +134,9 @@ class BrowseTabsModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                control.update { it.withCursor(tab) { cursor -> cursor.copy(isLoading = false) }.copy(isRefreshing = false) }
+                control.update {
+                    it.withCursor(tab) { cursor -> cursor.copy(isLoading = false, failed = offset == 0) }.copy(isRefreshing = false)
+                }
                 // A failed page further down is retried by scrolling again; only a first page or a refresh reports.
                 if (offset == 0 && control.value.tab == tab) onFirstPageFailed(error)
             }

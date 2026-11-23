@@ -9,6 +9,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
@@ -101,6 +103,39 @@ class BrowseScreenshotTest {
         }
     }
 
+    /**
+     * The header halfway through sliding away, as the screen lays it out: the body is placed under the
+     * header's current bottom edge and is as tall as the room that leaves, so the list moves with it.
+     */
+    @Composable
+    private fun HalfHiddenScreen() {
+        val headerPx = with(LocalDensity.current) { 150.dp.roundToPx() }
+        val offset = -headerPx / 2f
+        val listState = rememberLazyListState()
+        ReverieTheme {
+            Surface(color = MaterialTheme.colorScheme.background) {
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().belowHeader(headerPx = { headerPx }, heightOffset = { offset })) {
+                        TabFeed(
+                            tab = BrowseTab.PHOTOS, documents = photos, hasMore = false, listState = listState,
+                            contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noActions,
+                            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+                        )
+                    }
+                    PinnedBand(
+                        heading = headingNow(BrowseTab.PHOTOS, photos, 0), processingCount = 2,
+                        onProcessingClick = {}, visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                    BrowseHeader(
+                        title = BrowseTitle("My Files", tabSubtitle(BrowseTab.PHOTOS, 168, null), isFolder = false),
+                        tab = BrowseTab.PHOTOS, processingCount = 2, onSelectTab = {}, onProcessingClick = {}, onCanvas = {}, onBack = null,
+                        modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
+                    )
+                }
+            }
+        }
+    }
+
     /** The heading a list scrolled to [index] sits under, computed the way the feed reports it. */
     private fun headingNow(tab: BrowseTab, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
         headingAt(toRows(buildFeed(tab, documents, today, ZoneOffset.UTC), 390f, layout.mode, layout.featureEvery), index)
@@ -112,6 +147,8 @@ class BrowseScreenshotTest {
     @Test fun videos() = paparazzi.snapshot { Screen(BrowseTab.VIDEOS, videos, total = 12) }
 
     @Test fun files() = paparazzi.snapshot { Screen(BrowseTab.FILES, files, total = 250) }
+
+    @Test fun headerHalfHidden() = paparazzi.snapshot { HalfHiddenScreen() }
 
     @Test fun scrolledPhotos() = paparazzi.snapshot { Screen(BrowseTab.PHOTOS, photos, total = 168, scrolledTo = 3) }
 }

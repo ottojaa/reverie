@@ -51,9 +51,21 @@ class BrowseTabsTest {
         assertTrue(photos.hasMore)
     }
 
-    @Test fun `an empty fetched tab shows nothing even when rows of its kind are cached`() {
-        val cursor = TabCursor(offset = 0, total = 0, fetched = true, frontier = null)
-        assertEquals(emptyList<String>(), ids(BrowseTab.VIDEOS, mapOf(BrowseTab.VIDEOS to cursor)))
+    @Test fun `a tab that has read everything shows rows that reached the cache since, an empty one included`() {
+        // Videos was empty when it was read; a video uploaded afterwards lands in the cache and must appear.
+        val empty = TabCursor(offset = 0, total = 0, fetched = true, frontier = null)
+        val videos = BrowseTabs.derive(library, mapOf(BrowseTab.VIDEOS to empty)).getValue(BrowseTab.VIDEOS)
+        assertEquals(listOf("video"), videos.documents.map { it.id })
+        assertEquals(1, videos.total)
+        assertEquals(false, videos.hasMore)
+        assertTrue(videos.fetched)
+    }
+
+    @Test fun `a first page that failed is carried to the tab so it can show its empty state`() {
+        val failed = TabCursor(failed = true)
+        val videos = BrowseTabs.derive(emptyList(), mapOf(BrowseTab.VIDEOS to failed)).getValue(BrowseTab.VIDEOS)
+        assertTrue(videos.failed)
+        assertEquals(false, videos.fetched)
     }
 
     @Test fun `unparseable dates sink to the bottom`() {

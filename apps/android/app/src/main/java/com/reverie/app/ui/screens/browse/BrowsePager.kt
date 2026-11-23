@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -57,7 +58,10 @@ fun BrowsePager(pagerState: PagerState, feed: PagerFeed, modifier: Modifier = Mo
 private fun TabPage(tab: BrowseTab, feed: PagerFeed, isCurrent: Boolean) {
     val docs = feed.state.tabs[tab] ?: TabDocuments()
     val listState = feed.listStates.getValue(tab)
-    val loading = docs.isLoading || (!docs.fetched && feed.state.error == null)
+    val latestFeed by rememberUpdatedState(feed)
+    // Memoized per tab so a tab whose documents have not changed is skipped when only other state moves.
+    val onLoadMore = remember(tab) { { latestFeed.onLoadMore(tab) } }
+    val loading = docs.isLoading || (!docs.fetched && !docs.failed && feed.state.error == null)
     when {
         docs.documents.isEmpty() && loading -> LoadingGrid(feed.contentPadding)
         docs.documents.isEmpty() -> Box(Modifier.padding(top = feed.contentPadding.calculateTopPadding()).fillMaxSize()) {
@@ -80,7 +84,7 @@ private fun TabPage(tab: BrowseTab, feed: PagerFeed, isCurrent: Boolean) {
             // Only the open tab answers the viewer's return: the others are not what it was showing.
             focusedId = if (isCurrent) feed.focusedId else null,
             onFocusConsumed = feed.onFocusConsumed,
-            onLoadMore = { feed.onLoadMore(tab) },
+            onLoadMore = onLoadMore,
             onHeading = if (isCurrent) feed.onHeading else null,
         )
     }
