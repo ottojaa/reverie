@@ -1,6 +1,6 @@
 // Domain types for documents (not tied to API schemas)
 
-import type { Entity } from '../api/schemas/documents.js';
+import type { DocumentKind, Entity } from '../api/schemas/documents.js';
 
 export interface OcrResult {
     raw_text: string;
@@ -76,4 +76,18 @@ export interface LlmMetadata {
     extractedDates?: ExtractedDate[];
     keyValues?: KeyValue[];
     tableData?: TableRow[];
+}
+
+/**
+ * The kind a MIME type belongs to: `image/*` is an image, `video/*` a video, everything else (an empty or unknown
+ * type too) a file. Case-insensitive, by prefix only, so `image/svg+xml` and `image/heic` are images.
+ * The backend's SQL filter and the Android client's DocumentKind.of follow this rule.
+ */
+export function documentKindOf(mimeType: string): DocumentKind {
+    const mime = mimeType.toLowerCase();
+
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+
+    return 'file';
 }
