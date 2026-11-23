@@ -176,7 +176,20 @@ class BrowseTabsModelTest {
         f.model.refresh()
         assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids(BrowseTab.PHOTOS))
         f.model.loadMore()
-        assertEquals(DocumentKind.IMAGE to 2, f.server.requests.last())
+        // The next page starts where page one ended; it only re-reads rows already shown.
+        assertEquals(listOf(DocumentKind.IMAGE to 2, DocumentKind.IMAGE to 4), f.server.requests.takeLast(2))
+    }
+
+    @Test fun `after a refresh one load more reads on until a row that was not shown yet`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start()
+        f.model.selectTab(BrowseTab.PHOTOS)
+        f.model.loadMore()
+        assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids(BrowseTab.PHOTOS))
+        f.model.refresh()
+        f.model.loadMore()
+        // Page two brought nothing new, so the model read page three itself: the feed would not have asked again.
+        assertEquals(listOf("p5", "p4", "p3", "p2", "p1"), f.ids(BrowseTab.PHOTOS))
+        assertFalse(f.model.state.value.current.hasMore)
     }
 
     @Test fun `after deleting rows above what a tab read, scrolling on skips none of the server's rows`() = runTest(UnconfinedTestDispatcher()) {

@@ -97,11 +97,12 @@ class BrowseTabsModel(
 
     /**
      * Documents were deleted or added: the open tab re-reads its first page now, and every other tab that
-     * has been fetched does so the next time it is shown, so its rows and subtitle total follow.
+     * has been fetched does so the next time it is shown, so its rows and subtitle total follow. The open
+     * tab is marked too: if a page is in flight and the refresh is dropped, its next load starts over.
      */
     fun contentChanged() {
         control.update { c ->
-            c.copy(cursors = c.cursors.mapValues { (tab, cursor) -> if (tab != c.tab && cursor.fetched) cursor.copy(stale = true) else cursor })
+            c.copy(cursors = c.cursors.mapValues { (_, cursor) -> if (cursor.fetched) cursor.copy(stale = true) else cursor })
         }
         refresh(initial = true)
     }
@@ -136,7 +137,8 @@ class BrowseTabsModel(
     }
 
     private fun fetch(tab: BrowseTab, offset: Int, refreshing: Boolean) {
-        if (control.value.cursor(tab).isLoading) return
+        val before = control.value.cursor(tab)
+        if (before.isLoading) return
         control.update {
             it.withCursor(tab) { cursor -> cursor.copy(isLoading = true, failed = false) }
                 .copy(isRefreshing = refreshing)
@@ -145,6 +147,11 @@ class BrowseTabsModel(
             try {
                 val page = fetchPage(tab.kind, offset)
                 control.update { it.withCursor(tab) { cursor -> cursor.after(tab, offset, page) }.copy(isRefreshing = false) }
+                // After a refresh the offset starts over while the frontier stays deep, so the pages up to the old
+                // depth bring nothing new on screen and the feed would never ask for another: read straight on.
+                val now = control.value.cursor(tab)
+                val addedNothing = offset > 0 && before.frontier != null && now.frontier == before.frontier
+                if (addedNothing && now.hasMore && !now.stale && now.offset > offset) loadMore(tab)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {

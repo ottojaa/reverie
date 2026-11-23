@@ -9,6 +9,7 @@ import coil.request.ImageRequest
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.connectivity.ConnectivityMonitor
@@ -116,7 +117,7 @@ class BrowseViewModel @Inject constructor(
         if (document.is_private) return
         viewModelScope.launch {
             val raw = documentRepository.fileUrl(document.id) ?: return@launch
-            if (document.mime_type.startsWith("image/")) {
+            if (DocumentKind.of(document.mime_type) == DocumentKind.IMAGE) {
                 imageLoader.enqueue(ImageRequest.Builder(appContext).data(absolute(raw)).build())
             }
         }
