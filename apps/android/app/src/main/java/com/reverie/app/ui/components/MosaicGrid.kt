@@ -1,19 +1,11 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
@@ -22,7 +14,6 @@ import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.domain.model.ThumbnailSize
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
 
 /**
@@ -213,66 +204,20 @@ fun computeUniformSections(
     return docs.chunked(columns).map { chunk -> MosaicRow(chunk.map { MosaicTile(it, cell, cell) }) }
 }
 
-/**
- * A quilted Files grid: a [LazyColumn] of packed bands. Owns infinite-scroll paging and the
- * return-transform scroll sync (both keyed on bands, not documents) so [BrowseScreen] stays lean.
- */
-@Composable
-fun MosaicDocumentGrid(
-    documents: List<DocumentDto>,
-    listState: LazyListState,
-    contentPadding: PaddingValues,
-    layoutMode: GridLayoutMode,
-    featureEvery: Int,
-    hasMore: Boolean,
-    onLoadMore: () -> Unit,
-    focusedId: String?,
-    onFocusConsumed: () -> Unit,
-    selected: (DocumentDto) -> Boolean,
-    onClick: (DocumentDto) -> Unit,
-    onLongClick: (DocumentDto) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val sections = remember(documents, maxWidth, layoutMode, featureEvery) {
-            when (layoutMode) {
-                GridLayoutMode.MOSAIC -> computeMosaicSections(documents, maxWidth.value, featureEvery)
-                GridLayoutMode.JUSTIFIED -> computeJustifiedSections(documents, maxWidth.value)
-                GridLayoutMode.UNIFORM -> computeUniformSections(documents, maxWidth.value)
-            }
-        }
-
-        // Infinite scroll: fetch the next page as the last band approaches.
-        LaunchedEffect(listState, hasMore, sections.size) {
-            snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
-                .distinctUntilChanged()
-                .collect { lastIndex -> if (hasMore && lastIndex >= sections.size - 2) onLoadMore() }
-        }
-
-        // Return-transform sync: scroll the band holding the focused document into view.
-        LaunchedEffect(focusedId, sections) {
-            val id = focusedId ?: return@LaunchedEffect
-            val index = sections.indexOfFirst { section -> section.tiles.any { it.doc.id == id } }
-            if (index < 0) return@LaunchedEffect
-            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
-            onFocusConsumed()
-        }
-
-        LazyColumn(
-            state = listState,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(sections.size, key = { sections[it].tiles.first().doc.id }, contentType = { "band" }) { index ->
-                MosaicSectionView(sections[index], selected, onClick, onLongClick)
-            }
-        }
+/** Packs [docs] into bands for the user's grid layout setting over a [width]-dp-wide area. */
+fun computeSections(docs: List<DocumentDto>, width: Float, layoutMode: GridLayoutMode, featureEvery: Int): List<MosaicSection> =
+    when (layoutMode) {
+        GridLayoutMode.MOSAIC -> computeMosaicSections(docs, width, featureEvery)
+        GridLayoutMode.JUSTIFIED -> computeJustifiedSections(docs, width)
+        GridLayoutMode.UNIFORM -> computeUniformSections(docs, width)
     }
-}
 
+/** Lazy-list key of a band: its first document, which no other band holds. */
+fun MosaicSection.bandKey(): String = "band:" + tiles.first().doc.id
+
+/** One packed band of tiles, drawn with the gallery's hairline gaps. */
 @Composable
-private fun MosaicSectionView(
+fun MosaicSectionView(
     section: MosaicSection,
     selected: (DocumentDto) -> Boolean,
     onClick: (DocumentDto) -> Unit,

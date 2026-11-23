@@ -19,7 +19,6 @@ import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.components.FolderUnlocker
-import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -28,17 +27,27 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class BrowseUiState(
+    /** The open tab's documents, in that tab's order. */
     val documents: List<DocumentDto> = emptyList(),
+    val tab: BrowseTab = BrowseTab.ALL,
+    /** Every tab's documents, so the pager can show a neighbour while it is swiped in. */
+    val tabs: Map<BrowseTab, TabDocuments> = emptyMap(),
+    /** The open tab's server total, for the subtitle ("168 photos"). */
+    val total: Int = 0,
     val folder: FolderDto? = null,
     val isLoading: Boolean = false,
+    /** False until the last-used tab has been read, so the pager opens on the right page. */
+    val ready: Boolean = false,
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
     val error: String? = null,
@@ -55,13 +64,7 @@ data class BrowseUiState(
 data class DownloadTarget(val url: String, val filename: String)
 
 private data class BrowseControl(
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
-    val isLoadingMore: Boolean = false,
-    val total: Int = 0,
-    val loaded: Int = 0,
     val error: String? = null,
-    val selectedIds: Set<String> = emptySet(),
     val lockedFolderId: String? = null,
 )
 
@@ -77,7 +80,7 @@ class BrowseViewModel @Inject constructor(
     private val sequenceHolder: DocumentSequenceHolder,
     private val imageLoader: ImageLoader,
     @ApplicationContext private val appContext: Context,
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     val folderId: String? = savedStateHandle["folderId"]
@@ -102,13 +105,7 @@ class BrowseViewModel @Inject constructor(
      * Hand this grid's ordered documents to the viewer so it can swipe through them. Call right
      * before navigating into a document. [ids] stays live so the pager grows as we [loadMore].
      */
-    fun prepareSequence() = sequenceHolder.set(
-        DocumentSequence(
-            initialIds = uiState.value.documents.map(DocumentDto::id),
-            ids = uiState.map { s -> s.documents.map(DocumentDto::id) }.distinctUntilChanged(),
-            loadMore = ::loadMore,
-        ),
-    )
+    fun prepareSequence() = sequenceHolder.set(tabsModel.prepareSequence())
 
     /**
      * Warm the tapped document ahead of the dive so the viewer opens on the sharp image instead of the
@@ -135,29 +132,48 @@ class BrowseViewModel @Inject constructor(
 
     private val control = MutableStateFlow(BrowseControl())
 
+    // One Room observer for the whole screen: the four tabs and the unfinished-document watcher share it.
+    private val cache = documentRepository.observeDocuments(folderId)
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    private val tabsModel = BrowseTabsModel(
+        scope = viewModelScope,
+        cache = cache,
+        fetchPage = { kind, offset -> documentRepository.refresh(folderId, PAGE_SIZE, offset, kind) },
+        loadSavedTab = { BrowseTab.fromSaved(settingsRepository.settings.first().lastBrowseTab) },
+        saveTab = { settingsRepository.setLastBrowseTab(it.name) },
+        onFirstPageFailed = ::onRefreshFailed,
+        sharing = SharingStarted.Eagerly,
+    )
+
     val uiState: StateFlow<BrowseUiState> = combine(
-        documentRepository.observeDocuments(folderId),
+        tabsModel.state,
         if (folderId != null) folderRepository.observeFolder(folderId) else flowOf(null),
         connectivity.isOnline,
         control,
         processingTracker.count,
-    ) { docs, folder, online, ctrl, processing ->
+    ) { tabs, folder, online, ctrl, processing ->
+        val current = tabs.current
         BrowseUiState(
-            documents = docs,
+            documents = current.documents,
+            tab = tabs.tab,
+            tabs = tabs.tabs,
+            total = current.total,
             folder = folder,
-            isLoading = ctrl.isLoading && docs.isEmpty(),
-            isRefreshing = ctrl.isRefreshing,
+            isLoading = !tabs.ready || (current.isLoading && current.documents.isEmpty()),
+            ready = tabs.ready,
+            isRefreshing = tabs.isRefreshing,
             isOffline = !online,
             error = ctrl.error,
-            hasMore = docs.size < ctrl.total,
+            hasMore = current.hasMore,
             processingCount = processing,
-            selectedIds = ctrl.selectedIds,
+            selectedIds = tabs.selectedIds,
             lockedFolderId = ctrl.lockedFolderId,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState(isLoading = true))
 
     init {
-        refresh(initial = true)
+        processingTracker.refresh()
         if (folderId != null) {
             viewModelScope.launch { runCatching { folderRepository.refresh() } }
         }
@@ -171,23 +187,23 @@ class BrowseViewModel @Inject constructor(
      */
     private fun keepUnfinishedDocumentsLive() {
         viewModelScope.launch {
-            val unfinished = documentRepository.observeDocuments(folderId)
+            val unfinished = cache
                 .map { docs -> docs.filter(DocumentDto::isStillProcessing).map(DocumentDto::id).toSet() }
                 .distinctUntilChanged()
             processingTracker.keepLive(unfinished)
         }
     }
 
+    /** Opens [tab]. Its first page is fetched the first time it is shown; a later visit reuses what it loaded. */
+    fun selectTab(tab: BrowseTab) {
+        control.update { it.copy(error = null) }
+        tabsModel.selectTab(tab)
+    }
+
     fun refresh(initial: Boolean = false) {
         processingTracker.refresh()
-        viewModelScope.launch {
-            control.update { it.copy(isLoading = initial, isRefreshing = !initial, error = null, lockedFolderId = null) }
-            runCatching { documentRepository.refresh(folderId, PAGE_SIZE, 0) }
-                .onSuccess { page ->
-                    control.update { it.copy(total = page.total, loaded = page.loaded, isLoading = false, isRefreshing = false, error = null) }
-                }
-                .onFailure { throwable -> onRefreshFailed(throwable) }
-        }
+        control.update { it.copy(error = null, lockedFolderId = null) }
+        tabsModel.refresh(initial)
     }
 
     private fun onRefreshFailed(throwable: Throwable) {
@@ -196,37 +212,23 @@ class BrowseViewModel @Inject constructor(
         if (lockedId != null) unlocker.request(lockedId, uiState.value.folder?.name)
         control.update {
             it.copy(
-                isLoading = false,
-                isRefreshing = false,
                 lockedFolderId = lockedId,
                 error = if (lockedId == null && connectivity.currentlyOnline()) messageFor(throwable) else null,
             )
         }
     }
 
-    fun loadMore() {
-        val current = control.value
-        if (current.isLoadingMore || current.loaded >= current.total) return
-        viewModelScope.launch {
-            control.update { it.copy(isLoadingMore = true) }
-            runCatching { documentRepository.refresh(folderId, PAGE_SIZE, current.loaded) }
-                .onSuccess { page -> control.update { it.copy(loaded = page.loaded, total = page.total, isLoadingMore = false) } }
-                .onFailure { control.update { it.copy(isLoadingMore = false) } }
-        }
-    }
+    /** Fetches the next page of the open tab (or of [tab], for a neighbour the pager keeps). */
+    fun loadMore(tab: BrowseTab = uiState.value.tab) = tabsModel.loadMore(tab)
 
-    fun enterSelection(id: String) = control.update { it.copy(selectedIds = setOf(id)) }
+    fun enterSelection(id: String) = tabsModel.enterSelection(id)
 
-    fun toggleSelect(id: String) = control.update {
-        val next = it.selectedIds.toMutableSet()
-        if (!next.add(id)) next.remove(id)
-        it.copy(selectedIds = next)
-    }
+    fun toggleSelect(id: String) = tabsModel.toggleSelect(id)
 
-    fun clearSelection() = control.update { it.copy(selectedIds = emptySet()) }
+    fun clearSelection() = tabsModel.clearSelection()
 
     fun deleteSelected() {
-        val ids = control.value.selectedIds.toList()
+        val ids = tabsModel.selectedIds.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
             runCatching { documentRepository.delete(ids) }
@@ -239,7 +241,7 @@ class BrowseViewModel @Inject constructor(
      * hand them to [onTargets] to enqueue — the caller owns the platform DownloadManager.
      */
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) {
-        val ids = control.value.selectedIds.toList()
+        val ids = tabsModel.selectedIds.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
             val targets = ids.mapNotNull { id ->

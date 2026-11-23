@@ -36,6 +36,8 @@ data class DocumentEntity(
     val llmProcessedAt: String?,
     val llmTokenCount: Long?,
     val photoMetadataJson: String?,
+    // Date taken as the server sends it (a local clock reading stored as if UTC); null when unknown.
+    val takenAt: String?,
     val createdAt: String,
     val updatedAt: String,
     val cachedAt: Long,

@@ -2,6 +2,7 @@ package com.reverie.app.data.repository
 
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.entity.DocumentEntity
@@ -27,8 +28,11 @@ import javax.inject.Singleton
 /** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
 data class SignedUrls(val fileUrl: String, val hlsUrl: String?)
 
-/** One page of a refresh: the server total and how many rows we've loaded so far. */
-data class PageResult(val total: Int, val loaded: Int) {
+/**
+ * One page of a refresh: the server total, how many rows we've loaded so far, and the page's last
+ * row in the server's order (null for an empty page) so a caller can tell how far down it has read.
+ */
+data class PageResult(val total: Int, val loaded: Int, val last: DocumentDto? = null) {
     val hasMore: Boolean get() = loaded < total
 }
 
@@ -98,7 +102,7 @@ class DocumentRepository @Inject constructor(
      */
     private suspend fun absorb(items: List<DocumentDto>) {
         val now = System.currentTimeMillis()
-        documentDao.upsertAll(items.toCacheableEntities(now))
+        documentDao.upsertAll(withKnownTakenAt(items.toCacheableEntities(now)))
         val (private, public) = items.partition { it.is_private }
         privateStore.putAll(private)
         // A document that left its private folder (now public) must stop being served from memory.
@@ -113,18 +117,41 @@ class DocumentRepository @Inject constructor(
         }
     }
 
-    /** Fetch one page from the network into the cache. Throws [com.reverie.app.data.api.ReverieApiException]. */
-    suspend fun refresh(folderId: String?, limit: Int, offset: Int): PageResult = withContext(io) {
-        val page = documentsApi.list(limit = limit, offset = offset, folderId = folderId)
+    /**
+     * A response that carries no date taken (a rename or a search hit) must not wipe the one the
+     * Photos and Videos tabs order by: rows without one keep the cached value.
+     */
+    private suspend fun withKnownTakenAt(entities: List<DocumentEntity>): List<DocumentEntity> {
+        val missing = entities.filter { it.takenAt == null }.map { it.id }
+        if (missing.isEmpty()) return entities
+        val known = documentDao.takenAtOf(missing).associate { it.id to it.takenAt }
+        if (known.isEmpty()) return entities
+        return entities.map { if (it.takenAt == null) it.copy(takenAt = known[it.id]) else it }
+    }
+
+    /**
+     * Fetch one page of [kind] (every kind when null) from the network into the cache. Throws
+     * [com.reverie.app.data.api.ReverieApiException].
+     */
+    suspend fun refresh(folderId: String?, limit: Int, offset: Int, kind: DocumentKind? = null): PageResult = withContext(io) {
+        val page = documentsApi.list(limit = limit, offset = offset, folderId = folderId, kind = kind)
         absorb(page.items)
 
-        // If a single page covered the whole folder, drop rows the server no longer returns.
-        if (folderId != null && offset == 0 && page.items.size >= page.total) {
-            val keep = page.items.map { it.id }
-            documentDao.deleteInFolderNotIn(folderId, keep)
-            privateStore.removeInFolderNotIn(folderId, keep.toSet())
+        // If a single page covered the whole folder, drop rows the server no longer returns: only
+        // those of the fetched kind, since the page says nothing about the other kinds.
+        if (folderId != null && offset == 0 && page.items.size >= page.total) dropStale(folderId, kind, page.items.map { it.id }.toSet())
+        PageResult(total = page.total, loaded = offset + page.items.size, last = page.items.lastOrNull())
+    }
+
+    private suspend fun dropStale(folderId: String, kind: DocumentKind?, keep: Set<String>) {
+        if (kind == null) {
+            documentDao.deleteInFolderNotIn(folderId, keep.toList())
+            privateStore.removeInFolderNotIn(folderId, keep)
+            return
         }
-        PageResult(total = page.total, loaded = offset + page.items.size)
+        val stale = documentDao.mimeTypesInFolder(folderId).filter { it.id !in keep && DocumentKind.of(it.mimeType) == kind }.map { it.id }
+        if (stale.isNotEmpty()) documentDao.deleteByIds(stale)
+        privateStore.removeInFolderNotIn(folderId, keep, kind)
     }
 
     /**

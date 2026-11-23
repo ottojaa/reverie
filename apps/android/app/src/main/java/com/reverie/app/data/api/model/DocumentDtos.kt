@@ -89,6 +89,10 @@ data class DocumentDto(
     // Read-only, derived by the server from the document's folder (a document has no flag of its
     // own). Private documents are never persisted to disk — see DocumentRepository.
     val is_private: Boolean,
+    // When the photo or video was taken: a local clock reading stored as if it were UTC
+    // ("2026-11-23T14:03:00.000Z" is 14:03 where it was taken), so read its own date and never shift
+    // it to a time zone. Null without a capture time; absent from servers that predate it.
+    val taken_at: String? = null,
     val created_at: String,
     val updated_at: String,
     // Signed, short-lived URLs — never persist these.

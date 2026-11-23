@@ -58,7 +58,14 @@ describeDb('GET /documents?kind', () => {
         trips = trip.id;
         const at = (iso: string) => new Date(iso);
         const photo = (name: string, takenAt: string | null, createdAt: string, extra: Partial<Parameters<typeof seedDocument>[1]> = {}) =>
-            seedDocument(db, { userId: carol, name, mime: 'image/jpeg', createdAt: at(createdAt), photo: takenAt ? { takenAt: at(takenAt) } : undefined, ...extra });
+            seedDocument(db, {
+                userId: carol,
+                name,
+                mime: 'image/jpeg',
+                createdAt: at(createdAt),
+                photo: takenAt ? { takenAt: at(takenAt) } : undefined,
+                ...extra,
+            });
 
         // Uploaded in a different order than taken, so the two orders disagree.
         await photo('img-taken-nov.jpg', '2026-11-02T09:00:00Z', '2026-11-20T10:00:00Z');
@@ -67,9 +74,21 @@ describeDb('GET /documents?kind', () => {
         await photo('IMG-UPPER.JPG', '2026-09-01T00:00:00Z', '2026-11-22T10:00:00Z');
         // Same taken_at and created_at: the id decides, so paging never repeats or skips.
         for (const n of ['tie-a.jpg', 'tie-b.jpg', 'tie-c.jpg']) await photo(n, '2026-08-01T00:00:00Z', '2026-08-02T00:00:00Z');
-        await seedDocument(db, { userId: carol, name: 'clip-taken-nov.mp4', mime: 'video/mp4', createdAt: at('2026-11-10T10:00:00Z'), photo: { takenAt: at('2026-11-05T12:00:00Z') } });
+        await seedDocument(db, {
+            userId: carol,
+            name: 'clip-taken-nov.mp4',
+            mime: 'video/mp4',
+            createdAt: at('2026-11-10T10:00:00Z'),
+            photo: { takenAt: at('2026-11-05T12:00:00Z') },
+        });
         await seedDocument(db, { userId: carol, name: 'clip-no-exif.mov', mime: 'video/quicktime', createdAt: at('2026-11-12T10:00:00Z') });
-        await seedDocument(db, { userId: carol, name: 'clip-processing.mp4', mime: 'Video/MP4', createdAt: at('2026-11-13T10:00:00Z'), statuses: { thumbnail: 'processing' } });
+        await seedDocument(db, {
+            userId: carol,
+            name: 'clip-processing.mp4',
+            mime: 'Video/MP4',
+            createdAt: at('2026-11-13T10:00:00Z'),
+            statuses: { thumbnail: 'processing' },
+        });
         await seedDocument(db, { userId: carol, name: 'report.pdf', mime: 'application/pdf', createdAt: at('2026-11-15T10:00:00Z'), folderId: trip.id });
         await seedDocument(db, { userId: carol, name: 'song.mp3', mime: 'audio/mpeg', createdAt: at('2026-11-16T10:00:00Z') });
         await seedDocument(db, { userId: carol, name: 'mystery', mime: '', createdAt: at('2026-11-17T10:00:00Z') });
@@ -82,7 +101,15 @@ describeDb('GET /documents?kind', () => {
     it('lists only images with kind=image, case-insensitively, and totals them', async () => {
         const { names, total } = await list('?kind=image&limit=100');
 
-        expect([...names].sort()).toEqual(['IMG-UPPER.JPG', 'img-no-exif-uploaded-oct31.jpg', 'img-taken-nov.jpg', 'img-taken-oct.jpg', 'tie-a.jpg', 'tie-b.jpg', 'tie-c.jpg']);
+        expect([...names].sort()).toEqual([
+            'IMG-UPPER.JPG',
+            'img-no-exif-uploaded-oct31.jpg',
+            'img-taken-nov.jpg',
+            'img-taken-oct.jpg',
+            'tie-a.jpg',
+            'tie-b.jpg',
+            'tie-c.jpg',
+        ]);
         expect(total).toBe(7);
     });
 

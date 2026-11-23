@@ -96,3 +96,14 @@ object Migration5To6 : Migration(5, 6) {
         )
     }
 }
+
+/**
+ * v6 -> v7: documents gain `takenAt`, the date taken the Photos and Videos tabs order by. Additive;
+ * existing rows start with null (ordered by upload date) until the next fetch fills it in.
+ */
+object Migration6To7 : Migration(6, 7) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `documents` ADD COLUMN `takenAt` TEXT")
+    }
+}

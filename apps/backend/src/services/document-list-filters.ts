@@ -28,6 +28,7 @@ function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKi
     const isVideo = eb(sql<string>`lower(mime_type)`, 'like', 'video/%');
 
     if (kind === 'image') return isImage;
+
     if (kind === 'video') return isVideo;
 
     return eb.not(eb.or([isImage, isVideo]));
@@ -37,7 +38,10 @@ function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKi
  * Every rule that decides which documents the list (and its total) contains. The page query and the count query
  * both go through here, so they cannot disagree.
  */
-export function applyDocumentListFilters<O>(query: SelectQueryBuilder<Database, 'documents', O>, filters: DocumentListFilters): SelectQueryBuilder<Database, 'documents', O> {
+export function applyDocumentListFilters<O>(
+    query: SelectQueryBuilder<Database, 'documents', O>,
+    filters: DocumentListFilters,
+): SelectQueryBuilder<Database, 'documents', O> {
     const { userId, folderId, privateFolderIds, category, dateFrom, dateTo, processing, kind } = filters;
 
     let filtered = excludeTrashed(query.where('user_id', '=', userId), '');
@@ -45,9 +49,13 @@ export function applyDocumentListFilters<O>(query: SelectQueryBuilder<Database, 
     filtered = folderId ? filtered.where('folder_id', '=', folderId) : excludePrivateDocuments(filtered, privateFolderIds, '');
 
     if (category) filtered = filtered.where('document_category', '=', category);
+
     if (dateFrom) filtered = filtered.where('extracted_date', '>=', new Date(dateFrom));
+
     if (dateTo) filtered = filtered.where('extracted_date', '<=', new Date(dateTo));
+
     if (processing) filtered = filtered.where(isStillProcessing);
+
     if (kind) filtered = filtered.where((eb) => isOfKind(eb, kind));
 
     return filtered;

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,6 +31,7 @@ import coil.request.ImageRequest
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
+import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatDuration
 
 /**
@@ -114,6 +116,7 @@ fun GalleryThumbnail(
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     durationSeconds: Double? = null,
+    largeVideoTile: Boolean = false,
 ) {
     val isVideo = mimeType.startsWith("video/")
     val isImage = mimeType.startsWith("image/")
@@ -127,7 +130,8 @@ fun GalleryThumbnail(
             size = size,
             modifier = Modifier.matchParentSize(),
         )
-        if (isVideo) VideoPlayBadge(Modifier.align(Alignment.Center))
+        if (isVideo && largeVideoTile) VideoCornerIcon(Modifier.align(Alignment.TopEnd).padding(8.dp))
+        if (isVideo && !largeVideoTile) VideoPlayBadge(Modifier.align(Alignment.Center))
         // A previewable document (a rendered PDF/office page) still needs a type marker; files with
         // no preview already show their icon + name in the fill, so a corner chip would be redundant.
         if (!isImage && !isVideo && hasThumbnail) {
@@ -135,24 +139,43 @@ fun GalleryThumbnail(
         }
         // A video's length reads at a glance in the corner, Google-Photos style.
         if (isVideo && durationSeconds != null) {
-            DurationPill(seconds = durationSeconds, modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp))
+            DurationPill(
+                seconds = durationSeconds,
+                large = largeVideoTile,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(if (largeVideoTile) 8.dp else 6.dp),
+            )
         }
     }
 }
 
 /** Bottom-corner `m:ss` pill on video tiles. Shares the FileTypeBadge's scrim styling. */
 @Composable
-private fun DurationPill(seconds: Double, modifier: Modifier = Modifier) {
+internal fun DurationPill(seconds: Double, modifier: Modifier = Modifier, large: Boolean = false) {
     Box(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 5.dp, vertical = 2.dp),
+            .background(Color.Black.copy(alpha = if (large) 0.6f else 0.5f), RoundedCornerShape(6.dp))
+            .padding(horizontal = if (large) 7.dp else 5.dp, vertical = 2.dp),
     ) {
         Text(
             text = formatDuration(seconds),
-            style = MaterialTheme.typography.labelSmall,
+            style = if (large) {
+                MaterialTheme.typography.labelMedium.copy(fontFamily = GeistMonoFontFamily, fontWeight = FontWeight.SemiBold)
+            } else {
+                MaterialTheme.typography.labelSmall
+            },
             color = Color.White,
         )
+    }
+}
+
+/** Small round play icon in a large video tile's top corner. */
+@Composable
+private fun VideoCornerIcon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.size(28.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -186,7 +209,7 @@ private fun FileTypeBadge(mime: String, filename: String, modifier: Modifier = M
 }
 
 /** Short uppercase label for a file: its extension when short, else a MIME-derived fallback. */
-private fun fileTypeLabel(mime: String, filename: String): String {
+internal fun fileTypeLabel(mime: String, filename: String): String {
     val ext = filename.substringAfterLast('.', "").uppercase()
     if (ext.isNotEmpty() && ext.length <= 4) return ext
     return when {

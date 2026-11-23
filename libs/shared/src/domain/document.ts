@@ -87,6 +87,7 @@ export function documentKindOf(mimeType: string): DocumentKind {
     const mime = mimeType.toLowerCase();
 
     if (mime.startsWith('image/')) return 'image';
+
     if (mime.startsWith('video/')) return 'video';
 
     return 'file';
