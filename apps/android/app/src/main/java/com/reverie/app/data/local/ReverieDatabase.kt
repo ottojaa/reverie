@@ -31,7 +31,8 @@ import com.reverie.app.data.local.entity.UploadTaskEntity
     // v5: documents lost isPrivate/locked (private documents are never stored; see Migration4To5).
     // v6: adds the auto-backup ledger and retry tables (additive; see Migration5To6).
     // Other version jumps fall back to a destructive rebuild from the network (DatabaseModule).
-    version = 6,
+    // v7: documents gained takenAt, the date taken the Photos and Videos tabs order by (additive; see Migration6To7).
+    version = 7,
     exportSchema = false,
 )
 abstract class ReverieDatabase : RoomDatabase() {

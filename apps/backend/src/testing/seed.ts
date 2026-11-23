@@ -12,6 +12,8 @@ export interface SeedDocument {
     category?: string | null;
     extractedDate?: Date | null;
     deleted?: boolean;
+    /** The upload time; the database's now() when not given. */
+    createdAt?: Date;
     /** SHA-256 stored as file_hash; random when not given. */
     hash?: string;
     /** Text recognition, thumbnail and AI summary states; 'complete' for each when not given. */
@@ -109,6 +111,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             has_meaningful_text: doc.ocrText !== undefined,
             search_vector: null,
             deleted_at: doc.deleted ? new Date() : null,
+            ...(doc.createdAt && { created_at: doc.createdAt }),
             ...(doc.transcodeStatus !== undefined && { transcode_status: doc.transcodeStatus }),
             ...(doc.cameraReadAt !== undefined && { camera_read_at: doc.cameraReadAt }),
             ...(doc.mediaReadAt !== undefined && { media_read_at: doc.mediaReadAt }),

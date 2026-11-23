@@ -46,6 +46,7 @@ private fun DocumentDto.toEntityUnchecked(now: Long, lastAccessedAt: Long): Docu
     llmProcessedAt = llm_processed_at,
     llmTokenCount = llm_token_count,
     photoMetadataJson = photo_metadata?.let { ApiJson.encodeToString(DocumentPhotoMetadata.serializer(), it) },
+    takenAt = taken_at,
     createdAt = created_at,
     updatedAt = updated_at,
     cachedAt = now,
@@ -76,6 +77,7 @@ fun DocumentEntity.toDto(): DocumentDto = DocumentDto(
     llm_token_count = llmTokenCount,
     // Only non-private documents are ever cached.
     is_private = false,
+    taken_at = takenAt,
     created_at = createdAt,
     updated_at = updatedAt,
     file_url = null,

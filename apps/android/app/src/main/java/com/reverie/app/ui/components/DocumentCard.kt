@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -55,6 +56,10 @@ fun DocumentCard(
     modifier: Modifier = Modifier,
     // Larger mosaic tiles (2×2, 3×2, …) need a bigger source or the MD thumbnail visibly upscales.
     thumbnailSize: ThumbnailSize = GRID_THUMBNAIL_SIZE,
+    // The tile's outline; the Videos tab rounds its large tiles.
+    shape: Shape = RectangleShape,
+    // Large video tiles carry the duration pill and a corner play icon instead of a centered badge.
+    largeVideoTile: Boolean = false,
 ) {
     // Google-Photos multi-select: the thumbnail springs slightly smaller with rounded corners,
     // revealing a teal frame, while the check pops in. One `progress` drives all three so select
@@ -72,7 +77,7 @@ fun DocumentCard(
     Box(
         modifier = modifier
             .documentSharedBounds(document.id)
-            .clip(RectangleShape)
+            .clip(shape)
             // Muted frame, revealed only as the thumbnail shrinks; fully covered when unselected.
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
@@ -95,6 +100,7 @@ fun DocumentCard(
                 hasThumbnail = document.hasRenderedThumbnail,
                 size = thumbnailSize,
                 durationSeconds = document.duration_seconds,
+                largeVideoTile = largeVideoTile,
                 modifier = Modifier.matchParentSize(),
             )
         }
@@ -138,7 +144,7 @@ private fun PrivateLockBadge(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SelectedCheck(modifier: Modifier = Modifier) {
+internal fun SelectedCheck(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(24.dp)

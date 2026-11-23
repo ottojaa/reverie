@@ -15,6 +15,13 @@ export const DocumentTagSchema = z.object({
 export type DocumentTag = z.infer<typeof DocumentTagSchema>;
 
 /**
+ * The file-type kind a document belongs to, by MIME type alone (see documentKindOf). Named `image`, not
+ * `photo`, to stay apart from the AI document_category value `photo`.
+ */
+export const DocumentKindSchema = z.enum(['image', 'video', 'file']);
+export type DocumentKind = z.infer<typeof DocumentKindSchema>;
+
+/**
  * Document categories - distinguishes between content types
  */
 export const DocumentCategoryEnum = z.enum([
@@ -162,6 +169,10 @@ export const DocumentSchema = z.object({
     // privacy setting of their own; they are private exactly when their folder is. A document
     // is only ever returned while its folder's lock is open.
     is_private: z.boolean(),
+    // When the photo or video was taken, a local clock reading stored as if it were UTC (2026-11-23T14:03:00.000Z
+    // means 14:03 on the wall clock where it was taken): group it by its own date, never shift it to a time zone.
+    // Null for anything without a capture time; absent from responses of servers that predate it.
+    taken_at: z.string().nullable().optional(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     // Signed URLs for secure file access
@@ -190,6 +201,11 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     category: DocumentCategoryEnum.optional(),
     date_from: DateOnlySchema.optional(),
     date_to: DateOnlySchema.optional(),
+    /**
+     * Only documents of this kind (by MIME type, see documentKindOf); `total` is that kind's total. `image` and
+     * `video` come back by date taken (upload date when there is none), the others by upload date.
+     */
+    kind: DocumentKindSchema.optional(),
     /**
      * true: only documents whose text recognition, thumbnail or AI summary is still pending or running
      * (transcoding runs on its own clock and is left out). `total` is then the processing total.

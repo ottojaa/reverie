@@ -7,6 +7,7 @@ import com.reverie.app.data.api.model.CheckDuplicatesRequest
 import com.reverie.app.data.api.model.CheckDuplicatesResponse
 import com.reverie.app.data.api.model.ConflictStrategy
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentOcrResult
 import com.reverie.app.data.api.model.DocumentStatusResponse
 import com.reverie.app.data.api.model.JobIdResponse
@@ -35,12 +36,14 @@ class DocumentsApi @Inject constructor(
         folderId: String? = null,
         category: String? = null,
         processing: Boolean = false,
+        kind: DocumentKind? = null,
     ): Paginated<DocumentDto> = client.get("documents") {
         parameter("limit", limit)
         parameter("offset", offset)
         folderId?.let { parameter("folder_id", it) }
         category?.let { parameter("category", it) }
         if (processing) parameter("processing", true)
+        kind?.let { parameter("kind", it.wire) }
     }.decode()
 
     suspend fun get(id: String): DocumentDto = client.get("documents/$id").decode()

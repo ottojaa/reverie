@@ -23,10 +23,9 @@ import {
     type MoveDocumentsRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
-import type { ExpressionBuilder } from 'kysely';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { type Database, type Document as DbDocument, type JobStatus, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
+import { type Document as DbDocument, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { isVisionSwitchedOn } from '../../llm/provider-config';
 import { addLlmJob } from '../../queues/llm.queue';
@@ -36,7 +35,8 @@ import { getFolderService } from '../../services/folder.service';
 import { checkContent } from '../../services/content-check';
 import { loadOpenDocument } from '../../services/document-access';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
-import { excludePrivateDocuments, excludeTrashed } from '../../services/privacy';
+import { applyDocumentListFilters, TAKEN_AT_SQL, TAKEN_OR_CREATED_SQL, type DocumentListFilters } from '../../services/document-list-filters';
+import { excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
 import { buildHlsMasterUrl } from '../../services/hls-url';
 import { getStorageService } from '../../services/storage.service';
@@ -52,13 +52,6 @@ import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
 const uploadService = getUploadService();
 const storageService = getStorageService();
 const folderService = getFolderService();
-
-const RUNNING_STATUSES: JobStatus[] = ['pending', 'processing'];
-
-/** A document whose text recognition, thumbnail or AI summary has not finished yet (transcoding is its own clock). */
-function isStillProcessing(eb: ExpressionBuilder<Database, 'documents'>) {
-    return eb.or([eb('ocr_status', 'in', RUNNING_STATUSES), eb('thumbnail_status', 'in', RUNNING_STATUSES), eb('llm_status', 'in', RUNNING_STATUSES)]);
-}
 
 // OCR Result schema for API responses
 const OcrResultSchema = z.object({
@@ -102,68 +95,29 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const { limit, offset, folder_id, category, date_from, date_to, processing } = request.query;
+            const { limit, offset, folder_id, category, date_from, date_to, processing, kind } = request.query;
 
             // A private folder's documents are listed only by asking for that folder, once it is open.
             // Every other listing (no folder filter) leaves private folders out, locked or not.
             const locks = await loadFolderLocks(fastify, request, userId);
             locks.assertOpen(folder_id ?? null);
-            const privateFolderIds = locks.privateFolderIds;
 
-            let query = excludeTrashed(db.selectFrom('documents').selectAll().where('user_id', '=', userId), '');
+            const filters: DocumentListFilters = {
+                userId,
+                folderId: folder_id,
+                privateFolderIds: locks.privateFolderIds,
+                category,
+                dateFrom: date_from,
+                dateTo: date_to,
+                processing,
+                kind,
+            };
+            const byDateTaken = kind === 'image' || kind === 'video';
+            const page = applyDocumentListFilters(db.selectFrom('documents').selectAll().select(TAKEN_AT_SQL.as('taken_at')), filters);
+            const orderedPage = byDateTaken ? page.orderBy(TAKEN_OR_CREATED_SQL, 'desc').orderBy('id', 'desc') : page.orderBy('created_at', 'desc');
+            const count = applyDocumentListFilters(db.selectFrom('documents').select(db.fn.countAll().as('count')), filters);
 
-            // Apply filters
-            if (folder_id) {
-                query = query.where('folder_id', '=', folder_id);
-            } else {
-                query = excludePrivateDocuments(query, privateFolderIds, '');
-            }
-
-            if (category) {
-                query = query.where('document_category', '=', category);
-            }
-
-            if (date_from) {
-                query = query.where('extracted_date', '>=', new Date(date_from));
-            }
-
-            if (date_to) {
-                query = query.where('extracted_date', '<=', new Date(date_to));
-            }
-
-            if (processing) {
-                query = query.where(isStillProcessing);
-            }
-
-            // Get total count (must apply same filters)
-            let countQuery = excludeTrashed(db.selectFrom('documents').select(db.fn.countAll().as('count')).where('user_id', '=', userId), '');
-
-            if (folder_id) {
-                countQuery = countQuery.where('folder_id', '=', folder_id);
-            } else {
-                countQuery = excludePrivateDocuments(countQuery, privateFolderIds, '');
-            }
-
-            if (category) {
-                countQuery = countQuery.where('document_category', '=', category);
-            }
-
-            if (date_from) {
-                countQuery = countQuery.where('extracted_date', '>=', new Date(date_from));
-            }
-
-            if (date_to) {
-                countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
-            }
-
-            if (processing) {
-                countQuery = countQuery.where(isStillProcessing);
-            }
-
-            const [documents, countResult] = await Promise.all([
-                query.orderBy('created_at', 'desc').limit(limit).offset(offset).execute(),
-                countQuery.executeTakeFirst(),
-            ]);
+            const [documents, countResult] = await Promise.all([orderedPage.limit(limit).offset(offset).execute(), count.executeTakeFirst()]);
 
             // Rows only get here once their folder is known to be open, so serializing signs their URLs.
             const serializedDocuments = await Promise.all(documents.map((doc) => serializeDocument(doc, locks)));
@@ -1173,7 +1127,7 @@ export default async function (fastify: FastifyInstance) {
 // handler), so signed URLs are always safe to produce. Built field by field, never by spreading the
 // row, so a column added to `documents` later is not exposed by accident.
 async function serializeDocument(
-    doc: DbDocument,
+    doc: DbDocument & { taken_at?: Date | null },
     locks: FolderLocks,
     llmResult?: LlmResult | null,
     photoMeta?: PhotoMetadata | null,
@@ -1204,6 +1158,7 @@ async function serializeDocument(
         llm_processed_at: llmResult?.processed_at?.toISOString() ?? null,
         llm_token_count: llmResult?.token_count ?? null,
         is_private: locks.isPrivate(doc.folder_id),
+        ...takenAtOf(doc, photoMeta),
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
@@ -1220,6 +1175,13 @@ async function serializeDocument(
         photo_metadata: photoMeta ? toDocumentPhotoMetadata(photoMeta) : null,
         video_metadata: videoMeta ? toDocumentVideoMetadata(videoMeta) : null,
     };
+}
+
+/** `taken_at` as the API shows it; omitted when the row carries neither a listed value nor photo metadata. */
+function takenAtOf(doc: { taken_at?: Date | null }, photoMeta: PhotoMetadata | null | undefined): Pick<Document, 'taken_at'> {
+    const takenAt = photoMeta === undefined ? doc.taken_at : photoMeta?.taken_at;
+
+    return takenAt === undefined ? {} : { taken_at: takenAt ? takenAt.toISOString() : null };
 }
 
 function toDocumentVideoMetadata(videoMeta: VideoMetadata): DocumentVideoMetadata {
