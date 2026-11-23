@@ -38,6 +38,7 @@ import com.reverie.app.data.api.model.TopTypeDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
+import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.components.fileTypeVisual
 import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatBytes
@@ -166,7 +167,8 @@ private fun TypeBlock(ext: String, modifier: Modifier) {
     val base = MaterialTheme.colorScheme.surfaceContainerHighest
     Box(modifier.background(tint.copy(alpha = 0.30f).compositeOver(base)), contentAlignment = Alignment.TopCenter) {
         Text(
-            text = ext.uppercase(),
+            // The rows label the same documents with this rule, so a MIME-subtype "extension" reads FILE here too.
+            text = fileTypeLabel(mime = "", filename = "file.$ext"),
             color = tint,
             fontFamily = GeistMonoFontFamily,
             fontSize = 11.sp,

@@ -42,7 +42,7 @@ fun KindScreen(
     BrowseChrome(
         title = BrowseTitle(
             text = tab.label,
-            subtitle = if (documents.fetched) kindSubtitle(kind, documents.total, ui.folder?.name ?: "My Files") else "",
+            subtitle = if (documents.fetched) kindSubtitle(kind, documents.total, ui.folder?.name ?: if (viewModel.folderId == null) "My Files" else "Folder") else "",
             isFolder = false,
             compact = true,
         ),
