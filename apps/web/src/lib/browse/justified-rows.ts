@@ -36,7 +36,7 @@ function fillHeight(aspectSum: number, count: number, width: number, gap: number
  * Packs `documents` (in order) into rows that keep every picture's aspect ratio: a row takes pictures until they are
  * at least `width` wide at `targetHeight`, then scales to exactly `width`. The picture that crosses the width is kept
  * or left for the next row, whichever gives the row a height nearer the target (so one panorama does not squash a row).
- * The last row has nothing to fill it with and stays at the target height, left-aligned, instead of being blown up.
+ * The last row has nothing to fill it with and stays at the target height, left-aligned, instead of being blown up (shrunk only when a lone wide picture would overflow the row).
  */
 export function packJustifiedRows(
     documents: Document[],
