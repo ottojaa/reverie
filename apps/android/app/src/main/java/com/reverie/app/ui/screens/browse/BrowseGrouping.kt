@@ -14,8 +14,8 @@ import java.util.Locale
 
 /** What a Browse tab lists, top to bottom: group headers and the runs of documents between them. */
 sealed interface FeedItem {
-    /** A month or day heading: [title] on the left and a [trailing] count or summary on the right. */
-    data class Header(val key: String, val title: String, val trailing: String) : FeedItem
+    /** A month or day heading: just its [title], since a count of the rows loaded so far would grow as the list does. */
+    data class Header(val key: String, val title: String) : FeedItem
 
     /** Consecutive photos and videos, laid out as one mosaic. */
     data class Media(val docs: List<DocumentDto>) : FeedItem
@@ -68,16 +68,6 @@ fun dayLabel(day: LocalDate, today: LocalDate): String {
 
 private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
 
-/** "3 photos · 1 video · 3 files": what a day holds, leaving out the kinds it doesn't. */
-fun daySummary(docs: List<DocumentDto>): String {
-    val kinds = docs.groupingBy { it.kind }.eachCount()
-    return listOfNotNull(
-        kinds[DocumentKind.IMAGE]?.let { count(it, "photo", "photos") },
-        kinds[DocumentKind.VIDEO]?.let { count(it, "video", "videos") },
-        kinds[DocumentKind.FILE]?.let { count(it, "file", "files") },
-    ).joinToString(" · ")
-}
-
 /** What the title's subtitle says: the open tab's server total ("168 photos"), after the folder's description when it has one. */
 fun tabSubtitle(tab: BrowseTab, total: Int, description: String?): String {
     val counted = when (tab) {
@@ -90,30 +80,26 @@ fun tabSubtitle(tab: BrowseTab, total: Int, description: String?): String {
 
 /**
  * Lays [docs] (already in the tab's order) out as feed items. Groups are runs of neighbours, so a
- * page that continues a day or month adds to its last group instead of starting a new one. Counts
- * and summaries are of the documents loaded so far.
+ * page that continues a day or month adds to its last group instead of starting a new one.
  */
 fun buildFeed(tab: BrowseTab, docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): List<FeedItem> = when (tab) {
-    BrowseTab.PHOTOS -> monthGroups(docs, today, zone, "photo", "photos") { listOf(FeedItem.Media(it)) }
-    BrowseTab.VIDEOS -> monthGroups(docs, today, zone, "video", "videos") { group ->
+    BrowseTab.PHOTOS -> monthGroups(docs, today, zone) { listOf(FeedItem.Media(it)) }
+    BrowseTab.VIDEOS -> monthGroups(docs, today, zone) { group ->
         group.chunked(VIDEO_COLUMNS).map { FeedItem.VideoRow(it) }
     }
-    BrowseTab.FILES -> dayGroups(docs, today, zone, summarise = false) { group -> group.map { FeedItem.FileRow(it) } }
-    BrowseTab.ALL -> dayGroups(docs, today, zone, summarise = true, ::toAllRuns)
+    BrowseTab.FILES -> dayGroups(docs, today, zone) { group -> group.map { FeedItem.FileRow(it) } }
+    BrowseTab.ALL -> dayGroups(docs, today, zone, ::toAllRuns)
 }
 
 private fun monthGroups(
     docs: List<DocumentDto>,
     today: LocalDate,
     zone: ZoneId,
-    one: String,
-    many: String,
     toItems: (List<DocumentDto>) -> List<FeedItem>,
 ): List<FeedItem> = docs.groupConsecutive { monthOf(it, zone) }.flatMap { (month, group) ->
     val header = FeedItem.Header(
         key = "month:$month",
         title = month?.let { monthLabel(it, today) } ?: "Undated",
-        trailing = count(group.size, one, many),
     )
     listOf(header) + toItems(group)
 }
@@ -122,13 +108,11 @@ private fun dayGroups(
     docs: List<DocumentDto>,
     today: LocalDate,
     zone: ZoneId,
-    summarise: Boolean,
     toItems: (List<DocumentDto>) -> List<FeedItem>,
 ): List<FeedItem> = docs.groupConsecutive { dayOf(it, zone) }.flatMap { (day, group) ->
     val header = FeedItem.Header(
         key = "day:$day",
         title = day?.let { dayLabel(it, today) } ?: "Undated",
-        trailing = if (summarise) daySummary(group) else "",
     )
     listOf(header) + toItems(group)
 }

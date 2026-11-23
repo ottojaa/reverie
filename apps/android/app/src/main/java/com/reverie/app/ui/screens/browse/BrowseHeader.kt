@@ -141,14 +141,7 @@ fun PinnedBand(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = heading?.trailing.orEmpty(),
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            modifier = Modifier.padding(end = if (processingCount > 0) 8.dp else 0.dp),
+            modifier = Modifier.weight(1f).padding(end = if (processingCount > 0) 8.dp else 0.dp),
         )
         // The header's own pill sits at the same spot while the header is showing: only act on this one once it has taken over.
         ProcessingStatusBadge(count = processingCount, onClick = { if (visibility() > 0.5f) onProcessingClick() })

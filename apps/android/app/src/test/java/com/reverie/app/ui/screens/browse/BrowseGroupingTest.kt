@@ -25,13 +25,6 @@ class BrowseGroupingTest {
         assertEquals("October 2025", monthLabel(YearMonth.of(2025, 10), today))
     }
 
-    @Test fun `a day summary leaves out kinds the day does not hold`() {
-        val day = listOf(doc("a"), doc("b"), doc("c"), doc("v", "video/mp4"), doc("f1", "text/markdown"), doc("f2", ""), doc("f3", "application/zip"))
-        assertEquals("3 photos · 1 video · 3 files", daySummary(day))
-        assertEquals("1 photo", daySummary(listOf(doc("a"))))
-        assertEquals("2 files", daySummary(listOf(doc("f1", "text/markdown"), doc("f2", ""))))
-    }
-
     @Test fun `the date taken is read as written and the upload time in the device zone`() {
         // 23:30 taken on Oct 31 stays October; an upload at 23:30 UTC is already November in Helsinki (UTC+2).
         val taken = doc("t", taken = "2026-10-31T23:30:00.000Z", created = "2026-11-23T10:00:00Z")
@@ -41,7 +34,7 @@ class BrowseGroupingTest {
         assertEquals(YearMonth.of(2026, 10), monthOf(uploaded, utc))
     }
 
-    @Test fun `photos group by month with a count of what is loaded`() {
+    @Test fun `photos group by month, headed by the month alone`() {
         val docs = listOf(
             doc("n1", taken = "2026-11-20T10:00:00.000Z"), doc("n2", taken = "2026-11-02T10:00:00.000Z"),
             doc("o1", taken = "2026-10-30T10:00:00.000Z"),
@@ -49,8 +42,8 @@ class BrowseGroupingTest {
         val feed = buildFeed(BrowseTab.PHOTOS, docs, today, utc)
         assertEquals(
             listOf(
-                FeedItem.Header("month:2026-11", "November", "2 photos"), FeedItem.Media(docs.take(2)),
-                FeedItem.Header("month:2026-10", "October", "1 photo"), FeedItem.Media(docs.drop(2)),
+                FeedItem.Header("month:2026-11", "November"), FeedItem.Media(docs.take(2)),
+                FeedItem.Header("month:2026-10", "October"), FeedItem.Media(docs.drop(2)),
             ),
             feed,
         )
@@ -59,7 +52,7 @@ class BrowseGroupingTest {
     @Test fun `videos sit two to a row under their month`() {
         val docs = (1..3).map { doc("v$it", "video/mp4", created = "2026-11-2${it}T10:00:00Z") }.reversed()
         val feed = buildFeed(BrowseTab.VIDEOS, docs, today, utc)
-        assertEquals(FeedItem.Header("month:2026-11", "November", "3 videos"), feed[0])
+        assertEquals(FeedItem.Header("month:2026-11", "November"), feed[0])
         assertEquals(listOf(2, 1), feed.drop(1).map { (it as FeedItem.VideoRow).docs.size })
     }
 
@@ -71,8 +64,8 @@ class BrowseGroupingTest {
         val feed = buildFeed(BrowseTab.FILES, docs, today, utc)
         assertEquals(
             listOf(
-                FeedItem.Header("day:2026-11-23", "Today", ""), FeedItem.FileRow(docs[0]),
-                FeedItem.Header("day:2026-11-22", "Yesterday", ""), FeedItem.FileRow(docs[1]),
+                FeedItem.Header("day:2026-11-23", "Today"), FeedItem.FileRow(docs[0]),
+                FeedItem.Header("day:2026-11-22", "Yesterday"), FeedItem.FileRow(docs[1]),
             ),
             feed,
         )
@@ -88,7 +81,7 @@ class BrowseGroupingTest {
         val feed = buildFeed(BrowseTab.ALL, docs, today, utc)
         assertEquals(
             listOf(
-                FeedItem.Header("day:2026-11-23", "Today", "2 photos · 1 video · 2 files"),
+                FeedItem.Header("day:2026-11-23", "Today"),
                 FeedItem.Media(listOf(docs[0], docs[1])), FeedItem.FileCard(listOf(docs[2], docs[3])), FeedItem.Media(listOf(docs[4])),
             ),
             feed,
@@ -101,6 +94,6 @@ class BrowseGroupingTest {
         val before = buildFeed(BrowseTab.ALL, first, today, utc)
         val after = buildFeed(BrowseTab.ALL, more, today, utc)
         assertEquals(2, before.size)
-        assertEquals(listOf(FeedItem.Header("day:2026-11-23", "Today", "3 photos"), FeedItem.Media(more)), after)
+        assertEquals(listOf(FeedItem.Header("day:2026-11-23", "Today"), FeedItem.Media(more)), after)
     }
 }
