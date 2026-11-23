@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    id("app.cash.paparazzi") version "2.0.0-alpha02"
 }
 
 android {

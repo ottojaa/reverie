@@ -10,9 +10,9 @@ import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FolderDto
-import com.reverie.app.data.api.model.JobEventType
+import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.connectivity.ConnectivityMonitor
-import com.reverie.app.data.realtime.RealtimeManager
+import com.reverie.app.data.processing.ProcessingTracker
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
@@ -71,7 +71,7 @@ class BrowseViewModel @Inject constructor(
     private val documentRepository: DocumentRepository,
     private val folderRepository: FolderRepository,
     private val vaultRepository: VaultRepository,
-    private val realtimeManager: RealtimeManager,
+    private val processingTracker: ProcessingTracker,
     private val connectivity: ConnectivityMonitor,
     private val serverUrlProvider: ServerUrlProvider,
     private val sequenceHolder: DocumentSequenceHolder,
@@ -135,15 +135,13 @@ class BrowseViewModel @Inject constructor(
 
     private val control = MutableStateFlow(BrowseControl())
 
-    // Open realtime subscriptions for documents whose thumbnail is still generating (keyed by id).
-    private val thumbnailSubscriptions = mutableMapOf<String, AutoCloseable>()
-
     val uiState: StateFlow<BrowseUiState> = combine(
         documentRepository.observeDocuments(folderId),
         if (folderId != null) folderRepository.observeFolder(folderId) else flowOf(null),
         connectivity.isOnline,
         control,
-    ) { docs, folder, online, ctrl ->
+        processingTracker.count,
+    ) { docs, folder, online, ctrl, processing ->
         BrowseUiState(
             documents = docs,
             folder = folder,
@@ -152,7 +150,7 @@ class BrowseViewModel @Inject constructor(
             isOffline = !online,
             error = ctrl.error,
             hasMore = docs.size < ctrl.total,
-            processingCount = docs.count { !isFullyProcessed(it) },
+            processingCount = processing,
             selectedIds = ctrl.selectedIds,
             lockedFolderId = ctrl.lockedFolderId,
         )
@@ -163,50 +161,25 @@ class BrowseViewModel @Inject constructor(
         if (folderId != null) {
             viewModelScope.launch { runCatching { folderRepository.refresh() } }
         }
-        observePendingThumbnails()
-        collectThumbnailJobEvents()
+        keepUnfinishedDocumentsLive()
     }
 
     /**
-     * Keep a realtime subscription open for every document whose thumbnail is still being generated.
-     * Video thumbnails (ffmpeg frame extraction) finish well after the upload HTTP call returns, so
-     * without this the grid would keep showing the placeholder until a manual refresh.
+     * The tracker listens to the library's processing documents on its own; this adds what this
+     * grid shows that it might not cover (private-folder documents, a long backlog), so
+     * thumbnails still appear as they finish.
      */
-    private fun observePendingThumbnails() {
+    private fun keepUnfinishedDocumentsLive() {
         viewModelScope.launch {
-            documentRepository.observeDocuments(folderId)
-                .map { docs -> docs.filter { !it.thumbnail_status.isTerminal }.map { it.id }.toSet() }
+            val unfinished = documentRepository.observeDocuments(folderId)
+                .map { docs -> docs.filter(DocumentDto::isStillProcessing).map(DocumentDto::id).toSet() }
                 .distinctUntilChanged()
-                .collect { pending ->
-                    (pending - thumbnailSubscriptions.keys).forEach { id ->
-                        thumbnailSubscriptions[id] = realtimeManager.subscribeDocument(id)
-                    }
-                    (thumbnailSubscriptions.keys - pending).forEach { id ->
-                        thumbnailSubscriptions.remove(id)?.close()
-                    }
-                }
+            processingTracker.keepLive(unfinished)
         }
-    }
-
-    /** Refetch a document (updating its cached status) when its thumbnail/processing job settles. */
-    private fun collectThumbnailJobEvents() {
-        viewModelScope.launch {
-            realtimeManager.events.collect { event ->
-                val id = event.document_id ?: return@collect
-                if (id !in thumbnailSubscriptions) return@collect
-                if (event.type == JobEventType.COMPLETE || event.type == JobEventType.FAILED) {
-                    runCatching { documentRepository.fetchDocument(id) }
-                }
-            }
-        }
-    }
-
-    override fun onCleared() {
-        thumbnailSubscriptions.values.forEach { it.close() }
-        thumbnailSubscriptions.clear()
     }
 
     fun refresh(initial: Boolean = false) {
+        processingTracker.refresh()
         viewModelScope.launch {
             control.update { it.copy(isLoading = initial, isRefreshing = !initial, error = null, lockedFolderId = null) }
             runCatching { documentRepository.refresh(folderId, PAGE_SIZE, 0) }
@@ -282,9 +255,6 @@ class BrowseViewModel @Inject constructor(
 
     private fun absolute(url: String): String =
         if (url.startsWith("http")) url else serverUrlProvider.current().removeSuffix("/") + url
-
-    private fun isFullyProcessed(doc: DocumentDto): Boolean =
-        doc.ocr_status.isTerminal && doc.thumbnail_status.isTerminal && doc.llm_status.isTerminal
 
     private fun messageFor(throwable: Throwable): String =
         (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load documents."

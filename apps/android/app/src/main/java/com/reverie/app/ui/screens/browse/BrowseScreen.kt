@@ -64,6 +64,7 @@ import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.components.rememberSkeletonVisible
+import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
@@ -97,9 +98,17 @@ fun BrowseScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
+    var showProcessing by remember { mutableStateOf(false) }
     val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
 
     val onUploadClick: () -> Unit = { showUploadActions = true }
+    // Media (images + videos) size the dive transform to their aspect — the morph box is the
+    // content rect the poster grows into. Other file types morph a full-screen stand-in instead
+    // (see DocumentPage).
+    val openDocument: (DocumentDto) -> Unit = { document ->
+        val isMedia = isImageDocument(document) || isVideoDocument(document)
+        onDocumentClick(document.id, if (isMedia) document.mediaAspectOrNull() else null)
+    }
     // Collapsing top bar: hides on scroll down, returns on scroll up.
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
@@ -141,6 +150,7 @@ fun BrowseScreen(
                 processingCount = state.processingCount,
                 onBack = onBack,
                 onCanvas = { showCanvasSoon = true },
+                onProcessingClick = { showProcessing = true },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -212,17 +222,7 @@ fun BrowseScreen(
                             // Warm the signed URL + full-res image now, so it's ready by the time the
                             // dive transition finishes instead of loading in ~2s later.
                             viewModel.prefetch(document)
-                            // Media (images + videos) size the dive transform to their aspect —
-                            // the morph box is the content rect the poster grows into. Other file
-                            // types morph a full-screen stand-in instead (see DocumentPage).
-                            onDocumentClick(
-                                document.id,
-                                if (isImageDocument(document) || isVideoDocument(document)) {
-                                    document.mediaAspectOrNull()
-                                } else {
-                                    null
-                                },
-                            )
+                            openDocument(document)
                         }
                     },
                     onLongClick = { document ->
@@ -287,6 +287,16 @@ fun BrowseScreen(
     }
     UploadReviewSheet(viewModel = uploadViewModel)
 
+    if (showProcessing) {
+        ProcessingSheet(
+            onOpenDocument = { document ->
+                showProcessing = false
+                openDocument(document)
+            },
+            onDismiss = { showProcessing = false },
+        )
+    }
+
     if (showDeleteConfirm) {
         ConfirmDialog(
             title = "Delete ${state.selectedIds.size} ${plural(state.selectedIds.size)}?",
@@ -329,6 +339,7 @@ private fun BrowseTopBar(
     processingCount: Int,
     onBack: (() -> Unit)?,
     onCanvas: () -> Unit,
+    onProcessingClick: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -382,7 +393,7 @@ private fun BrowseTopBar(
             }
         },
         actions = {
-            ProcessingStatusBadge(count = processingCount)
+            ProcessingStatusBadge(count = processingCount, onClick = onProcessingClick)
             if (isFolder) {
                 // Wrap button + menu in a Box so the menu anchors to the button.
                 Box {

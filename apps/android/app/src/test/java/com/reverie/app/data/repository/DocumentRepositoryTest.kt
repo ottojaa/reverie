@@ -82,9 +82,11 @@ class DocumentRepositoryTest {
         dao: FakeDocumentDao,
         store: PrivateDocumentStore = PrivateDocumentStore(),
         purger: FakePurger = FakePurger(dao),
+        requested: MutableList<String> = mutableListOf(),
         pageBody: () -> String,
     ): DocumentRepository {
-        val engine = MockEngine {
+        val engine = MockEngine { request ->
+            requested += request.url.toString()
             respond(
                 content = pageBody(),
                 status = HttpStatusCode.OK,
@@ -109,6 +111,19 @@ class DocumentRepositoryTest {
         assertEquals(2, result.total)
         assertEquals(2, result.loaded)
         assertEquals(2, repository.observeDocuments("f1").first().size)
+    }
+
+    @Test fun `fetching processing documents asks the server for processing ones and caches them`() = runTest {
+        val dao = FakeDocumentDao()
+        val requested = mutableListOf<String>()
+        val page = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":7,"limit":60,"offset":0}"""
+        val repository = repo(dao, requested = requested) { page }
+
+        val result = repository.fetchProcessing(limit = 60, offset = 0)
+
+        assertEquals(7, result.total)
+        assertTrue("processing=true is sent: $requested", requested.single().contains("processing=true"))
+        assertEquals(listOf("d1"), repository.observeDocuments(null).first().map { it.id })
     }
 
     @Test fun `a full-folder refresh reconciles away stale rows`() = runTest {

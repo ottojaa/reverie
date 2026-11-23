@@ -129,6 +129,10 @@ data class DocumentTagDto(
 val DocumentDto.hasRenderedThumbnail: Boolean
     get() = !thumbnail_blurhash.isNullOrBlank()
 
+/** True while the thumbnail, text recognition or AI summary is still pending or running. */
+val DocumentDto.isStillProcessing: Boolean
+    get() = !(ocr_status.isTerminal && thumbnail_status.isTerminal && llm_status.isTerminal)
+
 /** width/height ratio for image/video docs, or null when dimensions are unknown. */
 fun DocumentDto.mediaAspectOrNull(): Float? {
     val w = width ?: return null

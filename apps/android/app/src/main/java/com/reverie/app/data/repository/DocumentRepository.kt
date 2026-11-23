@@ -2,6 +2,7 @@ package com.reverie.app.data.repository
 
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.entity.DocumentEntity
 import com.reverie.app.data.local.toDto
@@ -46,7 +47,7 @@ class DocumentRepository @Inject constructor(
     private val privateStore: PrivateDocumentStore,
     private val purger: PrivateDataPurger,
     @IoDispatcher private val io: CoroutineDispatcher,
-) {
+) : ProcessingDocuments {
     // Signed file URLs are never persisted (Room strips them), so opening a document would normally
     // pay a fresh /documents/:id round-trip. Cache the last-seen URL in memory — app-scoped, so a tap
     // in the grid can warm it before the viewer's ViewModel even exists — harvested from EVERY fetch
@@ -126,8 +127,19 @@ class DocumentRepository @Inject constructor(
         PageResult(total = page.total, loaded = offset + page.items.size)
     }
 
+    /**
+     * One page of the library's still-processing documents (newest first), cached like any list
+     * page so the grid and the processing sheet see their current statuses. `total` is the number
+     * of processing documents in the whole library.
+     */
+    override suspend fun fetchProcessing(limit: Int, offset: Int): Paginated<DocumentDto> = withContext(io) {
+        val page = documentsApi.list(limit = limit, offset = offset, processing = true)
+        absorb(page.items)
+        page
+    }
+
     /** Fetch + cache a single document detail (includes photo/LLM metadata). */
-    suspend fun fetchDocument(id: String): DocumentDto = withContext(io) {
+    override suspend fun fetchDocument(id: String): DocumentDto = withContext(io) {
         val dto = documentsApi.get(id)
         // Also refreshes the in-memory signed URL — this is where a rotated signature lands.
         absorb(listOf(dto))
