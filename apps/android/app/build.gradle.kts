@@ -44,8 +44,26 @@ android {
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
     }
 
+    // Release signing reads four Gradle properties: REVERIE_RELEASE_STORE_FILE (absolute keystore
+    // path), REVERIE_RELEASE_STORE_PASSWORD, REVERIE_RELEASE_KEY_ALIAS, REVERIE_RELEASE_KEY_PASSWORD.
+    // They live in ~/.gradle/gradle.properties (outside the repo) or come as -P flags. Without
+    // REVERIE_RELEASE_STORE_FILE the release build stays unsigned, so machines without the key
+    // (CI, sandboxes) still configure and build every variant.
+    val releaseStoreFile = providers.gradleProperty("REVERIE_RELEASE_STORE_FILE").orNull
+    if (releaseStoreFile != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("REVERIE_RELEASE_STORE_PASSWORD").orNull
+                keyAlias = providers.gradleProperty("REVERIE_RELEASE_KEY_ALIAS").orNull
+                keyPassword = providers.gradleProperty("REVERIE_RELEASE_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
