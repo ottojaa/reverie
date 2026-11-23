@@ -66,38 +66,40 @@ export function SidebarFooter({ user, pathname, onClose }: SidebarFooterProps) {
 
     return (
         <div className="shrink-0 border-t border-sidebar-border p-2">
-            <AnimatePresence initial={false}>
-                {isOpen && (
-                    <motion.div
-                        key="links"
-                        id={linksId}
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration, ease: EASE }}
-                        className="overflow-hidden"
-                    >
-                        <div className="flex flex-col pb-1">
-                            {links.map(({ to, label, Icon }) => (
-                                <Link
-                                    key={to}
-                                    to={to}
-                                    className={cn(
-                                        'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                                        pathname === to
-                                            ? 'bg-sidebar-accent text-sidebar-primary'
-                                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                                    )}
-                                    onClick={onClose}
-                                >
-                                    <Icon className="size-4" />
-                                    {label}
-                                </Link>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Always rendered so the toggle's aria-controls resolves while collapsed too. */}
+            <div id={linksId}>
+                <AnimatePresence initial={false}>
+                    {isOpen && (
+                        <motion.div
+                            key="links"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration, ease: EASE }}
+                            className="overflow-hidden"
+                        >
+                            <div className="flex flex-col pb-1">
+                                {links.map(({ to, label, Icon }) => (
+                                    <Link
+                                        key={to}
+                                        to={to}
+                                        className={cn(
+                                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                                            pathname === to
+                                                ? 'bg-sidebar-accent text-sidebar-primary'
+                                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                                        )}
+                                        onClick={onClose}
+                                    >
+                                        <Icon className="size-4" />
+                                        {label}
+                                    </Link>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
             <div className="flex items-center gap-1">
                 {user ? (

@@ -22,8 +22,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('motion/react', () => {
-    const passthrough = ({ children, id, className }: { children?: unknown; id?: string; className?: string }) =>
-        createElement('div', { id, className }, children as never);
+    const passthrough = ({ children, className }: { children?: unknown; className?: string }) => createElement('div', { className }, children as never);
 
     return {
         AnimatePresence: ({ children }: { children?: unknown }) => children,
@@ -68,6 +67,7 @@ describe('SidebarFooter', () => {
         render();
 
         expect(toggle().getAttribute('aria-expanded')).toBe('false');
+        expect(document.getElementById(toggle().getAttribute('aria-controls')!)).not.toBeNull();
         expect(container.textContent).toContain('2.15 GB of 10.74 GB used');
         expect(linkLabels()).toEqual([]);
     });
