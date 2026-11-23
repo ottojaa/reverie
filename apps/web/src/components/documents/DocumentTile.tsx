@@ -1,8 +1,7 @@
-import { documentsApi } from '@/lib/api/documents';
 import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
+import { usePrefetchDocument } from '@/lib/hooks/usePrefetchDocument';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { memo } from 'react';
 import { DocumentActionsMenu } from './DocumentCard/DocumentActionsMenu';
@@ -15,7 +14,7 @@ interface DocumentTileProps {
     width: number;
     height: number;
     shouldPulse?: boolean;
-    onPulseComplete?: () => void;
+    onPulseComplete?: (id: string) => void;
 }
 
 /**
@@ -23,7 +22,7 @@ interface DocumentTileProps {
  * menu exactly like a card (same interaction hook and actions menu); a video keeps its duration badge.
  */
 export const DocumentTile = memo(function DocumentTile({ document, orderedIds, width, height, shouldPulse, onPulseComplete }: DocumentTileProps) {
-    const queryClient = useQueryClient();
+    const prefetchDocument = usePrefetchDocument(document);
     const interaction = useDocumentInteraction({ document, orderedIds });
     const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
 
@@ -47,9 +46,7 @@ export const DocumentTile = memo(function DocumentTile({ document, orderedIds, w
                     preload="intent"
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
-                    onMouseEnter={() => {
-                        queryClient.prefetchQuery({ queryKey: ['document', document.id], queryFn: () => documentsApi.get(document.id) });
-                    }}
+                    onMouseEnter={prefetchDocument}
                     draggable={false}
                     className={cn(
                         'block h-full w-full overflow-hidden rounded-sm transition-opacity',
@@ -60,7 +57,7 @@ export const DocumentTile = memo(function DocumentTile({ document, orderedIds, w
                     <DocumentThumbnail document={document} variant="tile" />
                     {isSelected && <div className="pointer-events-none absolute inset-0 rounded-sm bg-primary/15" aria-hidden />}
                 </Link>
-                {shouldPulse && <PulseOverlay onComplete={onPulseComplete} />}
+                {shouldPulse && <PulseOverlay onComplete={() => onPulseComplete?.(document.id)} />}
             </div>
         </DocumentActionsMenu>
     );

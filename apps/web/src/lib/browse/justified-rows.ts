@@ -87,7 +87,11 @@ export function packJustifiedRows(
         aspectSum = aspect;
     }
 
-    if (run.length > 0) rows.push({ documents: run, widths: runAspects.map((aspect) => aspect * targetHeight), height: targetHeight });
+    if (run.length === 0) return rows;
+
+    // Nothing fills the last row, so it stays at the target height, unless that would be wider than the row (a lone panorama).
+    const tailHeight = Math.min(targetHeight, fillHeight(aspectSum, run.length, width, gap));
+    rows.push({ documents: run, widths: runAspects.map((aspect) => aspect * tailHeight), height: tailHeight });
 
     return rows;
 }

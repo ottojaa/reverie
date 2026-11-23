@@ -1,8 +1,6 @@
-import { documentsApi } from '@/lib/api/documents';
-import { buildFileUrl } from '@/lib/commonhelpers';
 import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
+import { usePrefetchDocument } from '@/lib/hooks/usePrefetchDocument';
 import type { Document } from '@reverie/shared';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 
 import { DocumentActionsMenu } from './DocumentActionsMenu';
@@ -17,7 +15,7 @@ interface DocumentCardProps {
 }
 
 export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplete, className }: DocumentCardProps) {
-    const queryClient = useQueryClient();
+    const prefetchDocument = usePrefetchDocument(document);
     const interaction = useDocumentInteraction({ document, orderedIds });
     const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
 
@@ -39,18 +37,7 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                     preload="intent"
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
-                    onMouseEnter={() => {
-                        queryClient.prefetchQuery({
-                            queryKey: ['document', document.id],
-                            queryFn: () => documentsApi.get(document.id),
-                        });
-
-                        if (document.mime_type?.startsWith('image/') && document.file_url) {
-                            const url = buildFileUrl(document.file_url);
-
-                            if (url) new Image().src = url;
-                        }
-                    }}
+                    onMouseEnter={prefetchDocument}
                     draggable={false}
                 >
                     <DocumentCardVisual

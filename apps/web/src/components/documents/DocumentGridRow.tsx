@@ -30,7 +30,7 @@ export function DocumentGridRow({ row, layout, columns, tileSide, orderedIds, pu
                         width={row.widths?.[i] ?? tileSide}
                         height={row.height ?? tileSide}
                         shouldPulse={pulsingIds.has(doc.id)}
-                        onPulseComplete={() => onPulseComplete(doc.id)}
+                        onPulseComplete={onPulseComplete}
                     />
                 ))}
             </div>

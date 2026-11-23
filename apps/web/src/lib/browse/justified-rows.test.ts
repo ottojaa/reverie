@@ -45,6 +45,16 @@ describe('packJustifiedRows', () => {
         expect(rows[1]!.widths).toEqual([800]);
     });
 
+    it('shrinks a last row that would be wider than the row', () => {
+        // The 6:1 panorama is left for the next row (250px beats 1000 / 10 = 100px); alone at 200px it would be 1200px wide.
+        const rows = packJustifiedRows([pic('a', 2), pic('b', 2), pic('wide', 6)], { width: 1000, targetHeight: 200, gap: 0 });
+
+        expect(rows[0]!.widths).toEqual([500, 500]);
+        expect(ids(rows[1]!.documents)).toEqual(['wide']);
+        expect(rows[1]!.height).toBeCloseTo(1000 / 6);
+        expect(rows[1]!.widths[0]).toBeCloseTo(1000);
+    });
+
     it('keeps the crossing picture when that is nearer the target', () => {
         // 1000 / 6.25 = 160px (40 under) beats 1000 / 4 = 250px (50 over).
         const rows = packJustifiedRows([pic('a', 2), pic('b', 2), pic('c', 2.25)], { width: 1000, targetHeight: 200, gap: 0 });

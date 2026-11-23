@@ -243,6 +243,12 @@ export function DocumentGrid({
         paddingEnd: 60,
     });
 
+    // virtual-core only re-lays-out rows when count, scrollMargin or getItemKey change; a resize that keeps the
+    // row keys but changes tile or card sizes needs a nudge.
+    useEffect(() => {
+        virtualizer.measure();
+    }, [virtualizer, gridWidth, columns, layout]);
+
     // --- Infinite scroll trigger ---
 
     const virtualItems = virtualizer.getVirtualItems();
