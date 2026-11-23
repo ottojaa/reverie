@@ -216,6 +216,36 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
 
 export type DocumentListQuery = z.infer<typeof DocumentListQuerySchema>;
 
+export const DocumentSummaryQuerySchema = z.object({
+    /** Omitted: the whole library, with the same private-folder and trash rules as the list. */
+    folder_id: UuidSchema.optional(),
+});
+
+export type DocumentSummaryQuery = z.infer<typeof DocumentSummaryQuerySchema>;
+
+const KindTotalsSchema = z.object({
+    count: z.number().int().nonnegative(),
+    bytes: z.number().nonnegative(),
+});
+
+/** One file type of the Files kind, as its lowercase extension (or MIME subtype when the name has none). */
+export const DocumentTopTypeSchema = z.object({
+    ext: z.string(),
+    count: z.number().int().positive(),
+});
+
+/** What a scope holds, per kind (see documentKindOf): the figures behind the Browse dashboard's cards. */
+export const DocumentSummaryResponseSchema = z.object({
+    image: KindTotalsSchema,
+    video: KindTotalsSchema,
+    file: KindTotalsSchema.extend({
+        /** The most common file types, most common first; at most four. */
+        top_types: z.array(DocumentTopTypeSchema).max(4),
+    }),
+});
+
+export type DocumentSummaryResponse = z.infer<typeof DocumentSummaryResponseSchema>;
+
 export const DocumentStatusResponseSchema = z.object({
     document_id: UuidSchema,
     ocr_status: JobStatusEnum,

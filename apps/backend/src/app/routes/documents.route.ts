@@ -6,6 +6,8 @@ import {
     CheckDuplicatesResponseSchema,
     DocumentListQuerySchema,
     DocumentSchema,
+    DocumentSummaryQuerySchema,
+    DocumentSummaryResponseSchema,
     EntitySchema,
     JobSchema,
     JobStatusEnum,
@@ -19,6 +21,7 @@ import {
     type Document,
     type DocumentListQuery,
     type DocumentPhotoMetadata,
+    type DocumentSummaryQuery,
     type DocumentVideoMetadata,
     type MoveDocumentsRequest,
 } from '@reverie/shared';
@@ -36,6 +39,7 @@ import { checkContent } from '../../services/content-check';
 import { loadOpenDocument } from '../../services/document-access';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
 import { applyDocumentListFilters, TAKEN_AT_SQL, TAKEN_OR_CREATED_SQL, type DocumentListFilters } from '../../services/document-list-filters';
+import { summariseDocuments } from '../../services/document-summary';
 import { excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
 import { buildHlsMasterUrl } from '../../services/hls-url';
@@ -128,6 +132,31 @@ export default async function (fastify: FastifyInstance) {
                 limit,
                 offset,
             };
+        },
+    );
+
+    // What the library (or one folder) holds per kind: the Browse dashboard's cards (requires authentication)
+    fastify.get<{
+        Querystring: DocumentSummaryQuery;
+    }>(
+        '/documents/summary',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Count and size per document kind, and the most common file types',
+                querystring: DocumentSummaryQuerySchema,
+                response: {
+                    200: DocumentSummaryResponseSchema,
+                },
+            },
+        },
+        async function (request) {
+            const userId = request.user.id;
+            const { folder_id } = request.query;
+            const locks = await loadFolderLocks(fastify, request, userId);
+            locks.assertOpen(folder_id ?? null);
+
+            return summariseDocuments({ userId, folderId: folder_id, privateFolderIds: locks.privateFolderIds });
         },
     );
 

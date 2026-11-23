@@ -1,0 +1,53 @@
+import type { DocumentKind, DocumentSummaryResponse } from '@reverie/shared';
+import { sql, type ExpressionBuilder } from 'kysely';
+import { db } from '../db/kysely.js';
+import type { Database } from '../db/schema.js';
+import { applyDocumentListFilters, isOfKind, type DocumentListFilters } from './document-list-filters.js';
+
+const TOP_TYPES = 4;
+const KINDS: DocumentKind[] = ['image', 'video', 'file'];
+
+/** The type a file shows as: the lowercase extension of its name, else the MIME subtype ('' when it has neither). */
+const FILE_TYPE_SQL = sql<string>`coalesce(nullif(substring(lower(original_filename) from '\\.([^.]+)$'), ''), split_part(lower(mime_type), '/', 2))`;
+
+function totalsOf(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
+    return [
+        eb.fn
+            .countAll<string>()
+            .filterWhere(isOfKind(eb, kind))
+            .as(kind + '_count'),
+        eb.fn.coalesce(eb.fn.sum<string>('size_bytes').filterWhere(isOfKind(eb, kind)), sql<string>`0`).as(kind + '_bytes'),
+    ];
+}
+
+/**
+ * What the documents the filters select hold, per kind: how many and how many bytes, and the most common file types.
+ * Both queries go through applyDocumentListFilters (without a kind), so the scope matches GET /documents exactly.
+ */
+export async function summariseDocuments(filters: Omit<DocumentListFilters, 'kind'>): Promise<DocumentSummaryResponse> {
+    const totals = applyDocumentListFilters(
+        db.selectFrom('documents').select((eb) => KINDS.flatMap((kind) => totalsOf(eb, kind))),
+        filters,
+    ).executeTakeFirstOrThrow();
+    const types = applyDocumentListFilters(db.selectFrom('documents').select([FILE_TYPE_SQL.as('ext'), (eb) => eb.fn.countAll<string>().as('count')]), {
+        ...filters,
+        kind: 'file',
+    })
+        .where(FILE_TYPE_SQL, '<>', '')
+        .groupBy('ext')
+        .orderBy('count', 'desc')
+        .orderBy('ext')
+        .limit(TOP_TYPES)
+        .execute();
+    const [row, topTypes] = await Promise.all([totals, types]);
+
+    return {
+        image: { count: Number(row.image_count), bytes: Number(row.image_bytes) },
+        video: { count: Number(row.video_count), bytes: Number(row.video_bytes) },
+        file: {
+            count: Number(row.file_count),
+            bytes: Number(row.file_bytes),
+            top_types: topTypes.map((type) => ({ ext: type.ext, count: Number(type.count) })),
+        },
+    };
+}
