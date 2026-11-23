@@ -14,6 +14,8 @@ export interface SeedDocument {
     deleted?: boolean;
     /** SHA-256 stored as file_hash; random when not given. */
     hash?: string;
+    /** Text recognition, thumbnail and AI summary states; 'complete' for each when not given. */
+    statuses?: { ocr?: JobStatus; thumbnail?: JobStatus; llm?: JobStatus };
     /** The HLS ladder's state; the column's own default ('skipped') when not given. */
     transcodeStatus?: JobStatus;
     ocrText?: string;
@@ -101,9 +103,9 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             thumbnail_paths: null,
             document_category: doc.category ?? null,
             extracted_date: doc.extractedDate ?? null,
-            ocr_status: 'complete',
-            thumbnail_status: 'complete',
-            llm_status: 'complete',
+            ocr_status: doc.statuses?.ocr ?? 'complete',
+            thumbnail_status: doc.statuses?.thumbnail ?? 'complete',
+            llm_status: doc.statuses?.llm ?? 'complete',
             has_meaningful_text: doc.ocrText !== undefined,
             search_vector: null,
             deleted_at: doc.deleted ? new Date() : null,

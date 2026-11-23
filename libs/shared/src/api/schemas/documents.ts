@@ -190,6 +190,12 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     category: DocumentCategoryEnum.optional(),
     date_from: DateOnlySchema.optional(),
     date_to: DateOnlySchema.optional(),
+    /**
+     * true: only documents whose text recognition, thumbnail or AI summary is still pending or running
+     * (transcoding runs on its own clock and is left out). `total` is then the processing total.
+     * Not z.coerce.boolean(): that turns the query-string "false" into true.
+     */
+    processing: z.union([z.boolean(), z.string().transform((v) => v === 'true' || v === '1')]).optional(),
 });
 
 export type DocumentListQuery = z.infer<typeof DocumentListQuerySchema>;
