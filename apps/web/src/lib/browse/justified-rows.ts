@@ -27,10 +27,16 @@ export function aspectOf(doc: Pick<Document, 'width' | 'height'>): number {
     return doc.width / doc.height;
 }
 
+/** The height a run of pictures with this aspect sum has when it is scaled to fill `width` exactly. */
+function fillHeight(aspectSum: number, count: number, width: number, gap: number): number {
+    return (width - gap * (count - 1)) / aspectSum;
+}
+
 /**
  * Packs `documents` (in order) into rows that keep every picture's aspect ratio: a row takes pictures until they are
- * at least `width` wide at `targetHeight`, then scales to exactly `width` (so it is never taller than the target). The
- * last row has nothing to fill it with and stays at the target height, left-aligned, instead of being blown up.
+ * at least `width` wide at `targetHeight`, then scales to exactly `width`. The picture that crosses the width is kept
+ * or left for the next row, whichever gives the row a height nearer the target (so one panorama does not squash a row).
+ * The last row has nothing to fill it with and stays at the target height, left-aligned, instead of being blown up.
  */
 export function packJustifiedRows(
     documents: Document[],
@@ -43,22 +49,45 @@ export function packJustifiedRows(
     let runAspects: number[] = [];
     let aspectSum = 0;
 
+    const closeRow = (height: number) => {
+        rows.push({ documents: run, widths: runAspects.map((aspect) => aspect * height), height });
+        run = [];
+        runAspects = [];
+        aspectSum = 0;
+    };
+
     for (const doc of documents) {
         const aspect = aspectOf(doc);
+
         run.push(doc);
         runAspects.push(aspect);
         aspectSum += aspect;
 
         if (aspectSum * targetHeight + gap * (run.length - 1) < width) continue;
 
-        const height = (width - gap * (run.length - 1)) / aspectSum;
-        rows.push({ documents: run, widths: runAspects.map((a) => a * height), height });
-        run = [];
-        runAspects = [];
-        aspectSum = 0;
+        const withLast = fillHeight(aspectSum, run.length, width, gap);
+
+        if (run.length === 1) {
+            closeRow(withLast);
+            continue;
+        }
+
+        const withoutLast = fillHeight(aspectSum - aspect, run.length - 1, width, gap);
+
+        if (Math.abs(withLast - targetHeight) <= Math.abs(withoutLast - targetHeight)) {
+            closeRow(withLast);
+            continue;
+        }
+
+        run.pop();
+        runAspects.pop();
+        closeRow(withoutLast);
+        run = [doc];
+        runAspects = [aspect];
+        aspectSum = aspect;
     }
 
-    if (run.length > 0) rows.push({ documents: run, widths: runAspects.map((a) => a * targetHeight), height: targetHeight });
+    if (run.length > 0) rows.push({ documents: run, widths: runAspects.map((aspect) => aspect * targetHeight), height: targetHeight });
 
     return rows;
 }

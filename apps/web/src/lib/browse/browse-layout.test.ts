@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BrowseTab } from './browse-tabs';
 import { hasLayoutChoice, parseBrowseLayout } from './browse-layout';
 
 describe('parseBrowseLayout', () => {
@@ -19,6 +20,6 @@ describe('parseBrowseLayout', () => {
 
 describe('hasLayoutChoice', () => {
     it('is offered on Photos and Videos only', () => {
-        expect(['all', 'image', 'video', 'file'].map((tab) => hasLayoutChoice(tab as 'all'))).toEqual([false, true, true, false]);
+        expect(['all', 'image', 'video', 'file'].map((tab) => hasLayoutChoice(tab as BrowseTab))).toEqual([false, true, true, false]);
     });
 });

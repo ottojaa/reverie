@@ -32,6 +32,26 @@ describe('packJustifiedRows', () => {
         expect(rows[0]!.widths).toEqual([320, 320, 360]);
     });
 
+    it('leaves the picture that crosses the width for the next row when that keeps the row nearer the target', () => {
+        // With the 4:1 panorama the row would be 1000 / 8 = 125px (75 under the 200px target); without it, 1000 / 4 = 250px (50 over).
+        const rows = packJustifiedRows([pic('a', 2), pic('b', 2), pic('wide', 4)], { width: 1000, targetHeight: 200, gap: 0 });
+
+        expect(ids(rows[0]!.documents)).toEqual(['a', 'b']);
+        expect(rows[0]!.height).toBe(250);
+        expect(rows[0]!.widths).toEqual([500, 500]);
+        // The panorama starts the next row, which has nothing to fill it, so it stays at the target height.
+        expect(ids(rows[1]!.documents)).toEqual(['wide']);
+        expect(rows[1]!.height).toBe(200);
+        expect(rows[1]!.widths).toEqual([800]);
+    });
+
+    it('keeps the crossing picture when that is nearer the target', () => {
+        // 1000 / 6.25 = 160px (40 under) beats 1000 / 4 = 250px (50 over).
+        const rows = packJustifiedRows([pic('a', 2), pic('b', 2), pic('c', 2.25)], { width: 1000, targetHeight: 200, gap: 0 });
+
+        expect(ids(rows[0]!.documents)).toEqual(['a', 'b', 'c']);
+    });
+
     it('takes the gaps out of the width the pictures share', () => {
         // 2 gaps of 8 leave 1000px for 6.25 aspect units: 160px tall, the same widths as without gaps.
         const rows = packJustifiedRows([pic('a', 2), pic('b', 2), pic('c', 2.25)], { width: 1016, targetHeight: 200, gap: 8 });

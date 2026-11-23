@@ -1,3 +1,5 @@
+import type { BrowseTab } from './browse-tabs';
+
 /** How Photos and Videos draw their documents: cards with a footer, square image-only tiles, or image-only rows. */
 export type BrowseLayout = 'cards' | 'grid' | 'justified';
 
@@ -30,6 +32,6 @@ export function parseBrowseLayout(stored: string): BrowseLayout {
 }
 
 /** Only Photos and Videos have a choice; All keeps its cards and Files is a table. */
-export function hasLayoutChoice(tab: 'all' | 'image' | 'video' | 'file'): boolean {
+export function hasLayoutChoice(tab: BrowseTab): boolean {
     return tab === 'image' || tab === 'video';
 }
