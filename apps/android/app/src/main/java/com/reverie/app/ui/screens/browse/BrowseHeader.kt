@@ -36,6 +36,8 @@ data class BrowseTitle(
     val subtitle: String,
     /** A folder's Browse has the "Open in Canvas" menu. */
     val isFolder: Boolean,
+    /** A kind screen's smaller title block (24/13sp); Browse and folders keep 32/15sp. */
+    val compact: Boolean = false,
 )
 
 /**
@@ -58,23 +60,23 @@ fun BrowseHeader(
             .statusBarsPadding()
             .padding(bottom = 8.dp),
     ) {
-        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(start = if (onBack != null) 4.dp else 20.dp, top = 8.dp, end = 8.dp)) {
+        Row(verticalAlignment = if (title.compact) Alignment.CenterVertically else Alignment.Top, modifier = Modifier.padding(start = if (onBack != null) 4.dp else 20.dp, top = 8.dp, end = 8.dp)) {
             if (onBack != null) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
             }
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title.text,
-                    fontSize = 32.sp,
-                    lineHeight = 40.sp,
+                    fontSize = if (title.compact) 24.sp else 32.sp,
+                    lineHeight = if (title.compact) 30.sp else 40.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = title.subtitle,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
+                    fontSize = if (title.compact) 13.sp else 15.sp,
+                    lineHeight = if (title.compact) 18.sp else 22.sp,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

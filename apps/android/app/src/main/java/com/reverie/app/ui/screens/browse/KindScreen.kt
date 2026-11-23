@@ -44,6 +44,7 @@ fun KindScreen(
             text = tab.label,
             subtitle = if (documents.fetched) kindSubtitle(kind, documents.total, ui.folder?.name ?: "My Files") else "",
             isFolder = false,
+            compact = true,
         ),
         ui = ui,
         folderId = viewModel.folderId,

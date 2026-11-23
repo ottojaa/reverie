@@ -10,9 +10,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
+import com.android.resources.Density
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.NightMode
 import com.reverie.app.data.api.model.DocumentDto
@@ -91,28 +93,36 @@ class BrowseScreenshotTest {
     private val noRecentActions = RecentActions(emptySet(), {}, {}, {}, {})
     private val noActions = DashboardActions(onOpenKind = {}, recent = noRecentActions)
     private val noRowActions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
-    private val headerHeight = 150.dp
+    // What the Photos header measures (status bar + compact title block); only the half-hidden shot needs the number.
+    private val headerHeight = 96.dp
 
     @Composable
     private fun Dashboard(state: DashboardState, scrolledTo: Int? = null) {
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
+        val body: @Composable () -> Unit = {
+            DashboardBody(
+                state = state, listState = listState, contentPadding = PaddingValues(bottom = 24.dp),
+                today = today, zone = zone, actions = noActions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
+                error = null, inFolder = false, onUpload = {},
+            )
+        }
         ReverieTheme {
             Surface(color = MaterialTheme.colorScheme.background) {
-                Box(Modifier.fillMaxSize()) {
-                    DashboardBody(
-                        state = state, listState = listState, contentPadding = PaddingValues(top = headerHeight, bottom = 24.dp),
-                        today = today, zone = zone, actions = noActions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
-                        error = null, inFolder = false, onUpload = {},
-                    )
-                    if (scrolledTo != null) {
+                if (scrolledTo != null) {
+                    // Header slid away: the list fills the screen and the Processing chip floats over it.
+                    Box(Modifier.fillMaxSize()) {
+                        body()
                         ScrollChips(heading = null, processingCount = 2, onProcessingClick = {}, visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter))
-                        return@Box
                     }
+                    return@Surface
+                }
+                // The list sits right under the header, as BrowseChrome places it.
+                Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
                         title = BrowseTitle("My Files", dashboardSubtitle(248, null), isFolder = false),
                         processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = null,
-                        modifier = Modifier.align(Alignment.TopCenter),
                     )
+                    Box(Modifier.weight(1f)) { body() }
                 }
             }
         }
@@ -134,25 +144,31 @@ class BrowseScreenshotTest {
     @Composable
     private fun KindScreen(kind: DocumentKind, title: String, subtitle: String, documents: List<DocumentDto>, scrolledTo: Int? = null) {
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
+        val body: @Composable () -> Unit = {
+            KindFeed(
+                kind = kind, documents = documents, hasMore = false, listState = listState,
+                contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
+                focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+            )
+        }
         ReverieTheme {
             Surface(color = MaterialTheme.colorScheme.background) {
-                Box(Modifier.fillMaxSize()) {
-                    KindFeed(
-                        kind = kind, documents = documents, hasMore = false, listState = listState,
-                        contentPadding = PaddingValues(top = headerHeight, bottom = 24.dp), layout = layout, actions = noRowActions,
-                        focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
-                    )
-                    if (scrolledTo != null) {
+                if (scrolledTo != null) {
+                    Box(Modifier.fillMaxSize()) {
+                        body()
                         ScrollChips(
                             heading = headingNow(kind, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
                             visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
                         )
-                        return@Box
                     }
+                    return@Surface
+                }
+                Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle(title, subtitle, isFolder = false), processingCount = 2, onProcessingClick = {},
-                        onCanvas = {}, onBack = {}, modifier = Modifier.align(Alignment.TopCenter),
+                        title = BrowseTitle(title, subtitle, isFolder = false, compact = true), processingCount = 2, onProcessingClick = {},
+                        onCanvas = {}, onBack = {},
                     )
+                    Box(Modifier.weight(1f)) { body() }
                 }
             }
         }
@@ -179,7 +195,7 @@ class BrowseScreenshotTest {
                         visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), isFolder = false),
+                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), isFolder = false, compact = true),
                         processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )
@@ -218,6 +234,19 @@ class BrowseScreenshotTest {
 
     @Test fun kindPhotosScrolled() = paparazzi.snapshot {
         KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), photoLibrary, scrolledTo = 3)
+    }
+
+    /** A 320dp-wide phone and the longest names he has: half-width cards and row names have to hold. */
+    @Test fun dashboardNarrow() {
+        paparazzi.unsafeUpdateConfig(DeviceConfig.PIXEL_5.copy(screenWidth = 640, screenHeight = 1280, xdpi = 320, ydpi = 320, density = Density.XHIGH, nightMode = NightMode.NIGHT))
+        val long = newestFirst.map {
+            when (it.id) {
+                "apk-latest" -> it.copy(original_filename = "reverie-android-1.12.0-release-unsigned-universal.apk")
+                "zip-install" -> it.copy(original_filename = "lunamux-install-bundle-with-a-very-long-name-final-v2.zip")
+                else -> it
+            }
+        }
+        paparazzi.snapshot { Dashboard(dashboardState(docs = long, summary = summary.copy(file = summary.file.copy(count = 1191, bytes = 12_900_000_000)))) }
     }
 
     @Test fun headerHalfHidden() = paparazzi.snapshot { HalfHiddenScreen() }

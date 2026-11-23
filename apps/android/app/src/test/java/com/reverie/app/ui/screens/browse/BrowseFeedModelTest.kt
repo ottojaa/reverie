@@ -203,4 +203,15 @@ class BrowseFeedModelTest {
         )
         assertTrue(preview.state.value.documents.failed)
     }
+
+    @Test
+    fun `a kind route argument picks its tab, and anything else opens Photos`() {
+        assertEquals(BrowseTab.PHOTOS, kindTabOf("photos"))
+        assertEquals(BrowseTab.VIDEOS, kindTabOf("VIDEOS"))
+        assertEquals(BrowseTab.FILES, kindTabOf("Files"))
+        // The dashboard's own feed is not a kind screen, and a missing or unknown argument must not crash the route.
+        assertEquals(BrowseTab.PHOTOS, kindTabOf("all"))
+        assertEquals(BrowseTab.PHOTOS, kindTabOf("nonsense"))
+        assertEquals(BrowseTab.PHOTOS, kindTabOf(null))
+    }
 }
