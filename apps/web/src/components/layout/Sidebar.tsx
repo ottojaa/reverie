@@ -3,7 +3,6 @@ import { CreateSectionModal, type FolderMode } from '@/components/sections';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/lib/api/users';
 import { useAuth } from '@/lib/auth';
-import { formatFileSize } from '@/lib/commonhelpers';
 import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useSectionEdit } from '@/lib/SectionEditContext';
@@ -12,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { useVault } from '@/lib/vault';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link, useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { Bot, Copy, LayoutGrid, Map, Settings, SlidersHorizontal, Trash2, Users, X, type LucideIcon } from 'lucide-react';
+import { Copy, LayoutGrid, Map, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +19,7 @@ import { toast } from 'sonner';
 import { Separator } from '../ui/separator';
 import { Skeleton } from '../ui/skeleton';
 import type { SortableTreeHandlers } from './Layout';
+import { SidebarFooter } from './SidebarFooter';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -39,7 +39,6 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const { hasPassword } = useVault();
 
     const user = userFromQuery ?? authUser;
-    const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
     const deleteFolder = useDeleteFolder();
     const reorderFolders = useReorderFolders();
     const updateFolder = useUpdateFolder();
@@ -54,22 +53,6 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
     const navRef = useRef<HTMLElement>(null);
 
     const isMobile = useIsMobile();
-
-    const renderAdminLink = (to: '/agent' | '/admin/users' | '/admin/settings', Icon: LucideIcon, label: string) => (
-        <Link
-            to={to}
-            className={cn(
-                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                location.pathname === to
-                    ? 'bg-sidebar-accent text-sidebar-primary'
-                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-            )}
-            onClick={onClose}
-        >
-            <Icon className="size-4" />
-            {label}
-        </Link>
-    );
 
     const openCreateCollection = () => {
         setCreateModalMode('collection');
@@ -291,39 +274,7 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 )}
             </nav>
 
-            {/* Storage & Settings */}
-            <div className="shrink-0 border-t border-sidebar-border p-2">
-                {user ? (
-                    <Link to="/settings" className="block px-3 py-2.5 transition-colors hover:bg-sidebar-accent" onClick={onClose}>
-                        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-success rounded-full transition-all duration-500 ease-out"
-                                style={{ width: `${Math.min(storagePct, 100)}%` }}
-                            />
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1.5">
-                            <span>
-                                {formatFileSize(user.storage_used_bytes)} of {formatFileSize(user.storage_quota_bytes)} used
-                            </span>
-                        </div>
-                    </Link>
-                ) : null}
-                <Link
-                    to="/settings"
-                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    onClick={onClose}
-                >
-                    <Settings className="size-4" />
-                    Settings
-                </Link>
-                {user?.role === 'admin' && (
-                    <>
-                        {renderAdminLink('/agent', Bot, 'Agent')}
-                        {renderAdminLink('/admin/users', Users, 'Users')}
-                        {renderAdminLink('/admin/settings', SlidersHorizontal, 'Server settings')}
-                    </>
-                )}
-            </div>
+            <SidebarFooter user={user} pathname={location.pathname} onClose={onClose} />
 
             <CreateSectionModal open={createModalOpen} onOpenChange={setCreateModalOpen} parentId={createModalParent} mode={createModalMode} />
         </>
