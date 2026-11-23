@@ -77,13 +77,23 @@ describe('SidebarFooter', () => {
         act(() => toggle().click());
 
         expect(toggle().getAttribute('aria-expanded')).toBe('true');
-        expect(toggle().getAttribute('aria-label')).toBe('Hide settings and admin links');
+        expect(toggle().getAttribute('aria-label')).toBe('Hide settings');
         expect(document.getElementById(toggle().getAttribute('aria-controls')!)).not.toBeNull();
 
         act(() => toggle().click());
 
         expect(toggle().getAttribute('aria-expanded')).toBe('false');
+        expect(toggle().getAttribute('aria-label')).toBe('Show settings');
+    });
+
+    it('names the admin links in the toggle label only for an admin', () => {
+        render({ user: admin });
+
         expect(toggle().getAttribute('aria-label')).toBe('Show settings and admin links');
+
+        act(() => toggle().click());
+
+        expect(toggle().getAttribute('aria-label')).toBe('Hide settings and admin links');
     });
 
     it('shows only Settings to a member', () => {

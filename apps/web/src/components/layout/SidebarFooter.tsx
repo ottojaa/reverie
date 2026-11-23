@@ -54,6 +54,7 @@ export function SidebarFooter({ user, pathname, onClose }: SidebarFooterProps) {
     const reduceMotion = useReducedMotion();
     const linksId = useId();
     const links = user?.role === 'admin' ? [...MEMBER_LINKS, ...ADMIN_LINKS] : MEMBER_LINKS;
+    const toggleSubject = user?.role === 'admin' ? 'settings and admin links' : 'settings';
     const storagePct = user && user.storage_quota_bytes > 0 ? (user.storage_used_bytes / user.storage_quota_bytes) * 100 : 0;
     const duration = reduceMotion ? 0 : 0.25;
 
@@ -124,7 +125,7 @@ export function SidebarFooter({ user, pathname, onClose }: SidebarFooterProps) {
                     className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-sidebar-accent"
                     aria-expanded={isOpen}
                     aria-controls={linksId}
-                    aria-label={isOpen ? 'Hide settings and admin links' : 'Show settings and admin links'}
+                    aria-label={`${isOpen ? 'Hide' : 'Show'} ${toggleSubject}`}
                     onClick={toggle}
                 >
                     <motion.span className="flex" animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration, ease: EASE }}>
