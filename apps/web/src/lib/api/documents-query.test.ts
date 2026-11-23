@@ -21,6 +21,14 @@ describe('per-tab queries', () => {
         expect(toDocumentListParams({ folderId: 'f1' })).not.toHaveProperty('kind');
     });
 
+    it('asks only for still-processing documents when told to, whatever their kind', () => {
+        const params = toDocumentListParams({ folderId: 'f1', processing: true });
+
+        expect(params).toMatchObject({ folder_id: 'f1', processing: 'true' });
+        expect(params).not.toHaveProperty('kind');
+        expect(toDocumentListParams({ folderId: 'f1' })).not.toHaveProperty('processing');
+    });
+
     it('puts the kind in the query key, so each tab keeps its own pages', () => {
         const all = infiniteDocumentsKey(toInfiniteDocumentsOptions({ folderId: 'f1' }));
         const photos = infiniteDocumentsKey(toInfiniteDocumentsOptions({ folderId: 'f1', kind: 'image' }));

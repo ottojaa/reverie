@@ -88,14 +88,28 @@ class BrowseTabsModel(
         if (tab == control.value.tab) return
         control.update { it.copy(tab = tab, selectedIds = emptySet(), isRefreshing = false) }
         scope.launch { saveTab(tab) }
-        if (!control.value.cursor(tab).fetched) fetch(tab, offset = 0, refreshing = false)
+        val cursor = control.value.cursor(tab)
+        if (!cursor.fetched || cursor.stale) fetch(tab, offset = 0, refreshing = false)
     }
 
     /** Re-reads the open tab's first page. [initial] retries a failed first load without the refresh spinner. */
     fun refresh(initial: Boolean = false) = fetch(control.value.tab, offset = 0, refreshing = !initial)
 
+    /**
+     * Documents were deleted or added: the open tab re-reads its first page now, and every other tab that
+     * has been fetched does so the next time it is shown, so its rows and subtitle total follow.
+     */
+    fun contentChanged() {
+        control.update { c ->
+            c.copy(cursors = c.cursors.mapValues { (tab, cursor) -> if (tab != c.tab && cursor.fetched) cursor.copy(stale = true) else cursor })
+        }
+        refresh(initial = true)
+    }
+
     fun loadMore(tab: BrowseTab = control.value.tab) {
         val cursor = control.value.cursor(tab)
+        // A stale tab's offset no longer matches the server's rows, so it starts over rather than reading on.
+        if (cursor.stale) return fetch(tab, offset = 0, refreshing = false)
         if (cursor.hasMore) fetch(tab, offset = cursor.offset, refreshing = false)
     }
 
@@ -148,8 +162,11 @@ class BrowseTabsModel(
 private fun TabCursor.after(tab: BrowseTab, offset: Int, page: PageResult): TabCursor {
     val reached = page.last?.let { sortKeyOf(it, tab) }
     return copy(
-        // A refresh of page one must not rewind a tab that had read further down.
-        offset = if (offset == 0) maxOf(this.offset, page.loaded) else page.loaded,
+        // Page one starts the offset over: rows may have been deleted since, so the old offset could
+        // step over rows that moved up. The frontier keeps its minimum, so nothing already shown
+        // disappears; the next page re-reads rows that are cached, which only upserts them.
+        offset = page.loaded,
+        stale = stale && offset != 0,
         total = page.total,
         fetched = true,
         isLoading = false,

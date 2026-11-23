@@ -1,6 +1,6 @@
 import { documentsApi } from '@/lib/api/documents';
 import { buildFileUrl } from '@/lib/commonhelpers';
-import type { Document } from '@reverie/shared';
+import { documentKindOf, type Document } from '@reverie/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -11,7 +11,7 @@ export function usePrefetchDocument(document: Document): () => void {
     return useCallback(() => {
         queryClient.prefetchQuery({ queryKey: ['document', document.id], queryFn: () => documentsApi.get(document.id) });
 
-        if (!document.mime_type?.startsWith('image/') || !document.file_url) return;
+        if (documentKindOf(document.mime_type ?? '') !== 'image' || !document.file_url) return;
 
         const url = buildFileUrl(document.file_url);
 

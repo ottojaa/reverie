@@ -29,6 +29,8 @@ data class TabCursor(
     val isLoading: Boolean = false,
     /** True when the last attempt at the first page failed, until the next attempt starts. */
     val failed: Boolean = false,
+    /** True when rows were deleted or added since this tab's pages were read: it re-reads page one before it reads on. */
+    val stale: Boolean = false,
 ) {
     val hasMore: Boolean get() = fetched && offset < total
 }

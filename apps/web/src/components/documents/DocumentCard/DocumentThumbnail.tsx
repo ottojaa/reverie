@@ -3,7 +3,7 @@ import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/
 import { ImageLoader } from '@/components/ui/image-loader';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
-import type { Document } from '@reverie/shared';
+import { documentKindOf, type Document } from '@reverie/shared';
 import { Play } from 'lucide-react';
 import { memo, useRef } from 'react';
 
@@ -19,6 +19,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document, var
     const fileConfig = getFileTypeConfig(document.mime_type, document.original_filename);
     const extension = getFileExtension(document.original_filename);
     const thumbnailUrl = getThumbnailUrl(document, 'lg');
+    const isVideo = documentKindOf(document.mime_type) === 'video';
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
 
     return (
@@ -42,7 +43,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document, var
                         />
                     </div>
 
-                    {!isTile && document.mime_type.startsWith('video/') && (
+                    {!isTile && isVideo && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
                                 <Play className="size-8 text-foreground fill-foreground" />
@@ -56,7 +57,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document, var
                 </div>
             )}
 
-            {document.mime_type.startsWith('video/') && document.duration_seconds != null && (
+            {isVideo && document.duration_seconds != null && (
                 <div className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">
                     {formatDuration(document.duration_seconds)}
                 </div>

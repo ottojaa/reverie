@@ -202,6 +202,16 @@ class BrowseViewModel @Inject constructor(
         tabsModel.refresh(initial)
     }
 
+    /**
+     * Documents were deleted or uploaded: every tab's rows and subtitle total follow the server, the
+     * open tab at once and the others when next shown.
+     */
+    fun contentChanged() {
+        processingTracker.refresh()
+        control.update { it.copy(error = null, lockedFolderId = null) }
+        tabsModel.contentChanged()
+    }
+
     private fun onRefreshFailed(throwable: Throwable) {
         val lockedId = (throwable as? ReverieApiException)?.lockedFolderId()
         // A closed lock is not an error: ask for the password and retry (see [unlocker]).
@@ -229,8 +239,7 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { documentRepository.delete(ids) }
             clearSelection()
-            // The subtitle counts what the server holds for the tab, so read its first page again.
-            refresh(initial = true)
+            contentChanged()
         }
     }
 
