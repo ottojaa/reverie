@@ -45,7 +45,6 @@ import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.fileTypeVisual
-import com.reverie.app.ui.theme.ReverieTheme
 
 /** Rows this close to the end of the list trigger loading the next page. */
 private const val LOAD_MORE_THRESHOLD = 5
@@ -208,17 +207,17 @@ private fun RowThumbnail(document: DocumentDto) {
 
 @Composable
 private fun StageLine(stages: List<String>) {
-    val info = ReverieTheme.extendedColors.onInfoContainer
+    val text = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.semantics { contentDescription = "Still running: ${stages.joinToString(", ")}" },
     ) {
-        CircularProgressIndicator(strokeWidth = 1.5.dp, color = info, modifier = Modifier.size(12.dp))
+        CircularProgressIndicator(strokeWidth = 1.5.dp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
         Text(
             text = stages.joinToString(" · "),
             style = MaterialTheme.typography.labelMedium,
-            color = info,
+            color = text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

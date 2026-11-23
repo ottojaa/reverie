@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -29,15 +30,28 @@ data class ProcessingSheetState(
     val total: Int = 0,
     val isLoading: Boolean = true,
     val isLoadingMore: Boolean = false,
+    /** The last page request failed or brought nothing new, so asking again would only repeat it. */
+    val isExhausted: Boolean = false,
 ) {
-    val hasMore: Boolean get() = total > rows.size
+    val hasMore: Boolean get() = total > rows.size && !isExhausted
 }
 
-private data class PagedIds(
+internal data class PagedIds(
     val ids: Set<String> = emptySet(),
     val isLoading: Boolean = true,
     val isLoadingMore: Boolean = false,
+    val isExhausted: Boolean = false,
 )
+
+/**
+ * The paged ids after a page request finished. [fetched] is null when the request failed. A page
+ * that fails or only repeats ids already held marks the list exhausted, so the list doesn't ask
+ * again until something changes (the count moves, or the sheet reopens) instead of polling.
+ */
+internal fun PagedIds.afterPage(fetched: Set<String>?): PagedIds {
+    val fresh = fetched.orEmpty() - ids
+    return copy(ids = ids + fresh, isLoading = false, isLoadingMore = false, isExhausted = fresh.isEmpty())
+}
 
 @HiltViewModel
 class ProcessingSheetViewModel @Inject constructor(
@@ -62,15 +76,21 @@ class ProcessingSheetViewModel @Inject constructor(
             total = total,
             isLoading = page.isLoading,
             isLoadingMore = page.isLoadingMore,
+            isExhausted = page.isExhausted,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProcessingSheetState())
+
+    init {
+        // Files finishing change what the server would return, so a page worth another try may exist.
+        viewModelScope.launch { tracker.count.drop(1).collect { paged.update { it.copy(isExhausted = false) } } }
+    }
 
     /** Start over from the newest page. Call each time the sheet opens. */
     fun load() {
         paged.value = PagedIds()
         viewModelScope.launch {
             val ids = fetchIds(offset = 0)
-            paged.update { it.copy(ids = ids ?: emptySet(), isLoading = false) }
+            paged.update { it.afterPage(ids) }
         }
     }
 
@@ -81,7 +101,7 @@ class ProcessingSheetViewModel @Inject constructor(
         paged.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             val ids = fetchIds(offset = current.rows.size)
-            paged.update { it.copy(ids = it.ids + ids.orEmpty(), isLoadingMore = false) }
+            paged.update { it.afterPage(ids) }
         }
     }
 
