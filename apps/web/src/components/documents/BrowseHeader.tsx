@@ -5,6 +5,9 @@ import { useSectionEdit } from '@/lib/SectionEditContext';
 import type { Document, FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
 import { Map, Pencil } from 'lucide-react';
+import { hasLayoutChoice, type BrowseLayout } from '@/lib/browse/browse-layout';
+import type { BrowseTab } from '@/lib/browse/browse-tabs';
+import { BrowseLayoutSwitch } from './BrowseLayoutSwitch';
 import { BrowseTabList } from './BrowseKindTabs';
 
 interface BrowseHeaderProps {
@@ -14,10 +17,13 @@ interface BrowseHeaderProps {
     subtitle: string | null;
     documents: Document[];
     isLoading: boolean;
+    tab: BrowseTab;
+    layout: BrowseLayout;
+    onLayoutChange: (layout: BrowseLayout) => void;
 }
 
 /** Title and count on the left; the folder's actions and the All / Photos / Videos / Files switch on the right. */
-export function BrowseHeader({ section, sectionId, subtitle, documents, isLoading }: BrowseHeaderProps) {
+export function BrowseHeader({ section, sectionId, subtitle, documents, isLoading, tab, layout, onLayoutChange }: BrowseHeaderProps) {
     const { openEdit } = useSectionEdit();
 
     return (
@@ -48,6 +54,7 @@ export function BrowseHeader({ section, sectionId, subtitle, documents, isLoadin
                         )}
                     </>
                 )}
+                {hasLayoutChoice(tab) && <BrowseLayoutSwitch layout={layout} onChange={onLayoutChange} />}
                 <BrowseTabList />
             </div>
         </div>

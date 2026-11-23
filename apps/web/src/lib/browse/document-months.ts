@@ -1,4 +1,5 @@
 import type { Document } from '@reverie/shared';
+import type { JustifiedRow } from './justified-rows';
 
 export interface YearMonth {
     year: number;
@@ -6,7 +7,16 @@ export interface YearMonth {
     month: number;
 }
 
-export type GridRow = { type: 'header'; key: string; label: string } | { type: 'cards'; key: string; documents: Document[] };
+/** A row of pictures. `widths` and `height` are set when the layout fixes them (Justified); otherwise the row is `columns` equal cells. */
+export interface CardsRow {
+    type: 'cards';
+    key: string;
+    documents: Document[];
+    widths?: number[];
+    height?: number;
+}
+
+export type GridRow = { type: 'header'; key: string; label: string } | CardsRow;
 
 interface GridRowOptions {
     columns: number;
@@ -16,6 +26,8 @@ interface GridRowOptions {
     currentYear: number;
     /** The zone an upload time is read in; the viewer's own zone when omitted. */
     timeZone?: string | undefined;
+    /** Splits a run of documents into rows with fixed widths and height (Justified); `columns` equal cells when omitted. */
+    pack?: ((documents: Document[]) => JustifiedRow[]) | undefined;
 }
 
 const monthFormatters = new Map<string, Intl.DateTimeFormat>();
@@ -62,8 +74,8 @@ export function monthLabel({ year, month }: YearMonth, currentYear: number): str
  * taken) gets its own header instead of reordering the list. Headers carry the label only: a count would cover just
  * the rows loaded so far and grow as the list does.
  */
-export function buildGridRows(documents: Document[], { columns, groupByMonth, currentYear, timeZone }: GridRowOptions): GridRow[] {
-    if (!groupByMonth) return chunkRows(documents, columns, 'all');
+export function buildGridRows(documents: Document[], { columns, groupByMonth, currentYear, timeZone, pack }: GridRowOptions): GridRow[] {
+    if (!groupByMonth) return chunkRows(documents, columns, 'all', pack);
 
     const rows: GridRow[] = [];
     let run: Document[] = [];
@@ -73,7 +85,7 @@ export function buildGridRows(documents: Document[], { columns, groupByMonth, cu
         if (!runMonth) return;
 
         const key = `month:${runMonth.year}-${runMonth.month}:${rows.length}`;
-        rows.push({ type: 'header', key, label: monthLabel(runMonth, currentYear) }, ...chunkRows(run, columns, key));
+        rows.push({ type: 'header', key, label: monthLabel(runMonth, currentYear) }, ...chunkRows(run, columns, key, pack));
         run = [];
     };
 
@@ -93,7 +105,16 @@ export function buildGridRows(documents: Document[], { columns, groupByMonth, cu
     return rows;
 }
 
-function chunkRows(documents: Document[], columns: number, keyPrefix: string): GridRow[] {
+function chunkRows(documents: Document[], columns: number, keyPrefix: string, pack: GridRowOptions['pack']): GridRow[] {
+    if (pack)
+        return pack(documents).map((row) => ({
+            type: 'cards',
+            key: `${keyPrefix}:cards:${row.documents[0]?.id}`,
+            documents: row.documents,
+            widths: row.widths,
+            height: row.height,
+        }));
+
     const rows: GridRow[] = [];
 
     for (let start = 0; start < documents.length; start += columns) {

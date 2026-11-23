@@ -1,3 +1,4 @@
+import type { BrowseLayout } from '@/lib/browse/browse-layout';
 import { emptyTabMessage, type BrowseTab } from '@/lib/browse/browse-tabs';
 import type { Document } from '@reverie/shared';
 import { DocumentGrid } from './DocumentGrid';
@@ -17,6 +18,8 @@ interface BrowseListProps {
     isFetchingNextPage: boolean;
     /** Open at the scroll position the router remembered; false once the tab was switched here. */
     restoreScroll: boolean;
+    /** How Photos and Videos draw their pictures; All always uses cards. */
+    layout: BrowseLayout;
 }
 
 /** What the open tab shows: the grid (All, Photos with month headers, Videos with month headers) or the Files table. */
@@ -30,6 +33,7 @@ export function BrowseList({
     hasNextPage,
     isFetchingNextPage,
     restoreScroll,
+    layout,
 }: BrowseListProps) {
     if (isLoading) return <LoadingList tab={tab} showSkeleton={showSkeleton} />;
 
@@ -61,6 +65,7 @@ export function BrowseList({
                     hasNextPage={canFetchMore}
                     groupByMonth={tab !== 'all'}
                     restoreScroll={restoreScroll}
+                    layout={tab === 'all' ? 'cards' : layout}
                 />
             )}
             {isFetchingNextPage && (

@@ -5,7 +5,9 @@ import { LockedFolderNotice } from '@/components/folders/LockedFolderNotice';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { UploadFAB } from '@/components/upload';
 import { firstPageTotal, useInfiniteDocuments } from '@/lib/api';
+import type { BrowseLayout } from '@/lib/browse/browse-layout';
 import { isBrowseTab, kindOfTab, tabSubtitle } from '@/lib/browse/browse-tabs';
+import { useBrowseLayout } from '@/lib/browse/useBrowseLayout';
 import { useBrowseTab } from '@/lib/browse/useBrowseTab';
 import { useLockedFolderPrompt } from '@/lib/hooks/useLockedFolderPrompt';
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
@@ -24,6 +26,7 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
     const selection = useSelectionOptional();
     const scrollContainerRef = useScrollContainer();
     const [tab, setTab] = useBrowseTab();
+    const [layout, setLayout] = useBrowseLayout();
     // The router remembers one scroll position per page: it belongs to the tab that was open, so a tab switched to here starts at the top.
     const [hasSwitchedTab, setHasSwitchedTab] = useState(false);
 
@@ -77,6 +80,15 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
         setTab(next);
     };
 
+    const handleLayoutChange = (next: BrowseLayout) => {
+        if (next === layout) return;
+
+        selection?.clear();
+        scrollContainerRef.current?.scrollTo({ top: 0 });
+        setHasSwitchedTab(true);
+        setLayout(next);
+    };
+
     const hasSelection = (selection?.selectedIds.size ?? 0) > 0;
 
     return (
@@ -89,6 +101,9 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                         subtitle={total ? tabSubtitle(tab, total) : null}
                         documents={documents}
                         isLoading={isLoading}
+                        tab={tab}
+                        layout={layout}
+                        onLayoutChange={handleLayoutChange}
                     />
 
                     {isLocked && <LockedFolderNotice onUnlock={unlock} />}
@@ -102,7 +117,9 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                     {!isLocked && !error && (
                         <TabsContent value={tab}>
                             <BrowseList
+                                key={`${tab}:${layout}`}
                                 tab={tab}
+                                layout={layout}
                                 documents={documents}
                                 isLoading={isLoading}
                                 showSkeleton={showSkeleton}
