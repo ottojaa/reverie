@@ -14,6 +14,7 @@ import com.reverie.app.R
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.local.dao.UploadDao
+import com.reverie.app.data.processing.ProcessingTracker
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FolderRepository
 import dagger.assisted.Assisted
@@ -34,6 +35,7 @@ class UploadWorker @AssistedInject constructor(
     private val stager: UploadStager,
     private val documentRepository: DocumentRepository,
     private val folderRepository: FolderRepository,
+    private val processingTracker: ProcessingTracker,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -92,6 +94,8 @@ class UploadWorker @AssistedInject constructor(
         // Swallowed so a refresh hiccup can never flip a successful upload to a retry/failure.
         runCatching { documentRepository.refresh(task.folderId, limit = 30, offset = 0) }
         runCatching { folderRepository.refresh() }
+        // The server has started processing what was just uploaded: count it and listen for it.
+        processingTracker.refresh()
 
         return Result.success()
     }

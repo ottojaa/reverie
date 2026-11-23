@@ -23,9 +23,10 @@ import {
     type MoveDocumentsRequest,
 } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
+import type { ExpressionBuilder } from 'kysely';
 import { z } from 'zod';
 import { db } from '../../db/kysely';
-import { type Document as DbDocument, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
+import { type Database, type Document as DbDocument, type JobStatus, type LlmResult, type PhotoMetadata, type VideoMetadata } from '../../db/schema';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { isVisionSwitchedOn } from '../../llm/provider-config';
 import { addLlmJob } from '../../queues/llm.queue';
@@ -51,6 +52,13 @@ import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
 const uploadService = getUploadService();
 const storageService = getStorageService();
 const folderService = getFolderService();
+
+const RUNNING_STATUSES: JobStatus[] = ['pending', 'processing'];
+
+/** A document whose text recognition, thumbnail or AI summary has not finished yet (transcoding is its own clock). */
+function isStillProcessing(eb: ExpressionBuilder<Database, 'documents'>) {
+    return eb.or([eb('ocr_status', 'in', RUNNING_STATUSES), eb('thumbnail_status', 'in', RUNNING_STATUSES), eb('llm_status', 'in', RUNNING_STATUSES)]);
+}
 
 // OCR Result schema for API responses
 const OcrResultSchema = z.object({
@@ -94,7 +102,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const { limit, offset, folder_id, category, date_from, date_to } = request.query;
+            const { limit, offset, folder_id, category, date_from, date_to, processing } = request.query;
 
             // A private folder's documents are listed only by asking for that folder, once it is open.
             // Every other listing (no folder filter) leaves private folders out, locked or not.
@@ -123,6 +131,10 @@ export default async function (fastify: FastifyInstance) {
                 query = query.where('extracted_date', '<=', new Date(date_to));
             }
 
+            if (processing) {
+                query = query.where(isStillProcessing);
+            }
+
             // Get total count (must apply same filters)
             let countQuery = excludeTrashed(db.selectFrom('documents').select(db.fn.countAll().as('count')).where('user_id', '=', userId), '');
 
@@ -142,6 +154,10 @@ export default async function (fastify: FastifyInstance) {
 
             if (date_to) {
                 countQuery = countQuery.where('extracted_date', '<=', new Date(date_to));
+            }
+
+            if (processing) {
+                countQuery = countQuery.where(isStillProcessing);
             }
 
             const [documents, countResult] = await Promise.all([

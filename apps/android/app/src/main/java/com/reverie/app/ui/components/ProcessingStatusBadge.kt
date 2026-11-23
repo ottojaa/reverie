@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,20 +16,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.reverie.app.ui.theme.ReverieTheme
 
-/** A tonal chip showing how many documents are still processing (OCR/LLM/thumbnails). Hidden at 0. */
+/**
+ * A tonal chip showing how many documents are still processing (thumbnail, text recognition, AI
+ * summary). Hidden at 0. With [onClick] it is a button, with the 48dp touch target that implies.
+ */
 @Composable
 fun ProcessingStatusBadge(
     count: Int,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(visible = count > 0, modifier = modifier) {
         val extended = ReverieTheme.extendedColors
@@ -39,9 +47,17 @@ fun ProcessingStatusBadge(
             animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
             label = "spin",
         )
+        val tappable = if (onClick == null) {
+            Modifier
+        } else {
+            Modifier
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(50))
+                .clickable(onClickLabel = "Show files being processed", role = Role.Button, onClick = onClick)
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
+            modifier = tappable
                 .background(extended.infoContainer, RoundedCornerShape(50))
                 .padding(horizontal = 10.dp, vertical = 5.dp),
         ) {

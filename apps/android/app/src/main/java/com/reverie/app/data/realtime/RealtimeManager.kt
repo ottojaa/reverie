@@ -40,7 +40,7 @@ class RealtimeManager @Inject constructor(
     private val serverUrlProvider: ServerUrlProvider,
     private val authSession: AuthSessionManager,
     @ApplicationScope private val scope: CoroutineScope,
-) : DefaultLifecycleObserver {
+) : DefaultLifecycleObserver, DocumentJobEvents {
 
     private data class Room(
         val subscribeEvent: String,
@@ -56,10 +56,13 @@ class RealtimeManager @Inject constructor(
     private val refreshingAuth = AtomicBoolean(false)
 
     private val _events = MutableSharedFlow<JobEventDto>(extraBufferCapacity = 128)
-    val events: SharedFlow<JobEventDto> = _events.asSharedFlow()
+    override val events: SharedFlow<JobEventDto> = _events.asSharedFlow()
 
     private val _connected = MutableStateFlow(false)
-    val connected: StateFlow<Boolean> = _connected.asStateFlow()
+    override val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    private val _foregrounded = MutableStateFlow(false)
+    override val foregrounded: StateFlow<Boolean> = _foregrounded.asStateFlow()
 
     init {
         scope.launch(Dispatchers.Main) {
@@ -68,14 +71,16 @@ class RealtimeManager @Inject constructor(
     }
 
     override fun onStart(owner: LifecycleOwner) {
+        _foregrounded.value = true
         scope.launch { mutex.withLock { foreground = true; ensureConnection() } }
     }
 
     override fun onStop(owner: LifecycleOwner) {
+        _foregrounded.value = false
         scope.launch { mutex.withLock { foreground = false; teardown() } }
     }
 
-    suspend fun subscribeDocument(documentId: String): AutoCloseable =
+    override suspend fun subscribeDocument(documentId: String): AutoCloseable =
         subscribe(Room("subscribe:document", "unsubscribe:document", "document_id", documentId))
 
     suspend fun subscribeSession(sessionId: String): AutoCloseable =

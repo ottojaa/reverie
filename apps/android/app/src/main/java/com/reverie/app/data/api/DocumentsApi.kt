@@ -34,11 +34,13 @@ class DocumentsApi @Inject constructor(
         offset: Int,
         folderId: String? = null,
         category: String? = null,
+        processing: Boolean = false,
     ): Paginated<DocumentDto> = client.get("documents") {
         parameter("limit", limit)
         parameter("offset", offset)
         folderId?.let { parameter("folder_id", it) }
         category?.let { parameter("category", it) }
+        if (processing) parameter("processing", true)
     }.decode()
 
     suspend fun get(id: String): DocumentDto = client.get("documents/$id").decode()
