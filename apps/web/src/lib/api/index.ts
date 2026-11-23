@@ -10,6 +10,7 @@ export {
     useInfiniteDocuments,
     useOcrResult,
     usePrefetchDocuments,
+    useProcessingDocuments,
     useReplaceDocumentFile,
     useReprocessLlm,
     useRetryOcr,

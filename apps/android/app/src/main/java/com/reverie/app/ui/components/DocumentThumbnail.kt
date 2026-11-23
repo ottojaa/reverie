@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
@@ -118,8 +119,9 @@ fun GalleryThumbnail(
     durationSeconds: Double? = null,
     largeVideoTile: Boolean = false,
 ) {
-    val isVideo = mimeType.startsWith("video/")
-    val isImage = mimeType.startsWith("image/")
+    val kind = DocumentKind.of(mimeType)
+    val isVideo = kind == DocumentKind.VIDEO
+    val isImage = kind == DocumentKind.IMAGE
     Box(modifier) {
         DocumentThumbnail(
             documentId = documentId,

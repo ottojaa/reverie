@@ -35,6 +35,8 @@ interface UseDocumentsOptions {
     offset?: number;
     /** Only documents of this kind (by MIME type); `total` of the response is then that kind's total. */
     kind?: DocumentKind | undefined;
+    /** Only documents whose text recognition, thumbnail or AI summary is still pending or running; `total` is then that count. */
+    processing?: boolean | undefined;
 }
 
 /** The query string of `GET /documents`: `kind` is sent only when set, so an omitted kind is exactly today's request. */
@@ -48,6 +50,8 @@ export function toDocumentListParams(options: UseDocumentsOptions): Record<strin
     if (options.offset !== undefined && options.offset > 0) params.offset = String(options.offset);
 
     if (options.kind) params.kind = options.kind;
+
+    if (options.processing) params.processing = 'true';
 
     return params;
 }
@@ -165,6 +169,14 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
         queryFn: () => documentsApi.list(options),
         enabled: isAuthenticated,
     });
+}
+
+/** How many still-processing documents of a folder the badge follows; it shows only that some are, so a page is plenty. */
+const PROCESSING_PAGE_SIZE = 50;
+
+/** The documents of a folder (of the library when null) that are still being processed, whatever their kind. */
+export function useProcessingDocuments(folderId: string | null) {
+    return useDocuments({ folderId, limit: PROCESSING_PAGE_SIZE, processing: true });
 }
 
 const DEFAULT_PAGE_SIZE = 24;

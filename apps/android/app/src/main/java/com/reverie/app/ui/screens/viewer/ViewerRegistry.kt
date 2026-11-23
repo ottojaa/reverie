@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.repository.SignedUrls
 import com.reverie.app.ui.screens.viewer.viewers.FallbackViewer
@@ -22,8 +23,9 @@ private val extensionFallback = mapOf(
 )
 
 private fun viewerTypeFor(mimeType: String, filename: String): ViewerType = when {
-    mimeType.startsWith("image/") -> ViewerType.IMAGE
-    mimeType.startsWith("video/") -> ViewerType.VIDEO
+    // The same case-insensitive rule that sorts documents into the Photos and Videos tabs.
+    DocumentKind.of(mimeType) == DocumentKind.IMAGE -> ViewerType.IMAGE
+    DocumentKind.of(mimeType) == DocumentKind.VIDEO -> ViewerType.VIDEO
     mimeType == "application/pdf" -> ViewerType.PDF
     mimeType.startsWith("text/") || mimeType == "application/json" -> ViewerType.TEXT
     else -> extensionFallback[filename.substringAfterLast('.', "").lowercase()] ?: ViewerType.FALLBACK

@@ -9,6 +9,7 @@ import coil.request.ImageRequest
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.connectivity.ConnectivityMonitor
@@ -116,7 +117,7 @@ class BrowseViewModel @Inject constructor(
         if (document.is_private) return
         viewModelScope.launch {
             val raw = documentRepository.fileUrl(document.id) ?: return@launch
-            if (document.mime_type.startsWith("image/")) {
+            if (DocumentKind.of(document.mime_type) == DocumentKind.IMAGE) {
                 imageLoader.enqueue(ImageRequest.Builder(appContext).data(absolute(raw)).build())
             }
         }
@@ -202,6 +203,16 @@ class BrowseViewModel @Inject constructor(
         tabsModel.refresh(initial)
     }
 
+    /**
+     * Documents were deleted or uploaded: every tab's rows and subtitle total follow the server, the
+     * open tab at once and the others when next shown.
+     */
+    fun contentChanged() {
+        processingTracker.refresh()
+        control.update { it.copy(error = null, lockedFolderId = null) }
+        tabsModel.contentChanged()
+    }
+
     private fun onRefreshFailed(throwable: Throwable) {
         val lockedId = (throwable as? ReverieApiException)?.lockedFolderId()
         // A closed lock is not an error: ask for the password and retry (see [unlocker]).
@@ -229,8 +240,7 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { documentRepository.delete(ids) }
             clearSelection()
-            // The subtitle counts what the server holds for the tab, so read its first page again.
-            refresh(initial = true)
+            contentChanged()
         }
     }
 

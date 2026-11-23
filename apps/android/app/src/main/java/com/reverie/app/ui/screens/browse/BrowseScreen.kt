@@ -125,10 +125,10 @@ fun BrowseScreen(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { today = LocalDate.now() }
     }
-    // Uploads land in the cache on their own; once they have all finished, read the first page again so the total catches up.
+    // Uploads land in the cache on their own; once they have all finished, read the first pages again so the totals catch up.
     var wasUploading by remember { mutableStateOf(false) }
     LaunchedEffect(activeUploads) {
-        if (activeUploads == 0 && wasUploading) viewModel.refresh(initial = true)
+        if (activeUploads == 0 && wasUploading) viewModel.contentChanged()
         wasUploading = activeUploads > 0
     }
     val zone = remember { ZoneId.systemDefault() }

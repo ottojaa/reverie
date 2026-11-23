@@ -99,7 +99,6 @@ export function BrowsePage({ sectionId }: BrowsePageProps) {
                         section={section}
                         sectionId={sectionId}
                         subtitle={total ? tabSubtitle(tab, total) : null}
-                        documents={documents}
                         isLoading={isLoading}
                         tab={tab}
                         layout={layout}

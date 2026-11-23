@@ -18,7 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** A server holding [library], two rows to a page, that writes each page it serves into [cache] like the repository does. */
-private class FakeServer(private val library: List<DocumentDto>) {
+private class FakeServer(library: List<DocumentDto>) {
+    private var library = library
     val cache = MutableStateFlow<List<DocumentDto>>(emptyList())
     val requests = mutableListOf<Pair<DocumentKind?, Int>>()
     var failNext = false
@@ -34,6 +35,12 @@ private class FakeServer(private val library: List<DocumentDto>) {
         val items = ordered.drop(offset).take(PAGE)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
         return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull())
+    }
+
+    /** Removes [ids] from the server and from the cache, like the repository's delete does. */
+    fun delete(vararg ids: String) {
+        library = library.filterNot { it.id in ids }
+        cache.update { rows -> rows.filterNot { it.id in ids } }
     }
 
     companion object { const val PAGE = 2 }
@@ -162,14 +169,61 @@ class BrowseTabsModelTest {
         assertEquals(listOf("f3", "f2"), restarted.ids(BrowseTab.FILES))
     }
 
-    @Test fun `refreshing the first page does not rewind a tab that read further`() = runTest(UnconfinedTestDispatcher()) {
+    @Test fun `refreshing the first page starts the tab's offset over without hiding what it showed`() = runTest(UnconfinedTestDispatcher()) {
         val f = start()
         f.model.selectTab(BrowseTab.PHOTOS)
         f.model.loadMore()
         f.model.refresh()
         assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids(BrowseTab.PHOTOS))
         f.model.loadMore()
-        assertEquals(DocumentKind.IMAGE to 4, f.server.requests.last())
+        // The next page starts where page one ended; it only re-reads rows already shown.
+        assertEquals(listOf(DocumentKind.IMAGE to 2, DocumentKind.IMAGE to 4), f.server.requests.takeLast(2))
+    }
+
+    @Test fun `after a refresh one load more reads on until a row that was not shown yet`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start()
+        f.model.selectTab(BrowseTab.PHOTOS)
+        f.model.loadMore()
+        assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids(BrowseTab.PHOTOS))
+        f.model.refresh()
+        f.model.loadMore()
+        // Page two brought nothing new, so the model read page three itself: the feed would not have asked again.
+        assertEquals(listOf("p5", "p4", "p3", "p2", "p1"), f.ids(BrowseTab.PHOTOS))
+        assertFalse(f.model.state.value.current.hasMore)
+    }
+
+    @Test fun `after deleting rows above what a tab read, scrolling on skips none of the server's rows`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start()
+        f.model.selectTab(BrowseTab.PHOTOS)
+        f.model.loadMore()
+        assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids(BrowseTab.PHOTOS))
+        // Two photos at the top go; every row below them moves up two places on the server.
+        f.server.delete("p5", "p4")
+        f.model.contentChanged()
+        f.model.loadMore()
+        f.model.loadMore()
+        assertEquals(listOf("p3", "p2", "p1"), f.ids(BrowseTab.PHOTOS))
+        assertEquals(3, f.model.state.value.current.total)
+        assertFalse(f.model.state.value.current.hasMore)
+    }
+
+    @Test fun `a tab that was not open when rows were deleted re-reads its first page when it is shown`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start()
+        f.model.selectTab(BrowseTab.PHOTOS)
+        f.model.selectTab(BrowseTab.VIDEOS)
+        f.server.delete("p5")
+        f.model.contentChanged()
+        // Only the open tab is read now.
+        assertEquals(DocumentKind.VIDEO to 0, f.server.requests.last())
+        f.model.selectTab(BrowseTab.PHOTOS)
+        assertEquals(DocumentKind.IMAGE to 0, f.server.requests.last())
+        assertEquals(4, f.model.state.value.current.total)
+        assertEquals(listOf("p4", "p3"), f.ids(BrowseTab.PHOTOS))
+        // Once re-read it is not stale any more.
+        val asked = f.server.requests.size
+        f.model.selectTab(BrowseTab.VIDEOS)
+        f.model.selectTab(BrowseTab.PHOTOS)
+        assertEquals(asked, f.server.requests.size)
     }
 
     @Test fun `a failed first page is reported and a failed later page is not`() = runTest(UnconfinedTestDispatcher()) {
