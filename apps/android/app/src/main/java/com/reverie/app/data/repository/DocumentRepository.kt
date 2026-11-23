@@ -3,6 +3,7 @@ package com.reverie.app.data.repository
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.entity.DocumentEntity
@@ -17,10 +18,15 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,6 +78,31 @@ class DocumentRepository @Inject constructor(
     // leaving composition) doesn't kill the shared fetch.
     private val fileUrlFlights = java.util.concurrent.ConcurrentHashMap<String, Deferred<String?>>()
     private val flightScope = CoroutineScope(SupervisorJob() + io)
+
+    // The last summary read for each scope (null is the whole library). Memory only: figures that are
+    // not from the server right now are not shown after a restart, and cached rows are never counted instead.
+    private val summaries = MutableStateFlow<Map<String?, DocumentSummaryDto>>(emptyMap())
+
+    private val contentChangesFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    /**
+     * Fires when documents were removed or added by this device, so every Browse screen that is still
+     * on the back stack re-reads its totals, not only the screen the change was made on.
+     */
+    val contentChanges: SharedFlow<Unit> = contentChangesFlow.asSharedFlow()
+
+    fun announceContentChanged() {
+        contentChangesFlow.tryEmit(Unit)
+    }
+
+    /** The last summary [fetchSummary] read for [folderId] in this process; null before the first one. */
+    fun summary(folderId: String?): Flow<DocumentSummaryDto?> = summaries.map { it[folderId] }.distinctUntilChanged()
+
+    /** Reads the summary of [folderId] (the whole library when null) and keeps it for [summary]. Throws [com.reverie.app.data.api.ReverieApiException]. */
+    suspend fun fetchSummary(folderId: String?): DocumentSummaryDto = withContext(io) {
+        documentsApi.summary(folderId).also { fresh -> summaries.update { it + (folderId to fresh) } }
+    }
+
     /**
      * Documents for the grid. `folderId == null` is the all-documents view, which by design never
      * contains private documents; a folder view also carries that folder's in-memory private ones.
@@ -211,6 +242,7 @@ class DocumentRepository @Inject constructor(
             fileUrls.remove(it)
             hlsUrls.remove(it)
         }
+        announceContentChanged()
     }
 
     suspend fun rename(id: String, filename: String): DocumentDto = withContext(io) {

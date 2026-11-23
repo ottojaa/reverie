@@ -16,86 +16,101 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.NightMode
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.FileTotalsDto
 import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.KindTotalsDto
+import com.reverie.app.data.api.model.kind
+import com.reverie.app.data.api.model.TopTypeDto
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * Renders the real header, pinned band and feed of each Browse tab from fixed documents. Thumbnails
- * are not fetched in a screenshot test, so tiles show their placeholder.
+ * Renders the real header, floating chips, dashboard and kind feeds of Browse from fixed documents.
+ * Thumbnails are not fetched in a screenshot test, so pictures show their placeholder.
  */
 class BrowseScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5.copy(nightMode = NightMode.NIGHT))
 
     private val today = LocalDate.of(2026, 11, 23)
-    private val layout = FeedLayout(GridLayoutMode.MOSAIC, featureEvery = 8, today = today, zone = ZoneOffset.UTC)
+    private val zone = ZoneOffset.UTC
+    private val layout = FeedLayout(GridLayoutMode.MOSAIC, featureEvery = 8, today = today, zone = zone)
 
-    private fun media(id: String, mime: String, day: Int, hour: Int, width: Int = 4000, height: Int = 3000, seconds: Double? = null): DocumentDto {
-        val at = "2026-11-%02dT%02d:00:00.000Z".format(day, hour)
-        return DocumentDto(
-            id = id, file_path = "/$id", file_hash = "h$id", original_filename = "$id.jpg", mime_type = mime,
-            size_bytes = 2_400_000, width = width, height = height, duration_seconds = seconds,
-            ocr_status = JobStatus.COMPLETE, thumbnail_status = JobStatus.COMPLETE, llm_status = JobStatus.COMPLETE,
-            is_private = false, created_at = at, updated_at = at, taken_at = at,
-        )
-    }
-
-    private fun file(id: String, name: String, mime: String, day: Int, hour: Int): DocumentDto {
-        val at = "2026-11-%02dT%02d:00:00Z".format(day, hour)
-        return DocumentDto(
+    private fun item(id: String, name: String, mime: String, at: String, bytes: Long = 2_400_000, seconds: Double? = null, w: Int? = null, h: Int? = null) =
+        DocumentDto(
             id = id, file_path = "/$id", file_hash = "h$id", original_filename = name, mime_type = mime,
-            size_bytes = 1_800_000, ocr_status = JobStatus.COMPLETE, thumbnail_status = JobStatus.COMPLETE,
-            llm_status = JobStatus.COMPLETE, is_private = false, created_at = at, updated_at = at,
+            size_bytes = bytes, width = w, height = h, duration_seconds = seconds,
+            ocr_status = JobStatus.COMPLETE, thumbnail_status = JobStatus.COMPLETE, llm_status = JobStatus.COMPLETE,
+            is_private = false, created_at = at, updated_at = at, taken_at = if (mime.startsWith("image/") || mime.startsWith("video/")) at else null,
         )
+
+    private fun photo(id: String, at: String, portrait: Boolean = false) =
+        item(id, "$id.jpg", "image/jpeg", at, w = if (portrait) 3000 else 4000, h = if (portrait) 4000 else 3000)
+
+    private fun video(id: String, at: String, seconds: Double = 74.0) = item(id, "$id.mp4", "video/mp4", at, bytes = 80_000_000, seconds = seconds)
+
+    private fun minutesAfter(base: String, minutes: Long): String = Instant.parse(base).plusSeconds(minutes * 60).toString()
+
+    // His library's shape: debug APKs (twelve copies of one name), zips, notes, a few screenshots, a batch of 14 videos.
+    private val apk = "application/vnd.android.package-archive"
+    private val newestFirst: List<DocumentDto> = buildList {
+        add(item("apk-latest", "app-release.apk", apk, "2026-11-23T00:10:00Z", 6_200_000))
+        add(photo("shot-2", "2026-11-22T19:40:00Z"))
+        add(photo("shot-1", "2026-11-22T19:34:00Z"))
+        add(item("zip-install", "lunamux-install.zip", "application/zip", "2026-11-19T21:00:00Z", 6_800_000))
+        add(item("notes", "release-notes.md", "text/markdown", "2026-11-17T09:00:00Z", 4_000))
+        (1..14).forEach { add(video("clip-${15 - it}", minutesAfter("2026-11-06T15:00:00Z", (14L - it) * 2), seconds = 60.0 + it)) }
+        (0..11).forEach { add(item("lm-${12 - it}", "lunamux-1.9.0-13.apk", apk, "2026-08-%02dT10:00:00Z".format(26 - it), 41_000_000)) }
+        add(item("zip-old", "backup.zip", "application/zip", "2026-08-01T10:00:00Z", 9_000_000))
     }
 
-    private val photos = (1..23).map { media("p$it", "image/jpeg", day = 23 - it / 6, hour = 23 - it % 12, width = if (it % 5 == 0) 3000 else 4000, height = if (it % 5 == 0) 4000 else 3000) } +
-        (1..9).map { media("o$it", "image/jpeg", day = 28 - it, hour = 10).copy(taken_at = "2026-10-%02dT10:00:00.000Z".format(30 - it)) }
-    private val videos = listOf(
-        media("v1", "video/mp4", 23, 21, seconds = 74.0), media("v2", "video/mp4", 22, 18, seconds = 12.0),
-        media("v3", "video/mp4", 20, 9, seconds = 603.0), media("v4", "video/mp4", 19, 9, seconds = 45.0),
-        media("v5", "video/mp4", 18, 9, seconds = 7.0),
+    private val summary = DocumentSummaryDto(
+        image = KindTotalsDto(38, 210_000_000),
+        video = KindTotalsDto(19, 1_400_000_000),
+        file = FileTotalsDto(191, 2_900_000_000, listOf(TopTypeDto("apk", 120), TopTypeDto("zip", 31), TopTypeDto("md", 22), TopTypeDto("gz", 9))),
     )
-    private val files = listOf(
-        file("f1", "Lease agreement – Kalevankatu 12.pdf", "application/pdf", 23, 14),
-        file("f2", "Q3 budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 23, 9),
-        file("f3", "Meeting notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 22, 16),
-        file("f4", "scan-0042.pdf", "application/pdf", 22, 11),
-        file("f5", "notes.md", "text/markdown", 20, 8),
-        file("f6", "backup.zip", "application/zip", 19, 22),
-    )
-    private val all = (photos.take(6) + videos.take(1) + files.take(3) + photos.drop(6).take(8) + videos.drop(1).take(1) + files.drop(3))
-        .sortedByDescending { it.created_at }
 
-    private val noActions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
+    private val strip = (1..4).map { photo("strip-$it", "2026-11-%02dT10:00:00Z".format(23 - it)) }
+
+    private fun dashboardState(docs: List<DocumentDto> = newestFirst, summary: DocumentSummaryDto = this.summary, photos: List<DocumentDto> = strip, expanded: Set<String> = emptySet()) =
+        DashboardState(
+            summary = summary,
+            photoPreview = photos,
+            videoPreview = video("preview", "2026-11-06T16:00:00Z"),
+            recent = FeedState(TabDocuments(docs, total = 248, hasMore = true, fetched = true)),
+            expanded = expanded,
+        )
+
+    private val noRecentActions = RecentActions(emptySet(), {}, {}, {}, {})
+    private val noActions = DashboardActions(onOpenKind = {}, recent = noRecentActions)
+    private val noRowActions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
+    private val headerHeight = 150.dp
 
     @Composable
-    private fun Screen(tab: BrowseTab, documents: List<DocumentDto>, total: Int, scrolledTo: Int? = null) {
+    private fun Dashboard(state: DashboardState, scrolledTo: Int? = null) {
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
-        val headerHeight = 150.dp
         ReverieTheme {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(Modifier.fillMaxSize()) {
-                    TabFeed(
-                        tab = tab, documents = documents, hasMore = false, listState = listState,
-                        contentPadding = PaddingValues(top = headerHeight, bottom = 24.dp), layout = layout, actions = noActions,
-                        focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+                    DashboardBody(
+                        state = state, listState = listState, contentPadding = PaddingValues(top = headerHeight, bottom = 24.dp),
+                        today = today, zone = zone, actions = noActions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
+                        error = null, inFolder = false, onUpload = {},
                     )
                     if (scrolledTo != null) {
-                        PinnedBand(
-                            heading = headingNow(tab, documents, scrolledTo), processingCount = 2,
-                            onProcessingClick = {}, visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
-                        )
+                        ScrollChips(heading = null, processingCount = 2, onProcessingClick = {}, visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter))
                         return@Box
                     }
                     BrowseHeader(
-                        title = BrowseTitle("My Files", tabSubtitle(tab, total, null), isFolder = false),
-                        tab = tab, processingCount = 2, onSelectTab = {}, onProcessingClick = {}, onCanvas = {}, onBack = null,
+                        title = BrowseTitle("My Files", dashboardSubtitle(248, null), isFolder = false),
+                        processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = null,
                         modifier = Modifier.align(Alignment.TopCenter),
                     )
                 }
@@ -103,32 +118,69 @@ class BrowseScreenshotTest {
         }
     }
 
-    /**
-     * The header halfway through sliding away, as the screen lays it out: the body is placed under the
-     * header's current bottom edge and is as tall as the room that leaves, so the list moves with it.
-     */
+    private val photoLibrary = (1..23).map { photo("p$it", "2026-11-%02dT%02d:00:00.000Z".format(23 - it / 6, 23 - it % 12), portrait = it % 5 == 0) } +
+        (1..9).map { photo("o$it", "2026-10-%02dT10:00:00.000Z".format(30 - it)) }
+    private val videoLibrary = listOf(
+        video("v1", "2026-11-23T21:00:00.000Z", 74.0), video("v2", "2026-11-22T18:00:00.000Z", 12.0),
+        video("v3", "2026-11-20T09:00:00.000Z", 603.0), video("v4", "2026-11-19T09:00:00.000Z", 45.0),
+    )
+    private val fileLibrary = listOf(
+        item("f1", "Lease agreement – Kalevankatu 12.pdf", "application/pdf", "2026-11-23T14:00:00Z", 1_800_000),
+        item("f2", "Q3 budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "2026-11-23T09:00:00Z", 90_000),
+        item("f3", "scan-0042.pdf", "application/pdf", "2026-11-22T11:00:00Z", 3_000_000),
+        item("f4", "notes.md", "text/markdown", "2026-11-20T08:00:00Z", 4_000),
+    )
+
+    @Composable
+    private fun KindScreen(kind: DocumentKind, title: String, subtitle: String, documents: List<DocumentDto>, scrolledTo: Int? = null) {
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
+        ReverieTheme {
+            Surface(color = MaterialTheme.colorScheme.background) {
+                Box(Modifier.fillMaxSize()) {
+                    KindFeed(
+                        kind = kind, documents = documents, hasMore = false, listState = listState,
+                        contentPadding = PaddingValues(top = headerHeight, bottom = 24.dp), layout = layout, actions = noRowActions,
+                        focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+                    )
+                    if (scrolledTo != null) {
+                        ScrollChips(
+                            heading = headingNow(kind, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
+                            visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
+                        )
+                        return@Box
+                    }
+                    BrowseHeader(
+                        title = BrowseTitle(title, subtitle, isFolder = false), processingCount = 2, onProcessingClick = {},
+                        onCanvas = {}, onBack = {}, modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                }
+            }
+        }
+    }
+
+    /** The header halfway through sliding away: the chips fade in as it goes, and the list moves with it. */
     @Composable
     private fun HalfHiddenScreen() {
-        val headerPx = with(LocalDensity.current) { 150.dp.roundToPx() }
+        val headerPx = with(LocalDensity.current) { headerHeight.roundToPx() }
         val offset = -headerPx / 2f
         val listState = rememberLazyListState()
         ReverieTheme {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().belowHeader(headerPx = { headerPx }, heightOffset = { offset })) {
-                        TabFeed(
-                            tab = BrowseTab.PHOTOS, documents = photos, hasMore = false, listState = listState,
-                            contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noActions,
+                        KindFeed(
+                            kind = DocumentKind.IMAGE, documents = photoLibrary, hasMore = false, listState = listState,
+                            contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
                             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
                         )
                     }
-                    PinnedBand(
-                        heading = headingNow(BrowseTab.PHOTOS, photos, 0), processingCount = 2,
-                        onProcessingClick = {}, visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
+                    ScrollChips(
+                        heading = headingNow(DocumentKind.IMAGE, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
+                        visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("My Files", tabSubtitle(BrowseTab.PHOTOS, 168, null), isFolder = false),
-                        tab = BrowseTab.PHOTOS, processingCount = 2, onSelectTab = {}, onProcessingClick = {}, onCanvas = {}, onBack = null,
+                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), isFolder = false),
+                        processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )
                 }
@@ -137,18 +189,36 @@ class BrowseScreenshotTest {
     }
 
     /** The heading a list scrolled to [index] sits under, computed the way the feed reports it. */
-    private fun headingNow(tab: BrowseTab, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
-        headingAt(toRows(buildFeed(tab, documents, today, ZoneOffset.UTC), 390f, layout.mode, layout.featureEvery), index)
+    private fun headingNow(kind: DocumentKind, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
+        headingAt(toRows(buildFeed(kind, documents, today, zone), 390f, layout.mode, layout.featureEvery), index)
 
-    @Test fun all() = paparazzi.snapshot { Screen(BrowseTab.ALL, all, total = 250) }
+    @Test fun dashboard() = paparazzi.snapshot { Dashboard(dashboardState()) }
 
-    @Test fun photos() = paparazzi.snapshot { Screen(BrowseTab.PHOTOS, photos, total = 168) }
+    @Test fun dashboardNoPhotos() = paparazzi.snapshot {
+        Dashboard(dashboardState(summary = summary.copy(image = KindTotalsDto()), photos = emptyList(), docs = newestFirst.filter { it.kind != DocumentKind.IMAGE }))
+    }
 
-    @Test fun videos() = paparazzi.snapshot { Screen(BrowseTab.VIDEOS, videos, total = 12) }
+    @Test fun dashboardFoldExpanded() = paparazzi.snapshot { Dashboard(dashboardState(expanded = setOf("clip-14")), scrolledTo = null) }
 
-    @Test fun files() = paparazzi.snapshot { Screen(BrowseTab.FILES, files, total = 250) }
+    @Test fun dashboardStackExpanded() = paparazzi.snapshot { Dashboard(dashboardState(expanded = setOf("lm-12")), scrolledTo = 4) }
+
+    @Test fun dashboardScrolled() = paparazzi.snapshot { Dashboard(dashboardState(), scrolledTo = 3) }
+
+    @Test fun kindPhotos() = paparazzi.snapshot {
+        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), photoLibrary)
+    }
+
+    @Test fun kindVideos() = paparazzi.snapshot {
+        KindScreen(DocumentKind.VIDEO, "Videos", kindSubtitle(DocumentKind.VIDEO, 19, "My Files"), videoLibrary)
+    }
+
+    @Test fun kindFiles() = paparazzi.snapshot {
+        KindScreen(DocumentKind.FILE, "Files", kindSubtitle(DocumentKind.FILE, 191, "My Files"), fileLibrary)
+    }
+
+    @Test fun kindPhotosScrolled() = paparazzi.snapshot {
+        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), photoLibrary, scrolledTo = 3)
+    }
 
     @Test fun headerHalfHidden() = paparazzi.snapshot { HalfHiddenScreen() }
-
-    @Test fun scrolledPhotos() = paparazzi.snapshot { Screen(BrowseTab.PHOTOS, photos, total = 168, scrolledTo = 3) }
 }

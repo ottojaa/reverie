@@ -22,6 +22,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -252,6 +253,48 @@ class DocumentRepositoryTest {
 
         assertEquals(listOf("d1"), purger.purged)
         assertTrue(dao.rows.value.isEmpty())
+    }
+
+    private val summaryJson =
+        """{"image":{"count":38,"bytes":210},"video":{"count":19,"bytes":1400},"file":{"count":191,"bytes":2900,"top_types":[{"ext":"apk","count":120},{"ext":"zip","count":31}]}}"""
+
+    @Test fun `a fetched summary is kept in memory per scope and asked for with its folder`() = runTest {
+        val requested = mutableListOf<String>()
+        val repository = repo(FakeDocumentDao(), requested = requested) { summaryJson }
+
+        assertEquals(null, repository.summary("f1").first())
+        val fetched = repository.fetchSummary("f1")
+
+        assertEquals(38, fetched.image.count)
+        assertEquals(listOf("apk", "zip"), fetched.file.top_types.map { it.ext })
+        assertTrue("folder_id is sent: $requested", requested.single().contains("documents/summary") && requested.single().contains("folder_id=f1"))
+        assertEquals(fetched, repository.summary("f1").first())
+        assertEquals("another scope has no summary yet", null, repository.summary(null).first())
+    }
+
+    @Test fun `a failed summary read keeps the last summary and counts no cached rows`() = runTest {
+        val dao = FakeDocumentDao()
+        var body = summaryJson
+        var ok = true
+        val repository = repo(dao) { if (!ok) error("offline") else body }
+        repository.fetchSummary(null)
+        ok = false
+
+        val failed = runCatching { repository.fetchSummary(null) }
+
+        assertTrue(failed.isFailure)
+        assertEquals(191, repository.summary(null).first()?.file?.count)
+    }
+
+    @Test fun `a delete tells the browse screens that content changed`() = runTest {
+        val repository = repo(FakeDocumentDao()) { "{}" }
+        val heard = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { repository.contentChanges.first() }
+        testScheduler.runCurrent()
+
+        val deleted = runCatching { repository.delete(listOf("d1")) }
+
+        assertTrue("delete failed: ${deleted.exceptionOrNull()}", deleted.isSuccess)
+        assertEquals(Unit, heard.await())
     }
 
     @Test fun `all documents never include private ones`() = runTest {

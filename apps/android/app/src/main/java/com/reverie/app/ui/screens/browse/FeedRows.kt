@@ -30,10 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
@@ -55,7 +54,7 @@ class RowActions(
     val onLongClick: (DocumentDto) -> Unit,
 )
 
-/** Draws one lazy-list row of a Browse tab. */
+/** Draws one lazy-list row of a kind screen. */
 @Composable
 fun FeedRowView(row: FeedRow, actions: RowActions) {
     when (row) {
@@ -64,7 +63,7 @@ fun FeedRowView(row: FeedRow, actions: RowActions) {
             MosaicSectionView(row.section, actions.selected, actions.onClick, actions.onLongClick)
         }
         is FeedRow.Videos -> VideoTiles(row.docs, actions)
-        is FeedRow.File -> FileRow(row.doc, row.slot, actions)
+        is FeedRow.File -> FileRow(row.doc, actions)
     }
 }
 
@@ -111,42 +110,10 @@ private fun VideoTiles(docs: List<DocumentDto>, actions: RowActions) {
     }
 }
 
-private val CARD_RADIUS = 16.dp
-
-private fun CardSlot.shape(): Shape = when (this) {
-    CardSlot.ONLY -> RoundedCornerShape(CARD_RADIUS)
-    CardSlot.FIRST -> RoundedCornerShape(topStart = CARD_RADIUS, topEnd = CARD_RADIUS)
-    CardSlot.MIDDLE -> RectangleShape
-    CardSlot.LAST -> RoundedCornerShape(bottomStart = CARD_RADIUS, bottomEnd = CARD_RADIUS)
-}
-
-/**
- * A file row. In the All tab ([slot] set) it is one row of a rounded card, and the card's rows are
- * separate list items that each round their own corners. In the Files tab it stands on the page and
- * has an overflow menu.
- */
-@Composable
-private fun FileRow(doc: DocumentDto, slot: CardSlot?, actions: RowActions) {
-    if (slot == null) {
-        FileRowContent(doc, actions, compact = false, modifier = Modifier.height(64.dp).padding(start = 20.dp, end = 8.dp))
-        return
-    }
-    val topEdge = slot == CardSlot.FIRST || slot == CardSlot.ONLY
-    val bottomEdge = slot == CardSlot.LAST || slot == CardSlot.ONLY
-    Box(
-        Modifier
-            .padding(horizontal = 12.dp)
-            .clip(slot.shape())
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(top = if (topEdge) 4.dp else 0.dp, bottom = if (bottomEdge) 4.dp else 0.dp),
-    ) {
-        FileRowContent(doc, actions, compact = true, modifier = Modifier.height(56.dp).padding(horizontal = 14.dp))
-    }
-}
-
+/** A file row: it stands on the page and has an overflow menu. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRowContent(doc: DocumentDto, actions: RowActions, compact: Boolean, modifier: Modifier) {
+private fun FileRow(doc: DocumentDto, actions: RowActions) {
     val selected = actions.selected(doc)
     Row(
         modifier = Modifier
@@ -154,9 +121,10 @@ private fun FileRowContent(doc: DocumentDto, actions: RowActions, compact: Boole
             .documentSharedBounds(doc.id)
             .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(onClick = { actions.onClick(doc) }, onLongClick = { actions.onLongClick(doc) })
-            .then(modifier),
+            .height(64.dp)
+            .padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (selected) SelectedCheck(Modifier.size(36.dp)) else TypeBadge(doc)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -170,26 +138,26 @@ private fun FileRowContent(doc: DocumentDto, actions: RowActions, compact: Boole
             )
             Text(
                 text = fileMeta(doc),
-                fontSize = if (compact) 12.sp else 13.sp,
-                lineHeight = if (compact) 16.sp else 18.sp,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!compact) FileMenu(doc, actions)
+        FileMenu(doc, actions)
     }
 }
 
 /** "2.4 MB · 14:03": the size and the time the file was added. */
-private fun fileMeta(doc: DocumentDto): String =
+fun fileMeta(doc: DocumentDto): String =
     listOfNotNull(formatBytes(doc.size_bytes), formatTimeOfDay(doc.created_at)).joinToString(" · ")
 
 @Composable
-private fun TypeBadge(doc: DocumentDto) {
+fun TypeBadge(doc: DocumentDto, size: Dp = 36.dp) {
     val tint = fileTypeVisual(doc.mime_type, doc.original_filename).tint
     Box(
-        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(9.dp)).background(tint.copy(alpha = 0.16f)),
+        modifier = Modifier.size(size).clip(RoundedCornerShape(9.dp)).background(tint.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center,
     ) {
         Text(

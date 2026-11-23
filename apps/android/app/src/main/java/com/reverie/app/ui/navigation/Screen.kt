@@ -33,6 +33,11 @@ object Routes {
     const val FOLDER = "folder/{folderId}"
     fun folder(folderId: String) = "folder/$folderId"
 
+    /** One kind of Browse (photos, videos, files) as its own screen, optionally inside a folder. */
+    const val KIND = "browse/kind/{kind}?folderId={folderId}"
+    fun kind(kind: String, folderId: String? = null) =
+        "browse/kind/$kind" + (folderId?.let { "?folderId=$it" } ?: "")
+
     // Optional `ar` (aspect ratio) lets the document-open container transform size itself correctly
     // from the very first frame instead of waiting for the record to load.
     const val DOCUMENT = "document/{id}?ar={ar}"

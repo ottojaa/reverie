@@ -256,3 +256,35 @@ data class TrimVideoRequest(
 
 @Serializable
 data class TrimVideoResponse(val jobId: String)
+
+/** How many documents of one kind a scope holds, and their total size. */
+@Serializable
+data class KindTotalsDto(val count: Int = 0, val bytes: Long = 0)
+
+/** One file type of the Files kind: a lowercase extension (or MIME subtype) and how many documents have it. */
+@Serializable
+data class TopTypeDto(val ext: String, val count: Int)
+
+/** The Files kind's totals plus its most common types, most common first (at most four). */
+@Serializable
+data class FileTotalsDto(val count: Int = 0, val bytes: Long = 0, val top_types: List<TopTypeDto> = emptyList())
+
+/** What a scope (the library or one folder) holds per kind: the figures behind the Browse dashboard's cards. */
+@Serializable
+data class DocumentSummaryDto(
+    val image: KindTotalsDto = KindTotalsDto(),
+    val video: KindTotalsDto = KindTotalsDto(),
+    val file: FileTotalsDto = FileTotalsDto(),
+) {
+    fun countOf(kind: DocumentKind): Int = when (kind) {
+        DocumentKind.IMAGE -> image.count
+        DocumentKind.VIDEO -> video.count
+        DocumentKind.FILE -> file.count
+    }
+
+    fun bytesOf(kind: DocumentKind): Long = when (kind) {
+        DocumentKind.IMAGE -> image.bytes
+        DocumentKind.VIDEO -> video.bytes
+        DocumentKind.FILE -> file.bytes
+    }
+}
