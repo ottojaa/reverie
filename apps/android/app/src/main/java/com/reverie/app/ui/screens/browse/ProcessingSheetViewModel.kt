@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -118,14 +119,15 @@ class ProcessingSheetViewModel @Inject constructor(
         tracker.keepLive(state.map { s -> s.rows.map(DocumentDto::id).toSet() }.distinctUntilChanged())
     }
 
-    /** Hand the shown order to the viewer so swiping goes through these files, then open one. */
-    fun prepareSequence() = sequenceHolder.set(
-        DocumentSequence(
-            initialIds = state.value.rows.map(DocumentDto::id),
-            ids = state.map { s -> s.rows.map(DocumentDto::id) }.distinctUntilChanged(),
-            loadMore = ::loadMore,
-        ),
-    )
+    /**
+     * Hand the shown order to the viewer so swiping goes through these files, then open one. The
+     * order is fixed at tap time: the rows shrink as files finish, and a viewer sequence that
+     * dropped the open file (or emptied, closing the viewer) would pull the file out from under it.
+     */
+    fun prepareSequence() {
+        val shown = state.value.rows.map(DocumentDto::id)
+        sequenceHolder.set(DocumentSequence(initialIds = shown, ids = flowOf(shown), loadMore = {}))
+    }
 
     private companion object {
         const val PAGE_SIZE = 30
