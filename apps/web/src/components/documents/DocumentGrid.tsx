@@ -1,3 +1,7 @@
+import type { BrowseLayout } from '@/lib/browse/browse-layout';
+import { buildGridRows } from '@/lib/browse/document-months';
+import { packJustifiedRows, TILE_GAP, tileColumns, tileSize } from '@/lib/browse/justified-rows';
+import { useFetchNearEnd } from '@/lib/hooks/useFetchNearEnd';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
 import { useUpload } from '@/lib/upload';
@@ -5,11 +9,12 @@ import type { Document } from '@reverie/shared';
 import { useElementScrollRestoration } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DocumentCard } from './DocumentCard';
+import { DocumentGridRow } from './DocumentGridRow';
 
 const GAP = 16; // gap-4 = 1rem = 16px
 const COL_DEBOUNCE_MS = 80;
 const HYSTERESIS = 20; // px buffer at breakpoints to prevent bounce
+const MONTH_HEADER_HEIGHT = 32;
 const CONTENT_PADDING_X = 24; // Browse wraps the grid in p-6 (24px each side); cold-start width fallback only
 
 // Module-scoped so they survive unmount: on a back-navigation remount they seed the exact
@@ -50,24 +55,41 @@ interface DocumentGridProps {
     isLoading?: boolean;
     fetchNextPage?: () => void;
     hasNextPage?: boolean;
+    /** Put a month header (label only) before each run of documents from one month. */
+    groupByMonth?: boolean;
+    /** Open at the scroll position the router remembered; false when the list is a different one than that was kept for. */
+    restoreScroll?: boolean;
+    /** Cards (with a footer), Grid (square tiles) or Justified (tiles that keep their aspect ratio). */
+    layout?: BrowseLayout;
 }
 
-export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage }: DocumentGridProps) {
+export function DocumentGrid({
+    documents,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    groupByMonth = false,
+    restoreScroll = true,
+    layout = 'cards',
+}: DocumentGridProps) {
     const scrollContainerRef = useScrollContainer();
     const gridRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
     const { recentlyCompletedDocumentIds, markPulseComplete } = useUpload();
     const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
+    // Seed from the widest synchronous source available on a remount: the cached grid
+    // width (exact, from a previous mount) or the persistent <main> minus its padding.
+    const [gridWidth, setGridWidth] = useState(() => {
+        if (typeof window === 'undefined') return 0;
+
+        return Math.floor(cachedGridWidth || (scrollContainerRef.current ? scrollContainerRef.current.clientWidth - CONTENT_PADDING_X * 2 : window.innerWidth));
+    });
     const [columnCount, setColumnCount] = useState(() => {
         if (typeof window === 'undefined') return 1;
 
         if (window.matchMedia('(pointer: coarse)').matches) return 1;
 
-        // Seed from the widest synchronous source available on a remount: the cached grid
-        // width (exact, from a previous mount) or the persistent <main> minus its padding.
-        const width = cachedGridWidth || (scrollContainerRef.current ? scrollContainerRef.current.clientWidth - CONTENT_PADDING_X * 2 : window.innerWidth);
-
-        return getColumnCount(width);
+        return getColumnCount(gridWidth);
     });
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -126,6 +148,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
                 debounceRef.current = null;
                 const width = latestWidthRef.current;
 
+                setGridWidth(Math.floor(width));
                 setColumnCount((prev) => (isMobile ? 1 : getColumnCount(width, prev)));
             }, COL_DEBOUNCE_MS);
         });
@@ -134,6 +157,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         const rect = el.getBoundingClientRect();
         cachedGridWidth = rect.width;
         cachedGridOffsetTop = el.offsetTop;
+        setGridWidth(Math.floor(rect.width));
         setColumnCount(isMobile ? 1 : getColumnCount(rect.width));
         observer.observe(el);
 
@@ -146,7 +170,14 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
     // --- Virtualizer ---
 
-    const rowCount = Math.ceil(documents.length / columnCount);
+    const currentYear = new Date().getFullYear();
+    const isCards = layout === 'cards';
+    const columns = layout === 'grid' ? tileColumns(gridWidth) : columnCount;
+    const tileSide = tileSize(gridWidth, columns);
+    const rowGap = isCards ? GAP : TILE_GAP;
+    const pack = useMemo(() => (layout === 'justified' ? (docs: Document[]) => packJustifiedRows(docs, { width: gridWidth }) : undefined), [layout, gridWidth]);
+    const rows = useMemo(() => buildGridRows(documents, { columns, groupByMonth, currentYear, pack }), [documents, columns, groupByMonth, currentYear, pack]);
+    const rowCount = rows.length;
 
     // Widest synchronous width source, most precise first: the mounted grid, the cached width
     // from a previous mount, the persistent <main> minus padding, then the window.
@@ -164,7 +195,7 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         return typeof window !== 'undefined' ? window.innerWidth : 0;
     }, [scrollContainerRef]);
 
-    const estimateRowHeight = useCallback(() => {
+    const estimateCardRowHeight = useCallback(() => {
         const containerWidth = resolveGridWidth();
 
         if (!containerWidth) return 350;
@@ -175,6 +206,21 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         return colWidth * 0.75 + 80;
     }, [columnCount, resolveGridWidth]);
 
+    const estimateRowHeight = useCallback(
+        (index: number) => {
+            const row = rows[index];
+
+            if (row?.type === 'header') return MONTH_HEADER_HEIGHT;
+
+            if (layout === 'grid') return tileSide;
+
+            if (layout === 'justified' && row?.height) return row.height;
+
+            return estimateCardRowHeight();
+        },
+        [rows, layout, tileSide, estimateCardRowHeight],
+    );
+
     // Read <main>'s cached scroll position so the virtualizer renders the
     // correct rows immediately (before the router restores scrollTop).
     const scrollEntry = useElementScrollRestoration({
@@ -183,32 +229,32 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
 
     const scrollMargin = gridRef.current?.offsetTop ?? cachedGridOffsetTop;
 
+    const getItemKey = useCallback((index: number) => rows[index]?.key ?? index, [rows]);
+
     const virtualizer = useVirtualizer({
         count: rowCount,
         getScrollElement: () => scrollContainerRef.current,
         estimateSize: estimateRowHeight,
+        getItemKey,
         overscan: 1,
         scrollMargin,
-        gap: GAP,
-        initialOffset: scrollEntry?.scrollY,
+        gap: rowGap,
+        initialOffset: restoreScroll ? scrollEntry?.scrollY : undefined,
         paddingEnd: 60,
     });
+
+    // virtual-core only re-lays-out rows when count, scrollMargin or getItemKey change; a resize that keeps the
+    // row keys but changes tile or card sizes needs a nudge.
+    useEffect(() => {
+        virtualizer.measure();
+    }, [virtualizer, gridWidth, columns, layout]);
 
     // --- Infinite scroll trigger ---
 
     const virtualItems = virtualizer.getVirtualItems();
     const lastVirtualItemIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
 
-    useEffect(() => {
-        if (!hasNextPage || !fetchNextPage) return;
-
-        if (lastVirtualItemIndex < 0) return;
-
-        // Trigger when within 2 rows of the bottom
-        if (lastVirtualItemIndex >= rowCount - 2) {
-            fetchNextPage();
-        }
-    }, [lastVirtualItemIndex, hasNextPage, fetchNextPage, rowCount]);
+    useFetchNearEnd({ lastRowIndex: lastVirtualItemIndex, rowCount, hasNextPage, fetchNextPage });
 
     if (isLoading) {
         return (
@@ -224,35 +270,32 @@ export function DocumentGrid({ documents, isLoading, fetchNextPage, hasNextPage 
         <div ref={gridRef}>
             <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
                 {virtualItems.map((virtualRow) => {
-                    const startIdx = virtualRow.index * columnCount;
-                    const rowDocs = documents.slice(startIdx, startIdx + columnCount);
+                    const row = rows[virtualRow.index];
+
+                    if (!row) return null;
+
+                    const style = { top: virtualRow.start - scrollMargin, height: virtualRow.size, gap: rowGap };
+
+                    if (row.type === 'header') {
+                        return (
+                            <h2 key={virtualRow.key} className="absolute left-0 right-0 flex items-end text-lg font-semibold tracking-tight" style={style}>
+                                {row.label}
+                            </h2>
+                        );
+                    }
 
                     return (
-                        <div
+                        <DocumentGridRow
                             key={virtualRow.key}
-                            className="absolute left-0 right-0 flex"
-                            style={{
-                                top: virtualRow.start - scrollMargin,
-                                height: virtualRow.size,
-                                gap: GAP,
-                            }}
-                        >
-                            {rowDocs.map((doc) => (
-                                <div key={doc.id} style={{ flex: `1 1 0%`, minWidth: 0 }}>
-                                    <DocumentCard
-                                        document={doc}
-                                        orderedIds={orderedIds}
-                                        shouldPulse={pulsingIds.has(doc.id)}
-                                        onPulseComplete={() => handlePulseComplete(doc.id)}
-                                    />
-                                </div>
-                            ))}
-                            {/* Fill empty slots in the last row to maintain consistent card widths */}
-                            {rowDocs.length < columnCount &&
-                                Array.from({ length: columnCount - rowDocs.length }).map((_, i) => (
-                                    <div key={`empty-${i}`} style={{ flex: `1 1 0%`, minWidth: 0 }} />
-                                ))}
-                        </div>
+                            row={row}
+                            layout={layout}
+                            columns={columns}
+                            tileSide={tileSide}
+                            orderedIds={orderedIds}
+                            pulsingIds={pulsingIds}
+                            onPulseComplete={handlePulseComplete}
+                            style={style}
+                        />
                     );
                 })}
             </div>

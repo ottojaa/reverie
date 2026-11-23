@@ -1,3 +1,4 @@
+import { formatDuration } from '@/components/document-viewer/insights/media-facts';
 import { FileTypeIcon, getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { ImageLoader } from '@/components/ui/image-loader';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
@@ -6,7 +7,14 @@ import type { Document } from '@reverie/shared';
 import { Play } from 'lucide-react';
 import { memo, useRef } from 'react';
 
-export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: { document: Document }) {
+interface DocumentThumbnailProps {
+    document: Document;
+    /** `card` is the 4:3 picture above a footer; `tile` fills whatever box it is in, with no play button or extension badge. */
+    variant?: 'card' | 'tile';
+}
+
+export const DocumentThumbnail = memo(function DocumentThumbnail({ document, variant = 'card' }: DocumentThumbnailProps) {
+    const isTile = variant === 'tile';
     const thumbnailRef = useRef<HTMLDivElement>(null);
     const fileConfig = getFileTypeConfig(document.mime_type, document.original_filename);
     const extension = getFileExtension(document.original_filename);
@@ -14,7 +22,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
 
     return (
-        <div className="relative aspect-4/3 overflow-hidden bg-muted">
+        <div className={cn('relative overflow-hidden bg-muted', isTile ? 'h-full w-full' : 'aspect-4/3')}>
             {hasThumbnail && thumbnailUrl ? (
                 <>
                     {document.thumbnail_blurhash && (
@@ -34,7 +42,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
                         />
                     </div>
 
-                    {document.mime_type.startsWith('video/') && (
+                    {!isTile && document.mime_type.startsWith('video/') && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <div className="rounded-full bg-white/90 p-3 shadow-md dark:bg-black/40">
                                 <Play className="size-8 text-foreground fill-foreground" />
@@ -48,7 +56,13 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document }: {
                 </div>
             )}
 
-            {extension && (
+            {document.mime_type.startsWith('video/') && document.duration_seconds != null && (
+                <div className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">
+                    {formatDuration(document.duration_seconds)}
+                </div>
+            )}
+
+            {!isTile && extension && (
                 <div className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white backdrop-blur-sm">
                     .{extension.toLowerCase()}
                 </div>

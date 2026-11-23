@@ -15,3 +15,19 @@ export function DocumentSkeleton() {
         </div>
     );
 }
+
+/** Placeholder for the Files table while its first page loads. */
+export function DocumentRowsSkeleton() {
+    return (
+        <div className="overflow-hidden rounded-xl bg-card">
+            {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex h-[52px] items-center gap-3 border-t border-border/60 px-4 first:border-t-0">
+                    <Skeleton className="size-8 rounded-lg" />
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="ml-auto h-4 w-16" />
+                    <Skeleton className="h-4 w-28" />
+                </div>
+            ))}
+        </div>
+    );
+}
