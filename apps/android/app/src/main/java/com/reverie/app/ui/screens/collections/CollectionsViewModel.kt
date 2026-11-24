@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.model.CreateFolderRequest
+import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.UpdateFolderRequest
@@ -28,6 +29,14 @@ import javax.inject.Inject
 
 data class CollectionsUiState(
     val tree: List<FolderWithChildren> = emptyList(),
+    /** Cover per folder id, from the last tree fetch. Empty until one succeeds (and offline after a restart). */
+    val covers: Map<String, FolderCoverDto> = emptyMap(),
+    /** The header's counts, over the whole tree: the filter does not change them. */
+    /** Folders per collection id over the whole tree: the filter only trims the rows, not the "N folders" line. */
+    val folderCounts: Map<String, Int> = emptyMap(),
+    val collectionCount: Int = 0,
+    val folderCount: Int = 0,
+    val isRefreshing: Boolean = false,
     val collapsedIds: Set<String> = emptySet(),
     val filter: String = "",
     val storageUsed: Long = 0,
@@ -51,6 +60,7 @@ class CollectionsViewModel @Inject constructor(
     private val collapsed = MutableStateFlow<Set<String>>(emptySet())
     private val filter = MutableStateFlow("")
     private val notice = MutableStateFlow<String?>(null)
+    private val refreshing = MutableStateFlow(false)
 
     // What to do once the open prompt succeeds: open the folder, or redo the refused change.
     private var afterUnlock: (() -> Unit)? = null
@@ -67,31 +77,47 @@ class CollectionsViewModel @Inject constructor(
         afterUnlock = null
     }
 
+    private val chrome = combine(collapsed, filter, notice, refreshing) { c, f, n, r -> Chrome(c, f, n, r) }
+
     val uiState: StateFlow<CollectionsUiState> = combine(
         folderRepository.observeTree(),
+        folderRepository.covers,
         authRepository.authState,
         connectivity.isOnline,
-        // combine tops out at 5 flows, so fold expansion + filter + notice into one.
-        combine(collapsed, filter, notice) { c, f, n -> Triple(c, f, n) },
-    ) { tree, auth, online, (collapsedIds, filterText, noticeText) ->
+        chrome,
+    ) { tree, covers, auth, online, chrome ->
         val user = (auth as? AuthState.Authenticated)?.user
         CollectionsUiState(
-            tree = filterTree(tree, filterText),
-            collapsedIds = collapsedIds,
-            filter = filterText,
+            tree = filterTree(tree, chrome.filter),
+            covers = covers,
+            folderCounts = tree.associate { it.id to it.children.size },
+            collectionCount = tree.count { it.type == FolderType.COLLECTION },
+            folderCount = countFolders(tree),
+            isRefreshing = chrome.refreshing,
+            collapsedIds = chrome.collapsed,
+            filter = chrome.filter,
             storageUsed = user?.storage_used_bytes ?: 0,
             storageQuota = user?.storage_quota_bytes ?: 0,
             isOffline = !online,
-            notice = noticeText,
+            notice = chrome.notice,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CollectionsUiState())
 
-    init {
-        refresh()
-    }
+    private data class Chrome(val collapsed: Set<String>, val filter: String, val notice: String?, val refreshing: Boolean)
 
+    /** Quietly refetch the tree (on opening the tab and on returning to it); a failure leaves the cached one showing. */
     fun refresh() {
         viewModelScope.launch { runCatching { folderRepository.refresh() } }
+    }
+
+    /** The pull-to-refresh gesture: the same fetch, with the spinner. */
+    fun pullToRefresh() {
+        if (refreshing.value) return
+        viewModelScope.launch {
+            refreshing.value = true
+            runCatching { folderRepository.refresh() }
+            refreshing.value = false
+        }
     }
 
     /**
@@ -122,6 +148,9 @@ class CollectionsViewModel @Inject constructor(
     fun setFilter(text: String) {
         filter.value = text
     }
+
+    private fun countFolders(tree: List<FolderWithChildren>): Int =
+        tree.sumOf { node -> (if (node.type == FolderType.FOLDER) 1 else 0) + countFolders(node.children) }
 
     private fun filterTree(tree: List<FolderWithChildren>, query: String): List<FolderWithChildren> {
         if (query.isBlank()) return tree

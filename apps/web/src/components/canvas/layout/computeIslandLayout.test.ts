@@ -15,6 +15,7 @@ function folder(overrides: Partial<FolderWithChildren> & { id: string }): Folder
         updated_at: '2026-01-01T00:00:00.000Z',
         children: [],
         document_count: 10,
+        cover: null,
         ...overrides,
     };
 }

@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
@@ -21,7 +22,12 @@ import androidx.compose.ui.unit.sp
  * anything that doesn't resolve falls back to the folder glyph — mirroring the web's fallback order.
  */
 @Composable
-fun SectionIcon(emoji: String?, modifier: Modifier = Modifier, size: Dp = 22.dp) {
+fun SectionIcon(
+    emoji: String?,
+    modifier: Modifier = Modifier,
+    size: Dp = 22.dp,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     val value = emoji?.trim().orEmpty()
     // A Lucide name is empty-or-ASCII kebab/lowercase; an emoji character is not.
     val looksLikeName = value.all { it == '-' || it in 'a'..'z' || it in '0'..'9' }
@@ -40,7 +46,7 @@ fun SectionIcon(emoji: String?, modifier: Modifier = Modifier, size: Dp = 22.dp)
     Icon(
         painter = painterResource(id = resId),
         contentDescription = null,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        tint = tint,
         modifier = modifier.size(size),
     )
 }

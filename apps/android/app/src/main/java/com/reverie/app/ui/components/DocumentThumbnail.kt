@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
@@ -51,6 +52,8 @@ fun DocumentThumbnail(
     hasThumbnail: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
+    // READ_ONLY reads a thumbnail some other screen already cached but never writes one.
+    diskCachePolicy: CachePolicy = CachePolicy.ENABLED,
 ) {
     if (hasThumbnail) {
         val placeholder = rememberBlurhashPainter(blurhash)
@@ -61,6 +64,7 @@ fun DocumentThumbnail(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(ThumbnailRef(documentId, size))
                     .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
+                    .diskCachePolicy(diskCachePolicy)
                     .build(),
                 contentDescription = filename,
                 contentScale = ContentScale.Crop,

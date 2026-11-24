@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema } from './common.js';
+import { DocumentSummaryResponseSchema } from './documents.js';
 
 export const FolderTypeSchema = z.enum(['collection', 'folder']);
 export type FolderType = z.infer<typeof FolderTypeSchema>;
@@ -60,14 +61,38 @@ export const ReorderFoldersRequestSchema = z.object({
 
 export type ReorderFoldersRequest = z.infer<typeof ReorderFoldersRequestSchema>;
 
+/** One document shown in a folder's cover mosaic. */
+export const FolderCoverTileSchema = z.object({
+    document_id: UuidSchema,
+    mime_type: z.string(),
+    original_filename: z.string(),
+    thumbnail_blurhash: z.string().nullable(),
+});
+
+export type FolderCoverTile = z.infer<typeof FolderCoverTileSchema>;
+
+/**
+ * What a folder holds, for its row on the Collections screen: up to four documents (thumbnailed first, then
+ * newest first) and the same per-kind summary GET /documents/summary gives for the folder.
+ */
+export const FolderCoverSchema = z.object({
+    tiles: z.array(FolderCoverTileSchema).max(4),
+    summary: DocumentSummaryResponseSchema,
+});
+
+export type FolderCover = z.infer<typeof FolderCoverSchema>;
+
 export interface FolderWithChildren extends z.infer<typeof FolderSchema> {
     children: FolderWithChildren[];
     document_count: number;
+    /** Null for collections, locked nodes and every private folder, open or not (private document ids and filenames stay out of the tree). */
+    cover: FolderCover | null;
 }
 
 export const FolderWithChildrenSchema: z.ZodType<FolderWithChildren> = FolderSchema.extend({
     children: z.lazy(() => z.array(FolderWithChildrenSchema)),
     document_count: z.number(),
+    cover: FolderCoverSchema.nullable(),
 });
 
 export const FolderTreeResponseSchema = z.array(FolderWithChildrenSchema);

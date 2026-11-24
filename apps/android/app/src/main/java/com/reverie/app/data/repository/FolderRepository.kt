@@ -2,6 +2,7 @@ package com.reverie.app.data.repository
 
 import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.model.CreateFolderRequest
+import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.ReorderFolderUpdate
@@ -16,6 +17,9 @@ import com.reverie.app.data.local.toTree
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -28,6 +32,20 @@ class FolderRepository @Inject constructor(
     private val purger: PrivateDataPurger,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
+    private val _covers = MutableStateFlow<Map<String, FolderCoverDto>>(emptyMap())
+
+    /**
+     * Folder covers by folder id. In memory only, never in Room (the server sends none for private
+     * folders, and a cached cover would go stale). A successful fetch replaces the whole map (a folder that locked, went
+     * private or was deleted loses its cover with its row); a failed fetch keeps it, so the cached
+     * tree offline still shows the last covers; logout clears it.
+     */
+    val covers: StateFlow<Map<String, FolderCoverDto>> = _covers.asStateFlow()
+
+    fun clearCovers() {
+        _covers.value = emptyMap()
+    }
+
     /** The two-level tree, reassembled from cached rows. */
     fun observeTree(): Flow<List<FolderWithChildren>> =
         folderDao.observeAll().map { it.toTree() }
@@ -38,6 +56,7 @@ class FolderRepository @Inject constructor(
 
     suspend fun refresh() = withContext(io) {
         val tree = foldersApi.tree()
+        _covers.value = tree.toCoverMap()
         val entities = tree.flattenToEntities(System.currentTimeMillis())
         folderDao.upsertAll(entities)
         folderDao.deleteNotIn(entities.map { it.id })
@@ -68,4 +87,15 @@ class FolderRepository @Inject constructor(
 internal fun List<FolderEntity>.toPublicFolderIds(): List<String> {
     val privateIds = filter { it.isPrivate }.map { it.id }.toSet()
     return filterNot { it.id in privateIds || it.parentId in privateIds }.map { it.id }
+}
+
+/** Covers by folder id, for every node that has one (collections and locked nodes have none). */
+internal fun List<FolderWithChildren>.toCoverMap(): Map<String, FolderCoverDto> = buildMap {
+    fun visit(nodes: List<FolderWithChildren>) {
+        nodes.forEach { node ->
+            node.cover?.let { put(node.id, it) }
+            visit(node.children)
+        }
+    }
+    visit(this@toCoverMap)
 }

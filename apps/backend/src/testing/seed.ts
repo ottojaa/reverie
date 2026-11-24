@@ -16,6 +16,8 @@ export interface SeedDocument {
     deleted?: boolean;
     /** The upload time; the database's now() when not given. */
     createdAt?: Date;
+    /** The stored thumbnail blurhash (a rendered thumbnail); null when not given. */
+    blurhash?: string | null;
     /** SHA-256 stored as file_hash; random when not given. */
     hash?: string;
     /** Text recognition, thumbnail and AI summary states; 'complete' for each when not given. */
@@ -103,7 +105,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             width: null,
             height: null,
             duration_seconds: null,
-            thumbnail_blurhash: null,
+            thumbnail_blurhash: doc.blurhash ?? null,
             thumbnail_paths: null,
             document_category: doc.category ?? null,
             extracted_date: doc.extractedDate ?? null,
