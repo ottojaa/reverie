@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { Folder as DbFolder } from '../../db/schema';
 import { loadFolderCovers } from '../../services/document-summary';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
+import { hasCover, serializeFolder } from '../../services/folder-serializer';
 import { getFolderService } from '../../services/folder.service';
 
 const folderService = getFolderService();
@@ -236,23 +237,6 @@ export default async function (fastify: FastifyInstance) {
     );
 }
 
-function serializeFolder(folder: DbFolder, locks: FolderLocks): Folder {
-    return {
-        id: folder.id,
-        parent_id: folder.parent_id,
-        name: folder.name,
-        path: folder.path,
-        description: folder.description,
-        emoji: folder.emoji,
-        sort_order: folder.sort_order,
-        type: folder.type,
-        is_private: folder.is_private,
-        locked: locks.isLocked(folder.id),
-        created_at: folder.created_at.toISOString(),
-        updated_at: folder.updated_at.toISOString(),
-    };
-}
-
 /** A locked collection shows no folders; a locked folder shows no documents (its count reads 0) and no cover. */
 function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks, covers: Map<string, FolderCover>): FolderWithChildren {
     const locked = locks.isLocked(node.id);
@@ -265,17 +249,12 @@ function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks, covers:
     };
 }
 
-/**
- * The folders whose cover is built: not collections, and nothing private. A closed lock hides its
- * subtree (never walked); an open one still gets no cover, because the tree is a broad listing and
- * private documents (ids, filenames) stay out of every listing, open or not: they are only
- * reachable by asking for their folder.
- */
+/** The folders of the tree whose cover is built. A closed lock hides its subtree, which is never walked. */
 function collectCoverFolderIds(nodes: TreeNode[], locks: FolderLocks): string[] {
     return nodes.flatMap((node) => {
         if (locks.isLocked(node.id)) return [];
 
-        const own = node.type === 'folder' && !locks.isPrivate(node.id) ? [node.id] : [];
+        const own = hasCover(node, locks) ? [node.id] : [];
 
         return [...own, ...collectCoverFolderIds(node.children as TreeNode[], locks)];
     });
