@@ -228,7 +228,7 @@ const KindTotalsSchema = z.object({
     bytes: z.number().nonnegative(),
 });
 
-/** One file type of the Files kind, as its lowercase extension (or MIME subtype when the name has none). */
+/** One file type of the Files kind, as its lowercase filename extension; names without one count toward no type. */
 export const DocumentTopTypeSchema = z.object({
     ext: z.string(),
     count: z.number().int().positive(),

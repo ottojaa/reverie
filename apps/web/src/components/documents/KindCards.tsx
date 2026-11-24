@@ -1,6 +1,7 @@
 import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
 import { dashboardCards, typeBlockCells, typeBlockColumns, type KindCard } from '@/lib/browse/dashboard-cards';
 import { kindTitle } from '@/lib/browse/browse-kinds';
+import { fileTypeLabel } from '@/lib/browse/file-type-label';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document, DocumentSummaryResponse } from '@reverie/shared';
@@ -13,19 +14,23 @@ const CARD_HEIGHT = 'h-42';
 interface KindCardsProps {
     /** The scope's totals; undefined while they load (the row is held with blank cards so the table below does not jump). */
     summary: DocumentSummaryResponse | undefined;
-    /** The latest photos (up to six) and the latest video, for the pictures on their cards. */
+    /** The latest photos and the latest video, for the pictures on their cards. */
     photos: Document[];
+    /** How many of `photos` the Photos card's strip shows. */
+    photoPreviewCount: number;
     video: Document | undefined;
 }
 
 /** The dashboard's picture cards: Photos, Videos and Files, each opening its own view. */
-export function KindCards({ summary, photos, video }: KindCardsProps) {
+export function KindCards({ summary, photos, photoPreviewCount, video }: KindCardsProps) {
     return (
         // A container query, not a viewport one: what matters is the page's width beside the sidebar.
         <div className="@container mt-5.5">
             <div className="flex flex-wrap gap-3">
                 {summary ? (
-                    dashboardCards(summary).map((card) => <KindCardView key={card.kind} card={card} photos={photos} video={video} />)
+                    dashboardCards(summary).map((card) => (
+                        <KindCardView key={card.kind} card={card} photos={photos} photoPreviewCount={photoPreviewCount} video={video} />
+                    ))
                 ) : (
                     <CardPlaceholders />
                 )}
@@ -51,7 +56,17 @@ const CARD_WIDTH: Record<KindCard['kind'], string> = {
     file: 'min-w-0 flex-1',
 };
 
-function KindCardView({ card, photos, video }: { card: KindCard; photos: Document[]; video: Document | undefined }) {
+function KindCardView({
+    card,
+    photos,
+    photoPreviewCount,
+    video,
+}: {
+    card: KindCard;
+    photos: Document[];
+    photoPreviewCount: number;
+    video: Document | undefined;
+}) {
     const title = kindTitle(card.kind);
 
     return (
@@ -67,7 +82,7 @@ function KindCardView({ card, photos, video }: { card: KindCard; photos: Documen
                 'group relative block overflow-hidden rounded-[20px] bg-card outline-none focus-visible:ring-2 focus-visible:ring-primary',
             )}
         >
-            {card.kind === 'image' && <PhotoStrip photos={photos} />}
+            {card.kind === 'image' && <PhotoStrip photos={photos} count={photoPreviewCount} />}
             {card.kind === 'video' && <VideoPicture video={video} />}
             {card.kind === 'file' && <TypeBlocks types={card.topTypes} />}
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,transparent_40%,rgb(0_0_0/0.78))]" aria-hidden />
@@ -81,10 +96,10 @@ function KindCardView({ card, photos, video }: { card: KindCard; photos: Documen
     );
 }
 
-function PhotoStrip({ photos }: { photos: Document[] }) {
+function PhotoStrip({ photos, count }: { photos: Document[]; count: number }) {
     return (
         <div className="absolute inset-0 flex gap-0.5">
-            {photos.slice(0, 6).map((photo) => (
+            {photos.slice(0, count).map((photo) => (
                 <div key={photo.id} className="min-w-0 flex-1">
                     <DocumentThumbnail document={photo} variant="tile" size="md" showDuration={false} />
                 </div>
@@ -129,7 +144,7 @@ function TypeBlock({ ext }: { ext: string | null }) {
 
     return (
         <div className={cn('flex items-start justify-center pt-3 font-mono text-xs font-semibold uppercase', config.bgColor, config.color)}>
-            {ext.slice(0, 5)}
+            {fileTypeLabel('', `file.${ext}`)}
         </div>
     );
 }

@@ -20,8 +20,6 @@ export type GridRow = { type: 'header'; key: string; label: string } | CardsRow;
 
 interface GridRowOptions {
     columns: number;
-    /** Put a month header before each run of documents from the same month. */
-    groupByMonth: boolean;
     /** The year that month labels leave out ("November" this year, "November 2025" otherwise). */
     currentYear: number;
     /** The zone an upload time is read in; the viewer's own zone when omitted. */
@@ -69,14 +67,12 @@ export function monthLabel({ year, month }: YearMonth, currentYear: number): str
 
 /**
  * Lays `documents` (already in the list's order) out as rows of `columns` cards, with a header row before each run of
- * one month when `groupByMonth` is set. Months are runs of neighbours, never a lookup by month: the order the server
+ * one month. Months are runs of neighbours, never a lookup by month: the order the server
  * sent stays the order on screen, and a month that comes back later (an upload date reads in another zone than a date
  * taken) gets its own header instead of reordering the list. Headers carry the label only: a count would cover just
  * the rows loaded so far and grow as the list does.
  */
-export function buildGridRows(documents: Document[], { columns, groupByMonth, currentYear, timeZone, pack }: GridRowOptions): GridRow[] {
-    if (!groupByMonth) return chunkRows(documents, columns, 'all', pack);
-
+export function buildGridRows(documents: Document[], { columns, currentYear, timeZone, pack }: GridRowOptions): GridRow[] {
     const rows: GridRow[] = [];
     let run: Document[] = [];
     let runMonth: YearMonth | null = null;

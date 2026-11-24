@@ -53,15 +53,7 @@ export function BrowseList({
                     restoreScroll={restoreScroll}
                 />
             ) : (
-                <DocumentGrid
-                    documents={documents}
-                    isLoading={false}
-                    fetchNextPage={fetchNextPage}
-                    hasNextPage={canFetchMore}
-                    groupByMonth
-                    restoreScroll={restoreScroll}
-                    layout={layout}
-                />
+                <DocumentGrid documents={documents} fetchNextPage={fetchNextPage} hasNextPage={canFetchMore} restoreScroll={restoreScroll} layout={layout} />
             )}
             {isFetchingNextPage && (
                 <div className="mt-4 flex justify-center">
