@@ -7,6 +7,7 @@ import {
     UuidSchema,
     type CreateFolderRequest,
     type Folder,
+    type FolderCover,
     type FolderWithChildren,
     type ReorderFoldersRequest,
     type UpdateFolderRequest,
@@ -14,6 +15,7 @@ import {
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Folder as DbFolder } from '../../db/schema';
+import { loadFolderCovers } from '../../services/document-summary';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
 import { getFolderService } from '../../services/folder.service';
 
@@ -49,7 +51,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Get folder tree with nested children and document counts',
+                description: 'Get folder tree with nested children, document counts and folder covers',
                 response: {
                     200: z.array(FolderWithChildrenSchema),
                 },
@@ -59,8 +61,9 @@ export default async function (fastify: FastifyInstance) {
             const userId = request.user.id;
             const locks = await loadFolderLocks(fastify, request, userId);
             const tree = await folderService.getFolderTree(userId);
+            const covers = await loadFolderCovers(userId, collectCoverFolderIds(tree, locks));
 
-            return tree.map((node) => serializeFolderWithChildren(node, locks));
+            return tree.map((node) => serializeFolderWithChildren(node, locks, covers));
         },
     );
 
@@ -250,13 +253,25 @@ function serializeFolder(folder: DbFolder, locks: FolderLocks): Folder {
     };
 }
 
-/** A locked collection shows no folders; a locked folder shows no documents (its count reads 0). */
-function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks): FolderWithChildren {
+/** A locked collection shows no folders; a locked folder shows no documents (its count reads 0) and no cover. */
+function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks, covers: Map<string, FolderCover>): FolderWithChildren {
     const locked = locks.isLocked(node.id);
 
     return {
         ...serializeFolder(node, locks),
-        children: locked ? [] : (node.children as TreeNode[]).map((child) => serializeFolderWithChildren(child, locks)),
+        children: locked ? [] : (node.children as TreeNode[]).map((child) => serializeFolderWithChildren(child, locks, covers)),
         document_count: locked ? 0 : node.document_count,
+        cover: covers.get(node.id) ?? null,
     };
+}
+
+/** The folders whose cover is built: not collections, and nothing a closed lock hides (its subtree is never walked). */
+function collectCoverFolderIds(nodes: TreeNode[], locks: FolderLocks): string[] {
+    return nodes.flatMap((node) => {
+        if (locks.isLocked(node.id)) return [];
+
+        const own = node.type === 'folder' ? [node.id] : [];
+
+        return [...own, ...collectCoverFolderIds(node.children as TreeNode[], locks)];
+    });
 }
