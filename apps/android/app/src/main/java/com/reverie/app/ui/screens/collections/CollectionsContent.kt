@@ -44,6 +44,7 @@ fun CollectionsContent(state: CollectionsUiState, actions: CollectionsActions, m
                     CollectionSection(
                         collection = collection,
                         covers = state.covers,
+                        folderCount = state.folderCounts[collection.id] ?: collection.children.size,
                         expanded = state.isExpanded(collection.id),
                         actions = actions,
                         modifier = Modifier.animateItem(),

@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.collections
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FileTotalsDto
 import com.reverie.app.data.api.model.FolderCoverDto
+import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.KindTotalsDto
 import com.reverie.app.data.api.model.TopTypeDto
 import org.junit.Assert.assertEquals
@@ -58,5 +59,13 @@ class FolderSubtitleTest {
         assertEquals("Empty", folderSubtitle(null, documentCount = 0))
         assertEquals("7 files", folderSubtitle(null, documentCount = 7))
         assertEquals("1 file", folderSubtitle(null, documentCount = 1))
+    }
+
+    @Test fun `a collection's folder line uses the count it is given, not the filtered children`() {
+        val shown = CollectionsFixtures.node("c1", "Travel", FolderType.COLLECTION, children = listOf(CollectionsFixtures.node("f1", "Rome", parent = "c1")))
+
+        assertEquals("5 folders", collectionSubtitle(shown, folderCount = 5))
+        assertEquals("1 folder", collectionSubtitle(shown, folderCount = 1))
+        assertEquals("No folders", collectionSubtitle(shown, folderCount = 0))
     }
 }

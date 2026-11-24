@@ -40,11 +40,12 @@ fun CollectionSection(
     expanded: Boolean,
     actions: CollectionsActions,
     modifier: Modifier = Modifier,
+    folderCount: Int = collection.children.size,
 ) {
     val accent = collectionAccent(collection.id).current()
 
     Column(modifier.padding(top = 18.dp)) {
-        CollectionHeader(collection, accent, expanded, actions)
+        CollectionHeader(collection, folderCount, accent, expanded, actions)
         Box(Modifier.padding(top = 6.dp)) {
             when {
                 collection.locked -> LockedCollectionCard(accent, onClick = { actions.onUnlock(collection) })
@@ -57,7 +58,7 @@ fun CollectionSection(
 }
 
 @Composable
-private fun CollectionHeader(collection: FolderWithChildren, accent: Color, expanded: Boolean, actions: CollectionsActions) {
+private fun CollectionHeader(collection: FolderWithChildren, folderCount: Int, accent: Color, expanded: Boolean, actions: CollectionsActions) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -78,7 +79,7 @@ private fun CollectionHeader(collection: FolderWithChildren, accent: Color, expa
                 modifier = Modifier.weight(1f, fill = false),
             )
             Text(
-                collectionSubtitle(collection),
+                collectionSubtitle(collection, folderCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -97,12 +98,12 @@ private fun CollectionHeader(collection: FolderWithChildren, accent: Color, expa
 }
 
 /** "5 folders", or the lock state when the collection is private (the board's wording). */
-internal fun collectionSubtitle(collection: FolderWithChildren): String = when {
+internal fun collectionSubtitle(collection: FolderWithChildren, folderCount: Int): String = when {
     collection.locked -> "Private · locked"
     collection.is_private -> "Private · unlocked"
-    collection.children.isEmpty() -> "No folders"
-    collection.children.size == 1 -> "1 folder"
-    else -> "${collection.children.size} folders"
+    folderCount == 0 -> "No folders"
+    folderCount == 1 -> "1 folder"
+    else -> "$folderCount folders"
 }
 
 @Composable

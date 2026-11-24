@@ -39,7 +39,7 @@ data class FolderWithChildren(
     val updated_at: String,
     val children: List<FolderWithChildren> = emptyList(),
     val document_count: Int = 0,
-    // Null for collections, locked nodes, and servers from before covers existed.
+    // Null for collections, locked nodes, every private folder (open or not), and servers from before covers existed.
     val cover: FolderCoverDto? = null,
 )
 

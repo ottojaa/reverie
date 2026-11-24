@@ -35,8 +35,8 @@ class FolderRepository @Inject constructor(
     private val _covers = MutableStateFlow<Map<String, FolderCoverDto>>(emptyMap())
 
     /**
-     * Folder covers by folder id. In memory only: covers of private folders carry filenames, so
-     * they never go to Room. A successful fetch replaces the whole map (a folder that locked, went
+     * Folder covers by folder id. In memory only, never in Room (the server sends none for private
+     * folders, and a cached cover would go stale). A successful fetch replaces the whole map (a folder that locked, went
      * private or was deleted loses its cover with its row); a failed fetch keeps it, so the cached
      * tree offline still shows the last covers; logout clears it.
      */

@@ -85,7 +85,7 @@ export type FolderCover = z.infer<typeof FolderCoverSchema>;
 export interface FolderWithChildren extends z.infer<typeof FolderSchema> {
     children: FolderWithChildren[];
     document_count: number;
-    /** Null for collections and for locked nodes (a closed lock reveals nothing about what is inside). */
+    /** Null for collections, locked nodes and every private folder, open or not (private document ids and filenames stay out of the tree). */
     cover: FolderCover | null;
 }
 

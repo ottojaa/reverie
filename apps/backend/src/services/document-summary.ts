@@ -84,15 +84,25 @@ export async function loadFolderCovers(userId: string, folderIds: string[]): Pro
     ]);
     const covers = new Map<string, FolderCover>();
 
-    for (const folderId of folderIds) {
-        const totals = totalRows.find((row) => row.folder_id === folderId);
-        const types = typeRows.filter((row) => row.folder_id === folderId);
-        const tiles = tileRows.filter((row) => row.folder_id === folderId).map(toTile);
+    const totalsByFolder = new Map(totalRows.map((row) => [row.folder_id, row]));
+    const typesByFolder = groupByFolder(typeRows);
+    const tilesByFolder = groupByFolder(tileRows);
 
-        covers.set(folderId, { tiles, summary: toSummary(totals ?? EMPTY_TOTALS, types) });
+    for (const folderId of folderIds) {
+        const tiles = (tilesByFolder.get(folderId) ?? []).map(toTile);
+
+        covers.set(folderId, { tiles, summary: toSummary(totalsByFolder.get(folderId) ?? EMPTY_TOTALS, typesByFolder.get(folderId) ?? []) });
     }
 
     return covers;
+}
+
+function groupByFolder<T extends { folder_id: string | null }>(rows: T[]): Map<string | null, T[]> {
+    const groups = new Map<string | null, T[]>();
+
+    for (const row of rows) groups.set(row.folder_id, [...(groups.get(row.folder_id) ?? []), row]);
+
+    return groups;
 }
 
 function loadCoverTiles(filters: CoverFilters, folderIds: string[]) {
