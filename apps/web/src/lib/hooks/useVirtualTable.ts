@@ -1,8 +1,8 @@
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
 import { useFetchNearEnd } from '@/lib/hooks/useFetchNearEnd';
-import { useElementScrollRestoration, useRouter } from '@tanstack/react-router';
+import { useRestoredScroll } from '@/lib/hooks/useRestoredScroll';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 // One measured offset per table, module-scoped: a back-navigation remount starts from the previous offset, so the
 // router's scroll restoration isn't clamped by a briefly too short list. Each table sits under a different page header
@@ -29,23 +29,7 @@ export function useVirtualTable({ cacheKey, rowCount, rowKey, rowHeight, hasNext
     const scrollContainerRef = useScrollContainer();
     const bodyRef = useRef<HTMLDivElement>(null);
     const [scrollMargin, setScrollMargin] = useState(cachedBodyOffsets.get(cacheKey) ?? 0);
-    const scrollEntry = useElementScrollRestoration({ id: 'main-scroll-area' });
-    const router = useRouter();
-    const restoredOffset = restoreScroll ? scrollEntry?.scrollY : undefined;
-
-    // The router puts the remembered offset back and then scrolls the area to the top anyway (it counts only the window
-    // as restored, and the area is listed in scrollToTopSelectors), so put it back once more after that pass.
-    useEffect(() => {
-        if (restoredOffset === undefined) return;
-
-        const unsubscribe = router.subscribe('onRendered', () => {
-            scrollContainerRef.current?.scrollTo({ top: restoredOffset });
-            unsubscribe();
-        });
-
-        return unsubscribe;
-        // Only the offset the page opened at: later renders must not pull the scroll back.
-    }, []);
+    const restoredOffset = useRestoredScroll(restoreScroll);
 
     // The body's distance from the top of the scrolling area: what sits above it (the page header, the cards) can change
     // height, so measure when the area or the page inside it resizes, not on every render (scrolling re-renders per row).

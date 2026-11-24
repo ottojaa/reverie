@@ -3,10 +3,10 @@ import { buildGridRows } from '@/lib/browse/document-months';
 import { packJustifiedRows, TILE_GAP, tileColumns, tileSize } from '@/lib/browse/justified-rows';
 import { useFetchNearEnd } from '@/lib/hooks/useFetchNearEnd';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { useRestoredScroll } from '@/lib/hooks/useRestoredScroll';
 import { useScrollContainer } from '@/lib/ScrollContainerContext';
 import { useUpload } from '@/lib/upload';
 import type { Document } from '@reverie/shared';
-import { useElementScrollRestoration } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentGridRow } from './DocumentGridRow';
@@ -221,11 +221,9 @@ export function DocumentGrid({
         [rows, layout, tileSide, estimateCardRowHeight],
     );
 
-    // Read <main>'s cached scroll position so the virtualizer renders the
-    // correct rows immediately (before the router restores scrollTop).
-    const scrollEntry = useElementScrollRestoration({
-        id: 'main-scroll-area',
-    });
+    // <main>'s remembered scroll position, so the virtualizer renders the correct rows immediately (before the router
+    // restores scrollTop).
+    const restoredOffset = useRestoredScroll(restoreScroll);
 
     const scrollMargin = gridRef.current?.offsetTop ?? cachedGridOffsetTop;
 
@@ -239,7 +237,7 @@ export function DocumentGrid({
         overscan: 1,
         scrollMargin,
         gap: rowGap,
-        initialOffset: restoreScroll ? scrollEntry?.scrollY : undefined,
+        initialOffset: restoredOffset,
         paddingEnd: 60,
     });
 
