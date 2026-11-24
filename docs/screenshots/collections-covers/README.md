@@ -9,3 +9,6 @@ Recorded by Paparazzi (`CollectionsScreenshotTest`); the PNGs the test verifies 
 
 The "C · Grouped cards" board could not be rendered offline (its template runtime is not available), so the grouped
 render sits beside today's baseline; compare it with the board on the canvas.
+
+The private-unlocked render shows the folder icon on its private folder rows on purpose: the server sends no cover for a
+private folder, open or not, so it differs from the C-States board there.
