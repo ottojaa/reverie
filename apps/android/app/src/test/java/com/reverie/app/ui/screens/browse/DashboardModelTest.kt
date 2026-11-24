@@ -153,6 +153,33 @@ class DashboardModelTest {
         assertTrue(ids.any { it.startsWith("v") } && ids.any { it.startsWith("f") })
     }
 
+    // Three photos a minute apart fold into one row; three same-name APKs on other days stack into one.
+    private val grouped = listOf(
+        doc("a3", created = "2026-11-20T10:02:00Z"), doc("a2", created = "2026-11-20T10:01:00Z"), doc("a1", created = "2026-11-20T10:00:00Z"),
+        doc("s3", "application/vnd.android.package-archive", "2026-11-19T09:00:00Z", name = "app.apk"),
+        doc("pdf", "application/pdf", "2026-11-18T09:00:00Z"),
+        doc("s2", "application/vnd.android.package-archive", "2026-11-17T09:00:00Z", name = "app.apk"),
+        doc("s1", "application/vnd.android.package-archive", "2026-11-16T09:00:00Z", name = "app.apk"),
+    )
+
+    @Test fun `the viewer skips collapsed groups, which count as one item, their newest`() = runTest {
+        val f = open(DashboardServer(grouped))
+
+        assertEquals(listOf("a3", "s3", "pdf"), f.model.prepareSequence().initialIds)
+    }
+
+    @Test fun `the members of an expanded group are in the viewer sequence in place`() = runTest {
+        val f = open(DashboardServer(grouped))
+
+        f.model.toggleExpanded("a3")
+        testScheduler.runCurrent()
+        assertEquals(listOf("a3", "a2", "a1", "s3", "pdf"), f.model.prepareSequence().initialIds)
+
+        f.model.toggleExpanded("s3")
+        testScheduler.runCurrent()
+        assertEquals(listOf("a3", "a2", "a1", "s3", "s2", "s1", "pdf"), f.model.prepareSequence().initialIds)
+    }
+
     @Test fun `a kind screen keeps its own paging, selection and a viewer sequence of its kind only`() = runTest {
         val server = DashboardServer(library)
         val f = open(server)

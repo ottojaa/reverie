@@ -141,8 +141,16 @@ class DashboardModel(
     val selectedIds: Set<String> get() = recent.selectedIds
 
     /**
-     * The viewer's swipe order: every loaded document of Recently added in upload order, the members of
-     * folds and stacks included whether or not the row is open (so a swipe never skips a hidden item).
+     * The viewer's swipe order: Recently added as the list shows it. A collapsed fold or stack is one item
+     * (its newest member); the members of an opened one are items in place. It follows the feed as pages
+     * arrive, and reaching the end asks Recently added for its next page.
      */
-    fun prepareSequence(): DocumentSequence = recent.prepareSequence()
+    fun prepareSequence(): DocumentSequence {
+        fun idsOf(state: DashboardState) = viewerIds(recentRows(state.recent.documents.documents), state.expanded)
+        return DocumentSequence(
+            initialIds = idsOf(state.value),
+            ids = state.map(::idsOf).distinctUntilChanged(),
+            loadMore = recent::loadMore,
+        )
+    }
 }

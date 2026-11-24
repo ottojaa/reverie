@@ -118,6 +118,18 @@ fun recentEntries(rows: List<RecentRow>, expanded: Set<String>): List<RecentEntr
     listOf<RecentEntry>(RecentEntry.Row(row, open)) + if (open) row.docs.map { RecentEntry.Member(it, row.key) } else emptyList()
 }
 
+/**
+ * The viewer's swipe order over [rows]: a single is one item, a collapsed group is one item (its newest
+ * member), and the members of a group in [expanded] are items in place, newest first.
+ */
+fun viewerIds(rows: List<RecentRow>, expanded: Set<String>): List<String> = rows.flatMap { row ->
+    when {
+        row is RecentRow.Single -> listOf(row.doc.id)
+        row is RecentRow.Group && row.key in expanded -> row.docs.map { it.id }
+        else -> listOf(row.key)
+    }
+}
+
 /** The ids of the documents a row stands for: all the members of a group, the one document of a single. */
 fun RecentRow.docIds(): List<String> = when (this) {
     is RecentRow.Single -> listOf(doc.id)
