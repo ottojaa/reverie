@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
+import com.reverie.app.data.api.model.DocumentKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -39,7 +40,7 @@ class BrowseGroupingTest {
             doc("n1", taken = "2026-11-20T10:00:00.000Z"), doc("n2", taken = "2026-11-02T10:00:00.000Z"),
             doc("o1", taken = "2026-10-30T10:00:00.000Z"),
         )
-        val feed = buildFeed(BrowseTab.PHOTOS, docs, today, utc)
+        val feed = buildFeed(DocumentKind.IMAGE, docs, today, utc)
         assertEquals(
             listOf(
                 FeedItem.Header("month:2026-11", "November"), FeedItem.Media(docs.take(2)),
@@ -51,7 +52,7 @@ class BrowseGroupingTest {
 
     @Test fun `videos sit two to a row under their month`() {
         val docs = (1..3).map { doc("v$it", "video/mp4", created = "2026-11-2${it}T10:00:00Z") }.reversed()
-        val feed = buildFeed(BrowseTab.VIDEOS, docs, today, utc)
+        val feed = buildFeed(DocumentKind.VIDEO, docs, today, utc)
         assertEquals(FeedItem.Header("month:2026-11", "November"), feed[0])
         assertEquals(listOf(2, 1), feed.drop(1).map { (it as FeedItem.VideoRow).docs.size })
     }
@@ -61,7 +62,7 @@ class BrowseGroupingTest {
             doc("a", "application/pdf", created = "2026-11-23T09:00:00Z"),
             doc("b", "application/zip", created = "2026-11-22T09:00:00Z"),
         )
-        val feed = buildFeed(BrowseTab.FILES, docs, today, utc)
+        val feed = buildFeed(DocumentKind.FILE, docs, today, utc)
         assertEquals(
             listOf(
                 FeedItem.Header("day:2026-11-23", "Today"), FeedItem.FileRow(docs[0]),
@@ -71,29 +72,10 @@ class BrowseGroupingTest {
         )
     }
 
-    @Test fun `the all tab makes a mosaic run of neighbouring media and a card of neighbouring files`() {
-        val day = "2026-11-23T1"
-        val docs = listOf(
-            doc("p1", created = "${day}2:00:00Z"), doc("v1", "video/mp4", created = "${day}1:50:00Z"),
-            doc("f1", "text/markdown", created = "${day}1:40:00Z"), doc("f2", "", created = "${day}1:30:00Z"),
-            doc("p2", created = "${day}1:20:00Z"),
-        )
-        val feed = buildFeed(BrowseTab.ALL, docs, today, utc)
-        assertEquals(
-            listOf(
-                FeedItem.Header("day:2026-11-23", "Today"),
-                FeedItem.Media(listOf(docs[0], docs[1])), FeedItem.FileCard(listOf(docs[2], docs[3])), FeedItem.Media(listOf(docs[4])),
-            ),
-            feed,
-        )
-    }
-
-    @Test fun `a run carries on across a page boundary instead of starting a new group`() {
-        val first = listOf(doc("p1", created = "2026-11-23T12:00:00Z"), doc("p2", created = "2026-11-23T11:00:00Z"))
-        val more = first + doc("p3", created = "2026-11-23T10:00:00Z")
-        val before = buildFeed(BrowseTab.ALL, first, today, utc)
-        val after = buildFeed(BrowseTab.ALL, more, today, utc)
-        assertEquals(2, before.size)
-        assertEquals(listOf(FeedItem.Header("day:2026-11-23", "Today"), FeedItem.Media(more)), after)
+    @Test fun `a month's photos carry on across a page boundary instead of starting a new group`() {
+        val first = listOf(doc("p1", taken = "2026-11-23T12:00:00.000Z"), doc("p2", taken = "2026-11-23T11:00:00.000Z"))
+        val more = first + doc("p3", taken = "2026-11-23T10:00:00.000Z")
+        assertEquals(2, buildFeed(DocumentKind.IMAGE, first, today, utc).size)
+        assertEquals(listOf(FeedItem.Header("month:2026-11", "November"), FeedItem.Media(more)), buildFeed(DocumentKind.IMAGE, more, today, utc))
     }
 }

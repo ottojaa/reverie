@@ -53,8 +53,6 @@ data class AppSettings(
     val videoBackground: VideoBackground = VideoBackground.BLACK,
     /** Mosaic Files grid: a larger feature tile appears roughly every N photos (min 2). */
     val mosaicFeatureEvery: Int = 3,
-    /** The Browse tab (All, Photos, Videos, Files) last shown, by its enum name; Browse reopens on it. */
-    val lastBrowseTab: String? = null,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
     val serverUrlOverride: String? = null,
     /** Original-file cache cap in bytes. */
@@ -90,7 +88,6 @@ class SettingsRepository @Inject constructor(
     private val gridLayoutModeKey = stringPreferencesKey("grid_layout_mode")
     private val videoBackgroundKey = stringPreferencesKey("video_background")
     private val mosaicFeatureEveryKey = intPreferencesKey("mosaic_feature_every")
-    private val lastBrowseTabKey = stringPreferencesKey("last_browse_tab")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
     // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
@@ -113,7 +110,6 @@ class SettingsRepository @Inject constructor(
             gridLayoutMode = prefs[gridLayoutModeKey]?.let { runCatching { GridLayoutMode.valueOf(it) }.getOrNull() } ?: defaults.gridLayoutMode,
             videoBackground = prefs[videoBackgroundKey]?.let { runCatching { VideoBackground.valueOf(it) }.getOrNull() } ?: defaults.videoBackground,
             mosaicFeatureEvery = (prefs[mosaicFeatureEveryKey] ?: defaults.mosaicFeatureEvery).coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX),
-            lastBrowseTab = prefs[lastBrowseTabKey],
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
             motionNavMs = prefs[motionNavMsKey] ?: defaults.motionNavMs,
@@ -153,10 +149,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setMosaicFeatureEvery(every: Int) {
         context.settingsDataStore.edit { it[mosaicFeatureEveryKey] = every.coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX) }
-    }
-
-    suspend fun setLastBrowseTab(tab: String) {
-        context.settingsDataStore.edit { it[lastBrowseTabKey] = tab }
     }
 
     suspend fun setServerUrlOverride(url: String?) {

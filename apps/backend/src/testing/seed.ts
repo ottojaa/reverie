@@ -9,6 +9,8 @@ export interface SeedDocument {
     name: string;
     folderId?: string | null;
     mime?: string;
+    /** The stored size; 100 when not given. */
+    sizeBytes?: number;
     category?: string | null;
     extractedDate?: Date | null;
     deleted?: boolean;
@@ -97,7 +99,7 @@ export async function seedDocument(db: Kysely<Database>, doc: SeedDocument): Pro
             file_hash: doc.hash ?? crypto.randomUUID(),
             original_filename: doc.name,
             mime_type: doc.mime ?? 'application/pdf',
-            size_bytes: 100,
+            size_bytes: doc.sizeBytes ?? 100,
             width: null,
             height: null,
             duration_seconds: null,

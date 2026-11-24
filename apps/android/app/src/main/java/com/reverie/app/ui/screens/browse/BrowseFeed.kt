@@ -13,6 +13,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.settings.GridLayoutMode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.LocalDate
@@ -27,13 +28,13 @@ data class FeedLayout(
 )
 
 /**
- * One tab's scrolling list, shared by All, Photos, Videos and Files: the tab only changes which
- * rows [buildFeed] produces. [focusedId] is the document the viewer last showed (only the open tab is
- * given one); [onHeading] reports the group under the top edge, for the pinned band.
+ * A kind screen's scrolling list, shared by Photos, Videos and Files: the kind only changes which
+ * rows [buildFeed] produces. [focusedId] is the document the viewer last showed; [onHeading] reports
+ * the group under the top edge, for the floating date chip.
  */
 @Composable
-fun TabFeed(
-    tab: BrowseTab,
+fun KindFeed(
+    kind: DocumentKind,
     documents: List<DocumentDto>,
     hasMore: Boolean,
     listState: LazyListState,
@@ -48,8 +49,8 @@ fun TabFeed(
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         val width = maxWidth.value
-        val rows = remember(tab, documents, width, layout) {
-            toRows(buildFeed(tab, documents, layout.today, layout.zone), width, layout.mode, layout.featureEvery)
+        val rows = remember(kind, documents, width, layout) {
+            toRows(buildFeed(kind, documents, layout.today, layout.zone), width, layout.mode, layout.featureEvery)
         }
         FeedScrollEffects(rows, listState, hasMore, onLoadMore, focusedId, onFocusConsumed, onHeading)
         LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -61,8 +62,8 @@ fun TabFeed(
 }
 
 /**
- * The three things every tab's list does on scroll: ask for the next page near the end, scroll the
- * viewer's last document into view on return, and tell the pinned band which group is at the top.
+ * The three things a kind screen's list does on scroll: ask for the next page near the end, scroll the
+ * viewer's last document into view on return, and tell the date chip which group is at the top.
  */
 @Composable
 private fun FeedScrollEffects(
@@ -82,7 +83,7 @@ private fun FeedScrollEffects(
     }
 
     // Scroll only when the document's row is off screen, and consume the signal so a later list
-    // update (a thumbnail finishing) doesn't scroll again. A document this tab hasn't loaded keeps
+    // update (a thumbnail finishing) doesn't scroll again. A document this list hasn't loaded keeps
     // the signal until its page arrives.
     LaunchedEffect(focusedId, rows) {
         val id = focusedId ?: return@LaunchedEffect

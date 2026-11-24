@@ -86,6 +86,8 @@ android {
         // Media3 calls android.text.TextUtils from its pure-Kotlin/Java helpers (e.g. MimeTypes);
         // let the JVM unit-test stubs return defaults instead of throwing "not mocked".
         unitTests.isReturnDefaultValues = true
+        // The navigation test hosts Compose under Robolectric, which needs the merged resources and manifest.
+        unitTests.isIncludeAndroidResources = true
     }
 
     buildFeatures {
@@ -120,6 +122,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -183,6 +186,8 @@ dependencies {
 
     // Unit testing
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.ui.test.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.ktor.client.mock)

@@ -9,6 +9,7 @@ import com.reverie.app.data.api.model.ConflictStrategy
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentOcrResult
+import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.DocumentStatusResponse
 import com.reverie.app.data.api.model.JobIdResponse
 import com.reverie.app.data.api.model.MoveDocumentsRequest
@@ -44,6 +45,11 @@ class DocumentsApi @Inject constructor(
         category?.let { parameter("category", it) }
         if (processing) parameter("processing", true)
         kind?.let { parameter("kind", it.wire) }
+    }.decode()
+
+    /** Count and size per kind for the library, or for [folderId] alone. */
+    suspend fun summary(folderId: String? = null): DocumentSummaryDto = client.get("documents/summary") {
+        folderId?.let { parameter("folder_id", it) }
     }.decode()
 
     suspend fun get(id: String): DocumentDto = client.get("documents/$id").decode()

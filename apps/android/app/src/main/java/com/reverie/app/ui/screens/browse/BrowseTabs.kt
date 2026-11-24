@@ -35,7 +35,7 @@ data class TabCursor(
     val hasMore: Boolean get() = fetched && offset < total
 }
 
-/** A tab's rows, in its order, plus the count its subtitle shows; [isLoading] while its first page is in flight. */
+/** A tab's rows, in its order, plus the server total; [isLoading] while its first page is in flight. */
 data class TabDocuments(
     val documents: List<DocumentDto> = emptyList(),
     val total: Int = 0,
@@ -61,22 +61,16 @@ fun sortKeyOf(doc: DocumentDto, tab: BrowseTab): SortKey {
     return SortKey(millis, doc.id)
 }
 
-private class Keyed(val doc: DocumentDto, val created: SortKey, val media: SortKey)
-
-/** Splits the one cached list into the four tabs, each in its own order and cut at its frontier. */
+/** Splits the one cached list into a tab's rows, in the tab's own order and cut at its frontier. */
 object BrowseTabs {
 
-    fun derive(cache: List<DocumentDto>, cursors: Map<BrowseTab, TabCursor>): Map<BrowseTab, TabDocuments> {
-        // Parse each row's dates once; the comparators below only compare the parsed keys.
-        val rows = cache.map { Keyed(it, sortKeyOf(it, BrowseTab.ALL), sortKeyOf(it, BrowseTab.PHOTOS)) }
-        val byUpload = rows.sortedByDescending { it.created }
-        val tabs = mapOf(
-            BrowseTab.ALL to byUpload.map { it.created to it.doc },
-            BrowseTab.PHOTOS to rows.filter { it.doc.kind == DocumentKind.IMAGE }.sortedByDescending { it.media }.map { it.media to it.doc },
-            BrowseTab.VIDEOS to rows.filter { it.doc.kind == DocumentKind.VIDEO }.sortedByDescending { it.media }.map { it.media to it.doc },
-            BrowseTab.FILES to byUpload.filter { it.doc.kind == DocumentKind.FILE }.map { it.created to it.doc },
-        )
-        return tabs.mapValues { (tab, keyed) -> toTabDocuments(keyed, cursors[tab] ?: TabCursor()) }
+    fun derive(cache: List<DocumentDto>, tab: BrowseTab, cursor: TabCursor): TabDocuments {
+        // Parse each row's dates once; the sort below only compares the parsed keys.
+        val keyed = cache
+            .filter { tab.kind == null || it.kind == tab.kind }
+            .map { sortKeyOf(it, tab) to it }
+            .sortedByDescending { it.first }
+        return toTabDocuments(keyed, cursor)
     }
 
     private fun toTabDocuments(keyed: List<Pair<SortKey, DocumentDto>>, cursor: TabCursor): TabDocuments {

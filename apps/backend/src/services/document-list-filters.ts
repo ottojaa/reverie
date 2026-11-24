@@ -23,7 +23,7 @@ function isStillProcessing(eb: ExpressionBuilder<Database, 'documents'>) {
 }
 
 /** documentKindOf in SQL: a case-insensitive MIME prefix; everything else is a file. mime_type is NOT NULL. */
-function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
+export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
     const isImage = eb(sql<string>`lower(mime_type)`, 'like', 'image/%');
     const isVideo = eb(sql<string>`lower(mime_type)`, 'like', 'video/%');
 
