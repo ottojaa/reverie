@@ -2,6 +2,9 @@ import type { ReactNode, Ref } from 'react';
 
 const MIN_WIDTH = 640;
 
+/** The height of a table row: the rows of the Files view and of Recently added must stay alike. */
+export const ROW_HEIGHT = 52;
+
 interface TableShellProps {
     columns: string;
     /** Add the Folder column: only the library-wide view needs it, inside a folder every row is in that folder. */

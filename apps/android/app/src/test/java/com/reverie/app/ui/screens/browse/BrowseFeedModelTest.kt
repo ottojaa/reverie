@@ -23,6 +23,8 @@ private class FakeServer(library: List<DocumentDto>) {
     val cache = MutableStateFlow<List<DocumentDto>>(emptyList())
     val requests = mutableListOf<Pair<DocumentKind?, Int>>()
     var failNext = false
+    /** Where the feed's reconcile callback lands: the repository's `dropStaleInLibrary`, on the fake cache. */
+    val reconciled = mutableListOf<Set<String>>()
 
     fun page(kind: DocumentKind?, offset: Int): PageResult {
         requests += kind to offset
@@ -30,11 +32,20 @@ private class FakeServer(library: List<DocumentDto>) {
             failNext = false
             error("offline")
         }
-        val tab = BrowseTab.entries.first { it.kind == kind }
-        val ordered = library.filter { kind == null || it.kind == kind }.sortedByDescending { sortKeyOf(it, tab) }
+        val ordered = library.filter { kind == null || it.kind == kind }.sortedByDescending { sortKeyOf(it, kind) }
         val items = ordered.drop(offset).take(PAGE)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
-        return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull())
+        return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull(), ids = items.map { it.id })
+    }
+
+    fun dropStale(kind: DocumentKind?, keep: Set<String>) {
+        reconciled += keep
+        cache.update { rows -> rows.filter { it.id in keep || (kind != null && it.kind != kind) } }
+    }
+
+    /** Removes [ids] from the server only, as a delete on another device does: the cache doesn't hear of it. */
+    fun deleteElsewhere(vararg ids: String) {
+        library = library.filterNot { it.id in ids }
     }
 
     /** Removes [ids] from the server and from the cache, like the repository's delete does. */
@@ -62,17 +73,18 @@ class BrowseFeedModelTest {
     private class Fixture(val server: FakeServer, val model: BrowseFeedModel, val failures: MutableList<Throwable>)
 
     private fun TestScope.start(
-        tab: BrowseTab,
+        kind: DocumentKind?,
         server: FakeServer = FakeServer(library),
         reportFailures: Boolean = true,
     ): Fixture {
         val failures = mutableListOf<Throwable>()
         val model = BrowseFeedModel(
             scope = backgroundScope as CoroutineScope,
-            tab = tab,
+            kind = kind,
             cache = server.cache,
-            fetchPage = { offset -> server.page(tab.kind, offset) },
+            fetchPage = { offset -> server.page(kind, offset) },
             onFirstPageFailed = { if (reportFailures) failures += it },
+            reconcile = { keep -> server.dropStale(kind, keep) },
             computation = UnconfinedTestDispatcher(testScheduler),
             sharing = SharingStarted.Eagerly,
         )
@@ -82,7 +94,7 @@ class BrowseFeedModelTest {
     private fun Fixture.ids() = model.state.value.documents.documents.map { it.id }
 
     @Test fun `a feed fetches its first page as soon as it exists`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.ALL)
+        val f = start(null)
         assertEquals(listOf<Pair<DocumentKind?, Int>>(null to 0), f.server.requests)
         assertEquals(11, f.model.state.value.documents.total)
         assertEquals(listOf("f3", "v3"), f.ids())
@@ -90,8 +102,8 @@ class BrowseFeedModelTest {
 
     @Test fun `feeds over one cache each show only their kind, down to what they have read`() = runTest(UnconfinedTestDispatcher()) {
         val server = FakeServer(library)
-        val all = start(BrowseTab.ALL, server)
-        val photos = start(BrowseTab.PHOTOS, server)
+        val all = start(null, server)
+        val photos = start(DocumentKind.IMAGE, server)
         assertEquals(listOf("p5", "p4"), photos.ids())
         // The All page cached rows of other kinds; the Photos feed has not read as far as them.
         assertFalse("p1" in photos.ids())
@@ -100,7 +112,7 @@ class BrowseFeedModelTest {
     }
 
     @Test fun `loading more reads on from where the feed stopped`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.PHOTOS)
+        val f = start(DocumentKind.IMAGE)
         f.model.loadMore()
         assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids())
         assertTrue(f.model.state.value.documents.hasMore)
@@ -110,7 +122,7 @@ class BrowseFeedModelTest {
     }
 
     @Test fun `loading more of a feed with nothing left asks for nothing`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.VIDEOS)
+        val f = start(DocumentKind.VIDEO)
         f.model.loadMore()
         val asked = f.server.requests.size
         f.model.loadMore()
@@ -119,8 +131,8 @@ class BrowseFeedModelTest {
     }
 
     @Test fun `selection is the feed's own and a fold's members toggle together`() = runTest(UnconfinedTestDispatcher()) {
-        val photos = start(BrowseTab.PHOTOS)
-        val videos = start(BrowseTab.VIDEOS, photos.server)
+        val photos = start(DocumentKind.IMAGE)
+        val videos = start(DocumentKind.VIDEO, photos.server)
         photos.model.enterSelection(listOf("p5"))
         photos.model.toggleSelect(listOf("p4", "p3"))
         assertEquals(setOf("p5", "p4", "p3"), photos.model.state.value.selectedIds)
@@ -134,19 +146,19 @@ class BrowseFeedModelTest {
 
     @Test fun `the viewer sequence holds only this feed and loads more of it`() = runTest(UnconfinedTestDispatcher()) {
         val server = FakeServer(library)
-        val videos = start(BrowseTab.VIDEOS, server)
+        val videos = start(DocumentKind.VIDEO, server)
         val sequence = videos.model.prepareSequence()
         assertEquals(listOf("v3", "v2"), sequence.initialIds)
         sequence.loadMore()
         assertEquals(listOf("v3", "v2", "v1"), sequence.ids.first())
         assertEquals(DocumentKind.VIDEO to 2, server.requests.last())
         // Another feed paging later does not change what this sequence holds.
-        start(BrowseTab.FILES, server).model.loadMore()
+        start(DocumentKind.FILE, server).model.loadMore()
         assertEquals(listOf("v3", "v2", "v1"), sequence.ids.first())
     }
 
     @Test fun `refreshing the first page starts the offset over without hiding what the feed showed`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.PHOTOS)
+        val f = start(DocumentKind.IMAGE)
         f.model.loadMore()
         f.model.refresh()
         assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids())
@@ -156,7 +168,7 @@ class BrowseFeedModelTest {
     }
 
     @Test fun `after a refresh one load more reads on until a row that was not shown yet`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.PHOTOS)
+        val f = start(DocumentKind.IMAGE)
         f.model.loadMore()
         f.model.refresh()
         f.model.loadMore()
@@ -166,7 +178,7 @@ class BrowseFeedModelTest {
     }
 
     @Test fun `after deleting rows above what a feed read, scrolling on skips none of the server's rows`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(BrowseTab.PHOTOS)
+        val f = start(DocumentKind.IMAGE)
         f.model.loadMore()
         assertEquals(listOf("p5", "p4", "p3", "p2"), f.ids())
         // Two photos at the top go; every row below them moves up two places on the server.
@@ -182,7 +194,7 @@ class BrowseFeedModelTest {
     @Test fun `a failed first page is reported and a failed later page is not`() = runTest(UnconfinedTestDispatcher()) {
         val server = FakeServer(library)
         server.failNext = true
-        val f = start(BrowseTab.VIDEOS, server)
+        val f = start(DocumentKind.VIDEO, server)
         assertEquals(1, f.failures.size)
         assertFalse(f.model.state.value.documents.fetched)
         assertTrue(f.model.state.value.documents.failed)
@@ -197,21 +209,80 @@ class BrowseFeedModelTest {
         val server = FakeServer(library)
         server.failNext = true
         val preview = BrowseFeedModel(
-            scope = backgroundScope as CoroutineScope, tab = BrowseTab.PHOTOS, cache = server.cache,
+            scope = backgroundScope as CoroutineScope, kind = DocumentKind.IMAGE, cache = server.cache,
             fetchPage = { server.page(DocumentKind.IMAGE, it) },
             computation = UnconfinedTestDispatcher(testScheduler), sharing = SharingStarted.Eagerly,
         )
         assertTrue(preview.state.value.documents.failed)
     }
 
+    @Test fun `a photo deleted elsewhere is gone once the feed has read to the end, and the total matches`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(DocumentKind.IMAGE)
+        f.model.loadMore()
+        f.model.loadMore()
+        assertEquals(5, f.model.state.value.documents.documents.size)
+
+        // p3 is deleted on another device; this phone still has it cached. Reading the feed to its end again finds it gone.
+        f.server.deleteElsewhere("p3")
+        f.model.refresh(initial = true)
+        f.model.loadMore()
+        f.model.loadMore()
+
+        val photos = f.model.state.value.documents
+        assertEquals(listOf("p5", "p4", "p2", "p1"), photos.documents.map { it.id })
+        assertEquals(4, photos.total)
+        assertFalse(photos.hasMore)
+    }
+
+    @Test fun `reading to the end of one kind leaves the cached rows of the other kinds alone`() = runTest(UnconfinedTestDispatcher()) {
+        val server = FakeServer(library)
+        val all = start(null, server)
+        val videos = start(DocumentKind.VIDEO, server)
+        videos.model.loadMore()
+        server.deleteElsewhere("v2")
+        videos.model.refresh(initial = true)
+        videos.model.loadMore()
+
+        assertEquals(listOf("v3", "v1"), videos.ids())
+        // Recently added cached f3 and v3 and has not read to its end: the video read dropped none of its other rows.
+        assertEquals(setOf("f3", "v3", "v1"), server.cache.value.map { it.id }.toSet())
+        assertEquals(listOf("f3", "v3"), all.ids())
+    }
+
+    @Test fun `a feed reconciles only after the last page, with every id it read`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(DocumentKind.IMAGE)
+        assertEquals(emptyList<Set<String>>(), f.server.reconciled)
+        f.model.loadMore()
+        assertEquals(emptyList<Set<String>>(), f.server.reconciled)
+        f.model.loadMore()
+        assertEquals(listOf(setOf("p5", "p4", "p3", "p2", "p1")), f.server.reconciled)
+    }
+
+    @Test fun `a read in which the server's total moved reconciles nothing`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(DocumentKind.IMAGE)
+        // A photo is deleted between page one and page two: the rows shift up and one is skipped.
+        f.server.deleteElsewhere("p4")
+        f.model.loadMore()
+        f.model.loadMore()
+        assertEquals(emptyList<Set<String>>(), f.server.reconciled)
+    }
+
+    @Test fun `an empty kind reconciles to nothing, so its cached rows go`() = runTest(UnconfinedTestDispatcher()) {
+        val server = FakeServer(library.filterNot { it.kind == DocumentKind.VIDEO })
+        server.cache.value = library.filter { it.kind == DocumentKind.VIDEO }
+        val f = start(DocumentKind.VIDEO, server)
+        assertEquals(emptyList<DocumentDto>(), server.cache.value)
+        assertEquals(0, f.model.state.value.documents.total)
+    }
+
     @Test
-    fun `a kind route argument picks its tab, and anything else opens Photos`() {
-        assertEquals(BrowseTab.PHOTOS, kindTabOf("photos"))
-        assertEquals(BrowseTab.VIDEOS, kindTabOf("VIDEOS"))
-        assertEquals(BrowseTab.FILES, kindTabOf("Files"))
+    fun `a kind route argument picks its kind, and anything else opens Photos`() {
+        assertEquals(DocumentKind.IMAGE, kindOfRoute("photos"))
+        assertEquals(DocumentKind.VIDEO, kindOfRoute("VIDEOS"))
+        assertEquals(DocumentKind.FILE, kindOfRoute("Files"))
         // The dashboard's own feed is not a kind screen, and a missing or unknown argument must not crash the route.
-        assertEquals(BrowseTab.PHOTOS, kindTabOf("all"))
-        assertEquals(BrowseTab.PHOTOS, kindTabOf("nonsense"))
-        assertEquals(BrowseTab.PHOTOS, kindTabOf(null))
+        assertEquals(DocumentKind.IMAGE, kindOfRoute("all"))
+        assertEquals(DocumentKind.IMAGE, kindOfRoute("nonsense"))
+        assertEquals(DocumentKind.IMAGE, kindOfRoute(null))
     }
 }

@@ -7,8 +7,8 @@ import { applyDocumentListFilters, isOfKind, type DocumentListFilters } from './
 const TOP_TYPES = 4;
 const KINDS: DocumentKind[] = ['image', 'video', 'file'];
 
-/** The type a file shows as: the lowercase extension of its name, else the MIME subtype ('' when it has neither). */
-const FILE_TYPE_SQL = sql<string>`coalesce(nullif(substring(lower(original_filename) from '\\.([^.]+)$'), ''), split_part(lower(mime_type), '/', 2))`;
+/** The type a file shows as: the lowercase extension of its name ('' when it has none, and then it counts toward no type). */
+const FILE_TYPE_SQL = sql<string>`coalesce(substring(lower(original_filename) from '\\.([^.]+)$'), '')`;
 
 function totalsOf(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
     return [

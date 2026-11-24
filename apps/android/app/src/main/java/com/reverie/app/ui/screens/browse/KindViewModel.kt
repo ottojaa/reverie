@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +21,7 @@ class KindViewModel @Inject constructor(
     val folderId: String? = savedStateHandle["folderId"]
 
     /** Photos, Videos or Files; an unknown route argument opens Photos. */
-    val tab: BrowseTab = kindTabOf(savedStateHandle["kind"])
+    val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
 
     private val cache = deps.documents.observeDocuments(folderId)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
@@ -37,10 +38,11 @@ class KindViewModel @Inject constructor(
 
     private val feed: BrowseFeedModel = BrowseFeedModel(
         scope = viewModelScope,
-        tab = tab,
+        kind = kind,
         cache = cache,
-        fetchPage = { offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, tab.kind) },
+        fetchPage = { offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, kind) },
         onFirstPageFailed = session::onRefreshFailed,
+        reconcile = { keep -> if (folderId == null) deps.documents.dropStaleInLibrary(kind, keep) },
         sharing = SharingStarted.Eagerly,
     )
 
@@ -80,6 +82,13 @@ class KindViewModel @Inject constructor(
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
 }
 
-/** The kind screen's tab for a route argument ("photos", "videos" or "files"); Photos for anything else. */
-fun kindTabOf(argument: String?): BrowseTab =
-    BrowseTab.entries.firstOrNull { it != BrowseTab.ALL && it.name.equals(argument, ignoreCase = true) } ?: BrowseTab.PHOTOS
+/** The route argument that opens [kind]'s screen: "photos", "videos" or "files". */
+fun routeOf(kind: DocumentKind): String = when (kind) {
+    DocumentKind.IMAGE -> "photos"
+    DocumentKind.VIDEO -> "videos"
+    DocumentKind.FILE -> "files"
+}
+
+/** The kind a kind screen's route argument opens; Photos for anything else. */
+fun kindOfRoute(argument: String?): DocumentKind =
+    DocumentKind.entries.firstOrNull { routeOf(it).equals(argument, ignoreCase = true) } ?: DocumentKind.IMAGE

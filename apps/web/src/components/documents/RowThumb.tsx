@@ -1,4 +1,5 @@
-import { getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { fileTypeLabel } from '@/lib/browse/file-type-label';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { cn } from '@/lib/utils';
 import type { Document } from '@reverie/shared';
@@ -16,7 +17,7 @@ interface RowThumbProps {
 export function RowThumb({ document, className, label = true }: RowThumbProps) {
     const url = document.thumbnail_status === 'complete' ? getThumbnailUrl(document, 'sm') : null;
     const config = getFileTypeConfig(document.mime_type, document.original_filename);
-    const extension = getFileExtension(document.original_filename).slice(0, 4);
+    const typeLabel = fileTypeLabel(document.mime_type, document.original_filename);
 
     if (url) return <img src={url} alt="" loading="lazy" decoding="async" draggable={false} className={cn('size-full rounded-lg object-cover', className)} />;
 
@@ -30,7 +31,7 @@ export function RowThumb({ document, className, label = true }: RowThumbProps) {
             )}
             aria-hidden
         >
-            {label && (extension || 'FILE')}
+            {label && typeLabel}
         </span>
     );
 }

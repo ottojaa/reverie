@@ -4,6 +4,14 @@ import type { Document } from '@reverie/shared';
 import { useEffect, type ReactNode } from 'react';
 import { SelectionBanner } from './SelectionBanner';
 
+/** How long a load lasts before it is worth drawing placeholders: a fast load shows none. */
+export const SKELETON_DELAY_MS = 200;
+
+/** The banner a Browse view shows when its documents fail to load (a locked folder has its own notice). */
+export function LoadFailedBanner() {
+    return <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">Failed to load documents. Please try again.</div>;
+}
+
 interface BrowseFrameProps {
     /** The documents the selection banner can act on (download needs their URLs). */
     documents: Document[];

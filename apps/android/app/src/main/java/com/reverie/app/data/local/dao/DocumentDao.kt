@@ -6,7 +6,7 @@ import androidx.room.Upsert
 import com.reverie.app.data.local.entity.DocumentEntity
 import kotlinx.coroutines.flow.Flow
 
-/** One cached document's MIME type (see [DocumentDao.mimeTypesInFolder]). */
+/** One cached document's MIME type (see [DocumentDao.mimeTypesInFolder] and [DocumentDao.allMimeTypes]). */
 data class DocumentMimeType(val id: String, val mimeType: String)
 
 /** One cached document's date taken (see [DocumentDao.takenAtOf]). */
@@ -36,6 +36,10 @@ interface DocumentDao {
     /** Reconcile a fully-loaded folder: drop cached rows the server no longer returns. */
     @Query("DELETE FROM documents WHERE folderId = :folderId AND id NOT IN (:keepIds)")
     suspend fun deleteInFolderNotIn(folderId: String, keepIds: List<String>)
+
+    /** Id and MIME type of every cached document: enough to tell which of them are of a given kind. */
+    @Query("SELECT id, mimeType FROM documents")
+    suspend fun allMimeTypes(): List<DocumentMimeType>
 
     /** Id and MIME type of every cached document in [folderId]: enough to tell which of them are of a given kind. */
     @Query("SELECT id, mimeType FROM documents WHERE folderId = :folderId")

@@ -31,8 +31,7 @@ fun KindScreen(
     val zone = remember { ZoneId.systemDefault() }
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
     val listState = rememberLazyListState()
-    val tab = viewModel.tab
-    val kind = tab.kind ?: DocumentKind.IMAGE
+    val kind = viewModel.kind
     val documents = state.documents
 
     val actions = remember(viewModel, state.selectedIds) {
@@ -41,7 +40,7 @@ fun KindScreen(
 
     BrowseChrome(
         title = BrowseTitle(
-            text = tab.label,
+            text = kindTitle(kind),
             subtitle = if (documents.fetched) kindSubtitle(kind, documents.total, ui.folder?.name ?: if (viewModel.folderId == null) "My Files" else "Folder") else "",
             isFolder = false,
             compact = true,
@@ -60,7 +59,6 @@ fun KindScreen(
         modifier = modifier,
     ) { slot ->
         KindBody(
-            tab = tab,
             kind = kind,
             state = state,
             error = ui.error,
@@ -79,7 +77,6 @@ fun KindScreen(
 /** The kind's list, or its loading skeleton or empty state. */
 @Composable
 fun KindBody(
-    tab: BrowseTab,
     kind: DocumentKind,
     state: FeedState,
     error: String?,
@@ -98,7 +95,7 @@ fun KindBody(
         return
     }
     if (documents.fetched && documents.documents.isEmpty()) {
-        EmptyList(emptyTitle(tab, inFolder), slot.contentPadding, slot.onUpload)
+        EmptyList(emptyTitle(kind, inFolder), slot.contentPadding, slot.onUpload)
         return
     }
     KindFeed(

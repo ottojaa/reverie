@@ -58,15 +58,14 @@ fun KindCards(
     cards: List<List<KindCard>>,
     photos: List<DocumentDto>,
     video: DocumentDto?,
-    onOpen: (BrowseTab) -> Unit,
+    onOpen: (DocumentKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(CARD_GAP)) {
         cards.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(CARD_GAP), modifier = Modifier.fillMaxWidth()) {
                 row.forEach { card ->
-                    val tab = BrowseTab.of(card.kind)
-                    val open = { onOpen(tab) }
+                    val open = { onOpen(card.kind) }
                     when (card.kind) {
                         DocumentKind.IMAGE -> PhotosCard(card, photos, open, Modifier.weight(1f))
                         DocumentKind.VIDEO -> VideosCard(card, video, open, Modifier.weight(1f))

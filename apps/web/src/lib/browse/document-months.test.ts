@@ -44,12 +44,6 @@ describe('monthLabel', () => {
 describe('buildGridRows', () => {
     const options = { columns: 2, currentYear: 2026, timeZone: 'UTC' };
 
-    it('lays out plain rows of cards without headers when not grouping', () => {
-        const rows = buildGridRows([doc('1', null), doc('2', null), doc('3', null)], { ...options, groupByMonth: false });
-
-        expect(shape(rows)).toEqual(['1,2', '3']);
-    });
-
     it('puts one label-only header before each month and starts a new row at it', () => {
         const rows = buildGridRows(
             [
@@ -58,7 +52,7 @@ describe('buildGridRows', () => {
                 doc('3', '2026-11-01T10:00:00.000Z'),
                 doc('4', '2025-12-31T23:59:00.000Z'),
             ],
-            { ...options, groupByMonth: true },
+            options,
         );
 
         expect(shape(rows)).toEqual(['# November', '1,2', '3', '# December 2025', '4']);
@@ -66,16 +60,13 @@ describe('buildGridRows', () => {
     });
 
     it('groups an upload-date fallback with its own month', () => {
-        const rows = buildGridRows([doc('1', null, '2026-11-23T10:00:00.000Z'), doc('2', '2026-10-05T08:00:00.000Z')], { ...options, groupByMonth: true });
+        const rows = buildGridRows([doc('1', null, '2026-11-23T10:00:00.000Z'), doc('2', '2026-10-05T08:00:00.000Z')], options);
 
         expect(shape(rows)).toEqual(['# November', '1', '# October', '2']);
     });
 
     it('keeps the order it was given: a month that returns gets a second header with its own key', () => {
-        const rows = buildGridRows([doc('1', '2026-11-20T10:00:00.000Z'), doc('2', '2026-10-05T08:00:00.000Z'), doc('3', '2026-11-01T10:00:00.000Z')], {
-            ...options,
-            groupByMonth: true,
-        });
+        const rows = buildGridRows([doc('1', '2026-11-20T10:00:00.000Z'), doc('2', '2026-10-05T08:00:00.000Z'), doc('3', '2026-11-01T10:00:00.000Z')], options);
 
         expect(shape(rows)).toEqual(['# November', '1', '# October', '2', '# November', '3']);
         expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
@@ -83,13 +74,13 @@ describe('buildGridRows', () => {
 
     it('keeps row keys while a later page extends the last month', () => {
         const first = [doc('1', '2026-11-20T10:00:00.000Z'), doc('2', '2026-11-19T10:00:00.000Z')];
-        const before = buildGridRows(first, { ...options, groupByMonth: true });
-        const after = buildGridRows([...first, doc('3', '2026-11-18T10:00:00.000Z'), doc('4', '2026-10-30T10:00:00.000Z')], { ...options, groupByMonth: true });
+        const before = buildGridRows(first, options);
+        const after = buildGridRows([...first, doc('3', '2026-11-18T10:00:00.000Z'), doc('4', '2026-10-30T10:00:00.000Z')], options);
 
         expect(after.slice(0, before.length).map((row) => row.key)).toEqual(before.map((row) => row.key));
     });
 
     it('returns nothing for no documents', () => {
-        expect(buildGridRows([], { ...options, groupByMonth: true })).toEqual([]);
+        expect(buildGridRows([], options)).toEqual([]);
     });
 });

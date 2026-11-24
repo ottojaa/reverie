@@ -8,6 +8,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
 
@@ -18,7 +19,7 @@ import java.time.ZoneId
 @Composable
 fun BrowseScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
-    onOpenKind: (BrowseTab) -> Unit,
+    onOpenKind: (DocumentKind) -> Unit,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     viewModel: BrowseViewModel = hiltViewModel(),

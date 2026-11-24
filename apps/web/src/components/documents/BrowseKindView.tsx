@@ -13,12 +13,10 @@ import type { DocumentKind } from '@reverie/shared';
 import { Link, useLocation, useRouter } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { BrowseFrame } from './BrowseFrame';
+import { BrowseFrame, LoadFailedBanner, SKELETON_DELAY_MS } from './BrowseFrame';
 import { BrowseHeader } from './BrowseHeader';
 import { BrowseLayoutSwitch } from './BrowseLayoutSwitch';
 import { BrowseList } from './BrowseList';
-
-const SKELETON_DELAY_MS = 200;
 
 interface BrowseKindViewProps {
     kind: DocumentKind;
@@ -62,11 +60,7 @@ export function BrowseKindView({ kind, sectionId }: BrowseKindViewProps) {
             <div className="mt-6">
                 {isLocked && <LockedFolderNotice onUnlock={unlock} />}
 
-                {error && !isLocked && (
-                    <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
-                        Failed to load documents. Please try again.
-                    </div>
-                )}
+                {error && !isLocked && <LoadFailedBanner />}
 
                 {!isLocked && !error && (
                     <BrowseList

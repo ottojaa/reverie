@@ -71,7 +71,7 @@ describeDb('GET /documents/summary', () => {
         await doc('readme.md', 'text/markdown', 50);
         await doc('tune.mp3', 'audio/mpeg', 5000);
         await doc('archive.tar.gz', 'application/gzip', 70);
-        // No extension in the name: the MIME subtype stands in. No mime type either: it is left out of the top types.
+        // No extension in the name: counted as a file, but toward no type.
         await doc('Makefile', 'text/x-makefile', 10);
         await doc('mystery', '', 10);
         // Never counted: private folder, trash, another user.
@@ -92,7 +92,7 @@ describeDb('GET /documents/summary', () => {
         expect(body.file.bytes).toBe(300 + 600 + 800 + 100 + 5000 + 70 + 10 + 10);
     });
 
-    it('lists the four most common file types, most common first, from the name or else the MIME subtype', async () => {
+    it('lists the four most common file types, most common first, from the filename extension', async () => {
         const { body } = await summary();
 
         // apk 3, then pdf/zip/md at 2 each (ties by name); mp3, gz, makefile-less ones trail.
@@ -104,7 +104,7 @@ describeDb('GET /documents/summary', () => {
         ]);
     });
 
-    it('falls back to the MIME subtype for a name with no extension, and skips files with neither', async () => {
+    it('counts a name with no extension as a file but toward no type, whatever its MIME type says', async () => {
         const { db } = world();
         const bare = (await seedFolder(db, carol, 'Bare')).id;
 
@@ -112,14 +112,12 @@ describeDb('GET /documents/summary', () => {
         await seedDocument(db, { userId: carol, name: 'LICENSE', mime: 'Text/Plain', folderId: bare });
         await seedDocument(db, { userId: carol, name: 'NOTES', mime: 'text/plain', folderId: bare });
         await seedDocument(db, { userId: carol, name: 'mystery', mime: '', folderId: bare });
+        await seedDocument(db, { userId: carol, name: 'build.sh', mime: 'text/plain', folderId: bare });
 
         const { body } = await summary('?folder_id=' + bare);
 
-        expect(body.file.count).toBe(4);
-        expect(body.file.top_types).toEqual([
-            { ext: 'plain', count: 2 },
-            { ext: 'x-makefile', count: 1 },
-        ]);
+        expect(body.file.count).toBe(5);
+        expect(body.file.top_types).toEqual([{ ext: 'sh', count: 1 }]);
     });
 
     it('scopes to a folder', async () => {

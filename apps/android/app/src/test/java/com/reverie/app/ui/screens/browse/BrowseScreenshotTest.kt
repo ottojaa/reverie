@@ -86,7 +86,7 @@ class BrowseScreenshotTest {
             summary = summary,
             photoPreview = photos,
             videoPreview = video("preview", "2026-11-06T16:00:00Z"),
-            recent = FeedState(TabDocuments(docs, total = 248, hasMore = true, fetched = true)),
+            recent = FeedState(FeedDocuments(docs, total = 248, hasMore = true, fetched = true)),
             expanded = expanded,
         )
 

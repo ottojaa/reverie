@@ -62,7 +62,7 @@ class BrowseNavigationTest {
     private fun Dashboard() {
         val listState = rememberLazyListState()
         dashboardList = listState
-        val state = DashboardState(recent = FeedState(TabDocuments(files, total = 40, hasMore = false, fetched = true)))
+        val state = DashboardState(recent = FeedState(FeedDocuments(files, total = 40, hasMore = false, fetched = true)))
         DashboardBody(
             state = state, listState = listState, contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp), today = today, zone = zone,
             actions = DashboardActions(onOpenKind = { nav.navigate("kind") }, recent = RecentActions(emptySet(), {}, {}, {}, {})),

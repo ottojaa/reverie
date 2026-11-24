@@ -3,9 +3,7 @@ import { flattenSectionTree, useSections } from '@/lib/sections';
 import type { Document } from '@reverie/shared';
 import { useMemo } from 'react';
 import { DocumentRow } from './DocumentRow';
-import { TableShell, tableColumns } from './TableShell';
-
-const ROW_HEIGHT = 52;
+import { ROW_HEIGHT, TableShell, tableColumns } from './TableShell';
 
 interface DocumentTableProps {
     documents: Document[];

@@ -52,26 +52,15 @@ function getColumnCount(width: number, prevCols?: number): number {
 
 interface DocumentGridProps {
     documents: Document[];
-    isLoading?: boolean;
     fetchNextPage?: () => void;
     hasNextPage?: boolean;
-    /** Put a month header (label only) before each run of documents from one month. */
-    groupByMonth?: boolean;
     /** Open at the scroll position the router remembered; false when the list is a different one than that was kept for. */
     restoreScroll?: boolean;
     /** Cards (with a footer), Grid (square tiles) or Justified (tiles that keep their aspect ratio). */
     layout?: BrowseLayout;
 }
 
-export function DocumentGrid({
-    documents,
-    isLoading,
-    fetchNextPage,
-    hasNextPage,
-    groupByMonth = false,
-    restoreScroll = true,
-    layout = 'cards',
-}: DocumentGridProps) {
+export function DocumentGrid({ documents, fetchNextPage, hasNextPage, restoreScroll = true, layout = 'cards' }: DocumentGridProps) {
     const scrollContainerRef = useScrollContainer();
     const gridRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
@@ -176,7 +165,7 @@ export function DocumentGrid({
     const tileSide = tileSize(gridWidth, columns);
     const rowGap = isCards ? GAP : TILE_GAP;
     const pack = useMemo(() => (layout === 'justified' ? (docs: Document[]) => packJustifiedRows(docs, { width: gridWidth }) : undefined), [layout, gridWidth]);
-    const rows = useMemo(() => buildGridRows(documents, { columns, groupByMonth, currentYear, pack }), [documents, columns, groupByMonth, currentYear, pack]);
+    const rows = useMemo(() => buildGridRows(documents, { columns, currentYear, pack }), [documents, columns, currentYear, pack]);
     const rowCount = rows.length;
 
     // Widest synchronous width source, most precise first: the mounted grid, the cached width
@@ -253,16 +242,6 @@ export function DocumentGrid({
     const lastVirtualItemIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
 
     useFetchNearEnd({ lastRowIndex: lastVirtualItemIndex, rowCount, hasNextPage, fetchNextPage });
-
-    if (isLoading) {
-        return (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i} className="aspect-4/3 animate-pulse rounded-xl bg-muted" />
-                ))}
-            </div>
-        );
-    }
 
     return (
         <div ref={gridRef}>

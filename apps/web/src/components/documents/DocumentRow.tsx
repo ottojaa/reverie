@@ -1,4 +1,5 @@
-import { getFileExtension, getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { getFileTypeConfig } from '@/components/ui/FileTypeIcon';
+import { fileTypeLabel } from '@/lib/browse/file-type-label';
 import { formatAddedDate } from '@/lib/browse/format-added';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useDocumentInteraction } from '@/lib/hooks/useDocumentInteraction';
@@ -40,7 +41,7 @@ export const DocumentRow = memo(function DocumentRow({
     const interaction = useDocumentInteraction({ document, orderedIds });
     const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
     const config = getFileTypeConfig(document.mime_type, document.original_filename);
-    const extension = getFileExtension(document.original_filename).slice(0, 4);
+    const label = fileTypeLabel(document.mime_type, document.original_filename);
     const showFolder = folderName !== undefined;
 
     return (
@@ -87,7 +88,7 @@ export const DocumentRow = memo(function DocumentRow({
                                 )}
                                 aria-hidden
                             >
-                                {extension || 'FILE'}
+                                {label}
                             </span>
                         )}
                         <span className="truncate font-medium" title={document.original_filename}>
