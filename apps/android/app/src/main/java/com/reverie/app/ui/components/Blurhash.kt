@@ -114,7 +114,8 @@ object BlurhashDecoder {
 
 // Sized generously so a fast scroll through the grid doesn't evict + re-decode placeholders while
 // the thumbnail disk cache is still cold.
-private val painterCache = LruCache<String, BitmapPainter>(256)
+// internal so a screenshot test can fill it: the painter is otherwise decoded off-thread after the first frame.
+internal val painterCache = LruCache<String, BitmapPainter>(256)
 
 /** Decodes [blurhash] off the main thread and remembers the resulting painter, cached by hash. */
 // The producer intentionally leaves value unassigned on a cache hit (initialValue already holds it).

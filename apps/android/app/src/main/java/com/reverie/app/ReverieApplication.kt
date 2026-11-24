@@ -7,6 +7,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.reverie.app.data.auth.AuthSessionManager
 import com.reverie.app.data.local.PrivateDataPurger
+import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.di.ApplicationScope
 import com.reverie.app.domain.model.AuthState
 import dagger.hilt.EntryPoint
@@ -25,6 +26,7 @@ class ReverieApplication : Application(), ImageLoaderFactory, Configuration.Prov
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var authSessionManager: AuthSessionManager
     @Inject lateinit var privateDataPurger: PrivateDataPurger
+    @Inject lateinit var folderRepository: FolderRepository
     @Inject @field:ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
@@ -40,7 +42,10 @@ class ReverieApplication : Application(), ImageLoaderFactory, Configuration.Prov
         appScope.launch {
             authSessionManager.authState
                 .filter { it is AuthState.LoggedOut }
-                .collect { privateDataPurger.clearSession() }
+                .collect {
+                    privateDataPurger.clearSession()
+                    folderRepository.clearCovers()
+                }
         }
     }
 

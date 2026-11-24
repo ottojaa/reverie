@@ -39,6 +39,26 @@ data class FolderWithChildren(
     val updated_at: String,
     val children: List<FolderWithChildren> = emptyList(),
     val document_count: Int = 0,
+    // Null for collections, locked nodes, and servers from before covers existed.
+    val cover: FolderCoverDto? = null,
+)
+
+/** One document shown in a folder's cover mosaic. */
+@Serializable
+data class FolderCoverTileDto(
+    val document_id: String,
+    val mime_type: String,
+    val original_filename: String,
+    val thumbnail_blurhash: String? = null,
+) {
+    val hasRenderedThumbnail: Boolean get() = !thumbnail_blurhash.isNullOrBlank()
+}
+
+/** A folder's cover from GET /folders/tree: up to four tiles plus what the folder holds per kind. */
+@Serializable
+data class FolderCoverDto(
+    val tiles: List<FolderCoverTileDto> = emptyList(),
+    val summary: DocumentSummaryDto = DocumentSummaryDto(),
 )
 
 @Serializable

@@ -71,7 +71,7 @@ type CoverFilters = Omit<DocumentListFilters, 'kind'>;
 /**
  * The covers of the given folders, in a fixed number of queries (tiles, totals, top types) whatever their number.
  * Each folder's own live documents only. The caller has dropped locked folders from [folderIds], so the private
- * filter is off here: an unlocked private folder still gets its cover. The rules are those of summariseDocuments.
+ * filter is off here, and so is the route's list of ids: it never passes a private folder, open or not. The rules are those of summariseDocuments.
  */
 export async function loadFolderCovers(userId: string, folderIds: string[]): Promise<Map<string, FolderCover>> {
     if (folderIds.length === 0) return new Map();

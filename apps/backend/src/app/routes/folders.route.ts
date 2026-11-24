@@ -265,12 +265,17 @@ function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks, covers:
     };
 }
 
-/** The folders whose cover is built: not collections, and nothing a closed lock hides (its subtree is never walked). */
+/**
+ * The folders whose cover is built: not collections, and nothing private. A closed lock hides its
+ * subtree (never walked); an open one still gets no cover, because the tree is a broad listing and
+ * private documents (ids, filenames) stay out of every listing, open or not: they are only
+ * reachable by asking for their folder.
+ */
 function collectCoverFolderIds(nodes: TreeNode[], locks: FolderLocks): string[] {
     return nodes.flatMap((node) => {
         if (locks.isLocked(node.id)) return [];
 
-        const own = node.type === 'folder' ? [node.id] : [];
+        const own = node.type === 'folder' && !locks.isPrivate(node.id) ? [node.id] : [];
 
         return [...own, ...collectCoverFolderIds(node.children as TreeNode[], locks)];
     });

@@ -158,11 +158,13 @@ describeDb('GET /folders/tree covers', () => {
         expect(JSON.stringify(vault)).not.toContain('inside-secret');
     });
 
-    it('gives an unlocked private folder its tiles and summary', async () => {
-        const secret = find(await tree([ids.vault as string]), ids.secret as string);
+    it('gives a private folder no cover even with its lock open: private documents stay out of every listing', async () => {
+        const nodes = await tree([ids.vault as string]);
+        const secret = find(nodes, ids.secret as string);
 
-        expect(secret?.cover?.tiles.map((tile) => tile.original_filename)).toEqual(['inside-secret.pdf']);
-        expect((secret?.cover?.summary as { file: { count: number } }).file.count).toBe(1);
+        expect(secret).toMatchObject({ locked: false, is_private: false, cover: null });
+        expect(JSON.stringify(nodes)).not.toContain('inside-secret');
+        expect(JSON.stringify(nodes)).not.toContain(ids.inSecret as string);
     });
 
     it('does not read the tiles of another user', async () => {
