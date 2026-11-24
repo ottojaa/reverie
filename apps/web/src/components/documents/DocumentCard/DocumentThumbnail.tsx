@@ -11,14 +11,18 @@ interface DocumentThumbnailProps {
     document: Document;
     /** `card` is the 4:3 picture above a footer; `tile` fills whatever box it is in, with no play button or extension badge. */
     variant?: 'card' | 'tile';
+    /** The rendition to load: small boxes (a table row, a dashboard card) need no more than `sm` or `md`. */
+    size?: 'sm' | 'md' | 'lg';
+    /** The video's length badge, bottom left. Off where a caption or a tiny box sits over it. */
+    showDuration?: boolean;
 }
 
-export const DocumentThumbnail = memo(function DocumentThumbnail({ document, variant = 'card' }: DocumentThumbnailProps) {
+export const DocumentThumbnail = memo(function DocumentThumbnail({ document, variant = 'card', size = 'lg', showDuration = true }: DocumentThumbnailProps) {
     const isTile = variant === 'tile';
     const thumbnailRef = useRef<HTMLDivElement>(null);
     const fileConfig = getFileTypeConfig(document.mime_type, document.original_filename);
     const extension = getFileExtension(document.original_filename);
-    const thumbnailUrl = getThumbnailUrl(document, 'lg');
+    const thumbnailUrl = getThumbnailUrl(document, size);
     const isVideo = documentKindOf(document.mime_type) === 'video';
     const hasThumbnail = document.thumbnail_urls && document.thumbnail_status === 'complete';
 
@@ -57,7 +61,7 @@ export const DocumentThumbnail = memo(function DocumentThumbnail({ document, var
                 </div>
             )}
 
-            {isVideo && document.duration_seconds != null && (
+            {showDuration && isVideo && document.duration_seconds != null && (
                 <div className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">
                     {formatDuration(document.duration_seconds)}
                 </div>

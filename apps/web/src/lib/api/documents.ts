@@ -5,6 +5,7 @@ import {
     DocumentListResponseSchema,
     DocumentOcrResultSchema,
     DocumentSchema,
+    DocumentSummaryResponseSchema,
     JobIdResponseSchema,
     TrimVideoResponseSchema,
     type CheckContentResult,
@@ -12,6 +13,7 @@ import {
     type Document,
     type DocumentKind,
     type DocumentOcrResult,
+    type DocumentSummaryResponse,
     type FolderWithChildren,
 } from '@reverie/shared';
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
@@ -20,7 +22,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { apiClient } from './client';
 import { useAuth } from '../auth';
-import { folderCountDecrements, withoutDocuments, type DocumentsCache } from './document-cache';
+import { folderCountDecrements, withoutDocuments } from './document-cache';
 
 export type DocumentsResponse = {
     items: Document[];
@@ -61,6 +63,13 @@ export const documentsApi = {
         const { data } = await apiClient.get('/documents', { params: toDocumentListParams(options) });
 
         return DocumentListResponseSchema.parse(data);
+    },
+
+    /** What a folder (the library when omitted) holds per kind: the figures behind the Browse dashboard's cards. */
+    async summary(folderId?: string | null): Promise<DocumentSummaryResponse> {
+        const { data } = await apiClient.get('/documents/summary', { params: folderId ? { folder_id: folderId } : {} });
+
+        return DocumentSummaryResponseSchema.parse(data);
     },
 
     async get(documentId: string): Promise<Document> {
@@ -161,13 +170,32 @@ export type { CheckDuplicatesResponse, DocumentOcrResult };
 /**
  * Hook to fetch documents (uses auth fetch so 401 triggers refresh + retry)
  */
-export function useDocuments(options: UseDocumentsOptions = {}) {
+export function useDocuments(options: UseDocumentsOptions = {}, enabled = true) {
     const { isAuthenticated } = useAuth();
 
     return useQuery({
         queryKey: ['documents', options],
         queryFn: () => documentsApi.list(options),
-        enabled: isAuthenticated,
+        enabled: isAuthenticated && enabled,
+    });
+}
+
+/**
+ * The summary's key. It sits under `['documents']`, so every invalidation of the lists refreshes it too; the optimistic
+ * writers skip it because it is not a list (see isDocumentsList).
+ */
+export function documentSummaryKey(folderId: string | null) {
+    return ['documents', 'summary', folderId] as const;
+}
+
+/** The per-kind totals of a folder (of the library when null). Held back while `enabled` is false (a locked folder). */
+export function useDocumentSummary(folderId: string | null, enabled = true) {
+    const { isAuthenticated } = useAuth();
+
+    return useQuery({
+        queryKey: documentSummaryKey(folderId),
+        queryFn: () => documentsApi.summary(folderId),
+        enabled: isAuthenticated && enabled,
     });
 }
 
@@ -419,11 +447,11 @@ export function useDeleteDocuments() {
             const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
             const previousSections = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
-            queryClient.setQueriesData<DocumentsCache>({ queryKey: ['documents'] }, (old) => (old ? withoutDocuments(old, ids) : old));
+            queryClient.setQueriesData({ queryKey: ['documents'] }, (old) => (old ? withoutDocuments(old, ids) : old));
 
             if (previousSections) {
                 const decrements = folderCountDecrements(
-                    previous.map(([, data]) => data as DocumentsCache | undefined),
+                    previous.map(([, data]) => data),
                     ids,
                 );
 

@@ -6,6 +6,7 @@ export {
     firstPageTotal,
     useDeleteDocuments,
     useDocument,
+    useDocumentSummary,
     useDocuments,
     useInfiniteDocuments,
     useOcrResult,

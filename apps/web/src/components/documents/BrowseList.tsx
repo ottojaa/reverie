@@ -1,13 +1,12 @@
 import type { BrowseLayout } from '@/lib/browse/browse-layout';
-import { emptyTabMessage, type BrowseTab } from '@/lib/browse/browse-tabs';
-import type { Document } from '@reverie/shared';
+import { emptyKindMessage } from '@/lib/browse/browse-kinds';
+import type { Document, DocumentKind } from '@reverie/shared';
 import { DocumentGrid } from './DocumentGrid';
 import { DocumentRowsSkeleton, DocumentSkeleton } from './DocumentSkeleton';
 import { DocumentTable } from './DocumentTable';
-import { EmptyDocumentsState } from './EmptyDocumentsState';
 
 interface BrowseListProps {
-    tab: BrowseTab;
+    kind: DocumentKind;
     documents: Document[];
     isLoading: boolean;
     /** Loading has lasted long enough to be worth drawing placeholders (a fast load shows none). */
@@ -16,15 +15,15 @@ interface BrowseListProps {
     fetchNextPage: () => void;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
-    /** Open at the scroll position the router remembered; false once the tab was switched here. */
+    /** Open at the scroll position the router remembered; false once the layout was switched here. */
     restoreScroll: boolean;
-    /** How Photos and Videos draw their pictures; All always uses cards. */
+    /** How Photos and Videos draw their pictures. */
     layout: BrowseLayout;
 }
 
-/** What the open tab shows: the grid (All, Photos with month headers, Videos with month headers) or the Files table. */
+/** What a kind view shows: the grid (Photos and Videos, with month headers) or the Files table. */
 export function BrowseList({
-    tab,
+    kind,
     documents,
     isLoading,
     showSkeleton,
@@ -35,21 +34,17 @@ export function BrowseList({
     restoreScroll,
     layout,
 }: BrowseListProps) {
-    if (isLoading) return <LoadingList tab={tab} showSkeleton={showSkeleton} />;
+    if (isLoading) return <LoadingList kind={kind} showSkeleton={showSkeleton} />;
 
     if (documents.length === 0) {
-        return tab === 'all' ? (
-            <EmptyDocumentsState isFolderView={isFolderView} />
-        ) : (
-            <p className="py-16 text-center text-sm text-muted-foreground">{emptyTabMessage(tab, isFolderView)}</p>
-        );
+        return <p className="py-16 text-center text-sm text-muted-foreground">{emptyKindMessage(kind, isFolderView)}</p>;
     }
 
     const canFetchMore = hasNextPage && !isFetchingNextPage;
 
     return (
         <>
-            {tab === 'file' ? (
+            {kind === 'file' ? (
                 <DocumentTable
                     documents={documents}
                     fetchNextPage={fetchNextPage}
@@ -63,9 +58,9 @@ export function BrowseList({
                     isLoading={false}
                     fetchNextPage={fetchNextPage}
                     hasNextPage={canFetchMore}
-                    groupByMonth={tab !== 'all'}
+                    groupByMonth
                     restoreScroll={restoreScroll}
-                    layout={tab === 'all' ? 'cards' : layout}
+                    layout={layout}
                 />
             )}
             {isFetchingNextPage && (
@@ -77,8 +72,8 @@ export function BrowseList({
     );
 }
 
-function LoadingList({ tab, showSkeleton }: { tab: BrowseTab; showSkeleton: boolean }) {
-    if (tab === 'file') {
+function LoadingList({ kind, showSkeleton }: { kind: DocumentKind; showSkeleton: boolean }) {
+    if (kind === 'file') {
         return (
             <div className={showSkeleton ? undefined : 'pointer-events-none opacity-0'} aria-hidden={!showSkeleton}>
                 <DocumentRowsSkeleton />
