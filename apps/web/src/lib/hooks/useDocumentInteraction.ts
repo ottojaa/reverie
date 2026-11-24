@@ -1,6 +1,5 @@
-import { useDeleteDocuments } from '@/lib/api/documents';
 import { buildDownloadUrl, buildFileUrl } from '@/lib/commonhelpers';
-import { useConfirm } from '@/lib/confirm';
+import { useConfirmedDelete } from '@/lib/hooks/useConfirmedDelete';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { useLongPress } from '@/lib/hooks/useLongPress';
 import { useSelectionOptional } from '@/lib/selection';
@@ -24,8 +23,7 @@ interface UseDocumentInteractionOptions {
  */
 export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumentInteractionOptions) {
     const selection = useSelectionOptional();
-    const confirm = useConfirm();
-    const deleteDocuments = useDeleteDocuments();
+    const deleteWithConfirm = useConfirmedDelete();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isMobile = useIsMobile();
@@ -155,27 +153,7 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
 
     // --- Delete ---
 
-    const handleDelete = async () => {
-        // A right-click on an unselected card targets just that card (same rule as move).
-        const ids = documentIds;
-        const count = ids.length;
-        const confirmed = await confirm({
-            title: count === 1 ? 'Move document to Trash?' : `Move ${count} documents to Trash?`,
-            description:
-                count === 1
-                    ? 'The document moves to Trash. You can restore it there until it is purged.'
-                    : 'The documents move to Trash. You can restore them there until they are purged.',
-            confirmText: 'Move to Trash',
-            cancelText: 'Cancel',
-            variant: 'destructive',
-        });
-
-        if (!confirmed) return;
-
-        deleteDocuments.mutate(ids, {
-            onSuccess: () => selection?.clear(),
-        });
-    };
+    const handleDelete = () => deleteWithConfirm(documentIds);
 
     // --- Download ---
 

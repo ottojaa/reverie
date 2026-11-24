@@ -1,10 +1,9 @@
 import type { FolderWithChildren } from '@reverie/shared';
-import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { produce } from 'immer';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from './api/client';
-import type { DocumentsResponse } from './api/documents';
+import { withDocumentsMoved } from './api/document-cache';
 import { documentsApi } from './api/documents';
 import { foldersApi } from './api/folders';
 import { useAuth } from './auth';
@@ -322,28 +321,8 @@ export function useMoveDocuments() {
         mutationFn: (data: MoveDocumentsParams) => documentsApi.move(data),
         onMutate: async ({ document_ids, folder_id }) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
-            const previous = queryClient.getQueriesData<DocumentsResponse | InfiniteData<DocumentsResponse>>({ queryKey: ['documents'] });
-            queryClient.setQueriesData({ queryKey: ['documents'] }, (old: DocumentsResponse | InfiniteData<DocumentsResponse> | undefined) => {
-                if (!old) return old;
-
-                const infinite = old as { pages?: DocumentsResponse[] };
-
-                if (infinite.pages) {
-                    return produce(old as InfiniteData<DocumentsResponse>, (draft) => {
-                        for (const page of draft.pages) {
-                            for (const doc of page.items) {
-                                if (document_ids.includes(doc.id)) doc.folder_id = folder_id;
-                            }
-                        }
-                    });
-                }
-
-                return produce(old as DocumentsResponse, (draft) => {
-                    for (const doc of draft.items) {
-                        if (document_ids.includes(doc.id)) doc.folder_id = folder_id;
-                    }
-                });
-            });
+            const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
+            queryClient.setQueriesData({ queryKey: ['documents'] }, (old) => (old ? withDocumentsMoved(old, document_ids, folder_id) : old));
 
             return { previous };
         },

@@ -1,4 +1,4 @@
-import type { BrowseTab } from './browse-tabs';
+import type { DocumentKind } from '@reverie/shared';
 
 /** How Photos and Videos draw their documents: cards with a footer, square image-only tiles, or image-only rows. */
 export type BrowseLayout = 'cards' | 'grid' | 'justified';
@@ -31,7 +31,7 @@ export function parseBrowseLayout(stored: string): BrowseLayout {
     }
 }
 
-/** Only Photos and Videos have a choice; All keeps its cards and Files is a table. */
-export function hasLayoutChoice(tab: BrowseTab): boolean {
-    return tab === 'image' || tab === 'video';
+/** Only Photos and Videos have a choice; Files is a table. */
+export function hasLayoutChoice(kind: DocumentKind): boolean {
+    return kind === 'image' || kind === 'video';
 }
