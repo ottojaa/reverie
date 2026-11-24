@@ -43,8 +43,8 @@ import com.reverie.app.ui.components.fileTypeVisual
 import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatBytes
 
-private val WIDE_CARD_HEIGHT = 150.dp
-private val HALF_CARD_HEIGHT = 128.dp
+/** Every card is this tall, so the half-width Videos and Files cards line up with Photos. */
+private val CARD_HEIGHT = 150.dp
 private val CARD_SHAPE = RoundedCornerShape(20.dp)
 private val CARD_GAP = 8.dp
 private const val TILE_GAP = 2
@@ -106,7 +106,7 @@ fun figures(card: KindCard): String? {
 
 @Composable
 private fun PhotosCard(card: KindCard, photos: List<DocumentDto>, onClick: () -> Unit, modifier: Modifier) {
-    CardFrame("Photos", card, onClick, WIDE_CARD_HEIGHT, modifier, wide = true) {
+    CardFrame("Photos", card, onClick, CARD_HEIGHT, modifier, wide = true) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TILE_GAP.dp)) {
             photos.take(PHOTO_PREVIEW_COUNT).forEach { photo -> Thumb(photo, Modifier.weight(1f).fillMaxHeight()) }
         }
@@ -115,7 +115,7 @@ private fun PhotosCard(card: KindCard, photos: List<DocumentDto>, onClick: () ->
 
 @Composable
 private fun VideosCard(card: KindCard, video: DocumentDto?, onClick: () -> Unit, modifier: Modifier) {
-    CardFrame("Videos", card, onClick, HALF_CARD_HEIGHT, modifier, wide = false) {
+    CardFrame("Videos", card, onClick, CARD_HEIGHT, modifier, wide = false) {
         video?.let { Thumb(it, Modifier.fillMaxSize()) }
         Box(
             Modifier.align(Alignment.TopEnd).padding(12.dp).size(32.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
@@ -139,7 +139,7 @@ private fun Thumb(doc: DocumentDto, modifier: Modifier) = DocumentThumbnail(
 
 @Composable
 private fun FilesCard(card: KindCard, onClick: () -> Unit, modifier: Modifier) {
-    CardFrame("Files", card, onClick, HALF_CARD_HEIGHT, modifier, wide = false) {
+    CardFrame("Files", card, onClick, CARD_HEIGHT, modifier, wide = false) {
         TypeBlocks(card.topTypes.take(4))
     }
 }
