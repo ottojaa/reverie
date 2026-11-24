@@ -61,13 +61,17 @@ export const RecentGroupRow = memo(function RecentGroupRow({ row, expanded, onTo
         selection.selectMany(memberIds);
     };
 
-    /** Shift-click extends the range from the anchor through the group's last member, so the whole group is in it. */
+    /** Shift-click extends the range from the anchor through the group's far edge, so the whole group is in it. */
     function extendSelection(current: NonNullable<typeof selection>) {
         const anchor = current.anchorId;
 
         if (anchor == null) return current.selectAll(memberIds);
 
-        current.selectRange(anchor, memberIds[memberIds.length - 1]!, orderedIds);
+        const first = memberIds[0]!;
+        const last = memberIds[memberIds.length - 1]!;
+        const isAnchorBelow = orderedIds.indexOf(anchor) > orderedIds.indexOf(last);
+
+        current.selectRange(anchor, isAnchorBelow ? first : last, orderedIds);
     }
 
     return (
@@ -88,8 +92,10 @@ export const RecentGroupRow = memo(function RecentGroupRow({ row, expanded, onTo
                             type="button"
                             aria-expanded={expanded}
                             onClick={handleClick}
-                            // The wrapper's drag listeners include the keyboard sensor, which would take Enter/Space for a drag start and cancel the click.
-                            onKeyDown={(e) => e.stopPropagation()}
+                            // The wrapper's drag listeners include the keyboard sensor, which would take Enter/Space for a drag start and cancel the click. Other keys (the Cmd+K and Cmd+Shift+O shortcuts) must still reach the document.
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+                            }}
                             className={cn(
                                 'grid h-full w-full items-center gap-4 border-t border-border/60 px-4 text-left text-sm transition-colors hover:bg-muted/50',
                                 'focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',

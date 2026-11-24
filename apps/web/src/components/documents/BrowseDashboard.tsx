@@ -51,7 +51,8 @@ export function BrowseDashboard({ sectionId }: BrowseDashboardProps) {
 
             {!isLocked && !recent.error && !isEmpty && (
                 <>
-                    <KindCards summary={summary.data} photos={photos.data?.items ?? []} video={videos.data?.items[0]} />
+                    {/* A failed summary leaves no cards rather than placeholders that pulse for good; the next invalidation retries it. */}
+                    {!summary.isError && <KindCards summary={summary.data} photos={photos.data?.items ?? []} video={videos.data?.items[0]} />}
                     <h2 className="mb-2.5 mt-7 text-lg font-semibold">Recently added</h2>
                     {recent.isLoading ? (
                         <div className={showSkeleton ? undefined : 'pointer-events-none opacity-0'} aria-hidden={!showSkeleton}>
