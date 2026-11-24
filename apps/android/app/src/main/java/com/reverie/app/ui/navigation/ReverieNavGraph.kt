@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.reverie.app.ui.screens.browse.BrowseScreen
 import com.reverie.app.ui.screens.browse.KindScreen
+import com.reverie.app.ui.screens.browse.routeOf
 import com.reverie.app.ui.screens.collections.CollectionsScreen
 import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.search.SearchScreen
@@ -39,7 +40,7 @@ fun ReverieNavGraph(
         reverieComposable(Screen.Files.route) {
             BrowseScreen(
                 onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
-                onOpenKind = { navController.navigate(Routes.kind(it.name.lowercase())) },
+                onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
             )
         }
 
@@ -89,7 +90,7 @@ fun ReverieNavGraph(
             val folderId = entry.arguments?.getString("folderId")
             BrowseScreen(
                 onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
-                onOpenKind = { navController.navigate(Routes.kind(it.name.lowercase(), folderId)) },
+                onOpenKind = { navController.navigate(Routes.kind(routeOf(it), folderId)) },
                 onBack = { navController.popBackStack() },
             )
         }

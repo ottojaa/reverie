@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.reverie.app.data.api.model.DocumentKind
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import java.time.LocalDate
@@ -23,7 +24,7 @@ import java.time.ZoneId
 
 /** What the dashboard's cards and rows do when tapped. */
 class DashboardActions(
-    val onOpenKind: (BrowseTab) -> Unit,
+    val onOpenKind: (DocumentKind) -> Unit,
     val recent: RecentActions,
 )
 
@@ -56,7 +57,7 @@ fun DashboardBody(
         return
     }
     if (recent.fetched && recent.documents.isEmpty()) {
-        EmptyList(emptyTitle(BrowseTab.ALL, inFolder), contentPadding, onUpload)
+        EmptyList(emptyTitle(null, inFolder), contentPadding, onUpload)
         return
     }
     val entries = state.entries

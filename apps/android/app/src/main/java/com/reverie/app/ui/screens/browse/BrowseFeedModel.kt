@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.repository.PageResult
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import kotlinx.coroutines.CoroutineDispatcher
@@ -21,41 +22,45 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /** One feed's rows, its selection and whether a pull-to-refresh is running. */
 data class FeedState(
-    val documents: TabDocuments = TabDocuments(),
+    val documents: FeedDocuments = FeedDocuments(),
     val selectedIds: Set<String> = emptySet(),
     val isRefreshing: Boolean = false,
 )
 
 private data class Control(
-    val cursor: TabCursor = TabCursor(),
+    val cursor: FeedCursor = FeedCursor(),
     val selectedIds: Set<String> = emptySet(),
     val isRefreshing: Boolean = false,
 )
 
 /**
  * One list of Browse (the dashboard's Recently added, a picture card's preview, or a kind screen)
- * over the cache observer [cache]. It pages the server for [tab]'s kind, starting with page one as
+ * over the cache observer [cache]. It pages the server for [kind] (null is Recently added: every kind), starting with page one as
  * soon as it is made, and shows the cached rows that lie above how far it has read. Plain Kotlin (no
  * Android types) so it can be tested on the JVM.
  *
- * @param fetchPage fetches one page of [tab]'s kind from [offset] into the cache the [cache] flow reads.
+ * @param fetchPage fetches one page of [kind] from [offset] into the cache the [cache] flow reads.
+ * @param reconcile told, with the ids the server returned, when the feed has read its whole list from the
+ *   server in one steady read: the caller drops the cached rows of this feed's kind that are not among them.
  * @param onFirstPageFailed told when the first page, or a refresh of it, fails; later pages retry silently.
  *   A preview feed leaves it unset, so an offline open reports the failure once and not once per feed.
  */
 class BrowseFeedModel(
     private val scope: CoroutineScope,
-    val tab: BrowseTab,
+    val kind: DocumentKind?,
     cache: Flow<List<DocumentDto>>,
     private val fetchPage: suspend (offset: Int) -> PageResult,
     private val onFirstPageFailed: (Throwable) -> Unit = {},
+    private val reconcile: suspend (readIds: Set<String>) -> Unit = {},
     computation: CoroutineDispatcher = Dispatchers.Default,
     sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
 ) {
     private val control = MutableStateFlow(Control())
+    private var reads: FeedReads? = null
 
     // Selecting rows must not re-sort the library, so the rows depend only on the cache and the cursor.
-    private val derived: Flow<TabDocuments> =
-        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> BrowseTabs.derive(docs, tab, cursor) }
+    private val derived: Flow<FeedDocuments> =
+        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> deriveFeed(docs, kind, cursor) }
             .flowOn(computation)
 
     val state: StateFlow<FeedState> = combine(derived, control) { documents, c ->
@@ -117,7 +122,12 @@ class BrowseFeedModel(
         scope.launch {
             try {
                 val page = fetchPage(offset)
-                control.update { it.copy(cursor = it.cursor.after(tab, offset, page), isRefreshing = false) }
+                control.update { it.copy(cursor = it.cursor.after(kind, offset, page), isRefreshing = false) }
+                // Page one starts the reads over; a later page adds to them (there are none before page one).
+                val read = if (offset == 0) FeedReads.first(page) else reads?.plus(page)
+                reads = read
+                // A feed made stale mid-read has rows moving under it: it reconciles on the read that follows.
+                if (!control.value.cursor.stale) read?.idsWhenComplete(page.loaded)?.let { reconcileQuietly(it) }
                 // After a refresh the offset starts over while the frontier stays deep, so the pages up to the old
                 // depth bring nothing new on screen and the feed would never ask for another: read straight on.
                 val now = control.value.cursor
@@ -132,11 +142,22 @@ class BrowseFeedModel(
             }
         }
     }
+
+    /** Dropping rows the server no longer has is housekeeping: when it fails, the next full read tries again. */
+    private suspend fun reconcileQuietly(readIds: Set<String>) {
+        try {
+            reconcile(readIds)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Best effort, as above.
+        }
+    }
 }
 
 /** The cursor once [page] (read from [offset]) has arrived. */
-private fun TabCursor.after(tab: BrowseTab, offset: Int, page: PageResult): TabCursor {
-    val reached = page.last?.let { sortKeyOf(it, tab) }
+private fun FeedCursor.after(kind: DocumentKind?, offset: Int, page: PageResult): FeedCursor {
+    val reached = page.last?.let { sortKeyOf(it, kind) }
     return copy(
         // Page one starts the offset over: rows may have been deleted since, so the old offset could
         // step over rows that moved up. The frontier keeps its minimum, so nothing already shown

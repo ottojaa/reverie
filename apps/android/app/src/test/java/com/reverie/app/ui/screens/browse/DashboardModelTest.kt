@@ -25,19 +25,24 @@ import org.junit.Test
 private class DashboardServer(var library: List<DocumentDto>) {
     val cache = MutableStateFlow<List<DocumentDto>>(emptyList())
     val summary = MutableStateFlow<DocumentSummaryDto?>(null)
-    val pages = mutableListOf<Triple<BrowseTab, Int, Int>>()
+    val pages = mutableListOf<Triple<DocumentKind?, Int, Int>>()
     var summaries = 0
     var offline = false
 
     val requests: Int get() = pages.size + summaries
 
-    fun page(tab: BrowseTab, offset: Int, limit: Int): PageResult {
-        pages += Triple(tab, offset, limit)
+    fun page(kind: DocumentKind?, offset: Int, limit: Int): PageResult {
+        pages += Triple(kind, offset, limit)
         if (offline) error("offline")
-        val ordered = library.filter { tab.kind == null || it.kind == tab.kind }.sortedByDescending { sortKeyOf(it, tab) }
+        val ordered = library.filter { kind == null || it.kind == kind }.sortedByDescending { sortKeyOf(it, kind) }
         val items = ordered.drop(offset).take(limit)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
-        return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull())
+        return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull(), ids = items.map { it.id })
+    }
+
+    /** The repository's `dropStaleInLibrary` on the fake cache. */
+    fun dropStale(kind: DocumentKind?, keep: Set<String>) {
+        cache.update { rows -> rows.filter { it.id in keep || (kind != null && it.kind != kind) } }
     }
 
     fun fetchSummary(): DocumentSummaryDto {
@@ -67,8 +72,9 @@ class DashboardModelTest {
             scope = backgroundScope as CoroutineScope,
             cache = server.cache,
             summary = server.summary,
-            fetchPage = { tab, offset -> server.page(tab, offset, if (tab == BrowseTab.ALL) pageSize else if (tab == BrowseTab.PHOTOS) PHOTO_PREVIEW_COUNT else 1) },
+            fetchPage = { kind, offset -> server.page(kind, offset, if (kind == null) pageSize else if (kind == DocumentKind.IMAGE) PHOTO_PREVIEW_COUNT else 1) },
             fetchSummary = { server.fetchSummary() },
+            dropStale = { kind, keep -> server.dropStale(kind, keep) },
             onFirstPageFailed = { failures += it },
             computation = UnconfinedTestDispatcher(testScheduler),
             sharing = SharingStarted.Eagerly,
@@ -82,7 +88,7 @@ class DashboardModelTest {
 
         assertEquals(4, f.server.requests)
         assertEquals(1, f.server.summaries)
-        assertEquals(setOf(BrowseTab.ALL, BrowseTab.PHOTOS, BrowseTab.VIDEOS), f.server.pages.map { it.first }.toSet())
+        assertEquals(setOf(null, DocumentKind.IMAGE, DocumentKind.VIDEO), f.server.pages.map { it.first }.toSet())
         assertTrue("first pages only: ${f.server.pages}", f.server.pages.all { it.second == 0 })
     }
 
@@ -110,6 +116,21 @@ class DashboardModelTest {
         assertEquals(8, f.model.state.value.summary?.image?.count)
     }
 
+    @Test fun `a document deleted elsewhere leaves Recently added and the card previews once the library has been read`() = runTest {
+        val f = open()
+        assertEquals("p9", f.model.state.value.photoPreview.first().id)
+
+        f.server.library = f.server.library.filterNot { it.id == "p9" }
+        f.model.refresh()
+        testScheduler.runCurrent()
+
+        val state = f.model.state.value
+        assertFalse("p9" in state.recent.documents.documents.map { it.id })
+        assertEquals(listOf("p8", "p7", "p6", "p5"), state.photoPreview.take(4).map { it.id })
+        assertEquals(14, state.recent.documents.total)
+        assertEquals(14, f.server.cache.value.size)
+    }
+
     @Test fun `loading more pages only Recently added`() = runTest {
         val f = open(pageSize = 4)
         val before = f.server.requests
@@ -119,7 +140,7 @@ class DashboardModelTest {
 
         assertEquals(before + 1, f.server.requests)
         val last = f.server.pages.last()
-        assertEquals(BrowseTab.ALL, last.first)
+        assertEquals(null, last.first)
         assertEquals(4, last.second)
     }
 
@@ -184,8 +205,8 @@ class DashboardModelTest {
         val server = DashboardServer(library)
         val f = open(server)
         val photos = BrowseFeedModel(
-            scope = backgroundScope as CoroutineScope, tab = BrowseTab.PHOTOS, cache = server.cache,
-            fetchPage = { offset -> server.page(BrowseTab.PHOTOS, offset, 4) },
+            scope = backgroundScope as CoroutineScope, kind = DocumentKind.IMAGE, cache = server.cache,
+            fetchPage = { offset -> server.page(DocumentKind.IMAGE, offset, 4) },
             computation = UnconfinedTestDispatcher(testScheduler), sharing = SharingStarted.Eagerly,
         )
         testScheduler.runCurrent()

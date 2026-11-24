@@ -70,6 +70,13 @@ fun dashboardSubtitle(total: Int, description: String?): String {
     return if (description.isNullOrBlank()) counted else "$description · $counted"
 }
 
+/** A kind screen's title. */
+fun kindTitle(kind: DocumentKind): String = when (kind) {
+    DocumentKind.IMAGE -> "Photos"
+    DocumentKind.VIDEO -> "Videos"
+    DocumentKind.FILE -> "Files"
+}
+
 /** A kind screen's subtitle: "38 photos · My Files", or the folder's name in place of "My Files". */
 fun kindSubtitle(kind: DocumentKind, total: Int, scopeName: String): String {
     val counted = when (kind) {

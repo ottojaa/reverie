@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,8 +38,9 @@ class BrowseViewModel @Inject constructor(
         scope = viewModelScope,
         cache = cache,
         summary = deps.documents.summary(folderId),
-        fetchPage = { tab, offset -> deps.documents.refresh(folderId, if (tab == BrowseTab.ALL) BROWSE_PAGE_SIZE else previewLimit(tab), offset, tab.kind) },
+        fetchPage = { kind, offset -> deps.documents.refresh(folderId, if (kind == null) BROWSE_PAGE_SIZE else previewLimit(kind), offset, kind) },
         fetchSummary = { deps.documents.fetchSummary(folderId) },
+        dropStale = { kind, keep -> dropStaleInLibrary(kind, keep) },
         onFirstPageFailed = session::onRefreshFailed,
         sharing = SharingStarted.Eagerly,
     )
@@ -78,5 +80,10 @@ class BrowseViewModel @Inject constructor(
 
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
 
-    private fun previewLimit(tab: BrowseTab): Int = if (tab == BrowseTab.PHOTOS) PHOTO_PREVIEW_COUNT else 1
+    // A folder reconciles itself (see DocumentRepository.refresh); only the whole library needs this.
+    private suspend fun dropStaleInLibrary(kind: DocumentKind?, keep: Set<String>) {
+        if (folderId == null) deps.documents.dropStaleInLibrary(kind, keep)
+    }
+
+    private fun previewLimit(kind: DocumentKind): Int = if (kind == DocumentKind.IMAGE) PHOTO_PREVIEW_COUNT else 1
 }

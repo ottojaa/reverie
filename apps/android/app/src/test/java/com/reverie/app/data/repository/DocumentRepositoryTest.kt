@@ -51,6 +51,8 @@ class DocumentRepositoryTest {
         override suspend fun deleteInFolderNotIn(folderId: String, keepIds: List<String>) {
             rows.value = rows.value.filterNot { it.folderId == folderId && it.id !in keepIds }
         }
+        override suspend fun allMimeTypes(): List<DocumentMimeType> =
+            rows.value.map { DocumentMimeType(it.id, it.mimeType) }
         override suspend fun mimeTypesInFolder(folderId: String): List<DocumentMimeType> =
             rows.value.filter { it.folderId == folderId }.map { DocumentMimeType(it.id, it.mimeType) }
         override suspend fun takenAtOf(ids: List<String>): List<DocumentTakenAt> =
@@ -191,6 +193,45 @@ class DocumentRepositoryTest {
         assertEquals(setOf("d1", "d3", "d4", "d5"), dao.rows.value.map { it.id }.toSet())
     }
 
+    @Test fun `a library-wide drop of one kind removes its unread rows in every folder and leaves the other kinds alone`() = runTest {
+        val dao = FakeDocumentDao()
+        dao.upsertAll(
+            listOf(
+                stubEntity("d1", "f1", mime = "image/jpeg"),
+                stubEntity("d2", "f1", mime = "IMAGE/PNG"),
+                stubEntity("d3", "f2", mime = "image/jpeg"),
+                stubEntity("d4", "f1", mime = "video/mp4"),
+                stubEntity("d5", null, mime = "application/pdf"),
+            ),
+        )
+        val repository = repo(dao) { "{}" }
+
+        repository.dropStaleInLibrary(DocumentKind.IMAGE, keep = setOf("d1"))
+
+        // d2 and d3 are images the server no longer returns; the video and the file are not this read's to judge.
+        assertEquals(setOf("d1", "d4", "d5"), dao.rows.value.map { it.id }.toSet())
+    }
+
+    @Test fun `a library-wide drop of every kind keeps exactly what the server returned, and handles more rows than one statement takes`() = runTest {
+        val dao = FakeDocumentDao()
+        dao.upsertAll((1..1200).map { stubEntity("d$it", null, mime = if (it % 2 == 0) "image/jpeg" else "application/pdf") })
+        val repository = repo(dao) { "{}" }
+
+        repository.dropStaleInLibrary(null, keep = setOf("d1", "d2"))
+
+        assertEquals(setOf("d1", "d2"), dao.rows.value.map { it.id }.toSet())
+    }
+
+    @Test fun `a refresh page reports the ids it returned`() = runTest {
+        val dao = FakeDocumentDao()
+        val page = """{"items":[${docJson("d1", "f1", "a.jpg")},${docJson("d2", "f1", "b.jpg")}],"total":9,"limit":2,"offset":0}"""
+        val repository = repo(dao) { page }
+
+        val result = repository.refresh(folderId = null, limit = 2, offset = 0)
+
+        assertEquals(listOf("d1", "d2"), result.ids)
+    }
+
     @Test fun `a kind refresh that did not cover the folder drops nothing`() = runTest {
         val dao = FakeDocumentDao()
         dao.upsertAll(listOf(stubEntity("d1", "f1"), stubEntity("d2", "f1")))
@@ -307,7 +348,7 @@ class DocumentRepositoryTest {
         assertEquals(listOf("d2"), repository.observeDocuments(null).first().map { it.id })
     }
 
-    private fun stubEntity(id: String, folder: String, mime: String = "image/jpeg", takenAt: String? = null) = DocumentEntity(
+    private fun stubEntity(id: String, folder: String?, mime: String = "image/jpeg", takenAt: String? = null) = DocumentEntity(
         id = id, folderId = folder, originalFilename = "$id.jpg", mimeType = mime, sizeBytes = 1,
         width = null, height = null, durationSeconds = null, thumbnailBlurhash = null, documentCategory = "photo", extractedDate = null,
         ocrStatus = "COMPLETE", thumbnailStatus = "COMPLETE", llmStatus = "COMPLETE", llmSummary = null,

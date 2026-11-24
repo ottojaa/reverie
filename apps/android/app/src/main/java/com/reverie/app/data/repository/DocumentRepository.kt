@@ -31,14 +31,18 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Most ids one delete statement takes (SQLite's variable limit is 999 on older Android). */
+private const val DELETE_CHUNK = 500
+
 /** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
 data class SignedUrls(val fileUrl: String, val hlsUrl: String?)
 
 /**
- * One page of a refresh: the server total, how many rows we've loaded so far, and the page's last
- * row in the server's order (null for an empty page) so a caller can tell how far down it has read.
+ * One page of a refresh: the server total, how many rows we've loaded so far, the page's last row in
+ * the server's order (null for an empty page) so a caller can tell how far down it has read, and the
+ * ids of the page's rows.
  */
-data class PageResult(val total: Int, val loaded: Int, val last: DocumentDto? = null) {
+data class PageResult(val total: Int, val loaded: Int, val last: DocumentDto? = null, val ids: List<String> = emptyList()) {
     val hasMore: Boolean get() = loaded < total
 }
 
@@ -171,7 +175,21 @@ class DocumentRepository @Inject constructor(
         // If a single page covered the whole folder, drop rows the server no longer returns: only
         // those of the fetched kind, since the page says nothing about the other kinds.
         if (folderId != null && offset == 0 && page.items.size >= page.total) dropStale(folderId, kind, page.items.map { it.id }.toSet())
-        PageResult(total = page.total, loaded = offset + page.items.size, last = page.items.lastOrNull())
+        PageResult(total = page.total, loaded = offset + page.items.size, last = page.items.lastOrNull(), ids = page.items.map { it.id })
+    }
+
+    /**
+     * The library-wide counterpart of [dropStale]: once every page of [kind] (every kind when null) has
+     * been read, drop the cached rows of that kind that the server did not return ([keep]). Rows of the
+     * other kinds are untouched, since a listing of one kind says nothing about them. Private documents
+     * are never in the library-wide listing nor in Room, so the in-memory store has nothing to drop.
+     */
+    suspend fun dropStaleInLibrary(kind: DocumentKind?, keep: Set<String>) = withContext(io) {
+        val stale = documentDao.allMimeTypes()
+            .filter { it.id !in keep && (kind == null || DocumentKind.of(it.mimeType) == kind) }
+            .map { it.id }
+        // Chunked: SQLite caps the variables of one statement, and a library can hold more rows than that.
+        stale.chunked(DELETE_CHUNK).forEach { documentDao.deleteByIds(it) }
     }
 
     private suspend fun dropStale(folderId: String, kind: DocumentKind?, keep: Set<String>) {

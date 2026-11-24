@@ -52,7 +52,9 @@ data class DashboardState(
  * Recently added feed, over one cache observer. Opening it costs four requests: the summary, the two
  * previews and the first page of Recently added. Plain Kotlin so it can be tested on the JVM.
  *
- * @param fetchPage one page of [tab] from [offset] into the cache; page size is the caller's, per tab.
+ * @param fetchPage one page of [kind] (null is Recently added) from [offset] into the cache; page size is the caller's, per feed.
+ * @param dropStale drops the cached rows of [kind] (null is every kind) that are not among the ids the server returned,
+ *   once a feed has read all of its list.
  * @param summary the last summary read in this process, from the repository's memory.
  * @param fetchSummary reads a fresh summary (the repository keeps it for [summary]).
  */
@@ -60,16 +62,17 @@ class DashboardModel(
     private val scope: CoroutineScope,
     cache: Flow<List<DocumentDto>>,
     summary: Flow<DocumentSummaryDto?>,
-    private val fetchPage: suspend (tab: BrowseTab, offset: Int) -> PageResult,
+    private val fetchPage: suspend (kind: DocumentKind?, offset: Int) -> PageResult,
     private val fetchSummary: suspend () -> DocumentSummaryDto,
+    private val dropStale: suspend (kind: DocumentKind?, keep: Set<String>) -> Unit = { _, _ -> },
     onFirstPageFailed: (Throwable) -> Unit = {},
     computation: CoroutineDispatcher = Dispatchers.Default,
     sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
 ) {
     // Only Recently added reports a failed first page: offline, one banner and not one per feed.
-    val recent = feed(BrowseTab.ALL, cache, onFirstPageFailed, computation, sharing)
-    private val photos = feed(BrowseTab.PHOTOS, cache, {}, computation, sharing)
-    private val videos = feed(BrowseTab.VIDEOS, cache, {}, computation, sharing)
+    val recent = feed(null, cache, onFirstPageFailed, computation, sharing)
+    private val photos = feed(DocumentKind.IMAGE, cache, {}, computation, sharing)
+    private val videos = feed(DocumentKind.VIDEO, cache, {}, computation, sharing)
 
     private val expanded = MutableStateFlow<Set<String>>(emptySet())
 
@@ -92,12 +95,21 @@ class DashboardModel(
     }
 
     private fun feed(
-        tab: BrowseTab,
+        kind: DocumentKind?,
         cache: Flow<List<DocumentDto>>,
         onFirstPageFailed: (Throwable) -> Unit,
         computation: CoroutineDispatcher,
         sharing: SharingStarted,
-    ) = BrowseFeedModel(scope, tab, cache, { offset -> fetchPage(tab, offset) }, onFirstPageFailed, computation, sharing)
+    ) = BrowseFeedModel(
+        scope = scope,
+        kind = kind,
+        cache = cache,
+        fetchPage = { offset -> fetchPage(kind, offset) },
+        onFirstPageFailed = onFirstPageFailed,
+        reconcile = { keep -> dropStale(kind, keep) },
+        computation = computation,
+        sharing = sharing,
+    )
 
     /** Pull-to-refresh: the summary, both previews and the first page of Recently added, all re-read. */
     fun refresh(initial: Boolean = false) {
