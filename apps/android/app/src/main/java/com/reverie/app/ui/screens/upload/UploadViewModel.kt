@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.CreateFolderRequest
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.UpdateFolderRequest
@@ -175,7 +176,7 @@ class UploadViewModel @Inject constructor(
             try {
                 val hashes = uploadRepository.hashContents(state.uris) { progress -> _review.update { it?.copy(checking = progress) } }
                 val files = state.fileNames.mapIndexed { index, name -> CheckContentFile(name, hashes[index]) }
-                val findings = uploadRepository.checkContent(folderId, files)?.let { toFindings(state.fileNames, it) }.orEmpty()
+                val findings = uploadRepository.checkContent(DocumentScope.of(folderId), files)?.let { toFindings(state.fileNames, it) }.orEmpty()
                 if (findings.isEmpty()) {
                     start(folderId, state.uris, conflictStrategy = null)
                 } else {
@@ -228,7 +229,6 @@ class UploadViewModel @Inject constructor(
                         parent_id = parentId,
                         description = form.description,
                         emoji = form.emoji,
-                        type = FolderType.FOLDER,
                     ),
                 )
                 if (form.isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))
@@ -255,7 +255,6 @@ class UploadViewModel @Inject constructor(
                         parent_id = null,
                         description = form.description,
                         emoji = form.emoji,
-                        type = FolderType.COLLECTION,
                     ),
                 )
                 if (form.isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))

@@ -15,6 +15,8 @@ internal class FakeDocumentDao : DocumentDao {
         rows.map { list -> list.sortedByDescending { it.createdAt } }
     override fun observeByFolder(folderId: String): Flow<List<DocumentEntity>> =
         rows.map { list -> list.filter { it.folderId == folderId } }
+    override fun observeTopLevel(): Flow<List<DocumentEntity>> =
+        rows.map { list -> list.filter { it.folderId == null }.sortedByDescending { it.createdAt } }
     override fun observeById(id: String): Flow<DocumentEntity?> =
         rows.map { list -> list.firstOrNull { it.id == id } }
     /** The ids of every thumbnail status query, in the order they were made. */
@@ -30,13 +32,14 @@ internal class FakeDocumentDao : DocumentDao {
         rows.value = map.values.toList()
     }
     override suspend fun deleteByIds(ids: List<String>) { rows.value = rows.value.filterNot { it.id in ids } }
-    override suspend fun deleteInFolderNotIn(folderId: String, keepIds: List<String>) {
-        rows.value = rows.value.filterNot { it.folderId == folderId && it.id !in keepIds }
-    }
     override suspend fun allMimeTypes(): List<DocumentMimeType> =
         rows.value.map { DocumentMimeType(it.id, it.mimeType) }
     override suspend fun mimeTypesInFolder(folderId: String): List<DocumentMimeType> =
         rows.value.filter { it.folderId == folderId }.map { DocumentMimeType(it.id, it.mimeType) }
+    override suspend fun mimeTypesAtTopLevel(): List<DocumentMimeType> =
+        rows.value.filter { it.folderId == null }.map { DocumentMimeType(it.id, it.mimeType) }
+    override suspend fun idsInFolders(folderIds: List<String>): List<String> =
+        rows.value.filter { it.folderId in folderIds }.map { it.id }
     override suspend fun takenAtOf(ids: List<String>): List<DocumentTakenAt> =
         rows.value.filter { it.id in ids && it.takenAt != null }.map { DocumentTakenAt(it.id, it.takenAt!!) }
     override suspend fun existingIds(ids: List<String>): List<String> =

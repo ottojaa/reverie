@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.CreateFolderRequest
-import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.BackupMedia
 import com.reverie.app.data.backup.BackupMediaSource
@@ -149,7 +148,6 @@ class BackupViewModel @Inject constructor(
                         parent_id = parentId,
                         description = form.description,
                         emoji = form.emoji,
-                        type = FolderType.FOLDER,
                     ),
                 )
             }.getOrNull() ?: return@launch
@@ -162,7 +160,7 @@ class BackupViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 folderRepository.create(
-                    CreateFolderRequest(name = form.name, description = form.description, emoji = form.emoji, type = FolderType.COLLECTION),
+                    CreateFolderRequest(name = form.name, description = form.description, emoji = form.emoji),
                 )
             }
         }

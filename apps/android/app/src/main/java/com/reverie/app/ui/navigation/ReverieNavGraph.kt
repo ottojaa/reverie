@@ -157,12 +157,6 @@ internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentI
 internal fun NavHostController.openFavourite(destination: FavouriteDestination) {
     when (destination) {
         is FavouriteDestination.Folder -> navigate(Routes.folder(destination.id))
-        // The screen reads which collection to show from CollectionFocus. A restored tab may have
-        // screens on top of it; the collection is on the tab's own screen.
-        is FavouriteDestination.Collection -> {
-            openTab(Screen.Collections)
-            popBackStack(Screen.Collections.route, inclusive = false)
-        }
         is FavouriteDestination.Document ->
             navigate(Routes.document(destination.id, NO_DIVE_ORIGIN, destination.aspect))
     }

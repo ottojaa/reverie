@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,29 +31,15 @@ fun CollectionsContent(
     state: CollectionsUiState,
     actions: CollectionsActions,
     modifier: Modifier = Modifier,
-    /** A collection to scroll to, once it is in the list. */
-    focusId: String? = null,
-    onFocused: () -> Unit = {},
 ) {
     val collections = state.tree.filter { it.type == FolderType.COLLECTION }
     val rootFolders = state.tree.filter { it.type == FolderType.FOLDER }
     val favourites = state.favourites.visible
-    val listState = rememberLazyListState()
-    // The header, and the favourites shelf when there is one, come before the first collection.
-    val leadItems = if (favourites.isEmpty()) 1 else 2
-    LaunchedEffect(focusId, state.tree) {
-        val index = collections.indexOfFirst { it.id == focusId }
-        if (index < 0) return@LaunchedEffect
-        listState.animateScrollToItem(leadItems + index)
-        onFocused()
-    }
-
     ReverieRefreshBox(isRefreshing = state.isRefreshing, onRefresh = actions.onRefresh, modifier = modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             OfflineBanner(visible = state.isOffline)
             LazyColumn(
                 Modifier.weight(1f),
-                state = listState,
                 // Room for the bottom navigation that overlays the list.
                 contentPadding = PaddingValues(bottom = bottomBarInset() + 16.dp),
             ) {

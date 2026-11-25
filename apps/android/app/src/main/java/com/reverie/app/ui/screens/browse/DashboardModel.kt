@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.repository.PageResult
@@ -102,7 +103,7 @@ class DashboardModel(
         sharing: SharingStarted,
     ) = BrowseFeedModel(
         scope = scope,
-        kind = kind,
+        filter = kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL,
         cache = cache,
         fetchPage = { offset -> fetchPage(kind, offset) },
         onFirstPageFailed = onFirstPageFailed,

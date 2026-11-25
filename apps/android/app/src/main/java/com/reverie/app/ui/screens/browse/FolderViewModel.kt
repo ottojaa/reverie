@@ -4,7 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.settings.FolderViewMode
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,7 +28,7 @@ class FolderViewModel @Inject constructor(
     val folderId: String = checkNotNull(savedStateHandle["folderId"]) { "A folder page needs a folder id" }
 
     // One Room observer for the whole screen: the chips' feeds and the unfinished-document watcher share it.
-    private val cache = deps.documents.observeDocuments(folderId)
+    private val cache = deps.documents.observeDocuments(DocumentScope.Folder(folderId))
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
@@ -42,9 +44,12 @@ class FolderViewModel @Inject constructor(
     private val model: FolderModel = FolderModel(
         scope = viewModelScope,
         cache = cache,
-        summary = deps.documents.summary(folderId),
-        fetchPage = { kind, offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, kind) },
-        fetchSummary = { deps.documents.fetchSummary(folderId) },
+        summary = deps.documents.summary(DocumentScope.Folder(folderId)),
+        fetchPage = { kind, offset ->
+            val filter = kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL
+            deps.documents.refresh(DocumentScope.Folder(folderId), BROWSE_PAGE_SIZE, offset, filter)
+        },
+        fetchSummary = { deps.documents.fetchSummary(DocumentScope.Folder(folderId)) },
         onFirstPageFailed = session::onRefreshFailed,
     )
 

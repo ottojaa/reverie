@@ -165,19 +165,23 @@ data class DocumentStatusResponse(
 @Serializable
 data class BatchDeleteDocuments(val ids: List<String>)
 
+/** Exactly one of [folder_id] and [top_level] says where the files are about to go. */
 @Serializable
 data class CheckDuplicatesRequest(
-    val folder_id: String,
+    val folder_id: String? = null,
+    val top_level: Boolean? = null,
     val filenames: List<String>,
 )
 
 @Serializable
 data class CheckDuplicatesResponse(val duplicates: List<String>)
 
+/** With neither [folder_id] nor [top_level], only the content is checked. */
 @Serializable
 data class CheckContentRequest(
     val folder_id: String? = null,
     val files: List<CheckContentFile>,
+    val top_level: Boolean? = null,
 )
 
 @Serializable
@@ -226,13 +230,6 @@ data class CheckContentResult(
 data class CheckContentResponse(val results: List<CheckContentResult>)
 
 @Serializable
-data class MoveDocumentsRequest(
-    val document_ids: List<String>,
-    val folder_id: String,
-    val conflict_strategy: ConflictStrategy? = null,
-)
-
-@Serializable
 data class UpdateDocumentRequest(val original_filename: String)
 
 @Serializable
@@ -269,12 +266,18 @@ data class TopTypeDto(val ext: String, val count: Int)
 @Serializable
 data class FileTotalsDto(val count: Int = 0, val bytes: Long = 0, val top_types: List<TopTypeDto> = emptyList())
 
-/** What a scope (the library or one folder) holds per kind: the figures behind the dashboard's cards and a folder page's chips. */
+/** Dates taken (upload time where there is none), as ISO timestamps to be read as written. */
+@Serializable
+data class MediaDatesDto(val first: String, val last: String)
+
+/** What a scope (the library, the top level or one folder's own documents) holds per kind. */
 @Serializable
 data class DocumentSummaryDto(
     val image: KindTotalsDto = KindTotalsDto(),
     val video: KindTotalsDto = KindTotalsDto(),
     val file: FileTotalsDto = FileTotalsDto(),
+    // From GET /documents/summary only: when the scope's first and last photo or video was taken.
+    val media_dates: MediaDatesDto? = null,
 ) {
     fun countOf(kind: DocumentKind): Int = when (kind) {
         DocumentKind.IMAGE -> image.count

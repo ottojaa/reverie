@@ -8,7 +8,8 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "upload_tasks")
 data class UploadTaskEntity(
     @PrimaryKey val sessionId: String,
-    val folderId: String,
+    // Null uploads to the top level.
+    val folderId: String?,
     val conflictStrategy: String?,
     val status: String,
     val createdAt: Long,

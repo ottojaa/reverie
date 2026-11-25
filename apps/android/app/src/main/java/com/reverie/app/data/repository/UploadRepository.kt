@@ -5,6 +5,7 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.CheckContentFile
 import com.reverie.app.data.api.model.CheckContentRequest
 import com.reverie.app.data.api.model.CheckContentResult
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.local.dao.UploadDao
 import com.reverie.app.data.local.entity.UploadItemEntity
 import com.reverie.app.data.upload.ContentHasher
@@ -27,9 +28,14 @@ private const val CHECK_CONTENT_BATCH = 500
  * Asks the server about [files] in as many calls as the per-call limit needs; answers come back in
  * [files]' order. Throws when a call fails (callers decide how to react to the reason).
  */
-suspend fun DocumentsApi.checkContentInBatches(folderId: String?, files: List<CheckContentFile>): List<CheckContentResult> =
+suspend fun DocumentsApi.checkContentInBatches(scope: DocumentScope, files: List<CheckContentFile>): List<CheckContentResult> =
     files.chunked(CHECK_CONTENT_BATCH).flatMap { batch ->
-        checkContent(CheckContentRequest(folderId, batch)).results
+        val request = CheckContentRequest(
+            folder_id = (scope as? DocumentScope.Folder)?.id,
+            files = batch,
+            top_level = true.takeIf { scope == DocumentScope.TopLevel },
+        )
+        checkContent(request).results
     }
 
 @Singleton
@@ -50,16 +56,17 @@ class UploadRepository @Inject constructor(
     suspend fun hashContents(uris: List<Uri>, onProgress: (HashProgress) -> Unit): List<String?> = hasher.hashAll(uris, onProgress)
 
     /**
-     * Which of [files]' content is already in the library, and whether each name is taken in [folderId]
-     * (null: no target, content only). Answers come back in [files]' order. Null when the check
-     * itself failed, so the caller can carry on without it instead of blocking the upload.
+     * Which of [files]' content is already in the library, and whether each name is taken where they
+     * are going ([target]; [DocumentScope.All] names no place and checks content only). Answers come
+     * back in [files]' order. Null when the check itself failed, so the caller can carry on without it
+     * instead of blocking the upload.
      */
-    suspend fun checkContent(folderId: String?, files: List<CheckContentFile>): List<CheckContentResult>? = withContext(io) {
-        runCatching { documentsApi.checkContentInBatches(folderId, files) }.getOrNull()
+    suspend fun checkContent(target: DocumentScope, files: List<CheckContentFile>): List<CheckContentResult>? = withContext(io) {
+        runCatching { documentsApi.checkContentInBatches(target, files) }.getOrNull()
     }
 
     /** Stage the picked files and enqueue the background upload; returns the session id. */
-    suspend fun startUpload(folderId: String, uris: List<Uri>, conflictStrategy: String?): String = withContext(io) {
+    suspend fun startUpload(folderId: String?, uris: List<Uri>, conflictStrategy: String?): String = withContext(io) {
         val sessionId = UUID.randomUUID().toString()
         val staged = stager.stage(sessionId, uris)
         enqueuer.enqueue(sessionId, folderId, conflictStrategy, staged)

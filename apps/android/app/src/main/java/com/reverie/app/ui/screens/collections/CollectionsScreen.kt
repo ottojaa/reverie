@@ -46,12 +46,10 @@ fun CollectionsScreen(
     var editTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     var deleteTarget by remember { mutableStateOf<FolderWithChildren?>(null) }
     val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
-    val focusId by viewModel.focusRequest.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // After a locked folder is unlocked the view model emits its id; step into it.
     LaunchedEffect(viewModel) { viewModel.openFolder.collect(onOpenFolder) }
-    LaunchedEffect(focusId) { focusId?.let(viewModel::reveal) }
 
     // The tree's counts and covers go stale while the user is elsewhere: refetch on every return,
     // which also covers the first open. Tabs are nav destinations, so this fires on tab return too.
@@ -79,7 +77,7 @@ fun CollectionsScreen(
     }
 
     Box(modifier.fillMaxSize()) {
-        CollectionsContent(state = state, actions = actions, focusId = focusId, onFocused = viewModel::focusShown)
+        CollectionsContent(state = state, actions = actions)
         ReverieSnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarInset()))
     }
     FavouriteHost(viewModel.favourites, snackbarHostState, onFavourite)

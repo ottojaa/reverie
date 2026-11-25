@@ -121,6 +121,46 @@ class DtoSerializationTest {
         assertEquals(FolderType.COLLECTION, (res.results[1] as CollectionSearchResult).folder_type)
     }
 
+    private fun fixture(name: String): String =
+        checkNotNull(javaClass.classLoader?.getResource(name)) { "Missing fixture: $name" }.readText()
+
+    @Test fun `parses the server's folder tree, three levels deep`() {
+        val tree = json.decodeFromString(ListSerializer(FolderWithChildren.serializer()), fixture("folder-tree.json"))
+        val photos = tree.first()
+        val (party, trips) = photos.children
+        val norway = trips.children.single()
+
+        assertEquals(listOf("Photos", "Receipts", "Taxes"), tree.map { it.name })
+        assertEquals(KindCountsDto(image = 3, video = 1), photos.kind_counts)
+        assertEquals(listOf(party.id, null), listOf(party.lock_id, trips.lock_id))
+        assertTrue(party.locked)
+        assertNull(party.cover)
+        assertEquals("Norway", norway.name)
+        assertEquals(3, norway.cover?.tiles?.size)
+        // An open private folder: what is beneath it carries its lock.
+        val taxes = tree.last()
+        assertEquals(listOf(false, false), listOf(taxes.locked, taxes.children.single().is_private))
+        assertEquals(taxes.id, taxes.children.single().lock_id)
+    }
+
+    @Test fun `parses the server's search of one folder`() {
+        val response = json.decodeFromString(SearchResponse.serializer(), fixture("folder-search.json"))
+
+        assertEquals(2, response.total)
+        val hit = response.results.first() as DocumentSearchResult
+        assertEquals("/Photos/Trips/Norway", hit.folder_path)
+        assertEquals(listOf("jpg", "png"), response.facets?.formats?.map { it.name })
+    }
+
+    @Test fun `parses the server's top level documents`() {
+        val page = json.decodeFromString(
+            Paginated.serializer(DocumentDto.serializer()), fixture("top-level-documents.json"),
+        )
+
+        assertEquals(2, page.total)
+        assertEquals(listOf(null, null), page.items.map { it.folder_id })
+    }
+
     @Test fun `decodes a nested folder tree`() {
         val payload = """
             [{"id":"c1","parent_id":null,"name":"Finance","path":"/Finance","description":null,"emoji":"💰",

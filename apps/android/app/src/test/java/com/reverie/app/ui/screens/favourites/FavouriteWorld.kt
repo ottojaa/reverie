@@ -82,9 +82,8 @@ internal class FavouriteWorld {
     val documents = DocumentRepository(documentDao, DocumentsApi(client), PrivateDocumentStore(), NoopPurger, Dispatchers.Unconfined)
     val favourites = FavouritesRepository(FavouritesApi(client), vault, documents, scope)
     val sequences = DocumentSequenceHolder()
-    val collectionFocus = CollectionFocus()
     val folders = FolderRepository(folderDao, FoldersApi(client), NoopPurger, Dispatchers.Unconfined)
-    val deps = FavouriteDeps(favourites, vault, documents, folders, sequences, collectionFocus)
+    val deps = FavouriteDeps(favourites, vault, documents, folders, sequences)
 
     fun controller() = FavouriteController(deps, scope)
 

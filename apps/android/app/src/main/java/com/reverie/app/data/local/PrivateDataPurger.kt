@@ -17,14 +17,16 @@ interface PrivateDataPurger {
     suspend fun purgeCachedCopies(ids: Collection<String>)
 
     /**
-     * Purge cached documents whose folder is not in [publicFolderIds]: private folders, and the
-     * folders of a collection that went private (a locked collection lists no children, so its
-     * folders drop out of the tree entirely).
+     * Purge cached documents whose folder is not in [publicFolderIds]: private folders, the folders
+     * beneath them, and those the tree no longer lists at all (a locked folder lists no children).
      */
     suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>)
 
     /** Forget moved documents everywhere: they may have landed in (or left) a private folder. */
     suspend fun forgetMoved(ids: Collection<String>)
+
+    /** Forget every document held for [folderIds]: the folders went to the trash. */
+    suspend fun forgetInFolders(folderIds: Collection<String>)
 
     /** Logout: drop the in-memory private documents, transient private originals and decoded thumbnails. */
     suspend fun clearSession()
@@ -64,6 +66,12 @@ class DiskPrivateDataPurger @Inject constructor(
     override suspend fun forgetMoved(ids: Collection<String>) = withContext(io) {
         store.remove(ids)
         purgeCachedCopies(ids)
+    }
+
+    override suspend fun forgetInFolders(folderIds: Collection<String>) = withContext(io) {
+        val cached = folderIds.chunked(QUERY_CHUNK).flatMap { documentDao.idsInFolders(it) }
+        val held = store.documents.value.values.filter { it.folder_id in folderIds }.map { it.id }
+        forgetMoved(cached + held)
     }
 
     override suspend fun clearSession() = withContext(io) {

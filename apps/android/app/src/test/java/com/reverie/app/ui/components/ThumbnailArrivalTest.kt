@@ -27,6 +27,8 @@ import com.reverie.app.data.api.model.JobEventType
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.api.model.isStillProcessing
+import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.processing.MissedThumbnails
@@ -107,9 +109,9 @@ class ThumbnailArrivalTest {
     @Test fun `a new upload's row loads its thumbnail once it is ready, with no refresh`() {
         val feed = BrowseFeedModel(
             scope = scope,
-            kind = null,
-            cache = repository.observeDocuments(null),
-            fetchPage = { offset -> repository.refresh(folderId = null, limit = 30, offset = offset) },
+            filter = DocumentFilter.ALL,
+            cache = repository.observeDocuments(DocumentScope.All),
+            fetchPage = { offset -> repository.refresh(DocumentScope.All, limit = 30, offset = offset) },
             computation = Dispatchers.Unconfined,
             sharing = SharingStarted.Eagerly,
         )
@@ -294,6 +296,7 @@ class ThumbnailArrivalTest {
         override suspend fun purgeCachedCopies(ids: Collection<String>) {}
         override suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>) {}
         override suspend fun forgetMoved(ids: Collection<String>) {}
+        override suspend fun forgetInFolders(folderIds: Collection<String>) {}
         override suspend fun clearSession() {}
     }
 

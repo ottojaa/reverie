@@ -75,7 +75,7 @@ fun FolderRow(
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp)) {
             FolderTitle(folder, isStarred)
             Text(
-                text = if (folder.locked) "Locked · Tap to unlock" else folderSubtitle(cover, folder.document_count),
+                text = if (folder.locked) "Locked · Tap to unlock" else folderSubtitle(cover, folder.kind_counts.total),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

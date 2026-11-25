@@ -21,7 +21,7 @@ fun toPickerSections(tree: List<FolderWithChildren>): List<FolderPickerSection> 
                     .filter { it.type == FolderType.FOLDER }
                     .map { FolderOption(it.id, it.name, it.emoji) },
             )
-            FolderType.FOLDER -> rootFolders += FolderOption(node.id, node.name, node.emoji)
+            else -> rootFolders += FolderOption(node.id, node.name, node.emoji)
         }
     }
     if (rootFolders.isNotEmpty()) {

@@ -3,7 +3,9 @@ package com.reverie.app.ui.screens.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +20,7 @@ class BrowseViewModel @Inject constructor(
 ) : ViewModel() {
 
     // One Room observer for the whole screen: the three feeds and the unfinished-document watcher share it.
-    private val cache = deps.documents.observeDocuments(null)
+    private val cache = deps.documents.observeDocuments(DocumentScope.All)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
@@ -34,10 +36,13 @@ class BrowseViewModel @Inject constructor(
     private val model: DashboardModel = DashboardModel(
         scope = viewModelScope,
         cache = cache,
-        summary = deps.documents.summary(null),
-        fetchPage = { kind, offset -> deps.documents.refresh(null, if (kind == null) BROWSE_PAGE_SIZE else previewLimit(kind), offset, kind) },
-        fetchSummary = { deps.documents.fetchSummary(null) },
-        dropStale = deps.documents::dropStaleInLibrary,
+        summary = deps.documents.summary(DocumentScope.All),
+        fetchPage = { kind, offset ->
+            val limit = if (kind == null) BROWSE_PAGE_SIZE else previewLimit(kind)
+            deps.documents.refresh(DocumentScope.All, limit, offset, kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL)
+        },
+        fetchSummary = { deps.documents.fetchSummary(DocumentScope.All) },
+        dropStale = { kind, keep -> deps.documents.dropStale(DocumentScope.All, kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL, keep) },
         onFirstPageFailed = session::onRefreshFailed,
         sharing = SharingStarted.Eagerly,
     )

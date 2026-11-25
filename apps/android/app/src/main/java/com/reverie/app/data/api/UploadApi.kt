@@ -29,7 +29,7 @@ class UploadApi @Inject constructor(
      */
     suspend fun uploadFile(
         sessionId: String,
-        folderId: String,
+        folderId: String?,
         file: File,
         filename: String,
         mimeType: String,
@@ -53,7 +53,7 @@ class UploadApi @Inject constructor(
      */
     suspend fun uploadStream(
         sessionId: String,
-        folderId: String,
+        folderId: String?,
         filename: String,
         mimeType: String,
         conflictStrategy: String?,
@@ -74,7 +74,7 @@ class UploadApi @Inject constructor(
 
     private suspend fun submit(
         sessionId: String,
-        folderId: String,
+        folderId: String?,
         filename: String,
         mimeType: String,
         conflictStrategy: String?,
@@ -86,7 +86,8 @@ class UploadApi @Inject constructor(
         val response = client.submitFormWithBinaryData(
             url = "upload",
             formData = formData {
-                append("folder_id", folderId)
+                // Left out for the top level.
+                folderId?.let { append("folder_id", it) }
                 append("session_id", sessionId)
                 conflictStrategy?.let { append("conflict_strategy", it) }
                 append(

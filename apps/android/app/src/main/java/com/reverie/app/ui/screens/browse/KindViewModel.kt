@@ -4,7 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,7 +24,7 @@ class KindViewModel @Inject constructor(
     /** Photos, Videos or Files; an unknown route argument opens Photos. */
     val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
 
-    private val cache = deps.documents.observeDocuments(null)
+    private val cache = deps.documents.observeDocuments(DocumentScope.All)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
@@ -37,11 +39,11 @@ class KindViewModel @Inject constructor(
 
     private val feed: BrowseFeedModel = BrowseFeedModel(
         scope = viewModelScope,
-        kind = kind,
+        filter = DocumentFilter.of(kind),
         cache = cache,
-        fetchPage = { offset -> deps.documents.refresh(null, BROWSE_PAGE_SIZE, offset, kind) },
+        fetchPage = { offset -> deps.documents.refresh(DocumentScope.All, BROWSE_PAGE_SIZE, offset, DocumentFilter.of(kind)) },
         onFirstPageFailed = session::onRefreshFailed,
-        reconcile = { keep -> deps.documents.dropStaleInLibrary(kind, keep) },
+        reconcile = { keep -> deps.documents.dropStale(DocumentScope.All, DocumentFilter.of(kind), keep) },
         sharing = SharingStarted.Eagerly,
     )
 

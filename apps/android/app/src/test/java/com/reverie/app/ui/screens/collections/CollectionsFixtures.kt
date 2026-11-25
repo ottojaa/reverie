@@ -5,6 +5,7 @@ import com.reverie.app.data.api.model.FileTotalsDto
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderCoverTileDto
 import com.reverie.app.data.api.model.FolderType
+import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.KindTotalsDto
 import com.reverie.app.data.api.model.TopTypeDto
@@ -33,7 +34,7 @@ internal object CollectionsFixtures {
         children: List<FolderWithChildren> = emptyList(),
     ) = FolderWithChildren(
         id = id, parent_id = parent, name = name, path = "/$name", emoji = emoji, sort_order = 0, type = type,
-        is_private = isPrivate, locked = locked, created_at = STAMP, updated_at = STAMP, children = children, document_count = count,
+        is_private = isPrivate, locked = locked, created_at = STAMP, updated_at = STAMP, children = children, kind_counts = KindCountsDto(file = count),
     )
 
     /** Decode the fixtures' blurhashes up front: the real painter is made off-thread, after a screenshot's one frame. */

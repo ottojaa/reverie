@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import kotlinx.coroutines.CoroutineScope
@@ -43,7 +44,7 @@ class FolderModelTest {
             scope = backgroundScope as CoroutineScope,
             cache = server.cache,
             summary = summary,
-            fetchPage = { kind, offset -> server.page(kind, offset) },
+            fetchPage = { kind, offset -> server.page(kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL, offset) },
             fetchSummary = { if (online) server.summary().also { summary.value = it } else error("offline") },
             computation = UnconfinedTestDispatcher(testScheduler),
             sharing = SharingStarted.Eagerly,
@@ -79,7 +80,7 @@ class FolderModelTest {
 
     @Test fun `a chip's list is read the first time it is selected, and kept`() = runTest(UnconfinedTestDispatcher()) {
         val f = start(FakeServer(photos + files))
-        assertEquals(listOf<Pair<DocumentKind?, Int>>(null to 0), f.server.requests)
+        assertEquals(listOf(DocumentFilter.ALL to 0), f.server.requests)
 
         f.model.select(DocumentKind.IMAGE)
         f.model.loadMore()
@@ -91,7 +92,7 @@ class FolderModelTest {
 
         assertEquals(listOf("p1", "p2", "p3"), f.ids)
         assertEquals(
-            listOf<Pair<DocumentKind?, Int>>(null to 0, DocumentKind.IMAGE to 0, DocumentKind.IMAGE to 2),
+            listOf(DocumentFilter.ALL to 0, DocumentFilter.IMAGES to 0, DocumentFilter.IMAGES to 2),
             f.server.requests,
         )
     }
@@ -106,7 +107,7 @@ class FolderModelTest {
         assertEquals(listOf("p1", "p2"), sequence.initialIds)
         sequence.loadMore()
         assertEquals(listOf("p1", "p2", "p3"), sequence.ids.first())
-        assertEquals(DocumentKind.IMAGE to 2, f.server.requests.last())
+        assertEquals(DocumentFilter.IMAGES to 2, f.server.requests.last())
     }
 
     @Test fun `a selection belongs to the shown list and ends when the chip changes`() = runTest(UnconfinedTestDispatcher()) {
@@ -167,6 +168,6 @@ class FolderModelTest {
 
         f.model.refresh()
 
-        assertEquals(setOf<Pair<DocumentKind?, Int>>(DocumentKind.FILE to 0, null to 0), f.server.requests.drop(asked).toSet())
+        assertEquals(setOf(DocumentFilter.FILES to 0, DocumentFilter.ALL to 0), f.server.requests.drop(asked).toSet())
     }
 }

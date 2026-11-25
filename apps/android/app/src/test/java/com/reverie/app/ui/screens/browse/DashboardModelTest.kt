@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FileTotalsDto
@@ -34,13 +35,14 @@ private class DashboardServer(var library: List<DocumentDto>) {
     fun page(kind: DocumentKind?, offset: Int, limit: Int): PageResult {
         pages += Triple(kind, offset, limit)
         if (offline) error("offline")
-        val ordered = library.filter { kind == null || it.kind == kind }.sortedByDescending { sortKeyOf(it, kind) }
+        val ordered = library.filter { kind == null || it.kind == kind }
+            .sortedByDescending { sortKeyOf(it, kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL) }
         val items = ordered.drop(offset).take(limit)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
         return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull(), ids = items.map { it.id })
     }
 
-    /** The repository's `dropStaleInLibrary` on the fake cache. */
+    /** The repository's `dropStale` on the fake cache. */
     fun dropStale(kind: DocumentKind?, keep: Set<String>) {
         cache.update { rows -> rows.filter { it.id in keep || (kind != null && it.kind != kind) } }
     }
@@ -205,7 +207,7 @@ class DashboardModelTest {
         val server = DashboardServer(library)
         val f = open(server)
         val photos = BrowseFeedModel(
-            scope = backgroundScope as CoroutineScope, kind = DocumentKind.IMAGE, cache = server.cache,
+            scope = backgroundScope as CoroutineScope, filter = DocumentFilter.IMAGES, cache = server.cache,
             fetchPage = { offset -> server.page(DocumentKind.IMAGE, offset, 4) },
             computation = UnconfinedTestDispatcher(testScheduler), sharing = SharingStarted.Eagerly,
         )

@@ -64,8 +64,6 @@ class CollectionsViewModel @Inject constructor(
 
     val favourites = FavouriteController(favouriteDeps, viewModelScope)
 
-    /** A collection another screen, or the shelf, asked to see here; null once it is on screen. */
-    val focusRequest: StateFlow<String?> = favouriteDeps.collectionFocus.requested
 
     private val collapsed = MutableStateFlow<Set<String>>(emptySet())
     private val filter = MutableStateFlow("")
@@ -169,16 +167,6 @@ class CollectionsViewModel @Inject constructor(
         if (id in it) it - id else it + id
     }
 
-    /** Make sure a requested collection can be scrolled to: no filter hiding it, and opened out. */
-    fun reveal(id: String) {
-        filter.value = ""
-        collapsed.update { it - id }
-    }
-
-    fun focusShown() {
-        favouriteDeps.collectionFocus.requested.value = null
-    }
-
     fun setFilter(text: String) {
         filter.value = text
     }
@@ -196,12 +184,12 @@ class CollectionsViewModel @Inject constructor(
     }
 
     fun createCollection(name: String, emoji: String?, description: String?, isPrivate: Boolean) =
-        create(name, emoji, description, isPrivate, parentId = null, type = FolderType.COLLECTION)
+        create(name, emoji, description, isPrivate, parentId = null)
 
     fun createFolder(parentId: String, name: String, emoji: String?, description: String?, isPrivate: Boolean) =
-        create(name, emoji, description, isPrivate, parentId = parentId, type = FolderType.FOLDER)
+        create(name, emoji, description, isPrivate, parentId = parentId)
 
-    private fun create(name: String, emoji: String?, description: String?, isPrivate: Boolean, parentId: String?, type: FolderType) {
+    private fun create(name: String, emoji: String?, description: String?, isPrivate: Boolean, parentId: String?) {
         viewModelScope.launch {
             runCatching {
                 val created = folderRepository.create(
@@ -210,7 +198,6 @@ class CollectionsViewModel @Inject constructor(
                         parent_id = parentId,
                         description = description?.ifBlank { null },
                         emoji = emoji?.ifBlank { null },
-                        type = type,
                     ),
                 )
                 if (isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))
