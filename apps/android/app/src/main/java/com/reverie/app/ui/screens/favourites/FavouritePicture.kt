@@ -33,6 +33,7 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.ON_PICTURE_SCRIM
 import com.reverie.app.ui.components.SectionIcon
 import com.reverie.app.ui.screens.collections.CoverTiles
 import com.reverie.app.ui.screens.collections.collectionAccent
@@ -120,7 +121,7 @@ private fun BoxScope.FolderPicture(folder: FolderWithChildren, style: FavouriteP
 /** The same in both themes: it sits on the picture. */
 @Composable
 private fun FolderMark(size: Dp, modifier: Modifier) {
-    Box(modifier.size(size).background(Color(0xC7121212), CircleShape), contentAlignment = Alignment.Center) {
+    Box(modifier.size(size).background(ON_PICTURE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
         Icon(Icons.Outlined.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
     }
 }

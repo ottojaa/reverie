@@ -7,10 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
-import com.reverie.app.data.api.model.FavouriteKey
-import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
@@ -42,7 +39,7 @@ fun KindScreen(
     val starredIds = favourites.starredDocumentIds
 
     val actions = remember(viewModel, state.selectedIds, starredIds) {
-        kindRowActions(viewModel, state.selectedIds, starredIds, openDocument)
+        documentRowActions(viewModel, state.selectedIds, starredIds, openDocument)
     }
 
     BrowseChrome(
@@ -118,31 +115,5 @@ fun KindBody(
         onLoadMore = onLoadMore,
         modifier = slot.modifier,
         onHeading = slot.onHeading,
-    )
-}
-
-/** Tap opens (or, once something is selected, selects); long press starts or extends a selection. */
-private fun kindRowActions(
-    viewModel: KindViewModel,
-    selectedIds: Set<String>,
-    starredIds: Set<String>,
-    openDocument: (DocumentDto) -> Unit,
-): RowActions {
-    val selecting = selectedIds.isNotEmpty()
-    return RowActions(
-        selected = { it.id in selectedIds },
-        onClick = { doc ->
-            if (selecting) {
-                viewModel.toggleSelect(doc.id)
-            } else {
-                // Publish this kind's order so the viewer swipes through it and nothing else.
-                viewModel.prepareSequence()
-                viewModel.prefetch(doc)
-                openDocument(doc)
-            }
-        },
-        onLongClick = { doc -> if (selecting) viewModel.toggleSelect(doc.id) else viewModel.enterSelection(doc.id) },
-        starred = { it.id in starredIds },
-        onToggleStar = { viewModel.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
     )
 }

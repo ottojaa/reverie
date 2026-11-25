@@ -44,6 +44,8 @@ class FolderBodyTest {
 
     private val files: List<DocumentDto> = (1..40).map { doc("f$it", "application/pdf", name = "file-$it.pdf") }
     private var documents by mutableStateOf(files)
+    private var hasMore by mutableStateOf(false)
+    private var pagesAsked = 0
     private var viewMode by mutableStateOf(FolderViewMode.GRID)
     private var chip by mutableStateOf<DocumentKind?>(null)
     private var selected by mutableStateOf(emptySet<String>())
@@ -55,7 +57,7 @@ class FolderBodyTest {
             FolderBody(
                 state = FolderState(
                     selected = chip,
-                    feed = FeedState(FeedDocuments(documents, total = documents.size, hasMore = false, fetched = true), selected),
+                    feed = FeedState(FeedDocuments(documents, total = documents.size, hasMore = hasMore, fetched = true), selected),
                 ),
                 viewMode = viewMode,
                 actions = RowActions(
@@ -64,7 +66,7 @@ class FolderBodyTest {
                     onLongClick = { calls += "hold:${it.id}" },
                 ),
                 today = LocalDate.of(2026, 11, 25), zone = ZoneOffset.UTC,
-                focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = {}, error = null,
+                focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = { pagesAsked++ }, error = null,
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
             )
         }
@@ -134,6 +136,50 @@ class FolderBodyTest {
         compose.waitForIdle()
 
         compose.onNodeWithText("just-uploaded.pdf").assertIsDisplayed()
+    }
+
+    private fun pdfs(count: Int) = (1..count).map { doc("f$it", "application/pdf", name = "file-$it.pdf") }
+
+    /** Of 90 documents, the next page is not asked for at the top or halfway, only at [nearEnd], and once. */
+    private fun assertAsksForTheNextPageOnlyNear(nearEnd: Int) {
+        documents = pdfs(90)
+        hasMore = true
+        show()
+        compose.waitForIdle()
+        assertEquals(0, pagesAsked)
+
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(45)
+        compose.waitForIdle()
+        assertEquals(0, pagesAsked)
+
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(nearEnd)
+        compose.waitForIdle()
+        assertEquals(1, pagesAsked)
+
+        documents = pdfs(120)
+        compose.waitForIdle()
+        assertEquals(1, pagesAsked)
+    }
+
+    @Test fun `a grid asks for the next page when its last rows come into view`() {
+        assertAsksForTheNextPageOnlyNear(75)
+    }
+
+    @Test fun `a list asks for the next page when its last rows come into view`() {
+        viewMode = FolderViewMode.LIST
+        assertAsksForTheNextPageOnlyNear(82)
+    }
+
+    @Test fun `pages too short to fill the screen keep being asked for`() {
+        documents = pdfs(2)
+        hasMore = true
+        show()
+        compose.waitForIdle()
+        assertEquals(1, pagesAsked)
+
+        documents = pdfs(4)
+        compose.waitForIdle()
+        assertEquals(2, pagesAsked)
     }
 
     @Test fun `an empty folder offers to upload`() {

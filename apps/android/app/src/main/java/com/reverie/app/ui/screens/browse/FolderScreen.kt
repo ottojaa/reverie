@@ -6,9 +6,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.FavouriteKey
-import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
@@ -36,7 +33,7 @@ fun FolderScreen(
     val starredIds = favourites.starredDocumentIds
 
     val actions = remember(viewModel, selectedIds, starredIds) {
-        folderRowActions(viewModel, selectedIds, starredIds, openDocument)
+        documentRowActions(viewModel, selectedIds, starredIds, openDocument)
     }
 
     BrowseChrome(
@@ -76,30 +73,4 @@ fun FolderScreen(
             slot = slot,
         )
     }
-}
-
-/** Tap opens (or, once something is selected, selects); long press starts or extends a selection. */
-internal fun folderRowActions(
-    viewModel: FolderViewModel,
-    selectedIds: Set<String>,
-    starredIds: Set<String>,
-    openDocument: (DocumentDto) -> Unit,
-): RowActions {
-    val selecting = selectedIds.isNotEmpty()
-    return RowActions(
-        selected = { it.id in selectedIds },
-        onClick = { doc ->
-            if (selecting) {
-                viewModel.toggleSelect(doc.id)
-            } else {
-                // Publish the shown list's order so the viewer swipes through it and nothing else.
-                viewModel.prepareSequence()
-                viewModel.prefetch(doc)
-                openDocument(doc)
-            }
-        },
-        onLongClick = { doc -> if (selecting) viewModel.toggleSelect(doc.id) else viewModel.enterSelection(doc.id) },
-        starred = { it.id in starredIds },
-        onToggleStar = { viewModel.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
-    )
 }

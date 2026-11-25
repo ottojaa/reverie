@@ -22,8 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.ui.theme.ReverieTheme
 
-private val BADGE_SCRIM = Color(0xC7121212)
-
 @Composable
 fun StarIcon(
     filled: Boolean,
@@ -42,7 +40,7 @@ fun StarIcon(
 /** The badge on a starred item's picture. The same in both themes: it sits on the picture. */
 @Composable
 fun StarredBadge(modifier: Modifier = Modifier) {
-    Box(modifier.size(22.dp).background(BADGE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
+    Box(modifier.size(22.dp).background(ON_PICTURE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
         StarIcon(filled = true, contentDescription = "Favourite", tint = ReverieTheme.extendedColors.starOnScrim, modifier = Modifier.size(13.dp))
     }
 }

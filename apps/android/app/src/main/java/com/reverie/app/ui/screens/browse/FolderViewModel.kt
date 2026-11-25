@@ -20,7 +20,7 @@ import javax.inject.Inject
 class FolderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
-) : ViewModel() {
+) : ViewModel(), DocumentListHandler {
 
     val folderId: String = checkNotNull(savedStateHandle["folderId"]) { "A folder page needs a folder id" }
 
@@ -50,7 +50,7 @@ class FolderViewModel @Inject constructor(
     val state: StateFlow<FolderState> get() = model.state
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
-    val favourites get() = session.favourites
+    override val favourites get() = session.favourites
     val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
 
     /** Cards or list, one choice for every folder; null until it has been read, so neither is drawn by guess. */
@@ -75,16 +75,16 @@ class FolderViewModel @Inject constructor(
 
     fun loadMore() = model.loadMore()
 
-    fun enterSelection(id: String) = model.enterSelection(listOf(id))
+    override fun enterSelection(id: String) = model.enterSelection(listOf(id))
 
-    fun toggleSelect(id: String) = model.toggleSelect(listOf(id))
+    override fun toggleSelect(id: String) = model.toggleSelect(listOf(id))
 
     fun clearSelection() = model.clearSelection()
 
     /** Hand the shown list, and only it, to the viewer. Call right before navigating into a document. */
-    fun prepareSequence() = session.publish(model.prepareSequence())
+    override fun prepareSequence() = session.publish(model.prepareSequence())
 
-    fun prefetch(document: DocumentDto) = session.prefetch(document)
+    override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
     fun clearFocusedDocument() = session.clearFocusedDocument()
 

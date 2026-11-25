@@ -36,15 +36,13 @@ import com.reverie.app.data.api.model.kind
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.NameWithStar
+import com.reverie.app.ui.components.ON_PICTURE_SCRIM
 import com.reverie.app.ui.components.PrivateLockBadge
 import com.reverie.app.ui.components.SelectedCheck
 import com.reverie.app.ui.components.StarredBadge
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatDuration
-
-/** Behind the marks drawn on a picture. The same in both themes: it sits on the picture. */
-private val ON_PICTURE_SCRIM = Color(0xC7121212)
 
 /** A folder's document as a square tile with its name under it. */
 @OptIn(ExperimentalFoundationApi::class)

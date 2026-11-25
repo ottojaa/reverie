@@ -120,6 +120,8 @@ private fun LoadNearEnd(gridState: LazyGridState, columns: Int, loadedCount: Int
         if (!hasMore) return@LaunchedEffect
         snapshotFlow {
             val info = gridState.layoutInfo
+            // Until the grid has measured everything loaded, its layout (empty, or a page behind) reads as the end.
+            if (info.totalItemsCount != loadedCount) return@snapshotFlow false
             val lastRow = (info.visibleItemsInfo.lastOrNull()?.index ?: -1) / columns
             isNearEnd(lastRow, (info.totalItemsCount + columns - 1) / columns, hasMore)
         }

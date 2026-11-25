@@ -16,7 +16,7 @@ import javax.inject.Inject
 class KindViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
-) : ViewModel() {
+) : ViewModel(), DocumentListHandler {
 
     /** Photos, Videos or Files; an unknown route argument opens Photos. */
     val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
@@ -47,7 +47,7 @@ class KindViewModel @Inject constructor(
     val state: StateFlow<FeedState> get() = feed.state
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
-    val favourites get() = session.favourites
+    override val favourites get() = session.favourites
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
     val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
@@ -63,16 +63,16 @@ class KindViewModel @Inject constructor(
 
     fun loadMore() = feed.loadMore()
 
-    fun enterSelection(id: String) = feed.enterSelection(listOf(id))
+    override fun enterSelection(id: String) = feed.enterSelection(listOf(id))
 
-    fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
+    override fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
 
     fun clearSelection() = feed.clearSelection()
 
     /** Hand this kind's loaded documents, and only those, to the viewer. Call right before navigating into a document. */
-    fun prepareSequence() = session.publish(feed.prepareSequence())
+    override fun prepareSequence() = session.publish(feed.prepareSequence())
 
-    fun prefetch(document: DocumentDto) = session.prefetch(document)
+    override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
     fun clearFocusedDocument() = session.clearFocusedDocument()
 

@@ -78,7 +78,7 @@ class FolderViewModelTest {
             FolderBody(
                 state = state,
                 viewMode = viewMode,
-                actions = folderRowActions(viewModel, state.feed.selectedIds, starredIds = emptySet(), openDocument = {}),
+                actions = documentRowActions(viewModel, state.feed.selectedIds, starredIds = emptySet(), openDocument = {}),
                 today = LocalDate.of(2026, 11, 25), zone = ZoneOffset.UTC,
                 focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),

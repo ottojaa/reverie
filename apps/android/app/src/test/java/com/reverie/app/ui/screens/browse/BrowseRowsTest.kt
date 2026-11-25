@@ -69,6 +69,14 @@ class BrowseRowsTest {
         assertEquals(-1, rowIndexOf(rows(DocumentKind.IMAGE, mixed.filter { it.id.startsWith("p") }), "v1"))
     }
 
+    @Test fun `a folder row shows the date its chip sorts by`() {
+        val photo = doc("p", created = "2026-11-21T10:00:00Z", taken = "2026-06-03T10:00:00.000Z", name = "p.jpg")
+        fun dateUnder(chip: DocumentKind?) = folderRowMeta(photo, chip, today, ZoneOffset.UTC).substringAfterLast(" · ")
+
+        assertEquals("3 Jun", dateUnder(DocumentKind.IMAGE))
+        assertEquals("21 Nov", dateUnder(null))
+    }
+
     @Test fun `scrolling near the end asks for more only while there is more`() {
         assertFalse(isNearEnd(lastVisibleIndex = 2, rowCount = 10, hasMore = true))
         assertTrue(isNearEnd(lastVisibleIndex = 7, rowCount = 10, hasMore = true))
