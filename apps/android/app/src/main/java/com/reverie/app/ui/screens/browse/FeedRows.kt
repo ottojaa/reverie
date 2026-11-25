@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -37,8 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.ui.components.DocumentCard
+import com.reverie.app.ui.components.FavouriteMenuItem
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
+import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.components.fileTypeVisual
@@ -47,11 +50,16 @@ import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
 
+/** The name line of a file row and of a Recently added row. */
+internal val ROW_NAME_STYLE = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+
 /** What a row's tiles do when tapped, held or selected. */
 class RowActions(
     val selected: (DocumentDto) -> Boolean,
     val onClick: (DocumentDto) -> Unit,
     val onLongClick: (DocumentDto) -> Unit,
+    val starred: (DocumentDto) -> Boolean = { false },
+    val onToggleStar: (DocumentDto) -> Unit = {},
 )
 
 /** Draws one lazy-list row of a kind screen. */
@@ -60,7 +68,7 @@ fun FeedRowView(row: FeedRow, actions: RowActions) {
     when (row) {
         is FeedRow.Heading -> HeadingRow(row.header)
         is FeedRow.Band -> Box(Modifier.padding(bottom = MOSAIC_GAP.dp)) {
-            MosaicSectionView(row.section, actions.selected, actions.onClick, actions.onLongClick)
+            MosaicSectionView(row.section, actions.selected, actions.onClick, actions.onLongClick, actions.starred)
         }
         is FeedRow.Videos -> VideoTiles(row.docs, actions)
         is FeedRow.File -> FileRow(row.doc, actions)
@@ -103,6 +111,7 @@ private fun VideoTiles(docs: List<DocumentDto>, actions: RowActions) {
                 onLongClick = { actions.onLongClick(doc) },
                 shape = RoundedCornerShape(14.dp),
                 largeVideoTile = true,
+                isStarred = actions.starred(doc),
                 modifier = Modifier.weight(1f).height(VIDEO_TILE_HEIGHT),
             )
         }
@@ -128,14 +137,7 @@ private fun FileRow(doc: DocumentDto, actions: RowActions) {
     ) {
         if (selected) SelectedCheck(Modifier.size(36.dp)) else TypeBadge(doc)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = doc.original_filename,
-                fontSize = 15.sp,
-                lineHeight = 20.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            NameWithStar(doc.original_filename, actions.starred(doc), style = ROW_NAME_STYLE)
             Text(
                 text = fileMeta(doc),
                 fontSize = 13.sp,
@@ -185,8 +187,16 @@ private fun FileMenu(doc: DocumentDto, actions: RowActions) {
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Open") }, onClick = { open = false; actions.onClick(doc) })
-            DropdownMenuItem(text = { Text("Select") }, onClick = { open = false; actions.onLongClick(doc) })
+            FileMenuItems(doc, actions, onDone = { open = false })
         }
     }
+}
+
+/** The file menu's items. Open and Select are indented to line up with the starred item's text. */
+@Composable
+fun FileMenuItems(doc: DocumentDto, actions: RowActions, onDone: () -> Unit = {}) {
+    val indent: @Composable () -> Unit = { Spacer(Modifier.size(24.dp)) }
+    FavouriteMenuItem(actions.starred(doc)) { onDone(); actions.onToggleStar(doc) }
+    DropdownMenuItem(text = { Text("Open") }, leadingIcon = indent, onClick = { onDone(); actions.onClick(doc) })
+    DropdownMenuItem(text = { Text("Select") }, leadingIcon = indent, onClick = { onDone(); actions.onLongClick(doc) })
 }

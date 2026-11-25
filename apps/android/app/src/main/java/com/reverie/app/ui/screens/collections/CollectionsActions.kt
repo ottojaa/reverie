@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.collections
 
 import androidx.compose.runtime.Immutable
+import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FolderWithChildren
 
 /** Everything the Collections list can ask for, so the stateless content takes one parameter. */
@@ -18,4 +19,7 @@ class CollectionsActions(
     val onOpenAllDocuments: () -> Unit = {},
     val onFilterChange: (String) -> Unit = {},
     val onRefresh: () -> Unit = {},
+    val onToggleStar: (folderId: String) -> Unit = {},
+    val onOpenFavourite: (FavouriteDto) -> Unit = {},
+    val onSeeAllFavourites: () -> Unit = {},
 )

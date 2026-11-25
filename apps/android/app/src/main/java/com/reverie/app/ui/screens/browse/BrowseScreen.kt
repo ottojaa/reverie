@@ -7,8 +7,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
 
@@ -22,6 +25,8 @@ fun BrowseScreen(
     onOpenKind: (DocumentKind) -> Unit,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    onFavourite: (FavouriteDestination) -> Unit = {},
+    onSeeAllFavourites: () -> Unit = {},
     viewModel: BrowseViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -36,11 +41,18 @@ fun BrowseScreen(
     val latestOnOpenKind by rememberUpdatedState(onOpenKind)
     val isFolder = viewModel.folderId != null
     val selectedIds = state.recent.selectedIds
+    val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
+    val starredIds = favourites.starredDocumentIds
+    val latestOnSeeAll by rememberUpdatedState(onSeeAllFavourites)
+    // The strip is re-read each time the library root comes back to the front.
+    if (!isFolder) LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.favourites.load() }
 
-    val actions = remember(viewModel, selectedIds) {
+    val actions = remember(viewModel, selectedIds, starredIds) {
         DashboardActions(
             onOpenKind = { latestOnOpenKind(it) },
-            recent = recentActions(viewModel, selectedIds, openDocument),
+            recent = recentActions(viewModel, selectedIds, starredIds, openDocument),
+            onOpenFavourite = viewModel.favourites::open,
+            onSeeAllFavourites = { latestOnSeeAll() },
         )
     }
 
@@ -61,7 +73,9 @@ fun BrowseScreen(
         onBack = onBack,
         onOpenDocument = openDocument,
         uploadViewModel = uploadViewModel,
+        favourites = viewModel.favourites,
         modifier = modifier,
+        onFavourite = onFavourite,
     ) { slot ->
         DashboardBody(
             state = state,
@@ -77,6 +91,7 @@ fun BrowseScreen(
             inFolder = isFolder,
             onUpload = slot.onUpload,
             modifier = slot.modifier,
+            favourites = favourites.visible,
         )
     }
 }
@@ -85,11 +100,13 @@ fun BrowseScreen(
 private fun recentActions(
     viewModel: BrowseViewModel,
     selectedIds: Set<String>,
+    starredIds: Set<String>,
     openDocument: (com.reverie.app.data.api.model.DocumentDto) -> Unit,
 ): RecentActions {
     val selecting = selectedIds.isNotEmpty()
     return RecentActions(
         selectedIds = selectedIds,
+        starredIds = starredIds,
         onDocClick = { doc ->
             if (selecting) {
                 viewModel.toggleSelect(listOf(doc.id))

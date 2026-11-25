@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,6 +35,7 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
+import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.components.fileTypeVisual
@@ -52,6 +52,7 @@ class RecentActions(
     val onDocLongClick: (DocumentDto) -> Unit,
     val onGroupClick: (RecentRow.Group) -> Unit,
     val onGroupLongClick: (RecentRow.Group) -> Unit,
+    val starredIds: Set<String> = emptySet(),
 )
 
 private val THUMB = 44.dp
@@ -77,6 +78,7 @@ private fun DocRow(doc: DocumentDto, actions: RecentActions, today: LocalDate, z
         meta = docMeta(doc),
         whenText = recentWhen(doc, today, zone),
         selected = selected,
+        isStarred = doc.id in actions.starredIds,
         indent = indent,
         onClick = { actions.onDocClick(doc) },
         onLongClick = { actions.onDocLongClick(doc) },
@@ -116,6 +118,7 @@ private fun RowShell(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     metaAccent: Boolean = false,
+    isStarred: Boolean = false,
     thumb: @Composable () -> Unit,
 ) {
     Row(
@@ -132,7 +135,7 @@ private fun RowShell(
             if (selected) SelectedCheck(Modifier.size(36.dp)) else thumb()
         }
         Column(Modifier.weight(1f)) {
-            Text(name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            NameWithStar(name, isStarred, style = ROW_NAME_STYLE)
             if (meta != null) {
                 Text(
                     meta,

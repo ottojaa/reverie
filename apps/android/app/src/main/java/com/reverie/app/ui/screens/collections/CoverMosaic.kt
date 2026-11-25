@@ -47,22 +47,28 @@ fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier) {
         return
     }
 
-    Box(modifier.size(COVER_SIZE).clip(COVER_SHAPE).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+    CoverTiles(tiles, TILE_GAP, modifier.size(COVER_SIZE).clip(COVER_SHAPE))
+}
+
+/** One to four cover tiles filling [modifier]'s bounds, [gap] apart. */
+@Composable
+internal fun CoverTiles(tiles: List<FolderCoverTileDto>, gap: Dp, modifier: Modifier = Modifier) {
+    Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
         when (tiles.size) {
             1 -> Tile(tiles[0], Modifier.fillMaxSize(), compact = false)
-            2 -> Row(Modifier.fillMaxSize(), Arrangement.spacedBy(TILE_GAP)) {
+            2 -> Row(Modifier.fillMaxSize(), Arrangement.spacedBy(gap)) {
                 tiles.forEach { Tile(it, Modifier.weight(1f).fillMaxHeight()) }
             }
-            3 -> Row(Modifier.fillMaxSize(), Arrangement.spacedBy(TILE_GAP)) {
+            3 -> Row(Modifier.fillMaxSize(), Arrangement.spacedBy(gap)) {
                 Tile(tiles[0], Modifier.weight(1f).fillMaxHeight())
-                Column(Modifier.weight(1f).fillMaxHeight(), Arrangement.spacedBy(TILE_GAP)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), Arrangement.spacedBy(gap)) {
                     Tile(tiles[1], Modifier.weight(1f).fillMaxSize())
                     Tile(tiles[2], Modifier.weight(1f).fillMaxSize())
                 }
             }
-            else -> Column(Modifier.fillMaxSize(), Arrangement.spacedBy(TILE_GAP)) {
+            else -> Column(Modifier.fillMaxSize(), Arrangement.spacedBy(gap)) {
                 tiles.chunked(2).forEach { pair ->
-                    Row(Modifier.weight(1f).fillMaxSize(), Arrangement.spacedBy(TILE_GAP)) {
+                    Row(Modifier.weight(1f).fillMaxSize(), Arrangement.spacedBy(gap)) {
                         pair.forEach { Tile(it, Modifier.weight(1f).fillMaxHeight()) }
                     }
                 }

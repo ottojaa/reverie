@@ -49,6 +49,7 @@ class KindViewModel @Inject constructor(
     val state: StateFlow<FeedState> get() = feed.state
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
+    val favourites get() = session.favourites
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
     val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId

@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.FavouriteKey
+import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.ui.screens.viewer.InsightTitleBlock
 
@@ -46,6 +48,9 @@ fun ViewerToolbar(
     onEdit: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onRename: () -> Unit,
+    favourites: FavouritesState,
+    documentId: String,
+    onToggleStar: (FavouriteKey) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val canEdit = document != null &&
@@ -86,6 +91,7 @@ fun ViewerToolbar(
                     modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                 )
             }
+            ViewerStarButton(favourites, documentId, onToggleStar)
             // Download and Delete live in the bottom action bar now; the overflow keeps the
             // less-frequent actions.
             // Wrap the button and its menu in a Box so the menu anchors to the button,

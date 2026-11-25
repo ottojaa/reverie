@@ -44,6 +44,8 @@ object Routes {
     fun document(id: String, aspect: Float? = null) =
         "document/$id" + (aspect?.let { "?ar=$it" } ?: "")
 
+    const val FAVOURITES = "favourites"
+
     const val SETTINGS_PASSWORD = "settings/password"
     const val SETTINGS_PRIVACY = "settings/privacy"
     const val SETTINGS_BACKUP = "settings/backup"

@@ -18,6 +18,8 @@ import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.data.settings.VideoBackground
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.FolderUnlocker
+import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.favourites.FavouriteDeps
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,7 +53,11 @@ class DocumentViewModel @Inject constructor(
     private val sequenceHolder: DocumentSequenceHolder,
     authRepository: com.reverie.app.data.repository.AuthRepository,
     settingsRepository: SettingsRepository,
+    favouriteDeps: FavouriteDeps,
 ) : ViewModel() {
+
+    /** The star in the toolbar, and the password prompt it may need. */
+    val favourites = FavouriteController(favouriteDeps, viewModelScope)
 
     private val initialId: String = checkNotNull(savedStateHandle["id"])
     private val fallback = listOf(initialId)
@@ -94,6 +100,7 @@ class DocumentViewModel @Inject constructor(
     private var currentId: String? = null
 
     init {
+        favourites.load()
         // Refetch the visible document when its processing settles (thumbnail/OCR/LLM), so the
         // toolbar/insights update live — mirrors the old single-document behavior for the current page.
         viewModelScope.launch {
@@ -122,6 +129,8 @@ class DocumentViewModel @Inject constructor(
     fun onPageSettled(id: String) {
         if (id == currentId) return
         currentId = id
+        // The star waits for the list; try again if the first fetch failed.
+        if (!favourites.state.value.isLoaded) favourites.load()
         currentSub?.close()
         viewModelScope.launch { currentSub = realtimeManager.subscribeDocument(id) }
         viewModelScope.launch { documentRepository.touchAccessed(id) }

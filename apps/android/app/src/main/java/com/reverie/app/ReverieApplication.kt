@@ -7,6 +7,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.reverie.app.data.auth.AuthSessionManager
 import com.reverie.app.data.local.PrivateDataPurger
+import com.reverie.app.data.repository.FavouritesRepository
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.di.ApplicationScope
 import com.reverie.app.domain.model.AuthState
@@ -27,6 +28,7 @@ class ReverieApplication : Application(), ImageLoaderFactory, Configuration.Prov
     @Inject lateinit var authSessionManager: AuthSessionManager
     @Inject lateinit var privateDataPurger: PrivateDataPurger
     @Inject lateinit var folderRepository: FolderRepository
+    @Inject lateinit var favouritesRepository: FavouritesRepository
     @Inject @field:ApplicationScope lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
@@ -45,6 +47,7 @@ class ReverieApplication : Application(), ImageLoaderFactory, Configuration.Prov
                 .collect {
                     privateDataPurger.clearSession()
                     folderRepository.clearCovers()
+                    favouritesRepository.clear()
                 }
         }
     }

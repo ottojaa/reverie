@@ -5,6 +5,9 @@ import com.reverie.app.data.api.VaultApi
 import com.reverie.app.data.api.model.AuthErrorCode
 import com.reverie.app.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +32,11 @@ class VaultRepository @Inject constructor(
     private val vaultApi: VaultApi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
+    private val unlockFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    /** Fires each time a lock is opened, so what depends on the open locks can be read again. */
+    val unlocks: SharedFlow<Unit> = unlockFlow.asSharedFlow()
+
     /**
      * Open the lock around [folderId] (a private folder, or a private collection covering its
      * folders). The server remembers it in the session cookie; callers refetch the tree/list after.
@@ -36,6 +44,7 @@ class VaultRepository @Inject constructor(
     suspend fun unlock(folderId: String, password: String): UnlockOutcome = withContext(io) {
         try {
             vaultApi.unlock(folderId, password)
+            unlockFlow.tryEmit(Unit)
             UnlockOutcome.Unlocked
         } catch (e: ReverieApiException) {
             e.toUnlockOutcome()

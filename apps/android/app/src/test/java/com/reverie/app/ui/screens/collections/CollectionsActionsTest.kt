@@ -39,6 +39,7 @@ class CollectionsActionsTest {
         onOpenAllDocuments = { calls += "allDocuments" },
         onFilterChange = { calls += "filter:$it" },
         onRefresh = { calls += "refresh" },
+        onToggleStar = { calls += "favourite:$it" },
     )
 
     private fun show(vararg tree: FolderWithChildren) {
@@ -72,10 +73,10 @@ class CollectionsActionsTest {
         assertTrue(calls.last().startsWith("filter:"))
     }
 
-    @Test fun `a collection's menu offers new folder, edit, private and delete`() {
+    @Test fun `a collection's menu offers favourite, new folder, edit, private and delete`() {
         show(CollectionsFixtures.travel)
 
-        listOf("New folder" to "newFolder:c-travel", "Edit" to "edit:c-travel", "Make private" to "private:c-travel", "Delete" to "delete:c-travel")
+        listOf("Add to favourites" to "favourite:c-travel", "New folder" to "newFolder:c-travel", "Edit" to "edit:c-travel", "Make private" to "private:c-travel", "Delete" to "delete:c-travel")
             .forEach { (item, call) ->
                 compose.onAllNodesWithContentDescription("Actions").onFirst().performClick()
                 compose.onNodeWithText(item).performClick()

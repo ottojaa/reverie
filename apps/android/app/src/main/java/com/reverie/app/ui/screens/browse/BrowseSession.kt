@@ -18,6 +18,8 @@ import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.components.FolderUnlocker
+import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.favourites.FavouriteDeps
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -62,6 +64,7 @@ class BrowseDeps @Inject constructor(
     val imageLoader: ImageLoader,
     val uploads: UploadRepository,
     val settings: SettingsRepository,
+    val favouriteDeps: FavouriteDeps,
     @ApplicationContext val appContext: Context,
 )
 
@@ -100,6 +103,9 @@ class BrowseSession(
         runCatching { deps.folders.refresh() }
     }
 
+    /** Starring and opening favourites from this screen. */
+    val favourites = FavouriteController(deps.favouriteDeps, scope)
+
     /** How the Files grid arranges photos (user setting). */
     val gridLayoutMode: StateFlow<GridLayoutMode> = deps.settings.settings
         .map { it.gridLayoutMode }
@@ -117,6 +123,8 @@ class BrowseSession(
         deps.processing.refresh()
         if (folderId != null) scope.launch { runCatching { deps.folders.refresh() } }
         watchContentChanges()
+        // Badges and menu wording need the list, whichever screen is the first to want it.
+        if (!favourites.state.value.isLoaded) favourites.load()
     }
 
     /** Consume the focus signal once the list has scrolled to it, so later list updates don't re-scroll. */

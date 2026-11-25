@@ -17,7 +17,6 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -55,6 +54,10 @@ import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.favourites.FavouriteDestination
+import com.reverie.app.ui.screens.favourites.FavouriteHost
+import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadReviewSheet
 import com.reverie.app.ui.screens.upload.UploadViewModel
@@ -106,7 +109,9 @@ fun BrowseChrome(
     onBack: (() -> Unit)?,
     onOpenDocument: (DocumentDto) -> Unit,
     uploadViewModel: UploadViewModel,
+    favourites: FavouriteController,
     modifier: Modifier = Modifier,
+    onFavourite: (FavouriteDestination) -> Unit = {},
     body: @Composable (ChromeSlot) -> Unit,
 ) {
     val context = LocalContext.current
@@ -145,7 +150,7 @@ fun BrowseChrome(
                     modifier = Modifier.padding(bottom = bottomBarInset()),
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = { ReverieSnackbarHost(snackbarHostState) },
         ) {
             Box(Modifier.fillMaxSize()) {
                 val slot = ChromeSlot(
@@ -264,6 +269,7 @@ fun BrowseChrome(
     unlockPrompt?.let { prompt ->
         VaultUnlockSheet(prompt = prompt, onSubmit = unlocker::submit, onDismiss = unlocker::dismiss)
     }
+    FavouriteHost(favourites, snackbarHostState, onFavourite)
 }
 
 /** The body, or in its place the lock prompt or the load error. */

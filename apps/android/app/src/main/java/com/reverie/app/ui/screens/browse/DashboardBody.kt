@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.FavouriteDto
+import com.reverie.app.ui.screens.favourites.FavouritesStrip
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import java.time.LocalDate
@@ -26,14 +29,17 @@ import java.time.ZoneId
 class DashboardActions(
     val onOpenKind: (DocumentKind) -> Unit,
     val recent: RecentActions,
+    val onOpenFavourite: (FavouriteDto) -> Unit = {},
+    val onSeeAllFavourites: () -> Unit = {},
 )
 
-/** Rows ahead of Recently added's first entry: the cards, then the heading. */
+/** List items ahead of Recently added's first entry: the cards (under the favourites strip), then the heading. */
 private const val LEAD_ITEMS = 2
 
 /**
- * Browse's body: the picture cards, then Recently added. Stateless: the screen hands it the state and
- * what to do, so the same body is drawn in a screenshot or a navigation test.
+ * Browse's body: the favourites strip (library root only), the picture cards, then Recently added.
+ * Stateless: the screen hands it the state and what to do, so the same body is drawn in a screenshot or a
+ * navigation test.
  */
 @Composable
 fun DashboardBody(
@@ -50,21 +56,31 @@ fun DashboardBody(
     inFolder: Boolean,
     onUpload: () -> Unit,
     modifier: Modifier = Modifier,
+    favourites: List<FavouriteDto> = emptyList(),
 ) {
     val recent = state.recent.documents
+    val strip = if (inFolder) emptyList() else favourites
     if (isFirstLoad(recent, error) && state.cards.isEmpty()) {
         LoadingGrid(contentPadding)
         return
     }
     if (recent.fetched && recent.documents.isEmpty()) {
-        EmptyList(emptyTitle(null, inFolder), contentPadding, onUpload)
+        Column(modifier.fillMaxSize()) {
+            Strip(strip, actions)
+            EmptyList(emptyTitle(null, inFolder), contentPadding, onUpload)
+        }
         return
     }
     val entries = state.entries
     DashboardEffects(listState, entries, recent.documents.size, recent.hasMore, focusedId, onFocusConsumed, onLoadMore)
     LazyColumn(state = listState, contentPadding = contentPadding, modifier = modifier.fillMaxSize()) {
+        // The strip shares the cards' item: it arrives after the list does, and an item of its own, inserted
+        // above the one the list is anchored to, would stay scrolled out of sight.
         item(key = "cards", contentType = "cards") {
-            KindCards(state.cards, state.photoPreview, state.videoPreview, actions.onOpenKind)
+            Column {
+                Strip(strip, actions)
+                KindCards(state.cards, state.photoPreview, state.videoPreview, actions.onOpenKind)
+            }
         }
         item(key = "heading", contentType = "heading") {
             Text(
@@ -79,6 +95,12 @@ fun DashboardBody(
             RecentEntryView(entries[index], actions.recent, today, zone)
         }
     }
+}
+
+@Composable
+private fun Strip(favourites: List<FavouriteDto>, actions: DashboardActions) {
+    if (favourites.isEmpty()) return
+    FavouritesStrip(favourites, actions.onOpenFavourite, actions.onSeeAllFavourites, Modifier.padding(bottom = 20.dp))
 }
 
 private fun RecentEntry.listKey(): String = if (this is RecentEntry.Row) "row:$key" else key

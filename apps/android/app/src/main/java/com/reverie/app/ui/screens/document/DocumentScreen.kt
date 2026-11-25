@@ -19,12 +19,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,8 @@ import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.aboveSharedElements
 import com.reverie.app.ui.navigation.animateViewerChrome
+import com.reverie.app.ui.screens.favourites.FavouriteHost
+import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.ViewerType
 import com.reverie.app.ui.screens.viewer.insight.InsightPanelContent
@@ -74,6 +77,8 @@ private const val MAX_PEEK_SCALE = 2f
  * grazed them looked fussy) — a deliberate, generous overlap.
  */
 private val DETAILS_MEDIA_TUCK = 32.dp
+
+private val ACTION_BAR_HEIGHT = 72.dp
 
 /**
  * The full-screen document viewer. It hosts a [HorizontalPager] over the ordered sequence handed
@@ -118,6 +123,8 @@ fun DocumentScreen(
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val videoBackground by viewModel.videoBackground.collectAsStateWithLifecycle()
     val currentViewerType = document?.let(::viewerTypeFor)
+    val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
+    FavouriteHost(viewModel.favourites, snackbarHostState)
 
     val details = rememberDocumentDetailsState()
     var immersive by remember { mutableStateOf(false) }
@@ -161,7 +168,11 @@ fun DocumentScreen(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // The star's confirmation sits above the bottom action bar.
+            val pillModifier = Modifier.navigationBarsPadding().padding(bottom = ACTION_BAR_HEIGHT)
+            ReverieSnackbarHost(snackbarHostState, pillModifier = pillModifier)
+        },
     ) { _ ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val screenHeightPx = constraints.maxHeight.toFloat()
@@ -305,6 +316,9 @@ fun DocumentScreen(
                     },
                     onMenuToggle = { menuOpen = it },
                     onRename = { menuOpen = false; showRename = true },
+                    favourites = favourites,
+                    documentId = currentId,
+                    onToggleStar = { viewModel.favourites.toggle(it, confirm = true) },
                 )
             }
 

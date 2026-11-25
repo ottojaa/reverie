@@ -18,6 +18,8 @@ import com.reverie.app.ui.screens.browse.KindScreen
 import com.reverie.app.ui.screens.browse.routeOf
 import com.reverie.app.ui.screens.collections.CollectionsScreen
 import com.reverie.app.ui.screens.document.DocumentScreen
+import com.reverie.app.ui.screens.favourites.FavouriteDestination
+import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
 
@@ -41,19 +43,24 @@ fun ReverieNavGraph(
             BrowseScreen(
                 onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
                 onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
+                onFavourite = navController::openFavourite,
+                onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
             )
         }
 
         composable(Screen.Collections.route) {
             CollectionsScreen(
                 onOpenFolder = { navController.navigate(Routes.folder(it)) },
-                onOpenAllDocuments = {
-                    navController.navigate(Screen.Files.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                onOpenAllDocuments = { navController.openTab(Screen.Files) },
+                onFavourite = navController::openFavourite,
+                onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
+            )
+        }
+
+        reverieComposable(Routes.FAVOURITES) {
+            FavouritesScreen(
+                onBack = { navController.popBackStack() },
+                onGo = navController::openFavourite,
             )
         }
 
@@ -92,6 +99,7 @@ fun ReverieNavGraph(
                 onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
                 onOpenKind = { navController.navigate(Routes.kind(routeOf(it), folderId)) },
                 onBack = { navController.popBackStack() },
+                onFavourite = navController::openFavourite,
             )
         }
 
@@ -106,6 +114,7 @@ fun ReverieNavGraph(
             KindScreen(
                 onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
                 onBack = { navController.popBackStack() },
+                onFavourite = navController::openFavourite,
             )
         }
 
@@ -124,6 +133,26 @@ fun ReverieNavGraph(
                 onBackClick = { navController.popBackStack() },
             )
         }
+    }
+}
+
+/** Switches to a bottom-nav tab, keeping each tab's back stack as it was. */
+private fun NavHostController.openTab(tab: Screen) = navigate(tab.route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
+private fun NavHostController.openFavourite(destination: FavouriteDestination) {
+    when (destination) {
+        is FavouriteDestination.Folder -> navigate(Routes.folder(destination.id))
+        // The screen reads which collection to show from CollectionFocus. A restored tab may have
+        // screens on top of it; the collection is on the tab's own screen.
+        is FavouriteDestination.Collection -> {
+            openTab(Screen.Collections)
+            popBackStack(Screen.Collections.route, inclusive = false)
+        }
+        is FavouriteDestination.Document -> navigate(Routes.document(destination.id, destination.aspect))
     }
 }
 

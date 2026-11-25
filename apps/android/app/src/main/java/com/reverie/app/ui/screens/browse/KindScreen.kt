@@ -9,6 +9,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.FavouriteKey
+import com.reverie.app.data.api.model.FavouriteType
+import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
 
@@ -18,6 +21,7 @@ fun KindScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onFavourite: (FavouriteDestination) -> Unit = {},
     viewModel: KindViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -34,8 +38,11 @@ fun KindScreen(
     val kind = viewModel.kind
     val documents = state.documents
 
-    val actions = remember(viewModel, state.selectedIds) {
-        kindRowActions(viewModel, state.selectedIds, openDocument)
+    val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
+    val starredIds = favourites.starredDocumentIds
+
+    val actions = remember(viewModel, state.selectedIds, starredIds) {
+        kindRowActions(viewModel, state.selectedIds, starredIds, openDocument)
     }
 
     BrowseChrome(
@@ -56,7 +63,9 @@ fun KindScreen(
         onBack = onBack,
         onOpenDocument = openDocument,
         uploadViewModel = uploadViewModel,
+        favourites = viewModel.favourites,
         modifier = modifier,
+        onFavourite = onFavourite,
     ) { slot ->
         KindBody(
             kind = kind,
@@ -115,7 +124,12 @@ fun KindBody(
 }
 
 /** Tap opens (or, once something is selected, selects); long press starts or extends a selection. */
-private fun kindRowActions(viewModel: KindViewModel, selectedIds: Set<String>, openDocument: (DocumentDto) -> Unit): RowActions {
+private fun kindRowActions(
+    viewModel: KindViewModel,
+    selectedIds: Set<String>,
+    starredIds: Set<String>,
+    openDocument: (DocumentDto) -> Unit,
+): RowActions {
     val selecting = selectedIds.isNotEmpty()
     return RowActions(
         selected = { it.id in selectedIds },
@@ -130,5 +144,7 @@ private fun kindRowActions(viewModel: KindViewModel, selectedIds: Set<String>, o
             }
         },
         onLongClick = { doc -> if (selecting) viewModel.toggleSelect(doc.id) else viewModel.enterSelection(doc.id) },
+        starred = { it.id in starredIds },
+        onToggleStar = { viewModel.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
     )
 }

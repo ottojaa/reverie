@@ -60,6 +60,7 @@ fun DocumentCard(
     shape: Shape = RectangleShape,
     // Large video tiles carry the duration pill and a corner play icon instead of a centered badge.
     largeVideoTile: Boolean = false,
+    isStarred: Boolean = false,
 ) {
     // Google-Photos multi-select: the thumbnail springs slightly smaller with rounded corners,
     // revealing a teal frame, while the check pops in. One `progress` drives all three so select
@@ -101,6 +102,7 @@ fun DocumentCard(
                 size = thumbnailSize,
                 durationSeconds = document.duration_seconds,
                 largeVideoTile = largeVideoTile,
+                isStarred = isStarred,
                 modifier = Modifier.matchParentSize(),
             )
         }

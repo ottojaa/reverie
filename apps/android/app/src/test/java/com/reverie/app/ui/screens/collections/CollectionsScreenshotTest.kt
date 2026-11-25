@@ -67,7 +67,7 @@ class CollectionsScreenshotTest {
             CollectionSection(CollectionsFixtures.travel, CollectionsFixtures.covers, expanded = false, actions = actions)
             Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), tonalElevation = 3.dp, shadowElevation = 6.dp, modifier = Modifier.padding(top = 8.dp)) {
                 Column(Modifier.padding(vertical = 8.dp)) {
-                    RowMenuItems(isPrivate = false, onNewFolder = {}, onEdit = {}, onTogglePrivate = {}, onDelete = {})
+                    RowMenuItems(isStarred = false, onToggleStar = {}, isPrivate = false, onNewFolder = {}, onEdit = {}, onTogglePrivate = {}, onDelete = {})
                 }
             }
         }
