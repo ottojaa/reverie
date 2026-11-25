@@ -1,6 +1,7 @@
 import { ZodError } from 'zod';
 import { createFolder, renameFolder } from './folders-write';
 import { addTags, removeTags } from './tags';
+import { saveTextDocument, uploadLocalFiles } from './documents-add';
 import { moveDocuments, renameDocument } from './documents-write';
 import { findDuplicates } from './duplicates';
 import { getDocument } from './get-document';
@@ -29,6 +30,8 @@ export const TOOLS: readonly ToolDefinition[] = [
     createFolder,
     renameFolder,
     renameDocument,
+    uploadLocalFiles,
+    saveTextDocument,
     undoWrite,
 ];
 

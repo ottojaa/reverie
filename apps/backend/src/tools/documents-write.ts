@@ -3,7 +3,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { Undoer } from './undo-types';
 import { defineTool, ToolError } from './types';
-import { assertVisibleDocuments, assertVisibleFolder, visibleDocuments, type Visibility } from './visibility';
+import { assertDocumentFolder, assertVisibleDocuments, assertVisibleFolder, visibleDocuments, type Visibility } from './visibility';
 import { dryRunShape, documentTargetShape, PREVIEW_SAMPLE_SIZE, rebuildSearchVectors, resolveDocumentIds, runWrite } from './write';
 
 /** move_documents / rename_document, and the undo of each. */
@@ -23,14 +23,6 @@ export interface RenameDocumentState {
     document_id: string;
     name: string;
     folder_id: string | null;
-}
-
-async function assertMoveTarget(trx: DbOrTrx, vis: Visibility, folderId: string) {
-    const folder = await assertVisibleFolder(trx, vis, folderId);
-
-    if (folder.type !== 'folder') throw new ToolError('Documents can only be moved into a folder, not a collection: ' + folderId);
-
-    return folder;
 }
 
 /** The folder an undo puts documents back into: a folder or a collection, as long as it is live and visible. The message does not say which of gone, trashed or locked it is. */
@@ -97,7 +89,7 @@ export const moveDocuments = defineTool({
             input,
             dryRun: input.dry_run,
             plan: async (trx, vis) => {
-                const target = await assertMoveTarget(trx, vis, input.folder_id);
+                const target = await assertDocumentFolder(trx, vis, input.folder_id);
                 const docs = await assertVisibleDocuments(trx, vis, ids);
                 const moving = docs.filter((doc) => doc.folder_id !== target.id);
                 const taken = await findNamesTakenIn(

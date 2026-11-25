@@ -89,6 +89,15 @@ export async function assertVisibleFolder(trx: DbOrTrx, vis: Visibility, id: str
     return folder;
 }
 
+/** A visible folder that documents can be put in, which a collection is not. Locks it inside a transaction. */
+export async function assertDocumentFolder(conn: DbOrTrx, vis: Visibility, id: string): Promise<Folder> {
+    const folder = await assertVisibleFolder(conn, vis, id);
+
+    if (folder.type !== 'folder') throw new ToolError('Documents can only be moved into a folder, not a collection: ' + id);
+
+    return folder;
+}
+
 /** Non-locking variant for read tools. */
 export async function fetchVisibleFolder(vis: Visibility, id: string): Promise<Folder> {
     const folder = await visibleFolders(db, vis).selectAll('folders').where('folders.id', '=', id).executeTakeFirst();
