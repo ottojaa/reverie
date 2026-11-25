@@ -15,7 +15,7 @@ export interface MoveState {
 }
 
 export interface MoveAfterState {
-    folder_id: string;
+    folder_id: string | null;
     document_ids: string[];
 }
 
@@ -25,15 +25,7 @@ export interface RenameDocumentState {
     folder_id: string | null;
 }
 
-async function assertMoveTarget(trx: DbOrTrx, vis: Visibility, folderId: string) {
-    const folder = await assertVisibleFolder(trx, vis, folderId);
-
-    if (folder.type !== 'folder') throw new ToolError('Documents can only be moved into a folder, not a collection: ' + folderId);
-
-    return folder;
-}
-
-/** The folder an undo puts documents back into: a folder or a collection, as long as it is live and visible. The message does not say which of gone, trashed or locked it is. */
+/** The folder an undo puts documents back into must be live and visible. The message does not say which of gone, trashed or locked it is. */
 async function assertOriginAvailable(trx: DbOrTrx, vis: Visibility, folderId: string): Promise<void> {
     try {
         await assertVisibleFolder(trx, vis, folderId);
@@ -44,13 +36,13 @@ async function assertOriginAvailable(trx: DbOrTrx, vis: Visibility, folderId: st
     }
 }
 
-/** Visible documents in `folderId` that already use one of `names`. Locked ones are not counted: that would reveal them. */
-async function findNamesTakenIn(trx: DbOrTrx, vis: Visibility, folderId: string, names: string[], exceptIds: string[]): Promise<string[]> {
+/** Visible documents in `folderId` (null: the top level) that already use one of `names`. Locked ones are not counted: that would reveal them. */
+async function findNamesTakenIn(trx: DbOrTrx, vis: Visibility, folderId: string | null, names: string[], exceptIds: string[]): Promise<string[]> {
     if (names.length === 0) return [];
 
     let query = visibleDocuments(trx, vis)
         .select('documents.original_filename')
-        .where('documents.folder_id', '=', folderId)
+        .where('documents.folder_id', folderId === null ? 'is' : '=', folderId)
         .where('documents.original_filename', 'in', names);
 
     if (exceptIds.length > 0) query = query.where('documents.id', 'not in', exceptIds);
@@ -79,13 +71,13 @@ function assertNoNameClash(taken: string[], moving: string[]): void {
 
 const moveSchema = z.object({
     ...documentTargetShape,
-    folder_id: z.string().uuid().describe('The folder to move into (a folder, not a collection)'),
+    folder_id: z.string().uuid().nullable().describe('The folder to move into, or null for the top level (no folder)'),
     ...dryRunShape,
 });
 
 export const moveDocuments = defineTool({
     name: 'move_documents',
-    description: 'Move documents into a folder, by ids or by a search selection. Undoable with undo_write.',
+    description: 'Move documents into a folder or to the top level, by ids or by a search selection. Undoable with undo_write.',
     access: 'write',
     inputSchema: moveSchema,
     handler: async (input, ctx) => {
@@ -97,13 +89,14 @@ export const moveDocuments = defineTool({
             input,
             dryRun: input.dry_run,
             plan: async (trx, vis) => {
-                const target = await assertMoveTarget(trx, vis, input.folder_id);
+                const target = input.folder_id === null ? null : await assertVisibleFolder(trx, vis, input.folder_id);
+                const targetId = target?.id ?? null;
                 const docs = await assertVisibleDocuments(trx, vis, ids);
-                const moving = docs.filter((doc) => doc.folder_id !== target.id);
+                const moving = docs.filter((doc) => doc.folder_id !== targetId);
                 const taken = await findNamesTakenIn(
                     trx,
                     vis,
-                    target.id,
+                    targetId,
                     moving.map((doc) => doc.original_filename),
                     moving.map((doc) => doc.id),
                 );
@@ -123,7 +116,7 @@ export const moveDocuments = defineTool({
 
                 return {
                     preview: {
-                        target: { id: target.id, path: target.path },
+                        target: { id: targetId, path: target?.path ?? '/' },
                         documents: docs.length,
                         moved: moving.length,
                         already_there: docs.length - moving.length,
@@ -131,11 +124,11 @@ export const moveDocuments = defineTool({
                     },
                     changes: moving.length,
                     before: { moves: moving.map((doc) => ({ id: doc.id, folder_id: doc.folder_id })) } satisfies MoveState,
-                    after: { folder_id: target.id, document_ids: moving.map((doc) => doc.id) } satisfies MoveAfterState,
+                    after: { folder_id: targetId, document_ids: moving.map((doc) => doc.id) } satisfies MoveAfterState,
                     apply: async (t) => {
                         await t
                             .updateTable('documents')
-                            .set({ folder_id: target.id, updated_at: new Date() })
+                            .set({ folder_id: targetId, updated_at: new Date() })
                             .where(
                                 'id',
                                 'in',
@@ -158,9 +151,11 @@ export const undoMove: Undoer = async (trx, vis, entry) => {
     if (moved.length > 0)
         throw new ToolError('Cannot undo: ' + moved.length + ' document(s) are no longer where the move put them (e.g. ' + moved[0]!.original_filename + ')');
 
-    const origins = Array.from(new Set(moves.map((move) => move.folder_id).filter((id): id is string => id !== null)));
+    const origins = Array.from(new Set(moves.map((move) => move.folder_id)));
 
-    for (const folderId of origins) await assertOriginAvailable(trx, vis, folderId);
+    for (const folderId of origins) {
+        if (folderId !== null) await assertOriginAvailable(trx, vis, folderId);
+    }
 
     const filenames = new Map(docs.map((doc) => [doc.id, doc.original_filename]));
 
@@ -189,9 +184,7 @@ export const undoMove: Undoer = async (trx, vis, entry) => {
         before: entry.after,
         after: entry.before,
         apply: async (t) => {
-            const groups = Array.from(new Set(moves.map((move) => move.folder_id)));
-
-            for (const folderId of groups) {
+            for (const folderId of origins) {
                 await t
                     .updateTable('documents')
                     .set({ folder_id: folderId, updated_at: new Date() })
@@ -230,7 +223,7 @@ export const renameDocument = defineTool({
             plan: async (trx, vis) => {
                 const [doc] = await assertVisibleDocuments(trx, vis, [input.document_id]);
                 const unchanged = doc!.original_filename === input.new_name;
-                const taken = doc!.folder_id && !unchanged ? await findNamesTakenIn(trx, vis, doc!.folder_id, [input.new_name], [doc!.id]) : [];
+                const taken = unchanged ? [] : await findNamesTakenIn(trx, vis, doc!.folder_id, [input.new_name], [doc!.id]);
 
                 if (taken.length > 0) throw new ToolError('A document with this filename already exists in this folder');
 
@@ -258,7 +251,7 @@ export const undoRenameDocument: Undoer = async (trx, vis, entry) => {
 
     if (doc!.folder_id !== after.folder_id) throw new ToolError('Cannot undo: the document was moved since');
 
-    const taken = doc!.folder_id ? await findNamesTakenIn(trx, vis, doc!.folder_id, [before.name], [doc!.id]) : [];
+    const taken = await findNamesTakenIn(trx, vis, doc!.folder_id, [before.name], [doc!.id]);
 
     if (taken.length > 0) throw new ToolError('Cannot undo: another document in this folder now has the original filename');
 

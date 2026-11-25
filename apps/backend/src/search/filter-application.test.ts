@@ -59,7 +59,8 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."mime_type" in');
         expect(sql).toContain('"d"."created_at" >=');
         expect(sql).toContain('"d"."extracted_date" <=');
-        expect(sql).toContain('"f"."path" =');
+        expect(sql).toContain('"d"."folder_id" IN (');
+        expect(sql).toContain('lower("root"."path")');
         expect(sql).toContain('"llm"."summary" is not null');
         expect(sql).toContain('"d"."size_bytes" >=');
         expect(sql).toContain('SELECT document_id FROM document_tags');
@@ -106,11 +107,29 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."extracted_date" >=');
     });
 
-    it('omitting folders drops both folder paths and folder ids', () => {
-        const { sql } = compile({ folders: ['/inbox'], folderIds: ['00000000-0000-0000-0000-000000000000'] }, ['folders']);
+    it('a folder filter reaches everything beneath the named folders, by whole path or whole name', () => {
+        const { sql, parameters } = compile({ folders: ['/inbox', 'Receipts'] });
 
-        expect(sql).not.toContain('"f"."path"');
-        expect(sql).not.toContain('folder_id" in');
+        expect(sql).toContain('WITH RECURSIVE subtree');
+        expect(sql).toContain('lower("root"."path") = lower(');
+        expect(sql).toContain('lower("root"."name") = lower(');
+        expect(sql).not.toContain('ilike');
+        expect(parameters).toEqual(expect.arrayContaining(['/inbox', 'Receipts']));
+    });
+
+    it('a negated folder filter excludes the subtree and keeps documents in no folder', () => {
+        const { sql } = compile({ negations: { folders: ['Receipts'] } });
+
+        expect(sql).toContain('"d"."folder_id" IS NULL OR "d"."folder_id" NOT IN (');
+    });
+
+    it('omitting folders drops the folder filters, but never the folder the search is scoped to', () => {
+        const scope = '00000000-0000-0000-0000-000000000000';
+        const { sql, parameters } = compile({ folders: ['/inbox'], negations: { folders: ['Receipts'] }, scopeFolderId: scope }, ['folders']);
+
+        expect(sql).not.toContain('lower("root"');
+        expect(sql).toContain('root.id = ');
+        expect(parameters).toContain(scope);
     });
 
     it('omitting tags drops positive and negated tag filters together', () => {

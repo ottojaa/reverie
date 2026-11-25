@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({ recorder: { db: undefined as unknown, statements: [] as string[] } }));
+const h = vi.hoisted(() => ({
+    recorder: { db: undefined as unknown, statements: [] as string[], respond: undefined as ((sql: string) => unknown[] | undefined) | undefined },
+}));
 
 vi.mock('../db/kysely', async () => {
     const { createRecordingDb } = await import('../testing/recording-db.js');
     const recording = createRecordingDb();
     h.recorder.db = recording.db;
     h.recorder.statements = recording.statements;
+    recording.respond = (sql) => h.recorder.respond?.(sql);
 
     return { db: recording.db };
 });
@@ -14,7 +17,9 @@ vi.mock('../db/kysely', async () => {
 import { generateFacets } from '../search/facets';
 import { parseQuery } from '../search/query-parser';
 import { countDocuments, search, suggest } from '../search/search.service';
-import { getFolderService } from './folder.service';
+import { findLiveFolder } from './folders/load';
+import { trashEmptyFolder } from './folders/trash';
+import { createFolder } from './folders/writes';
 import { getUploadService } from './upload.service';
 
 /**
@@ -25,10 +30,14 @@ import { getUploadService } from './upload.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const FOLDER_ID = '22222222-2222-4222-8222-222222222222';
+const FOLDER_ROW = { id: FOLDER_ID, user_id: USER_ID, parent_id: null, name: 'A', sort_order: 0, is_private: false, deleted_at: null };
 
-/** The privacy lookup deliberately ignores trash: a trashed item in a private folder stays locked. */
-function isPrivateFolderLookup(sql: string): boolean {
-    return /^select "id" from "folders" where "user_id" = \$1 and ("is_private" = \$2|"parent_id" in)/.test(sql);
+/**
+ * Reading the whole folder tree deliberately ignores trash: a trashed item in a private folder stays locked.
+ * Whoever shows folders from it leaves the trashed ones out themselves.
+ */
+function isFolderTreeRead(sql: string): boolean {
+    return sql === 'select * from "folders" where "user_id" = $1';
 }
 
 function touchesTrashableTable(sql: string): boolean {
@@ -36,26 +45,23 @@ function touchesTrashableTable(sql: string): boolean {
 }
 
 function trashableStatements(): string[] {
-    return h.recorder.statements.filter((sql) => touchesTrashableTable(sql) && !isPrivateFolderLookup(sql));
+    return h.recorder.statements.filter((sql) => touchesTrashableTable(sql) && !isFolderTreeRead(sql));
 }
 
 beforeEach(() => {
     h.recorder.statements.length = 0;
+    h.recorder.respond = undefined;
 });
 
 describe('trashed rows are excluded from every read path', () => {
     it('document and folder getters', async () => {
         const uploadService = getUploadService();
-        const folderService = getFolderService();
 
         await uploadService.getDocument('d', USER_ID);
         await uploadService.getDocumentsInFolder(USER_ID, FOLDER_ID);
         await uploadService.getDocumentsInFolder(USER_ID, null);
         await uploadService.getFilenamesInFolder(USER_ID, FOLDER_ID);
-        await folderService.getFolder(FOLDER_ID, USER_ID);
-        await folderService.getFolderByPath('/A/B', USER_ID);
-        await folderService.listChildren(null, USER_ID);
-        await folderService.getFolderWithCount(FOLDER_ID, USER_ID);
+        await findLiveFolder(USER_ID, FOLDER_ID);
 
         const statements = trashableStatements();
 
@@ -64,13 +70,16 @@ describe('trashed rows are excluded from every read path', () => {
         for (const sql of statements) expect(sql).toContain('deleted_at');
     });
 
-    it('folder writes that check for name clashes', async () => {
-        const folderService = getFolderService();
+    it('folder writes that check for name clashes and for emptiness', async () => {
+        h.recorder.respond = (sql) => (isFolderTreeRead(sql) ? [FOLDER_ROW] : undefined);
+        await createFolder(USER_ID, { name: 'Taxes' }).catch(() => undefined);
+        await trashEmptyFolder(USER_ID, FOLDER_ID).catch(() => undefined);
 
-        await folderService.createFolder(USER_ID, 'Taxes', undefined, undefined, undefined, 'collection').catch(() => undefined);
-        await folderService.deleteEmptyFolder(FOLDER_ID, USER_ID).catch(() => undefined);
+        const reads = trashableStatements().filter((s) => s.startsWith('select'));
 
-        for (const sql of trashableStatements().filter((s) => s.startsWith('select'))) expect(sql).toContain('deleted_at');
+        expect(reads.length).toBeGreaterThanOrEqual(2);
+
+        for (const sql of reads) expect(sql).toContain('deleted_at');
     });
 
     it('search, counts, facets and suggestions', async () => {

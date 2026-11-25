@@ -49,6 +49,7 @@ describeDb('search_documents', () => {
         const byDate = await run(w.alice, 'search_documents', { date: '2023' });
         const byFolder = await run(w.alice, 'search_documents', { folder: '/Work/Invoices' });
         const byFolderId = await run(w.alice, 'search_documents', { folder_id: w.folders.work.id });
+        const byFolderName = await run(w.alice, 'search_documents', { folder: 'invoices' });
         const byLocation = await run(w.alice, 'search_documents', { location: 'Helsinki' });
         const byType = await run(w.alice, 'search_documents', { types: ['screenshot'] });
 
@@ -56,7 +57,8 @@ describeDb('search_documents', () => {
         expect(ids(byCategory.rows)).toEqual([w.docs.invoice]);
         expect(ids(byDate.rows)).toEqual([w.docs.notes]);
         expect(ids(byFolder.rows)).toEqual([w.docs.invoice]);
-        expect(ids(byFolderId.rows).sort()).toEqual([w.docs.notes, w.docs.photo].sort());
+        expect(ids(byFolderName.rows)).toEqual([w.docs.invoice]);
+        expect(ids(byFolderId.rows).sort()).toEqual([w.docs.notes, w.docs.photo, w.docs.invoice].sort());
         expect(ids(byLocation.rows)).toEqual([w.docs.photo]);
         expect(ids(byType.rows)).toEqual([w.docs.screenshot]);
     });
@@ -93,7 +95,8 @@ describeDb('locked and trashed items are invisible to every read tool', () => {
             { tags: ['trashedtag'] },
             { query: 'in:content LOCKEDWORD' },
             { folder: '/Vault' },
-            { folder: '/Archive/Hidden' },
+            { folder: '/Archive/Years/Hidden' },
+            { folder: 'Inner' },
         ]) {
             const out = await run(w.alice, 'search_documents', input);
             const found = new Set(ids(out.rows));
@@ -124,30 +127,29 @@ describeDb('locked and trashed items are invisible to every read tool', () => {
         const out = await run(w.alice, 'list_folders');
         const text = JSON.stringify(out);
 
-        for (const name of ['Vault', 'Inner', 'Hidden', 'Bin']) expect(text).not.toContain('"' + name + '"');
+        for (const name of ['Vault', 'Middle', 'Inner', 'Hidden', 'Bin']) expect(text).not.toContain('"' + name + '"');
 
-        const archive = out.collections.find((c: { name: string }) => c.name === 'Archive');
+        const archive = out.folders.find((folder: { name: string }) => folder.name === 'Archive');
 
-        expect(archive.folders).toEqual([]);
-        expect(archive.documents).toBe(0);
+        expect(archive).toMatchObject({ documents: 0, subtree_documents: 0, folders: [{ name: 'Years', documents: 0, subtree_documents: 0, folders: [] }] });
         expect(out.unfiled_documents).toBe(5);
     });
 
     it('list_folder_contents: refuses locked and trashed folders and lists no hidden document', async () => {
         const message = await refusal(w.alice, 'list_folder_contents', { folder_id: '00000000-0000-4000-8000-000000000000' });
 
-        for (const key of ['vault', 'vaultInner', 'lockedFolder', 'bin'] as const) {
+        for (const key of ['vault', 'vaultMiddle', 'vaultInner', 'lockedFolder', 'bin'] as const) {
             expect((await refusal(w.alice, 'list_folder_contents', { folder_id: w.folders[key].id })).replace(w.folders[key].id, 'ID')).toBe(
                 message.replace('00000000-0000-4000-8000-000000000000', 'ID'),
             );
         }
 
         const root = await run(w.alice, 'list_folder_contents', {});
-        const archive = await run(w.alice, 'list_folder_contents', { folder_id: w.folders.secretParent.id });
+        const years = await run(w.alice, 'list_folder_contents', { folder_id: w.folders.secretMiddle.id });
 
         expect(JSON.stringify(root)).not.toMatch(/Vault|Hidden|Bin|locked|trashed/i);
-        expect(archive.folders).toEqual([]);
-        expect(archive.total_documents).toBe(0);
+        expect(years.folders).toEqual([]);
+        expect(years.total_documents).toBe(0);
     });
 
     it('get_library_overview: counts only visible documents', async () => {
@@ -166,7 +168,7 @@ describeDb('another user', () => {
 
         expect(ids(bobSearch.rows)).toEqual([w.docs.bobs]);
         expect(aliceSearch.rows).toEqual([]);
-        expect(bobFolders.collections.map((c: { name: string }) => c.name)).toEqual(['BobWork']);
+        expect(bobFolders.folders.map((folder: { name: string }) => folder.name)).toEqual(['BobWork']);
         await refusal(w.bob, 'get_document', { document_id: w.docs.invoice });
         await refusal(w.alice, 'get_document', { document_id: w.docs.bobs });
     });
@@ -301,13 +303,22 @@ describeDb('photos: details only', () => {
 });
 
 describeDb('list_folders, list_folder_contents and get_library_overview', () => {
-    it('list_folders returns the collection tree with counts', async () => {
+    it('list_folders returns the tree with direct and subtree counts, and the documents in no folder', async () => {
         const out = await run(w.alice, 'list_folders');
-        const work = out.collections.find((c: { name: string }) => c.name === 'Work');
+        const work = out.folders.find((folder: { name: string }) => folder.name === 'Work');
 
-        expect(work).toMatchObject({ path: '/Work', type: 'collection', documents: 2 });
-        expect(work.folders).toMatchObject([{ name: 'Invoices', path: '/Work/Invoices', documents: 1 }]);
-        expect(out.collections.map((c: { name: string }) => c.name).sort()).toEqual(['Archive', 'Empty', 'Work']);
+        expect(work).toMatchObject({ path: '/Work', documents: 2, subtree_documents: 3 });
+        expect(work.folders).toMatchObject([{ name: 'Invoices', path: '/Work/Invoices', documents: 1, subtree_documents: 1, folders: [] }]);
+        expect(out.folders.map((folder: { name: string }) => folder.name).sort()).toEqual(['Archive', 'Empty', 'Work']);
+        expect(out.unfiled_documents).toBe(5);
+    });
+
+    it('list_folder_contents names the folders above, from the top down', async () => {
+        const invoices = await run(w.alice, 'list_folder_contents', { folder_id: w.folders.invoices.id });
+        const years = await run(w.alice, 'list_folder_contents', { folder_id: w.folders.secretMiddle.id });
+
+        expect(invoices.breadcrumb).toEqual([{ id: w.folders.work.id, name: 'Work' }]);
+        expect(years.breadcrumb).toEqual([{ id: w.folders.secretParent.id, name: 'Archive' }]);
     });
 
     it('list_folder_contents lists child folders and pages documents', async () => {

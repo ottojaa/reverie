@@ -1,12 +1,11 @@
 import type { Kysely } from 'kysely';
-import { db } from '../db/kysely';
 import type { Database, Folder } from '../db/schema';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { ToolError } from './types';
 
 /**
  * The one place that decides what a tool may see or touch: the user's own documents and folders
- * that are neither trashed nor private (a private folder or collection). Every read goes through
+ * that are neither trashed nor private (in, or beneath, a private folder). Every read goes through
  * these query builders, and every write re-checks its targets with the assert helpers inside its
  * transaction, so an item locked or trashed after a search cannot be reached through its id or an
  * old selection. Nothing here, or anywhere in tools/, can unlock anything.
@@ -83,15 +82,6 @@ export async function assertVisibleDocuments(trx: DbOrTrx, vis: Visibility, ids:
 /** Lock and return a visible folder, or refuse with the same message as for an unknown id. */
 export async function assertVisibleFolder(trx: DbOrTrx, vis: Visibility, id: string): Promise<Folder> {
     const folder = await visibleFolders(trx, vis).selectAll('folders').where('folders.id', '=', id).forUpdate().executeTakeFirst();
-
-    if (!folder) throw new ToolError('Folder not found: ' + id);
-
-    return folder;
-}
-
-/** Non-locking variant for read tools. */
-export async function fetchVisibleFolder(vis: Visibility, id: string): Promise<Folder> {
-    const folder = await visibleFolders(db, vis).selectAll('folders').where('folders.id', '=', id).executeTakeFirst();
 
     if (!folder) throw new ToolError('Folder not found: ' + id);
 

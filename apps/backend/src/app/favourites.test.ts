@@ -17,7 +17,7 @@ vi.mock('../services/storage.service', async (importOriginal) => ({
     }),
 }));
 
-import { getFolderService } from '../services/folder.service.js';
+import { trashFolder } from '../services/folders/trash.js';
 import { getTrashService } from '../services/trash.service.js';
 import { seedDocument, seedFolder, seedUser } from '../testing/seed.js';
 import { describeDb, useWorld, type World } from '../testing/tool-world.js';
@@ -85,13 +85,15 @@ describeDb('favourites', () => {
         eve = await seedUser(db, 'eve-favourites');
 
         const trips = await seedFolder(db, dana, 'Trips');
-        const rome = await seedFolder(db, dana, 'Rome', { parent: trips });
+        const italy = await seedFolder(db, dana, 'Italy', { parent: trips });
+        const rome = await seedFolder(db, dana, 'Rome', { parent: italy });
         const vault = await seedFolder(db, dana, 'PLANTEDVAULT', { isPrivate: true });
-        const inner = await seedFolder(db, dana, 'PLANTEDINNER', { parent: vault });
+        const middle = await seedFolder(db, dana, 'PLANTEDMIDDLE', { parent: vault });
+        const inner = await seedFolder(db, dana, 'PLANTEDINNER', { parent: middle });
         const doc = (name: string, folderId: string | null) =>
             seedDocument(db, { userId: dana, name, folderId, mime: 'image/jpeg', blurhash: 'PLANTEDBLURHASH' });
 
-        Object.assign(ids, { trips: trips.id, rome: rome.id, vault: vault.id, inner: inner.id });
+        Object.assign(ids, { trips: trips.id, italy: italy.id, rome: rome.id, vault: vault.id, inner: inner.id });
         ids.photo = await doc('colosseum.jpg', rome.id);
         ids.loose = await doc('loose.jpg', null);
         ids.secret = await doc('PLANTEDSECRET.jpg', inner.id);
@@ -213,16 +215,19 @@ describeDb('favourites', () => {
 
         const byId = new Map((await fetchList()).items.map((item) => [item.id, item]));
         const trips = { id: ids.trips, name: 'Trips' };
+        const italy = { id: ids.italy, name: 'Italy' };
         const rome = { id: ids.rome, name: 'Rome' };
 
         expect(byId.get(ids.trips!)?.location).toEqual([]);
-        expect(byId.get(ids.rome!)?.location).toEqual([trips]);
-        expect(byId.get(ids.photo!)?.location).toEqual([trips, rome]);
+        expect(byId.get(ids.rome!)?.location).toEqual([trips, italy]);
+        expect(byId.get(ids.photo!)?.location).toEqual([trips, italy, rome]);
         expect(byId.get(ids.loose!)?.location).toEqual([]);
         expect(byId.get(ids.rome!)).toMatchObject({ type: 'folder', private: false, locked: false, lock_id: null, document: null });
         expect(byId.get(ids.rome!)?.folder).toMatchObject({ name: 'Rome', document_count: 1, locked: false });
         expect(byId.get(ids.rome!)?.folder?.cover?.tiles.map((tile) => tile.document_id)).toEqual([ids.photo]);
-        expect(byId.get(ids.trips!)?.folder?.cover).toBeNull();
+        // A folder holding only folders counts and shows what is beneath it.
+        expect(byId.get(ids.trips!)?.folder?.document_count).toBe(0);
+        expect(byId.get(ids.trips!)?.folder?.cover?.tiles.map((tile) => tile.document_id)).toEqual([ids.photo]);
         expect(byId.get(ids.photo!)).toMatchObject({ type: 'document', private: false, folder: null });
         expect(byId.get(ids.photo!)?.document).toMatchObject({
             original_filename: 'colosseum.jpg',
@@ -277,7 +282,7 @@ describeDb('favourites', () => {
 
         await star('folder', box.id, [box.id]);
         await star('document', kept, [box.id]);
-        await getFolderService().deleteFolder(box.id, dana);
+        await trashFolder(dana, box.id);
 
         expect(await listedIds()).toEqual([]);
 
@@ -294,7 +299,7 @@ describeDb('favourites', () => {
         await star('document', file);
         await star('folder', folder.id);
         await getTrashService().trashDocuments(dana, [file]);
-        await getFolderService().deleteFolder(folder.id, dana);
+        await trashFolder(dana, folder.id);
         await getTrashService().purge(dana, { documentIds: [file], folderIds: [folder.id] });
 
         expect(await countRows()).toBe(0);

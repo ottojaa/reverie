@@ -18,7 +18,10 @@ export interface World {
     db: Kysely<Database>;
     alice: string;
     bob: string;
-    folders: Record<'work' | 'invoices' | 'vault' | 'vaultInner' | 'secretParent' | 'lockedFolder' | 'bin' | 'empty' | 'bobs', { id: string; path: string }>;
+    folders: Record<
+        'work' | 'invoices' | 'vault' | 'vaultMiddle' | 'vaultInner' | 'secretParent' | 'secretMiddle' | 'lockedFolder' | 'bin' | 'empty' | 'bobs',
+        { id: string; path: string }
+    >;
     docs: Record<
         | 'invoice'
         | 'notes'
@@ -47,9 +50,12 @@ async function seedWorld(db: Kysely<Database>): Promise<World> {
     const work = await seedFolder(db, alice, 'Work');
     const invoices = await seedFolder(db, alice, 'Invoices', { parent: work });
     const vault = await seedFolder(db, alice, 'Vault', { isPrivate: true });
-    const vaultInner = await seedFolder(db, alice, 'Inner', { parent: vault });
+    // Both locks reach three levels deep: Vault is private from the top, Hidden sits under two public folders.
+    const vaultMiddle = await seedFolder(db, alice, 'Middle', { parent: vault });
+    const vaultInner = await seedFolder(db, alice, 'Inner', { parent: vaultMiddle });
     const secretParent = await seedFolder(db, alice, 'Archive');
-    const lockedFolder = await seedFolder(db, alice, 'Hidden', { parent: secretParent, isPrivate: true });
+    const secretMiddle = await seedFolder(db, alice, 'Years', { parent: secretParent });
+    const lockedFolder = await seedFolder(db, alice, 'Hidden', { parent: secretMiddle, isPrivate: true });
     const bin = await seedFolder(db, alice, 'Bin', { deleted: true });
     const empty = await seedFolder(db, alice, 'Empty');
     const bobs = await seedFolder(db, bob, 'BobWork');
@@ -144,7 +150,21 @@ async function seedWorld(db: Kysely<Database>): Promise<World> {
         bobs: await seedDocument(db, { userId: bob, name: 'bob-invoice.pdf', folderId: bobs.id, ocrText: 'BOBWORD content', tags: ['bobtag'] }),
     };
 
-    return { db, alice, bob, docs, folders: { work, invoices, vault, vaultInner, secretParent, lockedFolder, bin, empty, bobs } };
+    const folders: World['folders'] = {
+        work,
+        invoices,
+        vault,
+        vaultMiddle,
+        vaultInner,
+        secretParent,
+        secretMiddle,
+        lockedFolder,
+        bin,
+        empty,
+        bobs,
+    };
+
+    return { db, alice, bob, docs, folders };
 }
 
 /** Start the database, seed the world and point `db/kysely` and the selection store at them. */
