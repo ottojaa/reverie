@@ -1,0 +1,315 @@
+[
+    {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "parent_id": null,
+        "name": "Photos",
+        "path": "/Photos",
+        "description": null,
+        "emoji": null,
+        "sort_order": 0,
+        "type": "collection",
+        "is_private": false,
+        "lock_id": null,
+        "locked": false,
+        "created_at": "2026-01-01T09:00:00.000Z",
+        "updated_at": "2026-06-30T10:00:00.000Z",
+        "children": [
+            {
+                "id": "10000000-0000-4000-8000-000000000004",
+                "parent_id": "10000000-0000-4000-8000-000000000001",
+                "name": "Surprise party",
+                "path": "/Photos/Surprise party",
+                "description": null,
+                "emoji": null,
+                "sort_order": 0,
+                "type": "folder",
+                "is_private": true,
+                "lock_id": "10000000-0000-4000-8000-000000000004",
+                "locked": true,
+                "created_at": "2026-01-01T09:00:00.000Z",
+                "updated_at": "2026-06-30T10:00:00.000Z",
+                "children": [],
+                "kind_counts": {
+                    "image": 0,
+                    "video": 0,
+                    "file": 0
+                },
+                "document_count": 0,
+                "cover": null
+            },
+            {
+                "id": "10000000-0000-4000-8000-000000000002",
+                "parent_id": "10000000-0000-4000-8000-000000000001",
+                "name": "Trips",
+                "path": "/Photos/Trips",
+                "description": null,
+                "emoji": null,
+                "sort_order": 0,
+                "type": "folder",
+                "is_private": false,
+                "lock_id": null,
+                "locked": false,
+                "created_at": "2026-01-01T09:00:00.000Z",
+                "updated_at": "2026-06-30T10:00:00.000Z",
+                "children": [
+                    {
+                        "id": "10000000-0000-4000-8000-000000000003",
+                        "parent_id": "10000000-0000-4000-8000-000000000002",
+                        "name": "Norway",
+                        "path": "/Photos/Trips/Norway",
+                        "description": null,
+                        "emoji": null,
+                        "sort_order": 0,
+                        "type": "folder",
+                        "is_private": false,
+                        "lock_id": null,
+                        "locked": false,
+                        "created_at": "2026-01-01T09:00:00.000Z",
+                        "updated_at": "2026-06-30T10:00:00.000Z",
+                        "children": [],
+                        "kind_counts": {
+                            "image": 2,
+                            "video": 1,
+                            "file": 0
+                        },
+                        "document_count": 3,
+                        "cover": {
+                            "tiles": [
+                                {
+                                    "document_id": "20000000-0000-4000-8000-000000000003",
+                                    "mime_type": "video/mp4",
+                                    "original_filename": "ferry.mp4",
+                                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                                },
+                                {
+                                    "document_id": "20000000-0000-4000-8000-000000000002",
+                                    "mime_type": "image/jpeg",
+                                    "original_filename": "fjord.jpg",
+                                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                                },
+                                {
+                                    "document_id": "20000000-0000-4000-8000-000000000004",
+                                    "mime_type": "image/png",
+                                    "original_filename": "Screenshot 2026-06-01.png",
+                                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                                }
+                            ],
+                            "summary": {
+                                "image": {
+                                    "count": 2,
+                                    "bytes": 200
+                                },
+                                "video": {
+                                    "count": 1,
+                                    "bytes": 100
+                                },
+                                "file": {
+                                    "count": 0,
+                                    "bytes": 0,
+                                    "top_types": []
+                                }
+                            }
+                        }
+                    }
+                ],
+                "kind_counts": {
+                    "image": 2,
+                    "video": 1,
+                    "file": 0
+                },
+                "document_count": 0,
+                "cover": {
+                    "tiles": [
+                        {
+                            "document_id": "20000000-0000-4000-8000-000000000003",
+                            "mime_type": "video/mp4",
+                            "original_filename": "ferry.mp4",
+                            "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                        },
+                        {
+                            "document_id": "20000000-0000-4000-8000-000000000002",
+                            "mime_type": "image/jpeg",
+                            "original_filename": "fjord.jpg",
+                            "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                        },
+                        {
+                            "document_id": "20000000-0000-4000-8000-000000000004",
+                            "mime_type": "image/png",
+                            "original_filename": "Screenshot 2026-06-01.png",
+                            "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                        }
+                    ],
+                    "summary": {
+                        "image": {
+                            "count": 2,
+                            "bytes": 200
+                        },
+                        "video": {
+                            "count": 1,
+                            "bytes": 100
+                        },
+                        "file": {
+                            "count": 0,
+                            "bytes": 0,
+                            "top_types": []
+                        }
+                    }
+                }
+            }
+        ],
+        "kind_counts": {
+            "image": 3,
+            "video": 1,
+            "file": 0
+        },
+        "document_count": 1,
+        "cover": {
+            "tiles": [
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000003",
+                    "mime_type": "video/mp4",
+                    "original_filename": "ferry.mp4",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                },
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000002",
+                    "mime_type": "image/jpeg",
+                    "original_filename": "fjord.jpg",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                },
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000001",
+                    "mime_type": "image/jpeg",
+                    "original_filename": "midsummer.jpg",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                },
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000004",
+                    "mime_type": "image/png",
+                    "original_filename": "Screenshot 2026-06-01.png",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                }
+            ],
+            "summary": {
+                "image": {
+                    "count": 3,
+                    "bytes": 300
+                },
+                "video": {
+                    "count": 1,
+                    "bytes": 100
+                },
+                "file": {
+                    "count": 0,
+                    "bytes": 0,
+                    "top_types": []
+                }
+            }
+        }
+    },
+    {
+        "id": "10000000-0000-4000-8000-000000000005",
+        "parent_id": null,
+        "name": "Receipts",
+        "path": "/Receipts",
+        "description": null,
+        "emoji": null,
+        "sort_order": 0,
+        "type": "collection",
+        "is_private": false,
+        "lock_id": null,
+        "locked": false,
+        "created_at": "2026-01-01T09:00:00.000Z",
+        "updated_at": "2026-06-30T10:00:00.000Z",
+        "children": [],
+        "kind_counts": {
+            "image": 0,
+            "video": 0,
+            "file": 2
+        },
+        "document_count": 2,
+        "cover": {
+            "tiles": [
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000007",
+                    "mime_type": "application/pdf",
+                    "original_filename": "hardware.pdf",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                },
+                {
+                    "document_id": "20000000-0000-4000-8000-000000000006",
+                    "mime_type": "application/pdf",
+                    "original_filename": "grocery.pdf",
+                    "thumbnail_blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+                }
+            ],
+            "summary": {
+                "image": {
+                    "count": 0,
+                    "bytes": 0
+                },
+                "video": {
+                    "count": 0,
+                    "bytes": 0
+                },
+                "file": {
+                    "count": 2,
+                    "bytes": 200,
+                    "top_types": [
+                        {
+                            "ext": "pdf",
+                            "count": 2
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "id": "10000000-0000-4000-8000-000000000006",
+        "parent_id": null,
+        "name": "Taxes",
+        "path": "/Taxes",
+        "description": null,
+        "emoji": null,
+        "sort_order": 0,
+        "type": "collection",
+        "is_private": true,
+        "lock_id": "10000000-0000-4000-8000-000000000006",
+        "locked": false,
+        "created_at": "2026-01-01T09:00:00.000Z",
+        "updated_at": "2026-06-30T10:00:00.000Z",
+        "children": [
+            {
+                "id": "10000000-0000-4000-8000-000000000007",
+                "parent_id": "10000000-0000-4000-8000-000000000006",
+                "name": "Statements",
+                "path": "/Taxes/Statements",
+                "description": null,
+                "emoji": null,
+                "sort_order": 0,
+                "type": "folder",
+                "is_private": false,
+                "lock_id": "10000000-0000-4000-8000-000000000006",
+                "locked": false,
+                "created_at": "2026-01-01T09:00:00.000Z",
+                "updated_at": "2026-06-30T10:00:00.000Z",
+                "children": [],
+                "kind_counts": {
+                    "image": 0,
+                    "video": 0,
+                    "file": 1
+                },
+                "document_count": 1,
+                "cover": null
+            }
+        ],
+        "kind_counts": {
+            "image": 0,
+            "video": 0,
+            "file": 2
+        },
+        "document_count": 1,
+        "cover": null
+    }
+]
