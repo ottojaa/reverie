@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, UuidSchema } from './common.js';
+import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, QueryFlagSchema, UuidSchema } from './common.js';
 import { JobStatusEnum } from './jobs.js';
 
 /** Where a document's tag came from. `taught` tags come from a taught label and carry its id. */
@@ -196,9 +196,6 @@ export const DocumentListResponseSchema = PaginatedResponseSchema(DocumentSchema
 
 export type DocumentListResponse = z.infer<typeof DocumentListResponseSchema>;
 
-// Not z.coerce.boolean(): that turns the query-string "false" into true.
-const QueryFlagSchema = z.union([z.boolean(), z.string().transform((v) => v === 'true' || v === '1')]);
-
 export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     folder_id: UuidSchema.optional(),
     /** true: only the documents in no folder. Cannot be combined with `folder_id`. */
@@ -216,6 +213,8 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
      * `video` come back by date taken (upload date when there is none), the others by upload date.
      */
     kind: DocumentKindSchema.optional(),
+    /** true: only photos and videos (both kinds together), by date taken like `kind=image`. Not with `kind`. */
+    media: QueryFlagSchema.optional(),
     /**
      * true: only documents whose text recognition, thumbnail or AI summary is still pending or running
      * (transcoding runs on its own clock and is left out). `total` is then the processing total.
@@ -253,6 +252,11 @@ export const DocumentSummaryResponseSchema = z.object({
         /** The most common file types, most common first; at most four. */
         top_types: z.array(DocumentTopTypeSchema).max(4),
     }),
+    /**
+     * The first and last day the scope's photos and videos were taken (upload time where there is no date taken),
+     * on `GET /documents/summary` only; null when it holds none.
+     */
+    media_dates: z.object({ first: z.string().datetime(), last: z.string().datetime() }).nullable().optional(),
 });
 
 export type DocumentSummaryResponse = z.infer<typeof DocumentSummaryResponseSchema>;

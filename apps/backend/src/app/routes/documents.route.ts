@@ -17,6 +17,7 @@ import {
     TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
     UuidSchema,
+    ValidationError,
     type CheckContentRequest,
     type CheckDuplicatesRequest,
     type Document,
@@ -44,7 +45,7 @@ import {
     TAKEN_OR_CREATED_SQL,
     type DocumentListFilters,
 } from '../../services/document-list-filters';
-import { summariseDocuments } from '../../services/document-summary';
+import { loadMediaDates, summariseDocuments } from '../../services/document-summary';
 import { excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
 import { getStorageService } from '../../services/storage.service';
@@ -100,9 +101,11 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const { limit, offset, folder_id, top_level, preview, category, date_from, date_to, processing, kind } = request.query;
+            const { limit, offset, folder_id, top_level, preview, category, date_from, date_to, processing, kind, media } = request.query;
 
             if (folder_id && top_level) return reply.badRequest('Give folder_id or top_level, not both');
+
+            if (kind && media) throw new ValidationError('Give kind or media, not both');
 
             // A private folder's documents are listed only by asking for that folder, once it is open.
             // Every other listing (no folder filter) leaves private folders out, locked or not.
@@ -119,8 +122,9 @@ export default async function (fastify: FastifyInstance) {
                 dateTo: date_to,
                 processing,
                 kind,
+                media,
             };
-            const byDateTaken = kind === 'image' || kind === 'video';
+            const byDateTaken = media || kind === 'image' || kind === 'video';
             const page = applyDocumentListFilters(db.selectFrom('documents').selectAll().select(TAKEN_AT_SQL.as('taken_at')), filters);
             // A preview is a few cards standing for a kind: screenshots and screen recordings come after the rest.
             const ranked = preview && kind ? page.orderBy(IS_SCREEN_CAPTURE_SQL) : page;
@@ -165,7 +169,10 @@ export default async function (fastify: FastifyInstance) {
             const locks = await loadFolderLocks(fastify, request, userId);
             locks.assertOpen(folder_id ?? null);
 
-            return summariseDocuments({ userId, folderId: folder_id, topLevel: top_level, privateFolderIds: locks.privateFolderIds });
+            const scope = { userId, folderId: folder_id, topLevel: top_level, privateFolderIds: locks.privateFolderIds };
+            const [summary, mediaDates] = await Promise.all([summariseDocuments(scope), loadMediaDates(scope)]);
+
+            return { ...summary, media_dates: mediaDates };
         },
     );
 

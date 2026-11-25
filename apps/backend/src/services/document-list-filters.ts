@@ -17,6 +17,8 @@ export interface DocumentListFilters {
     dateTo?: string;
     processing?: boolean;
     kind?: DocumentKind;
+    /** Photos and videos only. */
+    media?: boolean;
 }
 
 /** A document whose text recognition, thumbnail or AI summary has not finished yet (transcoding is its own clock). */
@@ -36,6 +38,13 @@ export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: Doc
     return eb.not(eb.or([isImage, isVideo]));
 }
 
+/** A photo or a video (the image and video kinds together), for a query that names the documents table as it likes. */
+export function isMediaSql(mimeType: 'mime_type' | 'd.mime_type') {
+    const column = sql.ref(mimeType);
+
+    return sql<boolean>`(lower(${column}) like 'image/%' or lower(${column}) like 'video/%')`;
+}
+
 /**
  * Every rule that decides which documents the list (and its total) contains. The page query and the count query
  * both go through here, so they cannot disagree.
@@ -44,7 +53,7 @@ export function applyDocumentListFilters<O>(
     query: SelectQueryBuilder<Database, 'documents', O>,
     filters: DocumentListFilters,
 ): SelectQueryBuilder<Database, 'documents', O> {
-    const { userId, folderId, topLevel, privateFolderIds, category, dateFrom, dateTo, processing, kind } = filters;
+    const { userId, folderId, topLevel, privateFolderIds, category, dateFrom, dateTo, processing, kind, media } = filters;
 
     let filtered = excludeTrashed(query.where('user_id', '=', userId), '');
 
@@ -61,6 +70,8 @@ export function applyDocumentListFilters<O>(
     if (processing) filtered = filtered.where(isStillProcessing);
 
     if (kind) filtered = filtered.where((eb) => isOfKind(eb, kind));
+
+    if (media) filtered = filtered.where(isMediaSql('mime_type'));
 
     return filtered;
 }

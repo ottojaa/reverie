@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UuidSchema, DateOnlySchema, PaginationQuerySchema } from './common.js';
+import { UuidSchema, DateOnlySchema, PaginationQuerySchema, QueryFlagSchema } from './common.js';
 import { DocumentCategoryEnum, ThumbnailUrlsSchema } from './documents.js';
 import { FolderTypeSchema } from './folders.js';
 
@@ -35,6 +35,8 @@ const ParsedQueryBaseSchema = z.object({
     folders: z.array(z.string()).optional(),
     // The request's `folder_id`: everything else is narrowed to this folder and what is beneath it
     scopeFolderId: UuidSchema.optional(),
+    // The request's `media`: everything else is narrowed to photos and videos
+    scopeMedia: z.boolean().optional(),
 
     // Property filters
     hasText: z.boolean().optional(),
@@ -73,6 +75,8 @@ export const SearchQuerySchema = PaginationQuerySchema.extend({
     q: z.string().min(0).default(''), // Allow empty for browsing
     /** Search only this folder and everything beneath it. */
     folder_id: UuidSchema.optional(),
+    /** true: search only photos and videos; folders are left out of the results. */
+    media: QueryFlagSchema.optional(),
     sort_by: SortByEnum.default('relevance'),
     sort_order: z.enum(['asc', 'desc']).default('desc'),
     // Not z.coerce.boolean(): that turns the query-string "false" into true
@@ -274,6 +278,8 @@ export const FacetsQuerySchema = z.object({
     q: z.string().min(0).default(''),
     /** Count only this folder and everything beneath it. */
     folder_id: UuidSchema.optional(),
+    /** true: count only photos and videos. */
+    media: QueryFlagSchema.optional(),
 });
 
 export type FacetsQuery = z.infer<typeof FacetsQuerySchema>;
