@@ -60,6 +60,7 @@ class DocumentViewModel @Inject constructor(
     val favourites = FavouriteController(favouriteDeps, viewModelScope)
 
     private val initialId: String = checkNotNull(savedStateHandle["id"])
+    private val originId: String = checkNotNull(savedStateHandle["from"])
     private val fallback = listOf(initialId)
     private val sequence = sequenceHolder.current
 
@@ -125,7 +126,7 @@ class DocumentViewModel @Inject constructor(
     /** Fresh URLs after a 403/410 on the stream: a signature expired while the video played or sat paused. */
     suspend fun refreshSignedUrls(id: String): SignedUrls? = documentRepository.refreshSignedUrls(id)?.let(::absoluteUrls)
 
-    /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin grid. */
+    /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin list. */
     fun onPageSettled(id: String) {
         if (id == currentId) return
         currentId = id
@@ -134,7 +135,7 @@ class DocumentViewModel @Inject constructor(
         currentSub?.close()
         viewModelScope.launch { currentSub = realtimeManager.subscribeDocument(id) }
         viewModelScope.launch { documentRepository.touchAccessed(id) }
-        sequenceHolder.setFocused(id)
+        sequenceHolder.setFocus(ViewerFocus(originId, id))
         // Pull the detail record into Room so observers get llm_summary/llm_metadata (insights) and
         // photo_metadata (location map) — the list endpoint serializes all three as null. This used to
         // happen as a side effect of fileUrl()'s fetch, but list-page URL warming now lets fileUrl()

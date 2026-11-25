@@ -13,6 +13,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
+import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
 /**
@@ -31,7 +32,7 @@ fun BrowseScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    val focusedId = returnedDocumentId(viewModel.viewerFocus)
     val openDocument = rememberOpenDocument(onDocumentClick)
     val today = rememberToday()
     val zone = remember { ZoneId.systemDefault() }
@@ -83,7 +84,7 @@ fun BrowseScreen(
             zone = zone,
             actions = actions,
             focusedId = focusedId,
-            onFocusConsumed = viewModel::clearFocusedDocument,
+            onFocusConsumed = viewModel::clearViewerFocus,
             onLoadMore = viewModel::loadMore,
             error = ui.error,
             onUpload = slot.onUpload,

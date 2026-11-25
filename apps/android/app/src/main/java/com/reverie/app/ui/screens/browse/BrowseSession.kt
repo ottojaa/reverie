@@ -22,6 +22,7 @@ import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDeps
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
+import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -119,8 +120,8 @@ class BrowseSession(
         .map { it.mosaicFeatureEvery }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 3)
 
-    /** The document the viewer is showing, so the list can scroll it into view on return. */
-    val focusedDocumentId: StateFlow<String?> get() = deps.sequenceHolder.focused
+    /** What the viewer is showing, so the list it was opened from can scroll to it on return. */
+    val viewerFocus: StateFlow<ViewerFocus?> get() = deps.sequenceHolder.focus
 
     init {
         deps.processing.refresh()
@@ -131,7 +132,7 @@ class BrowseSession(
     }
 
     /** Consume the focus signal once the list has scrolled to it, so later list updates don't re-scroll. */
-    fun clearFocusedDocument() = deps.sequenceHolder.setFocused(null)
+    fun clearViewerFocus() = deps.sequenceHolder.setFocus(null)
 
     /** Hand [sequence] to the viewer so it can swipe through it. Call right before navigating into a document. */
     fun publish(sequence: DocumentSequence) = deps.sequenceHolder.set(sequence)

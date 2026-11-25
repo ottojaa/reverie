@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.AppViewModel
+import com.reverie.app.ui.components.RetryMissedThumbnails
 import com.reverie.app.ui.navigation.MainShell
 import com.reverie.app.ui.navigation.MotionTuning
 import com.reverie.app.ui.navigation.toMotionSpec
@@ -51,7 +52,9 @@ class MainActivity : ComponentActivity() {
                     when (authState) {
                         is AuthState.Unknown -> LoadingScreen()
                         is AuthState.LoggedOut -> LoginScreen()
-                        is AuthState.Authenticated -> MainShell(hideNavOnScroll = settings.hideNavOnScroll)
+                        is AuthState.Authenticated -> RetryMissedThumbnails(appViewModel.missedThumbnails) {
+                            MainShell(hideNavOnScroll = settings.hideNavOnScroll)
+                        }
                     }
                 }
             }

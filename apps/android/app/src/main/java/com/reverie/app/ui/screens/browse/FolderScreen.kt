@@ -8,6 +8,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
+import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
 /** A folder's page: what it holds, filtered by kind with the chips, as cards or as a list. */
@@ -22,7 +23,7 @@ fun FolderScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    val focusedId = returnedDocumentId(viewModel.viewerFocus)
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val openDocument = rememberOpenDocument(onDocumentClick)
@@ -67,7 +68,7 @@ fun FolderScreen(
             today = today,
             zone = zone,
             focusedId = focusedId,
-            onFocusConsumed = viewModel::clearFocusedDocument,
+            onFocusConsumed = viewModel::clearViewerFocus,
             onLoadMore = viewModel::loadMore,
             error = ui.error,
             slot = slot,

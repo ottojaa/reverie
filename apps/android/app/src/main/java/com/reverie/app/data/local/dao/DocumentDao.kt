@@ -24,6 +24,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :id")
     fun observeById(id: String): Flow<DocumentEntity?>
 
+    /** Those of [ids] whose thumbnail status is one of [statuses] (stored as JobStatus names). */
+    @Query("SELECT id FROM documents WHERE id IN (:ids) AND thumbnailStatus IN (:statuses)")
+    fun observeIdsWithThumbnailStatus(ids: List<String>, statuses: List<String>): Flow<List<String>>
+
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getById(id: String): DocumentEntity?
 
