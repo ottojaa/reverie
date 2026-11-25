@@ -5,6 +5,7 @@ import { getSetting } from '../settings/settings.service.js';
 import { getDeduplicatedFilename } from '../utils/filename';
 import { loadFolderTree } from './folders/load.js';
 import { deleteTrashedDocuments, purgeFolders, type DocumentPurgeScope, type FolderPurgeScope } from './folders/purge.js';
+import { lockFolders } from './folders/transaction.js';
 import { isUnitRoot, restoreFolder, toUnitCounts, type TrashUnitCounts } from './folders/trash.js';
 import { excludeTrashed, loadLockMap } from './privacy';
 import { getUploadService } from './upload.service';
@@ -52,6 +53,9 @@ export class TrashService {
 
     private async restoreDocumentsIn(trx: Kysely<Database>, userId: string, ids: string[]): Promise<number> {
         if (ids.length === 0) return 0;
+
+        // Restoring a document may restore its folder, after earlier documents are already updated.
+        await lockFolders(trx, userId);
 
         const docs = await trx
             .selectFrom('documents')

@@ -22,6 +22,28 @@ import type { FolderTree } from '../../services/folders/snapshot';
 import { trashFolder } from '../../services/folders/trash';
 import { createFolder, reorderFolders, toSharedParentId, updateFolder } from '../../services/folders/writes';
 
+/**
+ * Throws unless the open locks allow the change. Moving a folder out of its lock, or making it public, would
+ * expose what the lock hides, so that lock must be open, and so must the lock of where it goes. A folder inside a
+ * locked one takes no changes at all. No change may open a closed lock at or beneath the folder, so making a
+ * folder private needs no unlock unless it would do that.
+ */
+function assertMayChange(tree: FolderTree<DbFolder>, locks: FolderLocks, id: string, change: UpdateFolderRequest): void {
+    const { is_private, parent_id } = change;
+
+    if (locks.isHidden(id) || is_private === false || parent_id !== undefined) locks.assertOpen(id);
+
+    locks.assertOpen(parent_id ?? null);
+
+    const folder = tree.folder(id);
+    const parentAfter = parent_id === undefined ? (folder?.parent_id ?? null) : parent_id;
+    // The lock above its new place covers the folder afterwards; without one, it may be a lock of its own.
+    const lockAfter = locks.lockIdOf(parentAfter) ?? ((is_private ?? folder?.is_private) ? id : null);
+    const subtreeIds = tree.subtree(id, { trashed: true }).map((below) => below.id);
+
+    locks.assertNoneOpenedBy(lockAfter, subtreeIds);
+}
+
 export default async function (fastify: FastifyInstance) {
     /** The request user's folders, and the lock state of the same moment. */
     async function loadTreeAndLocks(request: FastifyRequest): Promise<{ tree: FolderTree<DbFolder>; locks: FolderLocks }> {
@@ -215,15 +237,9 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const { id } = request.params;
-            const { is_private, parent_id } = request.body;
-            const before = await loadFolderLocks(fastify, request, userId);
+            const { tree, locks } = await loadTreeAndLocks(request);
 
-            // Moving a folder out of its lock, or making it public, would expose what the lock hides, so
-            // that lock must be open, and so must the lock of where it goes. A folder inside a locked one
-            // takes no changes at all. Making a folder private exposes nothing and needs no unlock.
-            if (before.isHidden(id) || is_private === false || parent_id !== undefined) before.assertOpen(id);
-
-            before.assertOpen(parent_id ?? null);
+            assertMayChange(tree, locks, id, request.body);
 
             const folder = await updateFolder(userId, id, request.body);
 

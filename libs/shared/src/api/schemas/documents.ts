@@ -307,22 +307,24 @@ export const Sha256HexSchema = z
     .regex(/^[0-9a-fA-F]{64}$/)
     .transform((hash) => hash.toLowerCase());
 
-export const CheckContentRequestSchema = z.object({
-    /** Folder the files are about to go into. Without it or `top_level` only the content is checked. */
-    folder_id: UuidSchema.optional(),
-    /** true: the files are about to go to the top level (in no folder). */
-    top_level: z.boolean().optional(),
-    files: z
-        .array(
-            z.object({
-                name: z.string().min(1),
-                /** Left out when the client could not read the file: it then gets the name check only. */
-                sha256: Sha256HexSchema.optional(),
-            }),
-        )
-        .min(1)
-        .max(CHECK_CONTENT_MAX_FILES),
-});
+export const CheckContentRequestSchema = z
+    .object({
+        /** Folder the files are about to go into. Without it or `top_level` only the content is checked. */
+        folder_id: UuidSchema.optional(),
+        /** true: the files are about to go to the top level (in no folder). */
+        top_level: z.boolean().optional(),
+        files: z
+            .array(
+                z.object({
+                    name: z.string().min(1),
+                    /** Left out when the client could not read the file: it then gets the name check only. */
+                    sha256: Sha256HexSchema.optional(),
+                }),
+            )
+            .min(1)
+            .max(CHECK_CONTENT_MAX_FILES),
+    })
+    .refine((value) => value.folder_id === undefined || value.top_level !== true, { message: 'Give folder_id or top_level, not both' });
 export type CheckContentRequest = z.input<typeof CheckContentRequestSchema>;
 
 /**

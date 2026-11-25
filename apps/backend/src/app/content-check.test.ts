@@ -121,6 +121,7 @@ describeDb('POST /documents/check-content', () => {
 
         expect((await post('/documents/check-content', { files })).body.results[0].name_conflict).toBe(false);
         expect((await post('/documents/check-content', { top_level: true, files })).body.results[0].name_conflict).toBe(true);
+        expect((await post('/documents/check-content', { top_level: true, folder_id: world().folders.work.id, files })).status).toBe(400);
     });
 
     it('builds the path from current names, not the stored folders.path', async () => {

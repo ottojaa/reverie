@@ -12,6 +12,7 @@ import type { Database, Folder } from '../db/schema';
 import type { FolderLocks } from './folder-locks';
 import { assertLiveFolder, loadFolderTree } from './folders/load.js';
 import type { FolderTree } from './folders/snapshot.js';
+import { lockFolders } from './folders/transaction.js';
 import { trashEmptyFolder } from './folders/trash.js';
 import { findByNames, getOrCreateFolders } from './folders/writes.js';
 import { excludeTrashed } from './privacy';
@@ -82,6 +83,8 @@ export async function executeOrganize(options: ExecuteOrganizeOptions): Promise<
     const deleteOps = operations.filter((op): op is Extract<OrganizeOperation, { type: 'delete_folder' }> => op.type === 'delete_folder');
 
     return db.transaction().execute(async (trx) => {
+        await lockFolders(trx, userId);
+
         let movedCount = 0;
         let foldersCreated = 0;
         let foldersDeleted = 0;

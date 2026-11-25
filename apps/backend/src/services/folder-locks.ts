@@ -15,7 +15,9 @@ import { loadLockMap, toLockMap, type LockMap } from './privacy.js';
  * logout clears it. Nothing is stored on the server: the cookie is the whole state.
  *
  * Only ids that are still a current lock count, so moving a private folder under another private
- * folder (which changes the lock that covers it) closes it again.
+ * folder (which changes the lock that covers it) closes it again. A cookie can still name a folder
+ * that stopped being a lock and becomes one again, so a change to a folder is checked with
+ * `assertNoneOpenedBy`.
  */
 
 export const VAULT_COOKIE = 'vault_session';
@@ -93,6 +95,14 @@ export class FolderLocks {
     /** assertOpen for several folders (a document batch can span folders). */
     assertAllOpen(folderIds: Iterable<string | null>): void {
         for (const folderId of folderIds) this.assertOpen(folderId);
+    }
+
+    /**
+     * Guards a change that puts folders behind the lock `lockId` (null: none). When this session has that lock
+     * open, the change would open each of them that is locked now, so none may be.
+     */
+    assertNoneOpenedBy(lockId: string | null, folderIds: Iterable<string>): void {
+        if (lockId !== null && this.openLocks.has(lockId)) this.assertAllOpen(folderIds);
     }
 }
 
