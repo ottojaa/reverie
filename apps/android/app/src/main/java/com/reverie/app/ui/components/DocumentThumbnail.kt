@@ -18,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.network.HttpException
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentKind
@@ -37,13 +37,6 @@ import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatDuration
-
-/**
- * Ids of the documents whose thumbnail job has not finished, provided once around the app. A
- * composition local so that every thumbnail has it, also on cards that carry no job status (folder
- * covers, search results).
- */
-val LocalAwaitingThumbnails = compositionLocalOf<Set<String>> { emptySet() }
 
 /**
  * The thumbnail fill for a document: a cropped image, or — when there's no rendered preview — a
@@ -66,6 +59,7 @@ fun DocumentThumbnail(
 ) {
     if (hasThumbnail) {
         val placeholder = rememberBlurhashPainter(blurhash)
+        val onMissed = LocalOnThumbnailMissed.current
         Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
             AsyncImage(
                 // Explicit memory-cache key so the viewer can reuse this exact decoded bitmap as
@@ -74,15 +68,16 @@ fun DocumentThumbnail(
                     .data(ThumbnailRef(documentId, size))
                     .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
                     .diskCachePolicy(diskCachePolicy)
-                    // There can be a thumbnail to ask for before the job has made it. Such a load
-                    // fails, and Coil loads again only when the request differs: this makes it differ
-                    // once the job has finished.
-                    .setParameter("awaiting_thumbnail", documentId in LocalAwaitingThumbnails.current)
+                    // Coil loads again only when the request differs. This makes it differ when a
+                    // missed thumbnail starts being awaited, and again when its job has finished.
+                    .setParameter("awaited", documentId in LocalAwaitedThumbnails.current)
                     .build(),
                 contentDescription = filename,
                 contentScale = ContentScale.Crop,
                 placeholder = placeholder,
                 error = placeholder,
+                // Only a refusal from the server: an unreachable server says nothing about the job.
+                onError = { if (it.result.throwable is HttpException) onMissed(documentId) },
                 modifier = Modifier.matchParentSize(),
             )
         }

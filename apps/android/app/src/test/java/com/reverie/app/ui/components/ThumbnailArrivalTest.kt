@@ -4,15 +4,16 @@ import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import coil.Coil
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.intercept.Interceptor
+import coil.network.HttpException
 import coil.request.ErrorResult
 import coil.request.ImageResult
 import coil.request.SuccessResult
@@ -28,6 +29,7 @@ import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.PrivateDocumentStore
+import com.reverie.app.data.processing.MissedThumbnails
 import com.reverie.app.data.processing.ProcessingTracker
 import com.reverie.app.data.realtime.DocumentJobEvents
 import com.reverie.app.data.repository.DocumentRepository
@@ -57,8 +59,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.builtins.serializer
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -68,7 +72,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
@@ -133,24 +136,73 @@ class ThumbnailArrivalTest {
         assertEquals("no list was read", 0, server.listReads)
     }
 
-    /** Shows [content] as the app does, then finishes the upload's thumbnail job. */
+    @Test fun `a cover of an upload the app had not heard of loads once the job finishes`() {
+        showCoverOfUnheardUpload()
+        compose.waitUntil(TIMEOUT) { "new" in events.joined }
+
+        finishJob()
+        events.complete("new")
+
+        compose.waitUntil(TIMEOUT) { thumbnails.served.last() }
+    }
+
+    @Test fun `a cover whose job finished just after its load failed loads the thumbnail`() {
+        thumbnails.onMiss = ::finishJob
+
+        showCoverOfUnheardUpload()
+
+        compose.waitUntil(TIMEOUT) { thumbnails.served.lastOrNull() == true }
+    }
+
+    @Test fun `a thumbnail whose job failed is not asked for over and over`() {
+        server.document = server.document.copy(thumbnail_status = JobStatus.FAILED)
+        val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
+
+        show { CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+
+        compose.waitUntil(TIMEOUT) { server.documentReads > 0 }
+        compose.waitForIdle()
+        // At most: the first load, one as it starts being awaited, one as its failure becomes known.
+        assertTrue("loads: ${thumbnails.served}", thumbnails.served.size <= 3)
+    }
+
+    /** A cover from the folder tree appears after the tracker last found nothing processing. */
+    private fun showCoverOfUnheardUpload() {
+        server.uploaded = false
+        val uploaded = mutableStateOf(false)
+        val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
+        show { if (uploaded.value) CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+        compose.waitUntil(TIMEOUT) { server.processingReads > 0 }
+        compose.waitForIdle()
+
+        server.uploaded = true
+        compose.runOnIdle { uploaded.value = true }
+        compose.waitForIdle()
+        compose.waitUntil(TIMEOUT) { thumbnails.served.isNotEmpty() }
+    }
+
+    private fun finishJob() {
+        thumbnails.rendered = true
+        server.document = server.document.copy(thumbnail_status = JobStatus.COMPLETE)
+    }
+
+    /** Shows [content] as the app does, with the real processing tracker running. */
+    private fun show(content: @Composable () -> Unit) {
+        val tracker = ProcessingTracker(repository, events, flowOf(true), scope, refreshWindow = Duration.ZERO)
+        val missed = MissedThumbnails(repository, tracker)
+        compose.setContent { RetryMissedThumbnails(missed) { ReverieTheme(content = content) } }
+    }
+
+    /** Shows [content], then finishes the upload's thumbnail job. */
     private fun assertThumbnailArrives(content: @Composable () -> Unit) {
-        ProcessingTracker(repository, events, flowOf(true), scope, refreshWindow = Duration.ZERO)
-        val awaiting = repository.observeAwaitingThumbnail().stateIn(scope, SharingStarted.Eagerly, emptySet())
-        compose.setContent {
-            val ids by awaiting.collectAsState()
-            CompositionLocalProvider(LocalAwaitingThumbnails provides ids) { ReverieTheme(content = content) }
-        }
+        show(content)
         compose.waitUntil(TIMEOUT) { thumbnails.served.isNotEmpty() && "new" in events.joined }
         assertEquals("only the blurhash can be shown so far", false, thumbnails.served.last())
 
-        thumbnails.rendered = true
-        server.document = server.document.copy(thumbnail_status = JobStatus.COMPLETE)
+        finishJob()
         events.complete("new")
 
-        compose.waitUntil(TIMEOUT) { "new" !in awaiting.value }
-        compose.waitForIdle()
-        assertTrue("the thumbnail was loaded: ${thumbnails.served}", thumbnails.served.last())
+        compose.waitUntil(TIMEOUT) { thumbnails.served.last() }
     }
 
     /** The documents API over one fresh image upload: blurhash known, thumbnail pending. */
@@ -160,18 +212,26 @@ class ThumbnailArrivalTest {
             thumbnail_blurhash = BLURHASH,
         )
 
+        /** False while the upload has not happened yet, as far as the lists are concerned. */
+        @Volatile var uploaded = true
+
         /** How often the list was read, apart from the tracker asking what is processing. */
         @Volatile var listReads = 0
+
+        @Volatile var processingReads = 0
+
+        @Volatile var documentReads = 0
 
         fun repository(): DocumentRepository {
             val engine = MockEngine { request ->
                 val path = request.url.encodedPath
                 val body = if (path.endsWith("/documents/new")) {
+                    documentReads++
                     ApiJson.encodeToString(DocumentDto.serializer(), document)
                 } else {
                     val processing = request.url.parameters["processing"] == "true"
-                    if (!processing) listReads++
-                    val items = listOf(document).filter { !processing || it.isStillProcessing }
+                    if (processing) processingReads++ else listReads++
+                    val items = listOf(document).filter { uploaded && (!processing || it.isStillProcessing) }
                     ApiJson.encodeToString(
                         Paginated.serializer(DocumentDto.serializer()),
                         Paginated(items, items.size, limit = 60, offset = 0),
@@ -192,13 +252,19 @@ class ThumbnailArrivalTest {
     private class ThumbnailEndpoint : Interceptor {
         @Volatile var rendered = false
 
+        /** Runs after a load found nothing. */
+        @Volatile var onMiss: () -> Unit = {}
+
         /** One entry per image load: whether it got a picture. */
         val served = CopyOnWriteArrayList<Boolean>()
 
         override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
             val found = rendered
             served += found
-            if (!found) return ErrorResult(null, chain.request, IOException("Thumbnail not available"))
+            if (!found) {
+                onMiss()
+                return ErrorResult(null, chain.request, HttpException(serverError()))
+            }
             return SuccessResult(ColorDrawable(android.graphics.Color.RED), chain.request, DataSource.NETWORK)
         }
     }
@@ -232,6 +298,11 @@ class ThumbnailArrivalTest {
     }
 
     private companion object {
+        /** What the server answers while there is no thumbnail. */
+        fun serverError(): Response = Response.Builder()
+            .request(Request.Builder().url("http://localhost/thumbnail").build())
+            .protocol(Protocol.HTTP_1_1).code(500).message("Internal Server Error").build()
+
         const val TIMEOUT = 10_000L
         const val BLURHASH = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
     }

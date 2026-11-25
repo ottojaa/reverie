@@ -10,7 +10,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -20,7 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.AppViewModel
-import com.reverie.app.ui.components.LocalAwaitingThumbnails
+import com.reverie.app.ui.components.RetryMissedThumbnails
 import com.reverie.app.ui.navigation.MainShell
 import com.reverie.app.ui.navigation.MotionTuning
 import com.reverie.app.ui.navigation.toMotionSpec
@@ -38,7 +37,6 @@ class MainActivity : ComponentActivity() {
             val appViewModel: AppViewModel = hiltViewModel()
             val settings by appViewModel.settings.collectAsStateWithLifecycle()
             val authState by appViewModel.authState.collectAsStateWithLifecycle()
-            val awaitingThumbnails by appViewModel.awaitingThumbnails.collectAsStateWithLifecycle()
 
             // TEMPORARY / DEV TUNING — bridge persisted motion knobs into the runtime holder.
             LaunchedEffect(settings) { MotionTuning.spec = settings.toMotionSpec() }
@@ -54,9 +52,7 @@ class MainActivity : ComponentActivity() {
                     when (authState) {
                         is AuthState.Unknown -> LoadingScreen()
                         is AuthState.LoggedOut -> LoginScreen()
-                        is AuthState.Authenticated -> CompositionLocalProvider(
-                            LocalAwaitingThumbnails provides awaitingThumbnails,
-                        ) {
+                        is AuthState.Authenticated -> RetryMissedThumbnails(appViewModel.missedThumbnails) {
                             MainShell(hideNavOnScroll = settings.hideNavOnScroll)
                         }
                     }

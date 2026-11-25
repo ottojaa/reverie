@@ -24,9 +24,9 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :id")
     fun observeById(id: String): Flow<DocumentEntity?>
 
-    // Statuses are stored as JobStatus names; these two are the unfinished ones.
-    @Query("SELECT id FROM documents WHERE thumbnailStatus IN ('PENDING', 'PROCESSING')")
-    fun observeIdsAwaitingThumbnail(): Flow<List<String>>
+    // Statuses are stored as JobStatus names; these three are the finished ones.
+    @Query("SELECT id FROM documents WHERE id IN (:ids) AND thumbnailStatus IN ('COMPLETE', 'FAILED', 'SKIPPED')")
+    fun observeIdsWithFinishedThumbnail(ids: List<String>): Flow<List<String>>
 
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getById(id: String): DocumentEntity?

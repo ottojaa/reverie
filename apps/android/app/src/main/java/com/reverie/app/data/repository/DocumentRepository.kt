@@ -130,10 +130,10 @@ class DocumentRepository @Inject constructor(
         }.flowOn(io)
     }
 
-    /** Ids of the documents held here whose thumbnail job has not finished. */
-    fun observeAwaitingThumbnail(): Flow<Set<String>> =
-        combine(documentDao.observeIdsAwaitingThumbnail(), privateStore.documents) { cached, private ->
-            cached.toSet() + private.values.filterNot { it.thumbnail_status.isTerminal }.map { it.id }
+    /** Those of [ids] whose thumbnail job is not known here to have finished. */
+    fun observeUnfinishedThumbnails(ids: Set<String>): Flow<Set<String>> =
+        combine(documentDao.observeIdsWithFinishedThumbnail(ids.toList()), privateStore.documents) { cached, private ->
+            ids - cached.toSet() - ids.filter { private[it]?.thumbnail_status?.isTerminal == true }.toSet()
         }.distinctUntilChanged().flowOn(io)
 
     fun observeDocument(id: String): Flow<DocumentDto?> {

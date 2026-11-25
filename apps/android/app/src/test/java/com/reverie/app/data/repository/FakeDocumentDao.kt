@@ -16,8 +16,9 @@ internal class FakeDocumentDao : DocumentDao {
         rows.map { list -> list.filter { it.folderId == folderId } }
     override fun observeById(id: String): Flow<DocumentEntity?> =
         rows.map { list -> list.firstOrNull { it.id == id } }
-    override fun observeIdsAwaitingThumbnail(): Flow<List<String>> =
-        rows.map { list -> list.filter { it.thumbnailStatus == "PENDING" || it.thumbnailStatus == "PROCESSING" }.map { it.id } }
+    override fun observeIdsWithFinishedThumbnail(ids: List<String>): Flow<List<String>> = rows.map { list ->
+        list.filter { it.id in ids && it.thumbnailStatus in setOf("COMPLETE", "FAILED", "SKIPPED") }.map { it.id }
+    }
     override suspend fun getById(id: String): DocumentEntity? = rows.value.firstOrNull { it.id == id }
     override suspend fun upsertAll(documents: List<DocumentEntity>) {
         val map = rows.value.associateBy { it.id }.toMutableMap()
