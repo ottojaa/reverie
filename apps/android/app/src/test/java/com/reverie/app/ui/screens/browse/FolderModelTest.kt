@@ -2,8 +2,13 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.KindCountsDto
+import com.reverie.app.data.api.model.MediaDatesDto
+import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.domain.folderMeta
+import com.reverie.app.ui.screens.destination.node
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -12,8 +17,12 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 class FolderModelTest {
 
@@ -24,150 +33,218 @@ class FolderModelTest {
         doc("p1", created = "2026-11-21T10:00:00Z", taken = "2026-06-03T10:00:00Z"),
     )
     private val files = listOf(
-        doc("f2", "application/pdf", created = "2026-11-25T12:00:00Z"),
+        doc("f3", "application/pdf", created = "2026-11-25T12:00:00Z"),
+        doc("f2", "text/plain", created = "2026-11-24T12:00:00Z"),
         doc("f1", "text/plain", created = "2026-11-20T12:00:00Z"),
     )
 
-    private class Fixture(
-        val server: FakeServer,
-        val model: FolderModel,
-        val summary: MutableStateFlow<DocumentSummaryDto?>,
-    ) {
+    private val leaf = node("lisbon", parent = "trips").copy(kind_counts = KindCountsDto(image = 3, file = 3))
+    private val tree = listOf(node("trips", children = listOf(leaf)).copy(kind_counts = leaf.kind_counts))
+
+    private val layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 26), ZoneOffset.UTC)
+
+    private class Fixture(val server: FakeServer, val model: FolderModel, val failures: MutableList<Throwable>) {
         val state: FolderState get() = model.state.value
-        val ids: List<String> get() = state.feed.documents.documents.map(DocumentDto::id)
-        val chips: List<Pair<DocumentKind?, Int?>> get() = state.chips.map { it.kind to it.count }
+        val photoIds: List<String> get() = state.media.documents.map(DocumentDto::id)
+        val fileIds: List<String>? get() = state.files?.documents?.map(DocumentDto::id)
     }
 
-    private fun TestScope.start(server: FakeServer, online: Boolean = true): Fixture {
+    private fun TestScope.start(
+        server: FakeServer,
+        folderId: String = "lisbon",
+        isLockRefusal: Boolean = false,
+    ): Fixture {
         val summary = MutableStateFlow<DocumentSummaryDto?>(null)
+        val failures = mutableListOf<Throwable>()
         val model = FolderModel(
             scope = backgroundScope as CoroutineScope,
+            folderId = folderId,
+            tree = MutableStateFlow(tree),
             cache = server.cache,
             summary = summary,
-            fetchPage = { kind, offset -> server.page(kind?.let(DocumentFilter::of) ?: DocumentFilter.ALL, offset) },
-            fetchSummary = { if (online) server.summary().also { summary.value = it } else error("offline") },
+            fetchPage = server::page,
+            fetchSummary = { server.summary().also { summary.value = it } },
+            reconcile = { filter, keep -> server.dropStale(filter, keep) },
+            onFirstPageFailed = { failures += it },
+            isLockRefusal = { isLockRefusal },
             computation = UnconfinedTestDispatcher(testScheduler),
             sharing = SharingStarted.Eagerly,
         )
-        return Fixture(server, model, summary)
+        return Fixture(server, model, failures)
     }
 
-    @Test fun `the chips count what the server says the folder holds, and leave out the kinds it doesn't`() = runTest(UnconfinedTestDispatcher()) {
-        // One page is two rows: the counts are the folder's, not the loaded rows'.
-        val f = start(FakeServer(photos + files))
+    @Test fun `the folder is found in the tree with the folders above it`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(emptyList()))
 
-        assertEquals(listOf<Pair<DocumentKind?, Int?>>(null to 5, DocumentKind.IMAGE to 3, DocumentKind.FILE to 2), f.chips)
-        assertEquals(5, f.state.total)
-        assertEquals(null, f.state.matching)
+        assertEquals("lisbon", f.state.node?.name)
+        assertEquals(listOf("trips", "lisbon"), f.state.path.map(FolderWithChildren::id))
     }
 
-    @Test fun `a folder holding one kind has no chip row`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos))
+    @Test fun `the other files are asked for once the photos and videos have been read to the end`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val f = start(FakeServer(photos + files))
+            assertEquals(listOf(DocumentFilter.MEDIA to 0), f.server.requests)
+            assertNull(f.state.files)
+            assertTrue(f.state.hasMore)
 
-        assertEquals(emptyList<Pair<DocumentKind?, Int?>>(), f.chips)
-        assertEquals(3, f.state.total)
+            f.model.loadMore()
+
+            assertEquals(
+                listOf(DocumentFilter.MEDIA to 0, DocumentFilter.MEDIA to 2, DocumentFilter.FILES to 0),
+                f.server.requests,
+            )
+            // Photos go by date taken, files by upload time.
+            assertEquals(listOf("p1", "p2", "p3"), f.photoIds)
+            assertEquals(listOf("f3", "f2"), f.fileIds)
+
+            f.model.loadMore()
+
+            assertEquals(DocumentFilter.FILES to 2, f.server.requests.last())
+            assertEquals(listOf("f3", "f2", "f1"), f.fileIds)
+            assertEquals(false, f.state.hasMore)
+        }
+
+    @Test fun `a folder without photos shows its files straight away`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(files))
+
+        assertEquals(listOf(DocumentFilter.MEDIA to 0, DocumentFilter.FILES to 0), f.server.requests)
+        assertEquals(listOf("f3", "f2"), f.fileIds)
     }
 
-    @Test fun `without a summary the chips are the cached rows' kinds, uncounted`() = runTest(UnconfinedTestDispatcher()) {
-        val server = FakeServer(emptyList())
-        server.cache.value = photos + files
+    @Test fun `when the photos cannot be read, the files are still shown from the server or the cache`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val server = FakeServer(files)
+            server.failNext = true
+
+            val f = start(server)
+
+            assertEquals(1, f.failures.size)
+            assertEquals(listOf("f3", "f2"), f.fileIds)
+        }
+
+    @Test fun `a lock refusal asks for nothing further`() = runTest(UnconfinedTestDispatcher()) {
+        val server = FakeServer(files)
         server.failNext = true
-        val f = start(server, online = false)
 
-        assertEquals(listOf<Pair<DocumentKind?, Int?>>(null to null, DocumentKind.IMAGE to null, DocumentKind.FILE to null), f.chips)
-        assertEquals(null, f.state.total)
+        val f = start(server, isLockRefusal = true)
+
+        assertEquals(listOf(DocumentFilter.MEDIA to 0), f.server.requests)
+        assertNull(f.state.files)
     }
 
-    @Test fun `a chip's list is read the first time it is selected, and kept`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        assertEquals(listOf(DocumentFilter.ALL to 0), f.server.requests)
+    @Test fun `a selection spans both sections`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos.take(2) + files))
 
-        f.model.select(DocumentKind.IMAGE)
-        f.model.loadMore()
-        // Photos go by date taken.
-        assertEquals(listOf("p1", "p2", "p3"), f.ids)
-        assertEquals(3, f.state.matching)
-        f.model.select(null)
-        f.model.select(DocumentKind.IMAGE)
-
-        assertEquals(listOf("p1", "p2", "p3"), f.ids)
-        assertEquals(
-            listOf(DocumentFilter.ALL to 0, DocumentFilter.IMAGES to 0, DocumentFilter.IMAGES to 2),
-            f.server.requests,
-        )
-    }
-
-    @Test fun `the viewer swipes through the shown chip's documents, in its order`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        assertEquals(listOf("f2", "p3"), f.model.prepareSequence().initialIds)
-
-        f.model.select(DocumentKind.IMAGE)
-        val sequence = f.model.prepareSequence()
-
-        assertEquals(listOf("p1", "p2"), sequence.initialIds)
-        sequence.loadMore()
-        assertEquals(listOf("p1", "p2", "p3"), sequence.ids.first())
-        assertEquals(DocumentFilter.IMAGES to 2, f.server.requests.last())
-    }
-
-    @Test fun `a selection belongs to the shown list and ends when the chip changes`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        f.model.enterSelection(listOf("f2"))
+        f.model.enterSelection(listOf("f3"))
         f.model.toggleSelect(listOf("p3"))
-        assertEquals(setOf("f2", "p3"), f.model.selectedIds)
-        assertEquals(setOf("f2", "p3"), f.state.feed.selectedIds)
 
-        f.model.select(DocumentKind.IMAGE)
-        assertTrue(f.model.selectedIds.isEmpty())
-        f.model.select(null)
-
-        assertTrue(f.state.feed.selectedIds.isEmpty())
+        assertEquals(setOf("f3", "p3"), f.state.selectedIds)
+        f.model.clearSelection()
+        assertTrue(f.state.selectedIds.isEmpty())
     }
 
-    @Test fun `after a delete the counts and every list read so far follow the server`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        f.model.select(DocumentKind.IMAGE)
-        f.server.delete("p1")
+    @Test fun `the viewer swipes through the opened document's section, in the order the page shows it`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val f = start(FakeServer(photos + files))
+            f.model.loadMore()
+
+            val fileSequence = f.model.prepareSequence(files.first(), ZoneOffset.UTC)
+            assertEquals(listOf("f3", "f2"), fileSequence.initialIds)
+            fileSequence.loadMore()
+            assertEquals(listOf("f3", "f2", "f1"), fileSequence.ids.first())
+
+            assertEquals(listOf("p1", "p2", "p3"), f.model.prepareSequence(photos.first(), ZoneOffset.UTC).initialIds)
+        }
+
+    @Test fun `after a delete the figures and both sections follow the server`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos.take(2) + files.take(2)))
+        f.server.delete("p3", "f2")
 
         f.model.contentChanged()
 
-        assertEquals(4, f.state.total)
-        assertEquals(2, f.state.matching)
-        assertEquals(listOf("p2", "p3"), f.ids)
-        f.model.select(null)
-        assertEquals(4, f.state.feed.documents.total)
+        assertEquals(1, f.state.summary?.image?.count)
+        assertEquals(1, f.state.summary?.file?.count)
+        assertEquals(listOf("p2"), f.photoIds)
+        assertEquals(listOf("f3"), f.fileIds)
     }
 
-    @Test fun `losing the selected kind's last document goes back to All`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        f.model.select(DocumentKind.FILE)
-        f.server.delete("f2", "f1")
-
-        f.model.contentChanged()
-
-        assertEquals(null, f.state.selected)
-        assertEquals(emptyList<Pair<DocumentKind?, Int?>>(), f.chips)
-        assertEquals(listOf("p3", "p2"), f.ids)
-    }
-
-    @Test fun `a locked folder shows nothing of what was read before it locked`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-
-        val locked = f.state.unlessLocked(true)
-
-        assertTrue(locked.chips.isEmpty())
-        assertTrue(locked.feed.documents.documents.isEmpty())
-        assertEquals("Trips", folderPageSubtitle(locked.total, locked.matching, "Trips"))
-        assertEquals(f.state, f.state.unlessLocked(false))
-    }
-
-    @Test fun `pull to refresh re-reads the figures and every list read so far`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos + files))
-        f.model.select(DocumentKind.FILE)
+    @Test fun `pull to refresh re-reads both sections`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos.take(2) + files.take(2)))
         val asked = f.server.requests.size
 
         f.model.refresh()
 
-        assertEquals(setOf(DocumentFilter.FILES to 0, DocumentFilter.ALL to 0), f.server.requests.drop(asked).toSet())
+        assertEquals(
+            setOf(DocumentFilter.MEDIA to 0, DocumentFilter.FILES to 0),
+            f.server.requests.drop(asked).toSet(),
+        )
+    }
+
+    @Test fun `a locked folder shows nothing of what was read before it locked`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos.take(2) + files.take(2)))
+        f.model.enterSelection(listOf("p3"))
+
+        val locked = f.state.unlessLocked(true)
+
+        assertTrue(locked.isEmptyOfDocuments)
+        assertNull(locked.summary)
+        assertTrue(locked.selectedIds.isEmpty())
+        assertTrue(folderRows(locked, 360f, layout).isEmpty())
+        assertEquals("lisbon", locked.node?.name)
+        assertEquals(f.state, f.state.unlessLocked(false))
+    }
+
+    @Test fun `only a folder known to be public offers search`() {
+        assertTrue(FolderState(node = leaf).isSearchable)
+        assertFalse(FolderState(node = leaf.copy(is_private = true)).isSearchable)
+        // Inside a private folder further up.
+        assertFalse(FolderState(node = leaf.copy(lock_id = "trips")).isSearchable)
+        assertFalse(FolderState().isSearchable)
+    }
+
+    @Test fun `a folder with both kinds names its two sections, and one day in both gives two headings`() {
+        val sameDay = "2026-11-23T10:00:00Z"
+        val state = FolderState(
+            media = FeedDocuments(documents = listOf(doc("p", created = sameDay)), fetched = true),
+            files = FeedDocuments(documents = listOf(doc("f", "application/pdf", created = sameDay)), fetched = true),
+        )
+
+        val rows = folderRows(state, 360f, layout)
+
+        assertEquals(listOf("Photos and videos", "Files"), rows.filterIsInstance<FeedRow.Section>().map { it.title })
+        assertEquals(2, rows.filterIsInstance<FeedRow.Heading>().size)
+        assertEquals(rows.size, rows.map(FeedRow::key).toSet().size)
+    }
+
+    @Test fun `a folder holding one kind has date headings and no section titles`() {
+        val state = FolderState(media = FeedDocuments(documents = photos, fetched = true))
+
+        val rows = folderRows(state, 360f, layout)
+
+        assertTrue(rows.none { it is FeedRow.Section })
+        assertEquals(
+            listOf("Wed 3 Jun", "Tue 2 Jun", "Mon 1 Jun"),
+            rows.filterIsInstance<FeedRow.Heading>().map { it.header.title },
+        )
+    }
+
+    @Test fun `the photos are titled before the files have been read, when the server counts some`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val f = start(FakeServer(photos + files))
+
+            val rows = folderRows(f.state, 360f, layout)
+
+            assertEquals(listOf("Photos and videos"), rows.filterIsInstance<FeedRow.Section>().map { it.title })
+        }
+
+    @Test fun `a folder's header says what its row says, and spans its photos' days when it has no folders`() {
+        val dates = MediaDatesDto(first = "2026-08-21T09:00:00Z", last = "2026-08-25T18:00:00Z")
+        val summary = DocumentSummaryDto(media_dates = dates)
+        val parent = tree.single()
+
+        assertEquals(folderMeta(parent), folderPageMeta(FolderState(node = parent, summary = summary)))
+        assertEquals(folderMeta(leaf) + " · 21–25 Aug 2026", folderPageMeta(FolderState(node = leaf, summary = summary)))
+        assertEquals(folderMeta(leaf), folderPageMeta(FolderState(node = leaf)))
+        assertNull(folderPageMeta(FolderState()))
     }
 }

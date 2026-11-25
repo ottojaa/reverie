@@ -125,7 +125,7 @@ class BrowseSession(
 
     init {
         deps.processing.refresh()
-        if (folderId != null) scope.launch { runCatching { deps.folders.refresh() } }
+        refreshFolders()
         watchContentChanges()
         // Badges and menu wording need the list, whichever screen is the first to want it.
         if (!favourites.state.value.isLoaded) favourites.load()
@@ -157,6 +157,12 @@ class BrowseSession(
     fun beginRefresh() {
         deps.processing.refresh()
         control.update { SessionControl() }
+    }
+
+    /** Re-reads the folder tree for a folder page, whose rows and counts come from it. Offline, the cached one stays. */
+    fun refreshFolders() {
+        if (folderId == null) return
+        scope.launch { runCatching { deps.folders.refresh() } }
     }
 
     /** The first page (or a refresh) of a list failed. A closed lock asks for the password; offline is not an error. */
@@ -230,6 +236,7 @@ class BrowseSession(
 
     private fun changed() {
         beginRefresh()
+        refreshFolders()
         onContentChanged()
     }
 

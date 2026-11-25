@@ -145,6 +145,8 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
         FolderScreen(
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             onBack = { nav.popBackStack() },
+            onOpenFolder = { nav.openFolder(it) },
+            onSearch = { nav.navigate(Routes.search(it)) },
             onFavourite = { nav.openFavourite(it) },
             viewModel = viewModel { FolderViewModel(createSavedStateHandle(), deps) },
             uploadViewModel = uploads(),

@@ -59,7 +59,6 @@ fun BrowseScreen(
         title = BrowseTitle(
             text = "My Files",
             subtitle = state.total?.let(::dashboardSubtitle).orEmpty(),
-            isFolder = false,
         ),
         ui = ui,
         folderId = null,

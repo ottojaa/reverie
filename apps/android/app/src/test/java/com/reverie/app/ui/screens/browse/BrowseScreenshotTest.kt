@@ -118,8 +118,8 @@ class BrowseScreenshotTest {
                 // The list sits right under the header, as BrowseChrome places it.
                 Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle("My Files", dashboardSubtitle(248), isFolder = false),
-                        processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = null,
+                        title = BrowseTitle("My Files", dashboardSubtitle(248)),
+                        processingCount = 2, onProcessingClick = {}, onBack = null,
                     )
                     Box(Modifier.weight(1f)) { body() }
                 }
@@ -164,8 +164,8 @@ class BrowseScreenshotTest {
                 }
                 Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle(source.title, subtitle, isFolder = false, compact = true), processingCount = 2, onProcessingClick = {},
-                        onCanvas = {}, onBack = {},
+                        title = BrowseTitle(source.title, subtitle, compact = true), processingCount = 2, onProcessingClick = {},
+                        onBack = {},
                     )
                     Box(Modifier.weight(1f)) { body() }
                 }
@@ -194,8 +194,8 @@ class BrowseScreenshotTest {
                         visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty(), isFolder = false, compact = true),
-                        processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = {},
+                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty(), compact = true),
+                        processingCount = 2, onProcessingClick = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )
                 }

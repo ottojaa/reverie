@@ -1,7 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.settings.GridLayoutMode
 import org.junit.Assert.assertEquals
@@ -71,14 +70,6 @@ class BrowseRowsTest {
         assertEquals(-1, rowIndexOf(rows(FeedSource.PHOTOS, mixed), "v1"))
     }
 
-    @Test fun `a folder row shows the date its chip sorts by`() {
-        val photo = doc("p", created = "2026-11-21T10:00:00Z", taken = "2026-06-03T10:00:00.000Z", name = "p.jpg")
-        fun dateUnder(chip: DocumentKind?) = folderRowMeta(photo, chip, today, ZoneOffset.UTC).substringAfterLast(" · ")
-
-        assertEquals("3 Jun", dateUnder(DocumentKind.IMAGE))
-        assertEquals("21 Nov", dateUnder(null))
-    }
-
     @Test fun `scrolling near the end asks for more only while there is more`() {
         assertFalse(isNearEnd(lastVisibleIndex = 2, rowCount = 10, hasMore = true))
         assertTrue(isNearEnd(lastVisibleIndex = 7, rowCount = 10, hasMore = true))
@@ -108,11 +99,7 @@ class BrowseRowsTest {
 
     @Test fun `the dashboard's subtitle counts the scope's files`() {
         assertEquals("248 files", dashboardSubtitle(248))
-        assertEquals("1 file", folderPageSubtitle(1, null, ""))
-        assertEquals("Trips · 3 files", folderPageSubtitle(3, null, "Trips"))
-        assertEquals("4 of 31 files", folderPageSubtitle(31, 4, null))
-        assertEquals("Trips · 1 of 1 file", folderPageSubtitle(1, 1, "Trips"))
-        assertEquals("Trips", folderPageSubtitle(null, null, "Trips"))
+        assertEquals("1 file", dashboardSubtitle(1))
     }
 
     @Test fun `a list's subtitle names its total, and the lists by date have none`() {

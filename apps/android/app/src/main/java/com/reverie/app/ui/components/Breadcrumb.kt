@@ -24,8 +24,9 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderWithChildren
 
 /**
- * "Library › Travel › Portugal": [path] runs from the top level to the folder being shown. Every step
- * above the last opens that folder (null: the Library itself). A long path scrolls to its end.
+ * "Library › Travel › Portugal": [path] runs from the top level down. Every step opens that folder (null:
+ * the Library itself), except the folder being shown, which is the last step unless [endsAtCurrent] is off.
+ * A long path scrolls to its end.
  */
 @Composable
 fun Breadcrumb(
@@ -33,6 +34,7 @@ fun Breadcrumb(
     onOpen: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
+    endsAtCurrent: Boolean = true,
 ) {
     val scroll = rememberScrollState()
     LaunchedEffect(path.lastOrNull()?.id, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
@@ -42,7 +44,7 @@ fun Breadcrumb(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Crumb(LIBRARY_NAME, style, isCurrent = path.isEmpty(), isRoot = true) { onOpen(null) }
+        Crumb(LIBRARY_NAME, style, isCurrent = endsAtCurrent && path.isEmpty(), isRoot = true) { onOpen(null) }
         path.forEachIndexed { index, folder ->
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
@@ -50,7 +52,8 @@ fun Breadcrumb(
                 tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(16.dp),
             )
-            Crumb(folder.name, style, isCurrent = index == path.lastIndex, isRoot = false) { onOpen(folder.id) }
+            val isCurrent = endsAtCurrent && index == path.lastIndex
+            Crumb(folder.name, style, isCurrent, isRoot = false) { onOpen(folder.id) }
         }
     }
 }

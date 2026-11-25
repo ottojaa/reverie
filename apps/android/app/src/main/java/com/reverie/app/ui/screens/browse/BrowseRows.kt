@@ -23,6 +23,13 @@ sealed interface FeedRow {
         override val docIds get() = emptyList<String>()
     }
 
+    /** The title of one of a folder's two sections. */
+    data class Section(val title: String) : FeedRow {
+        override val key get() = "section:$title"
+        override val contentType get() = "section"
+        override val docIds get() = emptyList<String>()
+    }
+
     data class Band(val section: MosaicSection) : FeedRow {
         override val key get() = section.bandKey()
         override val contentType get() = "band"
@@ -81,7 +88,7 @@ fun feedRows(
  */
 fun shownIds(source: FeedSource, documents: List<DocumentDto>, expanded: Set<String>, zone: ZoneId): List<String> =
     when (source.style) {
-        FeedStyle.DAYS -> byDay(source.filter, documents, zone).flatMap { (_, day) -> day.map { it.id } }
+        FeedStyle.DAYS -> dayOrderedIds(source.filter, documents, zone)
         FeedStyle.ROWS -> documents.map { it.id }
         FeedStyle.FOLDS -> viewerIds(recentRows(documents), expanded)
     }

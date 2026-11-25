@@ -2,11 +2,7 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
-import com.reverie.app.data.api.model.DocumentKind
-import com.reverie.app.data.api.model.kind
-import com.reverie.app.ui.components.fileTypeLabel
-import com.reverie.app.util.formatBytes
-import com.reverie.app.util.formatDuration
+import com.reverie.app.data.api.model.MediaDatesDto
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -28,8 +24,8 @@ sealed interface FeedItem {
 
 private val headerDay = DateTimeFormatter.ofPattern("EEE d MMM", Locale.US)
 private val headerDayWithYear = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.US)
-private val rowDay = DateTimeFormatter.ofPattern("d MMM", Locale.US)
-private val rowDayWithYear = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
+private val dayAndMonth = DateTimeFormatter.ofPattern("d MMM", Locale.US)
+private val fullDay = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 
 private fun instantOf(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
@@ -54,42 +50,26 @@ fun dayLabel(day: LocalDate, today: LocalDate): String {
     }
 }
 
+/**
+ * The days a set of photos and videos spans: "21–25 Aug 2025", "28 Jul – 3 Aug 2025", or one day alone.
+ * Both ends are read as written, like a date taken (see [dayTakenOf]); null when either cannot be read.
+ */
+fun daySpan(dates: MediaDatesDto): String? {
+    val first = instantOf(dates.first)?.atOffset(ZoneOffset.UTC)?.toLocalDate() ?: return null
+    val last = instantOf(dates.last)?.atOffset(ZoneOffset.UTC)?.toLocalDate() ?: return null
+    val end = last.format(fullDay)
+    return when {
+        first == last -> end
+        first.year != last.year -> first.format(fullDay) + " – " + end
+        first.month != last.month -> first.format(dayAndMonth) + " – " + end
+        else -> "${first.dayOfMonth}–$end"
+    }
+}
+
 private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
 
 /** The dashboard's subtitle: the library's server total ("248 files"). */
 fun dashboardSubtitle(total: Int): String = count(total, "file", "files")
-
-/**
- * A folder page's subtitle: its description, then how many files it holds ("31 files"), or under a kind chip
- * how many of them that chip lists ("4 of 31 files").
- *
- * @param total null while unknown, which leaves only the description.
- * @param matching the selected chip's count; null under All.
- */
-fun folderPageSubtitle(total: Int?, matching: Int?, description: String?): String {
-    if (total == null) return description.orEmpty()
-    val held = count(total, "file", "files")
-    val counted = if (matching == null) held else "$matching of $held"
-    return if (description.isNullOrBlank()) counted else "$description · $counted"
-}
-
-/**
- * A folder list row's second line: "JPG · 3.4 MB · 21 Jun", with a video's length after its type. The date is
- * the one the list of [listed] (null is All) is sorted by: date taken for Photos and Videos when the file has
- * one, else the upload date. It carries its year when that isn't this year.
- */
-fun folderRowMeta(doc: DocumentDto, listed: DocumentKind?, today: LocalDate, zone: ZoneId): String {
-    val sortsByTaken = listed == DocumentKind.IMAGE || listed == DocumentKind.VIDEO
-    // The date taken is a local clock reading stored as UTC (see dayTakenOf), so it is read as written.
-    val taken = if (sortsByTaken) instantOf(doc.taken_at)?.atOffset(ZoneOffset.UTC)?.toLocalDate() else null
-    val day = taken ?: instantOf(doc.created_at)?.atZone(zone)?.toLocalDate()
-    return listOfNotNull(
-        fileTypeLabel(doc.mime_type, doc.original_filename),
-        doc.duration_seconds?.takeIf { doc.kind == DocumentKind.VIDEO }?.let(::formatDuration),
-        formatBytes(doc.size_bytes),
-        day?.format(if (day.year == today.year) rowDay else rowDayWithYear),
-    ).joinToString(" · ")
-}
 
 /**
  * [docs] (in the order of a list of [filter]) grouped under the day that list files them: photos and videos by
@@ -103,6 +83,10 @@ fun byDay(filter: DocumentFilter, docs: List<DocumentDto>, zone: ZoneId): List<P
     docs.groupBy { if (filter.isByDateTaken) dayTakenOf(it, zone) else dayAddedOf(it, zone) }
         .toList()
         .sortedWith(compareByDescending(nullsFirst<LocalDate>()) { it.first })
+
+/** The ids of [docs] in the order [byDay] shows them, which is the viewer's swipe order. */
+fun dayOrderedIds(filter: DocumentFilter, docs: List<DocumentDto>, zone: ZoneId): List<String> =
+    byDay(filter, docs, zone).flatMap { (_, day) -> day.map { it.id } }
 
 /** [byDay] as list items: a heading per day, over one grid of its photos and videos or over its rows. */
 fun buildFeed(filter: DocumentFilter, docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): List<FeedItem> =

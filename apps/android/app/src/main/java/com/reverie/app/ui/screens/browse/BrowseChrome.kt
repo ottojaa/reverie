@@ -13,13 +13,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,21 +26,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.ui.components.ComingSoonSheet
-import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.ErrorState
 import com.reverie.app.ui.components.FolderUnlocker
@@ -50,8 +43,6 @@ import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.ReverieFab
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
-import com.reverie.app.ui.components.VaultUnlockSheet
-import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
@@ -62,7 +53,8 @@ import com.reverie.app.ui.screens.upload.UploadDialog
 import com.reverie.app.ui.screens.upload.UploadProgressBar
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.util.enqueueDownload
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -89,15 +81,20 @@ class ChromeSelection(
 /**
  * Everything around a Browse list that the dashboard, a folder page and a kind screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
- * the upload button and sheets, the delete confirmation and the password prompt for a locked folder.
+ * the upload sheets, the delete confirmation and the password prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].
  *
+ * @param title null where the list carries its own title.
  * @param isEmpty whether the list has nothing to show, so a load error replaces it.
+ * @param headerActions the header's own buttons; they are handed what opens the upload sheet.
+ * @param onNewFolder adds "New folder" to the upload sheet.
+ * @param notices messages of the screen's own for the snackbar.
+ * @param hasUploadButton whether a floating upload button sits over the list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseChrome(
-    title: BrowseTitle,
+    title: BrowseTitle?,
     ui: SessionUi,
     folderId: String?,
     isRefreshing: Boolean,
@@ -112,18 +109,19 @@ fun BrowseChrome(
     favourites: FavouriteController,
     modifier: Modifier = Modifier,
     onFavourite: (FavouriteDestination) -> Unit = {},
-    headerActions: @Composable () -> Unit = {},
-    belowHeader: @Composable () -> Unit = {},
+    headerActions: @Composable (openUpload: () -> Unit) -> Unit = {},
+    onNewFolder: (() -> Unit)? = null,
+    notices: Flow<String> = emptyFlow(),
+    hasUploadButton: Boolean = true,
     body: @Composable (ChromeSlot) -> Unit,
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
     var showProcessing by remember { mutableStateOf(false) }
-    val unlockPrompt by unlocker.prompt.collectAsStateWithLifecycle()
+    LaunchedEffect(notices) { notices.collect { snackbarHostState.showSnackbar(it) } }
 
     // The header slides away on scroll down and returns on a small scroll up. No bar is placed, so
     // the limit is the header's own measured height, set below.
@@ -144,11 +142,13 @@ fun BrowseChrome(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             floatingActionButton = {
-                ReverieFab(
-                    onClick = { showUploadActions = true },
-                    visible = !inSelection,
-                    modifier = Modifier.padding(bottom = bottomBarInset()),
-                )
+                if (hasUploadButton) {
+                    ReverieFab(
+                        onClick = { showUploadActions = true },
+                        visible = !inSelection,
+                        modifier = Modifier.padding(bottom = bottomBarInset()),
+                    )
+                }
             },
             snackbarHost = { ReverieSnackbarHost(snackbarHostState) },
         ) {
@@ -172,14 +172,12 @@ fun BrowseChrome(
                     title = title,
                     processingCount = ui.processingCount,
                     onProcessingClick = { showProcessing = true },
-                    onCanvas = { showCanvasSoon = true },
                     onBack = onBack,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .onSizeChanged { headerPx = it.height }
                         .graphicsLayer { translationY = scrollBehavior.state.heightOffset },
-                    actions = headerActions,
-                    below = belowHeader,
+                    actions = { headerActions { showUploadActions = true } },
                 )
 
                 // Selection bar overlays the header (opaque) so entering selection never moves the list.
@@ -230,6 +228,7 @@ fun BrowseChrome(
             },
             loadMedia = { uploadViewModel.loadMedia() },
             onDismiss = { showUploadActions = false },
+            onNewFolder = onNewFolder,
         )
     }
     UploadDialog(uploadViewModel)
@@ -245,11 +244,8 @@ fun BrowseChrome(
     }
 
     if (showDeleteConfirm) {
-        ConfirmDialog(
-            title = "Delete ${selection.count} ${plural(selection.count)}?",
-            message = "These files will be permanently deleted — this can't be undone.",
-            confirmLabel = "Delete",
-            destructive = true,
+        DeleteDocumentsDialog(
+            count = selection.count,
             onConfirm = {
                 showDeleteConfirm = false
                 selection.onDelete()
@@ -258,18 +254,7 @@ fun BrowseChrome(
         )
     }
 
-    if (showCanvasSoon) {
-        ComingSoonSheet(
-            icon = Icons.Outlined.Dashboard,
-            title = "Canvas is coming soon",
-            description = "Explore your documents in a spatial 3D view — available on desktop today, coming to Android.",
-            onDismiss = { showCanvasSoon = false },
-        )
-    }
-
-    unlockPrompt?.let { prompt ->
-        VaultUnlockSheet(prompt = prompt, onSubmit = unlocker::submit, onDismiss = unlocker::dismiss)
-    }
+    UnlockSheetHost(unlocker)
     FavouriteHost(favourites, snackbarHostState, onFavourite)
 }
 
@@ -291,40 +276,10 @@ private fun BodyOrState(
             actionLabel = "Unlock",
             onAction = { unlocker.request(ui.lockedFolderId, ui.folder?.name) },
         )
-        ui.error != null && isEmpty -> ErrorState(message = ui.error, onRetry = onRetry)
+        ui.error != null && ui.replacesList(isEmpty) -> ErrorState(message = ui.error, onRetry = onRetry)
         // The body sits where the chrome put it already: it must not be placed under the header twice.
         else -> body(ChromeSlot(Modifier, slot.contentPadding, slot.onHeading, slot.onUpload))
     }
 }
-
-/**
- * Places the body under the header, following it as it slides away: the body is as tall as the room
- * the header leaves, so a drag that is hiding the header moves the list with the finger. (The scroll
- * behaviour hands the whole drag to the header while it moves; a list with a fixed top gap would stand still.)
- */
-internal fun Modifier.belowHeader(headerPx: () -> Int, heightOffset: () -> Float): Modifier = layout { measurable, constraints ->
-    val top = (headerPx() + heightOffset()).roundToInt().coerceIn(0, constraints.maxHeight)
-    val height = constraints.maxHeight - top
-    val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
-    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, top) }
-}
-
-/**
- * Drives the shell's bottom-bar visibility off the header's state, so both bars move in lockstep and
- * the bottom bar reappears at the top. Honored only when the setting is on.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BottomBarFollowsHeader(scrollBehavior: TopAppBarScrollBehavior) {
-    val bottomBarScroll = LocalBottomBarScrollState.current
-    LaunchedEffect(scrollBehavior, bottomBarScroll) {
-        val bar = bottomBarScroll ?: return@LaunchedEffect
-        snapshotFlow { scrollBehavior.state.collapsedFraction > 0.5f }
-            .distinctUntilChanged()
-            .collect { collapsed -> bar.value = !collapsed }
-    }
-}
-
-private fun plural(n: Int): String = if (n == 1) "file" else "files"
 
 private fun downloadStartedMessage(n: Int): String = "Downloading $n ${plural(n)}"

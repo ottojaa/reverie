@@ -7,11 +7,13 @@ import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.VaultApi
 import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.Paginated
+import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FakeDocumentDao
@@ -55,7 +57,7 @@ internal class FavouriteWorld {
     /** What GET /documents/{id} answers with. */
     @Volatile var served: List<DocumentDto> = emptyList()
 
-    /** What the document listing answers with: all of it on one page, narrowed to a folder when asked for one. */
+    /** What the document listing answers with: all of it on one page, narrowed to the folder and kinds asked for. */
     @Volatile var listed: List<DocumentDto> = emptyList()
 
     /** While set, a PUT waits for it before it is answered. */
@@ -140,8 +142,15 @@ internal class FavouriteWorld {
         if (id == node.parent_id) copy(children = children + node) else copy(children = children.map { it.adopting(node) })
 
     private fun MockRequestHandleScope.replyListing(request: HttpRequestData): HttpResponseData {
-        val folderId = request.url.parameters["folder_id"]
-        val items = listed.filter { folderId == null || it.folder_id == folderId }
+        val asked = request.url.parameters
+        val folderId = asked["folder_id"]
+        val isMedia = asked["media"] == "true"
+        val kind = asked["kind"]
+        val items = listed.filter {
+            (folderId == null || it.folder_id == folderId) &&
+                (!isMedia || it.kind != DocumentKind.FILE) &&
+                (kind == null || it.kind.wire == kind)
+        }
         val page = Paginated(items, total = items.size, limit = items.size, offset = 0)
         return reply(ApiJson.encodeToString(Paginated.serializer(DocumentDto.serializer()), page))
     }

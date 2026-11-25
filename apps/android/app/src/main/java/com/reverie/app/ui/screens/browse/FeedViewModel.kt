@@ -90,7 +90,7 @@ class FeedViewModel @Inject constructor(
     fun clearSelection() = feed.clearSelection()
 
     /** Hand the shown list's documents, in the order shown, to the viewer. Call right before opening one. */
-    override fun prepareSequence() {
+    override fun prepareSequence(opened: DocumentDto) {
         val open = openGroups.value
         session.publish(feed.prepareSequence { shownIds(source, it, open, ZoneId.systemDefault()) })
     }

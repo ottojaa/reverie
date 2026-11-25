@@ -22,10 +22,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.kind
-import com.reverie.app.data.settings.FolderViewMode
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.PhotoResultTile
 import com.reverie.app.ui.screens.browse.ChromeSlot
@@ -38,6 +38,7 @@ import com.reverie.app.ui.screens.browse.FeedList
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.FolderBody
+import com.reverie.app.ui.screens.browse.FolderLinks
 import com.reverie.app.ui.screens.browse.FolderState
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.doc
@@ -83,7 +84,6 @@ class DocumentDiveTest {
 
     /** The key each route's screen last gave the image. */
     private val imageKeys = mutableMapOf<String, String>()
-    private var folderView by mutableStateOf(FolderViewMode.GRID)
 
     /** The dashboard's strip: the image and the video, which also have rows in Recently added. */
     private val starred = documents.take(2).map { FavouriteFixtures.file(it.copy(original_filename = "starred ${it.id}")) }
@@ -152,11 +152,17 @@ class DocumentDiveTest {
 
     @Composable
     private fun Folder() {
+        val (media, files) = documents.partition { DocumentFilter.MEDIA.holds(it.kind) }
         FolderBody(
-            state = FolderState(feed = FeedState(FeedDocuments(documents, total = 3, hasMore = false, fetched = true))),
-            viewMode = folderView,
+            state = FolderState(
+                media = FeedDocuments(media, total = media.size, fetched = true),
+                files = FeedDocuments(files, total = files.size, fetched = true),
+            ),
+            name = "Trips", description = null,
+            links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}),
+            layout = layout,
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
-            today = today, zone = zone, focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
             slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),
         )
     }
@@ -251,16 +257,8 @@ class DocumentDiveTest {
         assertDives("file")
     }
 
-    @Test fun `a document opened from a folder tile dives into the viewer and shrinks back`() {
-        compose.setContent { Host() }
-        show(Routes.folder("f1"))
-        assertDives("image", aspect = 1.5f)
-        assertDives("video")
-        assertDives("file")
-    }
-
-    @Test fun `a document opened from a folder list row dives into the viewer and shrinks back`() {
-        folderView = FolderViewMode.LIST
+    @Config(qualifiers = "w400dp-h900dp")
+    @Test fun `a document opened from a folder's grid or file rows dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
         show(Routes.folder("f1"))
         assertDives("image", aspect = 1.5f)

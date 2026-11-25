@@ -64,9 +64,11 @@ fun FeedList(
 /**
  * The three things a document list does on scroll: ask for the next page near the end, scroll the
  * viewer's last document into view on return, and tell the date chip which group is at the top.
+ *
+ * @param leading how many items of the lazy list come before the first of [rows].
  */
 @Composable
-private fun FeedScrollEffects(
+internal fun FeedScrollEffects(
     rows: List<FeedRow>,
     listState: LazyListState,
     hasMore: Boolean,
@@ -74,24 +76,26 @@ private fun FeedScrollEffects(
     focusedId: String?,
     onFocusConsumed: () -> Unit,
     onHeading: ((FeedItem.Header?) -> Unit)?,
+    leading: Int = 0,
 ) {
     val loadMore by rememberUpdatedState(onLoadMore)
     // Keyed on the documents too: a page that only extends a folded group adds no row, and a list that does
     // not fill the screen must keep asking until it does.
     val loaded = rows.sumOf { it.docIds.size }
-    LaunchedEffect(listState, rows.size, loaded, hasMore) {
+    LaunchedEffect(listState, leading, rows.size, loaded, hasMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
-            .collect { last -> if (isNearEnd(last, rows.size, hasMore)) loadMore() }
+            .collect { last -> if (isNearEnd(last - leading, rows.size, hasMore)) loadMore() }
     }
 
     // Scroll only when the document's row is off screen, and consume the signal so a later list
     // update (a thumbnail finishing) doesn't scroll again. A document this list hasn't loaded keeps
     // the signal until its page arrives.
-    LaunchedEffect(focusedId, rows) {
+    LaunchedEffect(focusedId, leading, rows) {
         val id = focusedId ?: return@LaunchedEffect
-        val index = rowIndexOf(rows, id)
-        if (index < 0) return@LaunchedEffect
+        val row = rowIndexOf(rows, id)
+        if (row < 0) return@LaunchedEffect
+        val index = leading + row
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
         onFocusConsumed()
     }
@@ -99,7 +103,7 @@ private fun FeedScrollEffects(
     if (onHeading == null) return
     val report by rememberUpdatedState(onHeading)
     LaunchedEffect(listState, rows) {
-        snapshotFlow { headingAt(rows, listState.firstVisibleItemIndex) }
+        snapshotFlow { headingAt(rows, listState.firstVisibleItemIndex - leading) }
             .distinctUntilChanged()
             .collect { report(it) }
     }

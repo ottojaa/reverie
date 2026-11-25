@@ -72,6 +72,8 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
         FolderScreen(
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = { navController.popBackStack() },
+            onOpenFolder = { navController.openFolder(it) },
+            onSearch = { navController.navigate(Routes.search(it)) },
             onFavourite = { navController.openFavourite(it) },
         )
     }
@@ -136,6 +138,19 @@ private const val NO_DIVE_ORIGIN = "none"
 /** Opens the viewer from [origin]'s screen, so the tile there dives into it. */
 internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentId: String, aspect: Float? = null) =
     navigate(Routes.document(documentId, origin.id, aspect))
+
+/**
+ * Goes to a folder from inside one (null: the Library root). A folder already on the way here (a breadcrumb
+ * step) is gone back to; any other is opened on top.
+ */
+internal fun NavHostController.openFolder(folderId: String?) {
+    if (folderId == null) {
+        popBackStack(Routes.LIBRARY, inclusive = false)
+        return
+    }
+    val route = Routes.folder(folderId)
+    if (!popBackStack(route, inclusive = false)) navigate(route)
+}
 
 /**
  * A starred document opens with [NO_DIVE_ORIGIN]: what was tapped is a favourites tile, and a list on the

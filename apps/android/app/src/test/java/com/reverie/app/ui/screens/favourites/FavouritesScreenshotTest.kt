@@ -203,7 +203,7 @@ class FavouritesScreenshotTest {
     @Composable
     private fun Dashboard(favourites: List<FavouriteDto>, documents: List<DocumentDto>) {
         Column {
-            BrowseHeader(title = BrowseTitle("My Files", if (documents.isEmpty()) "0 documents" else "248 documents", isFolder = false), processingCount = 0, onProcessingClick = {}, onCanvas = {}, onBack = null)
+            BrowseHeader(title = BrowseTitle("My Files", if (documents.isEmpty()) "0 documents" else "248 documents"), processingCount = 0, onProcessingClick = {}, onBack = null)
             Box(Modifier.weight(1f)) {
                 DashboardBody(
                     state = DashboardState(

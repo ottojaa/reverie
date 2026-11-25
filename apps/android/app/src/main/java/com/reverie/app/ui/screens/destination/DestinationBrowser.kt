@@ -1,16 +1,13 @@
 package com.reverie.app.ui.screens.destination
 
-import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
-import com.reverie.app.data.api.model.UpdateFolderRequest
-import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.components.FolderFormData
 import com.reverie.app.ui.components.FolderUnlocker
-import kotlinx.coroutines.CancellationException
+import com.reverie.app.ui.components.createFolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -90,28 +87,13 @@ class DestinationBrowser(
     fun create(form: FolderFormData) {
         val parentId = state.value?.current?.id
         scope.launch {
-            val request = CreateFolderRequest(form.name, parentId, form.description, form.emoji)
-            val created = attempt("Couldn't create the folder") { folders.create(request) } ?: return@launch
-            goTo(created.id)
-            if (!form.isPrivate) return@launch
-            attempt("Created the folder, but couldn't make it private") {
-                folders.update(created.id, UpdateFolderRequest(is_private = true))
-            }
+            val failure = folders.createFolder(form, parentId) { goTo(it.id) } ?: return@launch
+            session.update { it?.copy(error = failure) }
         }
     }
 
     private fun goTo(folderId: String?) {
         session.update { it?.copy(at = folderId, query = null, error = null) }
-    }
-
-    private suspend fun <T> attempt(failure: String, block: suspend () -> T): T? = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        val reason = (e as? ReverieApiException)?.userMessage()
-        session.update { it?.copy(error = listOfNotNull(failure, reason).joinToString(": ")) }
-        null
     }
 
     private fun toState(session: Session?, tree: List<FolderWithChildren>, covers: Map<String, FolderCoverDto>): DestinationState? {
