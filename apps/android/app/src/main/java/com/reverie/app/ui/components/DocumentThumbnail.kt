@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.network.HttpException
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.DocumentKind
@@ -58,6 +59,7 @@ fun DocumentThumbnail(
 ) {
     if (hasThumbnail) {
         val placeholder = rememberBlurhashPainter(blurhash)
+        val onMissed = LocalOnThumbnailMissed.current
         Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
             AsyncImage(
                 // Explicit memory-cache key so the viewer can reuse this exact decoded bitmap as
@@ -66,11 +68,16 @@ fun DocumentThumbnail(
                     .data(ThumbnailRef(documentId, size))
                     .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
                     .diskCachePolicy(diskCachePolicy)
+                    // Coil loads again only when the request differs. This makes it differ when a
+                    // missed thumbnail starts being awaited, and again when its job has finished.
+                    .setParameter("awaited", documentId in LocalAwaitedThumbnails.current)
                     .build(),
                 contentDescription = filename,
                 contentScale = ContentScale.Crop,
                 placeholder = placeholder,
                 error = placeholder,
+                // Only a refusal from the server: an unreachable server says nothing about the job.
+                onError = { if (it.result.throwable is HttpException) onMissed(documentId) },
                 modifier = Modifier.matchParentSize(),
             )
         }

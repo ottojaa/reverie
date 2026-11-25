@@ -4,6 +4,7 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.entity.DocumentEntity
@@ -128,6 +129,15 @@ class DocumentRepository @Inject constructor(
         return combine(cached, privateStore.observeFolder(folderId)) { rows, private ->
             if (private.isEmpty()) rows else (rows + private).sortedByDescending { it.created_at }
         }.flowOn(io)
+    }
+
+    /** Those of [ids] whose thumbnail job is not known here to have finished. */
+    fun observeUnfinishedThumbnails(ids: Set<String>): Flow<Set<String>> {
+        val finished = JobStatus.entries.filter { it.isTerminal }.map { it.name }
+        val cachedFinished = documentDao.observeIdsWithThumbnailStatus(ids.toList(), finished)
+        return combine(cachedFinished, privateStore.documents) { cached, private ->
+            ids - cached.toSet() - ids.filter { private[it]?.thumbnail_status?.isTerminal == true }.toSet()
+        }.distinctUntilChanged().flowOn(io)
     }
 
     fun observeDocument(id: String): Flow<DocumentDto?> {

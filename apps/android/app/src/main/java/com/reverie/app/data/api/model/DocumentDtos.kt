@@ -117,7 +117,7 @@ data class DocumentTagDto(
 )
 
 /**
- * True when the server actually rendered a thumbnail image for this document.
+ * True when this document has a picture to ask the server for.
  *
  * NOT the same as `thumbnail_status == COMPLETE`: the backend marks non-previewable files
  * (apk, zip, audio, exe, …) `complete` at upload time with no thumbnail ever produced
@@ -127,8 +127,8 @@ data class DocumentTagDto(
  *
  * The precise signal is `thumbnail_paths != null`, but the Room cache drops that field
  * (Mappers.toDto), and both the grid and viewer read through the cache. The blurhash is the
- * cache-safe proxy: the thumbnail worker writes it together with `thumbnail_paths` only when a
- * thumbnail is genuinely rendered, and it round-trips through the cache.
+ * cache-safe proxy. It does not say the thumbnail exists yet: an image gets its blurhash at
+ * upload, so the request may well fail until the thumbnail job has finished.
  */
 val DocumentDto.hasRenderedThumbnail: Boolean
     get() = !thumbnail_blurhash.isNullOrBlank()
