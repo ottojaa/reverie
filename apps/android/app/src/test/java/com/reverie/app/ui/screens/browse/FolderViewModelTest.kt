@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -38,10 +39,10 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** Delete and download of a selection made on a folder's own tiles and rows, through to the server calls. */
+/** A folder's real view model: what its tiles and rows do through to the server, and the saved view choice. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
-class FolderSelectionTest {
+class FolderViewModelTest {
     @get:Rule
     val compose = createComposeRule()
 
@@ -52,16 +53,21 @@ class FolderSelectionTest {
     private val documents = listOf("one", "two", "three").map {
         doc(it, "application/pdf", name = "$it.pdf").copy(folder_id = "f1", file_url = "/files/$it")
     }
+    private val opened = mutableListOf<FolderViewModel>()
     private lateinit var viewModel: FolderViewModel
+    private lateinit var deps: BrowseDeps
 
     @Before fun setUp() {
         world.served = documents
         runBlocking { world.documentDao.upsertAll(documents.toCacheableEntities(now = 0)) }
-        viewModel = FolderViewModel(SavedStateHandle(mapOf("folderId" to "f1")), browseDeps(context, database, scope, world))
+        viewModel = open("f1", browseDeps(context, database, scope, world).also { deps = it })
     }
 
+    private fun open(folderId: String, from: BrowseDeps): FolderViewModel =
+        FolderViewModel(SavedStateHandle(mapOf("folderId" to folderId)), from).also { opened += it }
+
     @After fun tearDown() {
-        viewModel.viewModelScope.cancel()
+        opened.forEach { it.viewModelScope.cancel() }
         scope.cancel()
         database.close()
     }
@@ -119,5 +125,18 @@ class FolderSelectionTest {
         assertEquals(listOf("one.pdf", "two.pdf"), targets.map { it.filename }.sorted())
         assertEquals(true, targets.all { it.url.endsWith("/files/" + it.filename.removeSuffix(".pdf")) })
         await { viewModel.state.value.feed.selectedIds.isEmpty() }
+    }
+
+    // The only test that writes the choice: the settings store outlives a test, so the default holds until here.
+    @Test fun `folders open as cards until list is chosen, and the next folder opens the same way`() {
+        scope.launch { viewModel.viewMode.collect {} }
+        await { viewModel.viewMode.value == FolderViewMode.GRID }
+
+        viewModel.setViewMode(FolderViewMode.LIST)
+        await { viewModel.viewMode.value == FolderViewMode.LIST }
+
+        val nextFolder = open("f2", deps)
+        scope.launch { nextFolder.viewMode.collect {} }
+        await { nextFolder.viewMode.value == FolderViewMode.LIST }
     }
 }
