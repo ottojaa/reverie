@@ -23,7 +23,6 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.ScreenOrientation
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FileTotalsDto
@@ -42,8 +41,8 @@ import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedLayout
 import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.FileMenuItems
-import com.reverie.app.ui.screens.browse.KindFeed
-import com.reverie.app.ui.screens.browse.RecentActions
+import com.reverie.app.ui.screens.browse.FeedList
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.collections.CollectionSection
 import com.reverie.app.ui.screens.collections.CollectionsActions
@@ -147,9 +146,9 @@ class FavouritesScreenshotTest {
             .copy(duration_seconds = seconds, taken_at = "2026-11-%02dT10:00:00Z".format(day), created_at = "2026-11-%02dT10:00:00Z".format(day))
 
     @Composable
-    private fun Feed(kind: DocumentKind, documents: List<DocumentDto>, starred: Set<String>, modifier: Modifier) {
-        KindFeed(
-            kind = kind, documents = documents, hasMore = false, listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp),
+    private fun Feed(source: FeedSource, documents: List<DocumentDto>, starred: Set<String>, modifier: Modifier) {
+        FeedList(
+            source = source, documents = documents, hasMore = false, listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp),
             layout = FeedLayout(GridLayoutMode.MOSAIC, featureEvery = 8, today = today, zone = zone),
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { it.id in starred }),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, modifier = modifier,
@@ -161,9 +160,9 @@ class FavouritesScreenshotTest {
         val videos = (1..3).map { media("v$it", "video/mp4", 23, seconds = 74.0 * it) }
         Column {
             Label("Photos: the first and fourth are favourites")
-            Feed(DocumentKind.IMAGE, photos, setOf("p1", "p4"), Modifier.height(330.dp))
+            Feed(FeedSource.PHOTOS, photos, setOf("p1", "p4"), Modifier.height(330.dp))
             Label("Videos: the first and second are favourites")
-            Feed(DocumentKind.VIDEO, videos, setOf("v1", "v2"), Modifier.height(340.dp))
+            Feed(FeedSource.VIDEOS, videos, setOf("v1", "v2"), Modifier.height(340.dp))
         }
     }
 
@@ -179,7 +178,7 @@ class FavouritesScreenshotTest {
     @Test fun badgesRows() = both("badgesRows", DeviceConfig.PIXEL_5.copy(screenHeight = 2900)) {
         Column {
             Label("File rows: the first two are favourites")
-            Feed(DocumentKind.FILE, files, setOf("d-invoice", "d-long"), Modifier.height(270.dp))
+            Feed(FeedSource.FILES, files, setOf("d-invoice", "d-long"), Modifier.height(270.dp))
             Label("Collections: Travel, Lisbon and Japan are favourites")
             CollectionSection(CollectionsFixtures.travel, CollectionsFixtures.covers, expanded = true, actions = CollectionsActions(), modifier = Modifier.padding(horizontal = 16.dp), starredIds = setOf("c-travel", "f-lisbon", "f-japan"))
         }
@@ -214,7 +213,7 @@ class FavouritesScreenshotTest {
                         recent = FeedState(FeedDocuments(documents, total = documents.size, hasMore = false, fetched = true)),
                     ),
                     listState = rememberLazyListState(), contentPadding = PaddingValues(bottom = 24.dp), today = today, zone = zone,
-                    actions = DashboardActions(onOpenKind = {}, recent = RecentActions(emptySet(), {}, {}, {}, {}, starredIds = setOf("d-invoice"))),
+                    actions = DashboardActions(onOpenKind = {}, recent = RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { it.id == "d-invoice" })),
                     focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
                     favourites = favourites,
                 )

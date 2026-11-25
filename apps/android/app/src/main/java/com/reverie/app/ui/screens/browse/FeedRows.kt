@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.ui.components.DocumentCard
 import com.reverie.app.ui.components.FavouriteMenuItem
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
@@ -49,29 +48,33 @@ import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** The name line of a file row and of a Recently added row. */
 internal val ROW_NAME_STYLE = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
 
-/** What a row's tiles do when tapped, held or selected. */
+/** What a list's tiles and rows do when tapped, held or selected. The group actions are for folded lists. */
 class RowActions(
     val selected: (DocumentDto) -> Boolean,
     val onClick: (DocumentDto) -> Unit,
     val onLongClick: (DocumentDto) -> Unit,
     val starred: (DocumentDto) -> Boolean = { false },
     val onToggleStar: (DocumentDto) -> Unit = {},
+    val onGroupClick: (RecentRow.Group) -> Unit = {},
+    val onGroupLongClick: (RecentRow.Group) -> Unit = {},
 )
 
-/** Draws one lazy-list row of a kind screen. */
+/** Draws one lazy-list row of a document list. */
 @Composable
-fun FeedRowView(row: FeedRow, actions: RowActions) {
+fun FeedRowView(row: FeedRow, actions: RowActions, today: LocalDate, zone: ZoneId) {
     when (row) {
         is FeedRow.Heading -> HeadingRow(row.header)
         is FeedRow.Band -> Box(Modifier.padding(bottom = MOSAIC_GAP.dp)) {
             MosaicSectionView(row.section, actions.selected, actions.onClick, actions.onLongClick, actions.starred)
         }
-        is FeedRow.Videos -> VideoTiles(row.docs, actions)
         is FeedRow.File -> FileRow(row.doc, actions)
+        is FeedRow.Added -> RecentEntryView(row.entry, actions, today, zone)
     }
 }
 
@@ -83,39 +86,13 @@ private fun HeadingRow(header: FeedItem.Header) {
     ) {
         Text(
             text = header.title,
-            fontSize = 17.sp,
-            lineHeight = 22.sp,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-    }
-}
-
-private val VIDEO_TILE_HEIGHT = 196.dp
-private val VIDEO_TILE_GAP = 8.dp
-
-/** Two video tiles side by side; a lone video in a month's last row keeps its half width. */
-@Composable
-private fun VideoTiles(docs: List<DocumentDto>, actions: RowActions) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = VIDEO_TILE_GAP),
-        horizontalArrangement = Arrangement.spacedBy(VIDEO_TILE_GAP),
-    ) {
-        docs.forEach { doc ->
-            DocumentCard(
-                document = doc,
-                selected = actions.selected(doc),
-                onClick = { actions.onClick(doc) },
-                onLongClick = { actions.onLongClick(doc) },
-                shape = RoundedCornerShape(14.dp),
-                largeVideoTile = true,
-                isStarred = actions.starred(doc),
-                modifier = Modifier.weight(1f).height(VIDEO_TILE_HEIGHT),
-            )
-        }
-        if (docs.size == 1) Spacer(Modifier.weight(1f))
     }
 }
 

@@ -103,7 +103,7 @@ fun DateBucketHeader(label: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * A search grid tile — identical to the Files grid tile: a square, edge-to-edge cropped thumbnail
+ * A search grid tile — identical to the document grid tile: a square, edge-to-edge cropped thumbnail
  * (or a file-type icon when there's no preview) with a video play overlay, and a shared-element
  * container transform into the viewer. `blurhash` is the cache-safe "has a rendered preview" signal.
  */

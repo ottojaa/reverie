@@ -8,14 +8,12 @@ import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.navArgument
 import com.reverie.app.ui.screens.browse.BrowseScreen
 import com.reverie.app.ui.screens.browse.FolderScreen
-import com.reverie.app.ui.screens.browse.KindScreen
-import com.reverie.app.ui.screens.browse.routeOf
+import com.reverie.app.ui.screens.browse.FeedScreen
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
@@ -52,16 +50,17 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
     reverieComposable(Routes.LIBRARY) { entry ->
         BrowseScreen(
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-            onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
+            onOpenKind = { navController.navigate(Routes.feed(FeedSource.of(it))) },
             onFavourite = { navController.openFavourite(it) },
             onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
         )
     }
 
-    reverieComposable(Routes.PHOTOS, listOf(navArgument("kind") { type = NavType.StringType; defaultValue = "photos" })) { entry ->
-        KindScreen(
+    reverieComposable(Routes.PHOTOS, Routes.photosArguments) { entry ->
+        FeedScreen(
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-            onBack = { navController.popBackStack() },
+            onBack = null,
+            onSearch = { navController.navigate(Routes.search(it)) },
             onFavourite = { navController.openFavourite(it) },
         )
     }
@@ -77,11 +76,12 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
         )
     }
 
-    // A kind pushed over the Library: its own list state, paging and selection; back finds the Library as it was.
-    reverieComposable(Routes.KIND, Routes.kindArguments) { entry ->
-        KindScreen(
+    // A list pushed over the Library: its own list state, paging and selection; back finds the Library as it was.
+    reverieComposable(Routes.FEED, Routes.feedArguments) { entry ->
+        FeedScreen(
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = { navController.popBackStack() },
+            onSearch = { navController.navigate(Routes.search(it)) },
             onFavourite = { navController.openFavourite(it) },
         )
     }

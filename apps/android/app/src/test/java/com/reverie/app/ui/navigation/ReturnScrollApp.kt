@@ -33,10 +33,10 @@ import com.reverie.app.ui.screens.browse.BrowseScreen
 import com.reverie.app.ui.screens.browse.BrowseViewModel
 import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.FolderViewModel
-import com.reverie.app.ui.screens.browse.KindScreen
-import com.reverie.app.ui.screens.browse.KindViewModel
+import com.reverie.app.ui.screens.browse.FeedScreen
+import com.reverie.app.ui.screens.browse.FeedSource
+import com.reverie.app.ui.screens.browse.FeedViewModel
 import com.reverie.app.ui.screens.browse.browseDeps
-import com.reverie.app.ui.screens.browse.routeOf
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.favourites.FavouritesViewModel
@@ -118,7 +118,8 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
             }
             reverieComposable(Routes.SEARCH, Routes.searchArguments) { Search(it) }
             reverieComposable(Routes.FOLDER, Routes.folderArguments) { Folder(it) }
-            reverieComposable(Routes.KIND, Routes.kindArguments) { Kind(it) }
+            reverieComposable(Routes.PHOTOS, Routes.photosArguments) { Feed(it) }
+            reverieComposable(Routes.FEED, Routes.feedArguments) { Feed(it) }
             reverieComposable(Routes.DOCUMENT, Routes.documentArguments) { Viewer(it) }
         }
     }
@@ -132,7 +133,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private fun Browse(entry: NavBackStackEntry) {
         BrowseScreen(
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
-            onOpenKind = { nav.navigate(Routes.kind(routeOf(it))) },
+            onOpenKind = { nav.navigate(Routes.feed(FeedSource.of(it))) },
             onFavourite = { nav.openFavourite(it) },
             viewModel = viewModel { BrowseViewModel(deps) },
             uploadViewModel = uploads(),
@@ -151,12 +152,13 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     }
 
     @Composable
-    private fun Kind(entry: NavBackStackEntry) {
-        KindScreen(
+    private fun Feed(entry: NavBackStackEntry) {
+        FeedScreen(
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             onBack = { nav.popBackStack() },
+            onSearch = { nav.navigate(Routes.search(it)) },
             onFavourite = { nav.openFavourite(it) },
-            viewModel = viewModel { KindViewModel(createSavedStateHandle(), deps) },
+            viewModel = viewModel { FeedViewModel(createSavedStateHandle(), deps) },
             uploadViewModel = uploads(),
         )
     }

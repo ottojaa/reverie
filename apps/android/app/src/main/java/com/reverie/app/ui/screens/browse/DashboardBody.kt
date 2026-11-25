@@ -28,7 +28,7 @@ import java.time.ZoneId
 /** What the dashboard's cards and rows do when tapped. */
 class DashboardActions(
     val onOpenKind: (DocumentKind) -> Unit,
-    val recent: RecentActions,
+    val recent: RowActions,
     val onOpenFavourite: (FavouriteDto) -> Unit = {},
     val onSeeAllFavourites: () -> Unit = {},
 )

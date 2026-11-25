@@ -69,6 +69,8 @@ internal fun documentRowActions(
     selectedIds: Set<String>,
     starredIds: Set<String>,
     openDocument: (DocumentDto) -> Unit,
+    onGroupClick: (RecentRow.Group) -> Unit = {},
+    onGroupLongClick: (RecentRow.Group) -> Unit = {},
 ): RowActions {
     val selecting = selectedIds.isNotEmpty()
     return RowActions(
@@ -86,5 +88,7 @@ internal fun documentRowActions(
         onLongClick = { doc -> if (selecting) handler.toggleSelect(doc.id) else handler.enterSelection(doc.id) },
         starred = { it.id in starredIds },
         onToggleStar = { handler.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
+        onGroupClick = onGroupClick,
+        onGroupLongClick = onGroupLongClick,
     )
 }

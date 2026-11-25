@@ -110,10 +110,10 @@ class BrowseSession(
     /** Starring and opening favourites from this screen. */
     val favourites = FavouriteController(deps.favouriteDeps, scope)
 
-    /** How the Files grid arranges photos (user setting). */
+    /** How a photo grid arranges its tiles (user setting). */
     val gridLayoutMode: StateFlow<GridLayoutMode> = deps.settings.settings
         .map { it.gridLayoutMode }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), GridLayoutMode.MOSAIC)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), GridLayoutMode.UNIFORM)
 
     /** How often the mosaic grid promotes a photo to a larger tile (user setting). */
     val mosaicFeatureEvery: StateFlow<Int> = deps.settings.settings

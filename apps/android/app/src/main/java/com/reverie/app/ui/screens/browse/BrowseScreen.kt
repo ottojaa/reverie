@@ -100,12 +100,12 @@ private fun recentActions(
     selectedIds: Set<String>,
     starredIds: Set<String>,
     openDocument: (com.reverie.app.data.api.model.DocumentDto) -> Unit,
-): RecentActions {
+): RowActions {
     val selecting = selectedIds.isNotEmpty()
-    return RecentActions(
-        selectedIds = selectedIds,
-        starredIds = starredIds,
-        onDocClick = { doc ->
+    return RowActions(
+        selected = { it.id in selectedIds },
+        starred = { it.id in starredIds },
+        onClick = { doc ->
             if (selecting) {
                 viewModel.toggleSelect(listOf(doc.id))
             } else {
@@ -116,7 +116,7 @@ private fun recentActions(
                 openDocument(doc)
             }
         },
-        onDocLongClick = { doc -> if (selecting) viewModel.toggleSelect(listOf(doc.id)) else viewModel.enterSelection(listOf(doc.id)) },
+        onLongClick = { doc -> if (selecting) viewModel.toggleSelect(listOf(doc.id)) else viewModel.enterSelection(listOf(doc.id)) },
         onGroupClick = { group -> if (selecting) viewModel.toggleSelect(group.docIds()) else viewModel.toggleExpanded(group.key) },
         onGroupLongClick = { group -> if (selecting) viewModel.toggleSelect(group.docIds()) else viewModel.enterSelection(group.docIds()) },
     )

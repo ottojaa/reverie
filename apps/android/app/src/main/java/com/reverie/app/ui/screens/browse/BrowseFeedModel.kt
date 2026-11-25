@@ -104,9 +104,13 @@ class BrowseFeedModel(
     /**
      * The viewer's swipe order: this feed's loaded documents and nothing else. Its ids follow the feed as
      * pages arrive, and reaching the end asks this same feed for its next page.
+     *
+     * @param order the ids in the order the screen shows them, where that differs from the feed's own.
      */
-    fun prepareSequence(): DocumentSequence {
-        fun idsOf(state: FeedState) = state.documents.documents.map(DocumentDto::id)
+    fun prepareSequence(
+        order: (List<DocumentDto>) -> List<String> = { documents -> documents.map { it.id } },
+    ): DocumentSequence {
+        fun idsOf(state: FeedState) = order(state.documents.documents)
         return DocumentSequence(
             initialIds = idsOf(state.value),
             ids = state.map(::idsOf).distinctUntilChanged(),

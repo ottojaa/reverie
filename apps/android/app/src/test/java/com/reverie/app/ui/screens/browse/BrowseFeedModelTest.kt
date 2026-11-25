@@ -289,13 +289,11 @@ class BrowseFeedModelTest {
     }
 
     @Test
-    fun `a kind route argument picks its kind, and anything else opens Photos`() {
-        assertEquals(DocumentKind.IMAGE, kindOfRoute("photos"))
-        assertEquals(DocumentKind.VIDEO, kindOfRoute("VIDEOS"))
-        assertEquals(DocumentKind.FILE, kindOfRoute("Files"))
-        // The dashboard's own feed is not a kind screen, and a missing or unknown argument must not crash the route.
-        assertEquals(DocumentKind.IMAGE, kindOfRoute("all"))
-        assertEquals(DocumentKind.IMAGE, kindOfRoute("nonsense"))
-        assertEquals(DocumentKind.IMAGE, kindOfRoute(null))
+    fun `a list route argument picks its list, and anything else opens the photos`() {
+        FeedSource.entries.forEach { assertEquals(it, FeedSource.ofArgument(it.argument)) }
+        assertEquals(FeedSource.VIDEOS, FeedSource.ofArgument("VIDEOS"))
+        // A missing or unknown argument must not crash the route.
+        assertEquals(FeedSource.PHOTOS, FeedSource.ofArgument("nonsense"))
+        assertEquals(FeedSource.PHOTOS, FeedSource.ofArgument(null))
     }
 }

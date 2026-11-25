@@ -5,8 +5,9 @@ import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.MosaicSection
 import com.reverie.app.ui.components.bandKey
 import com.reverie.app.ui.components.computeSections
+import java.time.ZoneId
 
-/** One entry of a kind screen's lazy list. */
+/** One entry of a document list's lazy list. */
 sealed interface FeedRow {
     /** Unique within the list: it keeps scroll position and animations attached to the right row. */
     val key: String
@@ -28,42 +29,62 @@ sealed interface FeedRow {
         override val docIds get() = section.tiles.map { it.doc.id }
     }
 
-    data class Videos(val docs: List<DocumentDto>) : FeedRow {
-        override val key get() = "videos:" + docs.first().id
-        override val contentType get() = "videos"
-        override val docIds get() = docs.map { it.id }
-    }
-
     data class File(val doc: DocumentDto) : FeedRow {
         override val key get() = "file:" + doc.id
         override val contentType get() = "file"
         override val docIds get() = listOf(doc.id)
+    }
+
+    /** A row that says when a document, or a group of them, was added. */
+    data class Added(val entry: RecentEntry) : FeedRow {
+        override val key get() = "added:" + entry.key
+        override val contentType get() = "added"
+        override val docIds get() = when (entry) {
+            is RecentEntry.Member -> listOf(entry.doc.id)
+            // An opened group's documents are the member rows under it.
+            is RecentEntry.Row -> if (entry.expanded) emptyList() else entry.row.docIds()
+        }
     }
 }
 
 /** Fetch the next page once the last visible row is this close to the end of what is loaded. */
 private const val LOAD_AHEAD_ROWS = 3
 
-/**
- * Flattens [feed] into lazy-list rows for a [width]-dp-wide screen. Photo runs are packed by the
- * user's layout setting.
- */
-fun toRows(feed: List<FeedItem>, width: Float, layoutMode: GridLayoutMode, featureEvery: Int): List<FeedRow> {
-    val headings = mutableMapOf<String, Int>()
-    return feed.flatMap { item ->
+/** Flattens [feed] into lazy-list rows for a [width]-dp-wide screen, packing each day's photos by the grid setting. */
+fun toRows(feed: List<FeedItem>, width: Float, layoutMode: GridLayoutMode, featureEvery: Int): List<FeedRow> =
+    feed.flatMap { item ->
         when (item) {
-            is FeedItem.Header -> {
-                // A group can come back after another one (a photo with no date taken, between two taken
-                // in the same month), so the key counts its occurrences.
-                val nth = headings.merge(item.key, 1, Int::plus)
-                listOf(FeedRow.Heading("heading:${item.key}:$nth", item))
-            }
+            is FeedItem.Header -> listOf(FeedRow.Heading("heading:" + item.key, item))
             is FeedItem.Media -> computeSections(item.docs, width, layoutMode, featureEvery).map { FeedRow.Band(it) }
-            is FeedItem.VideoRow -> listOf(FeedRow.Videos(item.docs))
             is FeedItem.FileRow -> listOf(FeedRow.File(item.doc))
         }
     }
+
+/** The rows of [source]'s screen over [documents]; [expanded] holds the keys of the groups opened in a folded list. */
+fun feedRows(
+    source: FeedSource,
+    documents: List<DocumentDto>,
+    expanded: Set<String>,
+    width: Float,
+    layout: FeedLayout,
+): List<FeedRow> = when (source.style) {
+    FeedStyle.DAYS -> toRows(
+        buildFeed(source.filter, documents, layout.today, layout.zone), width, layout.mode, layout.featureEvery,
+    )
+    FeedStyle.ROWS -> documents.map { FeedRow.Added(RecentEntry.Row(RecentRow.Single(it))) }
+    FeedStyle.FOLDS -> recentEntries(recentRows(documents), expanded).map { FeedRow.Added(it) }
 }
+
+/**
+ * The ids of [documents] in the order [source]'s screen shows them, which is the viewer's swipe order. In a
+ * folded list a closed group is one item (its newest document).
+ */
+fun shownIds(source: FeedSource, documents: List<DocumentDto>, expanded: Set<String>, zone: ZoneId): List<String> =
+    when (source.style) {
+        FeedStyle.DAYS -> byDay(source.filter, documents, zone).flatMap { (_, day) -> day.map { it.id } }
+        FeedStyle.ROWS -> documents.map { it.id }
+        FeedStyle.FOLDS -> viewerIds(recentRows(documents), expanded)
+    }
 
 /** The list index of the row drawing [docId], or -1 when it isn't loaded in this list. */
 fun rowIndexOf(rows: List<FeedRow>, docId: String): Int = rows.indexOfFirst { docId in it.docIds }

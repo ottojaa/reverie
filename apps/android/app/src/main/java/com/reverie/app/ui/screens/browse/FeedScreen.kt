@@ -1,30 +1,42 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
-/** One kind of Browse as a screen of its own: Photos, Videos or Files, paged, selectable and swipeable in the viewer. */
+/**
+ * A list of documents as a screen of its own (see [FeedSource]): paged, selectable and swipeable in the
+ * viewer.
+ *
+ * @param onBack null on a screen that is a root, which has no back arrow.
+ */
 @Composable
-fun KindScreen(
+fun FeedScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
+    onSearch: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
     onFavourite: (FavouriteDestination) -> Unit = {},
-    viewModel: KindViewModel = hiltViewModel(),
+    viewModel: FeedViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val expanded by viewModel.expanded.collectAsStateWithLifecycle()
     val focusedId = returnedDocumentId(viewModel.viewerFocus)
     val layoutMode by viewModel.gridLayoutMode.collectAsStateWithLifecycle()
     val featureEvery by viewModel.mosaicFeatureEvery.collectAsStateWithLifecycle()
@@ -33,20 +45,24 @@ fun KindScreen(
     val zone = remember { ZoneId.systemDefault() }
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
     val listState = rememberLazyListState()
-    val kind = viewModel.kind
+    val source = viewModel.source
     val documents = state.documents
 
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val starredIds = favourites.starredDocumentIds
 
     val actions = remember(viewModel, state.selectedIds, starredIds) {
-        documentRowActions(viewModel, state.selectedIds, starredIds, openDocument)
+        documentRowActions(
+            viewModel, state.selectedIds, starredIds, openDocument,
+            onGroupClick = viewModel::tapGroup,
+            onGroupLongClick = viewModel::holdGroup,
+        )
     }
 
     BrowseChrome(
         title = BrowseTitle(
-            text = kindTitle(kind),
-            subtitle = if (documents.fetched) kindSubtitle(kind, documents.total) else "",
+            text = source.title,
+            subtitle = documents.total.takeIf { documents.fetched }?.let(source::subtitle).orEmpty(),
             isFolder = false,
             compact = true,
         ),
@@ -64,10 +80,12 @@ fun KindScreen(
         favourites = viewModel.favourites,
         modifier = modifier,
         onFavourite = onFavourite,
+        headerActions = { SearchAction(source.searchScope) { onSearch(source.searchScope) } },
     ) { slot ->
-        KindBody(
-            kind = kind,
+        FeedBody(
+            source = source,
             state = state,
+            expanded = expanded,
             error = ui.error,
             listState = listState,
             layout = layout,
@@ -80,13 +98,24 @@ fun KindScreen(
     }
 }
 
-/** The kind's list, or its loading skeleton or empty state. */
 @Composable
-fun KindBody(
-    kind: DocumentKind,
+private fun SearchAction(scope: SearchScope, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            Icons.Outlined.Search,
+            contentDescription = if (scope == SearchScope.Media) "Search photos and videos" else "Search the library",
+        )
+    }
+}
+
+/** The list, or its loading skeleton or empty state. */
+@Composable
+fun FeedBody(
+    source: FeedSource,
     state: FeedState,
+    expanded: Set<String>,
     error: String?,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     layout: FeedLayout,
     actions: RowActions,
     focusedId: String?,
@@ -100,11 +129,11 @@ fun KindBody(
         return
     }
     if (documents.fetched && documents.documents.isEmpty()) {
-        EmptyList(emptyTitle(kind), slot.contentPadding, slot.onUpload)
+        EmptyList(source.emptyTitle, slot.contentPadding, slot.onUpload)
         return
     }
-    KindFeed(
-        kind = kind,
+    FeedList(
+        source = source,
         documents = documents.documents,
         hasMore = documents.hasMore,
         listState = listState,
@@ -115,6 +144,7 @@ fun KindBody(
         onFocusConsumed = onFocusConsumed,
         onLoadMore = onLoadMore,
         modifier = slot.modifier,
+        expanded = expanded,
         onHeading = slot.onHeading,
     )
 }

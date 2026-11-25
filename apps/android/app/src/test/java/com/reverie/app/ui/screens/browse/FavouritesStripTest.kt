@@ -53,7 +53,7 @@ class FavouritesStripTest {
                 listState = listState, contentPadding = PaddingValues(bottom = 24.dp), today = LocalDate.of(2026, 11, 25), zone = ZoneOffset.UTC,
                 actions = DashboardActions(
                     onOpenKind = {},
-                    recent = RecentActions(emptySet(), {}, {}, {}, {}),
+                    recent = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
                     onOpenFavourite = { calls += "open:${it.id}" },
                     onSeeAllFavourites = { calls += "all" },
                 ),

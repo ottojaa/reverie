@@ -19,7 +19,7 @@ import javax.inject.Singleton
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "reverie_settings")
 
-/** How the Files grid lays photos out. */
+/** How a photo grid lays photos out. */
 enum class GridLayoutMode {
     /** Google-Photos-style: mostly 1×1 with occasional larger feature tiles. */
     MOSAIC,
@@ -53,13 +53,13 @@ data class AppSettings(
     val dynamicColor: Boolean = false,
     /** Slide the bottom navigation bar away while scrolling a list. */
     val hideNavOnScroll: Boolean = true,
-    /** Number of columns in the Files grid (1–4). */
+    /** Number of columns in a photo grid (1–4). */
     val gridColumns: Int = 3,
-    /** How the Files grid arranges photos. */
-    val gridLayoutMode: GridLayoutMode = GridLayoutMode.MOSAIC,
+    /** How a photo grid arranges photos. */
+    val gridLayoutMode: GridLayoutMode = GridLayoutMode.UNIFORM,
     /** What fills the area around a letterboxed video in the viewer. */
     val videoBackground: VideoBackground = VideoBackground.BLACK,
-    /** Mosaic Files grid: a larger feature tile appears roughly every N photos (min 2). */
+    /** Mosaic photo grid: a larger feature tile appears roughly every N photos (min 2). */
     val mosaicFeatureEvery: Int = 3,
     /** Cards or list on folder pages: one choice for every folder. */
     val folderViewMode: FolderViewMode = FolderViewMode.GRID,

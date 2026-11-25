@@ -34,7 +34,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * Renders the real header, floating chips, dashboard and kind feeds of Browse from fixed documents.
+ * Renders the real header, floating chips, dashboard and list screens of Browse from fixed documents.
  * Thumbnails are not fetched in a screenshot test, so pictures show their placeholder.
  */
 class BrowseScreenshotTest {
@@ -43,7 +43,7 @@ class BrowseScreenshotTest {
 
     private val today = LocalDate.of(2026, 11, 23)
     private val zone = ZoneOffset.UTC
-    private val layout = FeedLayout(GridLayoutMode.MOSAIC, featureEvery = 8, today = today, zone = zone)
+    private val layout = FeedLayout(GridLayoutMode.UNIFORM, featureEvery = 8, today = today, zone = zone)
 
     private fun item(id: String, name: String, mime: String, at: String, bytes: Long = 2_400_000, seconds: Double? = null, w: Int? = null, h: Int? = null) =
         DocumentDto(
@@ -90,10 +90,9 @@ class BrowseScreenshotTest {
             expanded = expanded,
         )
 
-    private val noRecentActions = RecentActions(emptySet(), {}, {}, {}, {})
-    private val noActions = DashboardActions(onOpenKind = {}, recent = noRecentActions)
     private val noRowActions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
-    // What the Photos header measures (status bar + compact title block); only the half-hidden shot needs the number.
+    private val noActions = DashboardActions(onOpenKind = {}, recent = noRowActions)
+    // What a list header with a subtitle measures (status bar + compact title block); only the half-hidden shot needs the number.
     private val headerHeight = 96.dp
 
     @Composable
@@ -142,13 +141,13 @@ class BrowseScreenshotTest {
     )
 
     @Composable
-    private fun KindScreen(kind: DocumentKind, title: String, subtitle: String, documents: List<DocumentDto>, scrolledTo: Int? = null) {
+    private fun ListScreen(source: FeedSource, subtitle: String, documents: List<DocumentDto>, scrolledTo: Int? = null) {
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
         val body: @Composable () -> Unit = {
-            KindFeed(
-                kind = kind, documents = documents, hasMore = false, listState = listState,
+            FeedList(
+                source = source, documents = documents, hasMore = false, listState = listState,
                 contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
-                focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+                focusedId = null, onFocusConsumed = {}, onLoadMore = {},
             )
         }
         ReverieTheme {
@@ -157,7 +156,7 @@ class BrowseScreenshotTest {
                     Box(Modifier.fillMaxSize()) {
                         body()
                         ScrollChips(
-                            heading = headingNow(kind, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
+                            heading = headingNow(source, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
                             visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
                         )
                     }
@@ -165,7 +164,7 @@ class BrowseScreenshotTest {
                 }
                 Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle(title, subtitle, isFolder = false, compact = true), processingCount = 2, onProcessingClick = {},
+                        title = BrowseTitle(source.title, subtitle, isFolder = false, compact = true), processingCount = 2, onProcessingClick = {},
                         onCanvas = {}, onBack = {},
                     )
                     Box(Modifier.weight(1f)) { body() }
@@ -184,18 +183,18 @@ class BrowseScreenshotTest {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().belowHeader(headerPx = { headerPx }, heightOffset = { offset })) {
-                        KindFeed(
-                            kind = DocumentKind.IMAGE, documents = photoLibrary, hasMore = false, listState = listState,
+                        FeedList(
+                            source = FeedSource.PHOTOS, documents = photoLibrary, hasMore = false, listState = listState,
                             contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
-                            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+                            focusedId = null, onFocusConsumed = {}, onLoadMore = {},
                         )
                     }
                     ScrollChips(
-                        heading = headingNow(DocumentKind.IMAGE, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
+                        heading = headingNow(FeedSource.PHOTOS, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
                         visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38), isFolder = false, compact = true),
+                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty(), isFolder = false, compact = true),
                         processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )
@@ -205,8 +204,8 @@ class BrowseScreenshotTest {
     }
 
     /** The heading a list scrolled to [index] sits under, computed the way the feed reports it. */
-    private fun headingNow(kind: DocumentKind, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
-        headingAt(toRows(buildFeed(kind, documents, today, zone), 390f, layout.mode, layout.featureEvery), index)
+    private fun headingNow(source: FeedSource, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
+        headingAt(feedRows(source, documents, emptySet(), 390f, layout), index)
 
     @Test fun dashboard() = paparazzi.snapshot { Dashboard(dashboardState()) }
 
@@ -220,21 +219,17 @@ class BrowseScreenshotTest {
 
     @Test fun dashboardScrolled() = paparazzi.snapshot { Dashboard(dashboardState(), scrolledTo = 3) }
 
-    @Test fun kindPhotos() = paparazzi.snapshot {
-        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38), photoLibrary)
-    }
+    @Test fun kindPhotos() = paparazzi.snapshot { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary) }
 
-    @Test fun kindVideos() = paparazzi.snapshot {
-        KindScreen(DocumentKind.VIDEO, "Videos", kindSubtitle(DocumentKind.VIDEO, 19), videoLibrary)
-    }
+    @Test fun kindVideos() = paparazzi.snapshot { ListScreen(FeedSource.VIDEOS, "19 videos", videoLibrary) }
 
-    @Test fun kindFiles() = paparazzi.snapshot {
-        KindScreen(DocumentKind.FILE, "Files", kindSubtitle(DocumentKind.FILE, 191), fileLibrary)
-    }
+    @Test fun kindFiles() = paparazzi.snapshot { ListScreen(FeedSource.FILES, "191 files", fileLibrary) }
 
-    @Test fun kindPhotosScrolled() = paparazzi.snapshot {
-        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38), photoLibrary, scrolledTo = 3)
-    }
+    @Test fun kindPhotosScrolled() = paparazzi.snapshot { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary, scrolledTo = 3) }
+
+    @Test fun unfiledList() = paparazzi.snapshot { ListScreen(FeedSource.UNFILED, "4 files", fileLibrary) }
+
+    @Test fun recentList() = paparazzi.snapshot { ListScreen(FeedSource.RECENT, "", newestFirst) }
 
     /** A 320dp-wide phone and the longest names he has: half-width cards and row names have to hold. */
     @Test fun dashboardNarrow() {

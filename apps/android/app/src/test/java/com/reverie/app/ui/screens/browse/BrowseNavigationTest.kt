@@ -11,7 +11,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.theme.ReverieTheme
 import kotlinx.coroutines.launch
@@ -65,7 +64,7 @@ class BrowseNavigationTest {
         val state = DashboardState(recent = FeedState(FeedDocuments(files, total = 40, hasMore = false, fetched = true)))
         DashboardBody(
             state = state, listState = listState, contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp), today = today, zone = zone,
-            actions = DashboardActions(onOpenKind = { nav.navigate("kind") }, recent = RecentActions(emptySet(), {}, {}, {}, {})),
+            actions = DashboardActions(onOpenKind = { nav.navigate("kind") }, recent = RowActions(selected = { false }, onClick = {}, onLongClick = {})),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
         )
     }
@@ -74,10 +73,10 @@ class BrowseNavigationTest {
     private fun Kind() {
         val listState = rememberLazyListState()
         kindList = listState
-        KindFeed(
-            kind = DocumentKind.IMAGE, documents = photos, hasMore = false, listState = listState,
+        FeedList(
+            source = FeedSource.PHOTOS, documents = photos, hasMore = false, listState = listState,
             contentPadding = PaddingValues(0.dp), layout = layout, actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
-            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {},
         )
     }
 

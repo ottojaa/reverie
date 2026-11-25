@@ -4,27 +4,28 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentFilter
-import com.reverie.app.data.api.model.DocumentKind
-import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.update
+import java.time.ZoneId
 import javax.inject.Inject
 
-/** One kind's own screen (Photos, Videos or Files): its own paging, selection and viewer sequence. */
+/** One [FeedSource]'s screen: its own paging, selection, opened groups and viewer sequence. */
 @HiltViewModel
-class KindViewModel @Inject constructor(
+class FeedViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
 ) : ViewModel(), DocumentListHandler {
 
-    /** Photos, Videos or Files; an unknown route argument opens Photos. */
-    val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
+    /** The list the route names; an unknown argument opens the photos. */
+    val source: FeedSource = FeedSource.ofArgument(savedStateHandle["source"])
 
-    private val cache = deps.documents.observeDocuments(DocumentScope.All)
+    private val cache = deps.documents.observeDocuments(source.scope)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
@@ -39,13 +40,18 @@ class KindViewModel @Inject constructor(
 
     private val feed: BrowseFeedModel = BrowseFeedModel(
         scope = viewModelScope,
-        filter = DocumentFilter.of(kind),
+        filter = source.filter,
         cache = cache,
-        fetchPage = { offset -> deps.documents.refresh(DocumentScope.All, BROWSE_PAGE_SIZE, offset, DocumentFilter.of(kind)) },
+        fetchPage = { offset -> deps.documents.refresh(source.scope, BROWSE_PAGE_SIZE, offset, source.filter) },
         onFirstPageFailed = session::onRefreshFailed,
-        reconcile = { keep -> deps.documents.dropStale(DocumentScope.All, DocumentFilter.of(kind), keep) },
+        reconcile = { keep -> deps.documents.dropStale(source.scope, source.filter, keep) },
         sharing = SharingStarted.Eagerly,
     )
+
+    private val openGroups = MutableStateFlow<Set<String>>(emptySet())
+
+    /** The keys of the groups opened in a folded list. */
+    val expanded: StateFlow<Set<String>> = openGroups.asStateFlow()
 
     val state: StateFlow<FeedState> get() = feed.state
     val ui: StateFlow<SessionUi> get() = session.ui
@@ -70,10 +76,24 @@ class KindViewModel @Inject constructor(
 
     override fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
 
+    /** A tap on a group opens or closes it; while selecting, it selects or deselects all of it. */
+    fun tapGroup(group: RecentRow.Group) {
+        if (feed.selectedIds.isNotEmpty()) return feed.toggleSelect(group.docIds())
+        openGroups.update { if (group.key in it) it - group.key else it + group.key }
+    }
+
+    fun holdGroup(group: RecentRow.Group) {
+        if (feed.selectedIds.isNotEmpty()) return feed.toggleSelect(group.docIds())
+        feed.enterSelection(group.docIds())
+    }
+
     fun clearSelection() = feed.clearSelection()
 
-    /** Hand this kind's loaded documents, and only those, to the viewer. Call right before navigating into a document. */
-    override fun prepareSequence() = session.publish(feed.prepareSequence())
+    /** Hand the shown list's documents, in the order shown, to the viewer. Call right before opening one. */
+    override fun prepareSequence() {
+        val open = openGroups.value
+        session.publish(feed.prepareSequence { shownIds(source, it, open, ZoneId.systemDefault()) })
+    }
 
     override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
@@ -83,14 +103,3 @@ class KindViewModel @Inject constructor(
 
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
 }
-
-/** The route argument that opens [kind]'s screen: "photos", "videos" or "files". */
-fun routeOf(kind: DocumentKind): String = when (kind) {
-    DocumentKind.IMAGE -> "photos"
-    DocumentKind.VIDEO -> "videos"
-    DocumentKind.FILE -> "files"
-}
-
-/** The kind a kind screen's route argument opens; Photos for anything else. */
-fun kindOfRoute(argument: String?): DocumentKind =
-    DocumentKind.entries.firstOrNull { routeOf(it).equals(argument, ignoreCase = true) } ?: DocumentKind.IMAGE

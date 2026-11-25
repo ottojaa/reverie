@@ -136,16 +136,15 @@ fun RecentRow.docIds(): List<String> = when (this) {
     is RecentRow.Group -> docs.map { it.id }
 }
 
-private val dayInYear = DateTimeFormatter.ofPattern("MMM d", Locale.US)
-private val dayWithYear = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
-private val monthOnly = DateTimeFormatter.ofPattern("MMM", Locale.US)
+private val dayInYear = DateTimeFormatter.ofPattern("d MMM", Locale.US)
+private val dayWithYear = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 
 private fun dayText(day: LocalDate, today: LocalDate): String =
     day.format(if (day.year == today.year) dayInYear else dayWithYear)
 
 private fun DocumentDto.day(zone: ZoneId): LocalDate? = createdMillis()?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
 
-/** "Videos · Nov 6", "Photos and videos · Nov 9": the members' kind (no count) and the day of the newest. */
+/** "Videos · 6 Nov", "Photos and videos · 9 Nov": the members' kind (no count) and the day of the newest. */
 fun foldLabel(docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): String {
     val kinds = docs.map { it.kind }.toSet()
     val what = when (kinds) {
@@ -157,7 +156,7 @@ fun foldLabel(docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): String {
     return "$what · $day"
 }
 
-/** "Versions · Aug 19 – 25": the days the copies were uploaded across, oldest to newest. */
+/** "Versions · 19–25 Aug": the days the copies were uploaded across, oldest to newest. */
 fun stackLabel(docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): String {
     val newest = docs.first().day(zone)
     val oldest = docs.last().day(zone)
@@ -167,15 +166,14 @@ fun stackLabel(docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): String 
 
 private fun dayRange(from: LocalDate, to: LocalDate, today: LocalDate): String = when {
     from == to -> dayText(from, today)
-    from.year != to.year -> dayText(from, today.withYear(0)) + " – " + dayText(to, today.withYear(0))
-    from.month == to.month -> dayText(from, today) + " – " + to.dayOfMonth
-    else -> dayText(from, today) + " – " + to.format(monthOnly) + " " + to.dayOfMonth
+    from.year == to.year && from.month == to.month -> from.dayOfMonth.toString() + "–" + dayText(to, today)
+    else -> dayText(from, today) + " – " + dayText(to, today)
 }
 
 private val weekday = DateTimeFormatter.ofPattern("EEE", Locale.US)
 private val clock = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
-/** When a row was added, short: the time today, "Yesterday", the weekday within a week, else "Nov 6". */
+/** When a row was added, short: the time today, "Yesterday", the weekday within a week, else "6 Nov". */
 fun recentWhen(doc: DocumentDto, today: LocalDate, zone: ZoneId): String {
     val instant = doc.createdMillis()?.let(Instant::ofEpochMilli) ?: return ""
     val at = instant.atZone(zone)

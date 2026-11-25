@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.reverie.app.domain.search.SearchScope
+import com.reverie.app.ui.screens.browse.FeedSource
 
 /** The app's destinations, and the arguments each one takes. */
 object Routes {
@@ -14,10 +15,15 @@ object Routes {
     val folderArguments = listOf(navArgument("folderId") { type = NavType.StringType })
     fun folder(folderId: String) = "folder/$folderId"
 
-    /** One kind of the whole library (photos, videos, files) as its own screen. */
-    const val KIND = "kind/{kind}"
-    val kindArguments = listOf(navArgument("kind") { type = NavType.StringType })
-    fun kind(kind: String) = "kind/$kind"
+    /** A list of documents as its own screen: one kind of the library, Recently added or "Not in a folder". */
+    const val FEED = "list/{source}"
+    val feedArguments = listOf(navArgument("source") { type = NavType.StringType })
+    fun feed(source: FeedSource) = "list/${source.argument}"
+
+    /** The Photos tab is the list of all photos and videos. */
+    val photosArguments = listOf(
+        navArgument("source") { type = NavType.StringType; defaultValue = FeedSource.MEDIA.argument },
+    )
 
     const val FAVOURITES = "favourites"
 
@@ -57,7 +63,7 @@ object Routes {
     const val SETTINGS_BACKUP = "settings/backup"
 
     /** The places the library is browsed from: the bottom pill floats over these and no others. */
-    val pillRoutes = setOf(LIBRARY, PHOTOS, FOLDER, KIND, FAVOURITES)
+    val pillRoutes = setOf(LIBRARY, PHOTOS, FOLDER, FEED, FAVOURITES)
 
     /** Where the pill has the round whole-library search button beside it; other lists search what they show. */
     val searchButtonRoutes = setOf(LIBRARY, FAVOURITES)

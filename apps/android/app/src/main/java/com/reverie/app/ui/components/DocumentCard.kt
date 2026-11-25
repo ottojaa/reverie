@@ -29,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -56,10 +55,6 @@ fun DocumentCard(
     modifier: Modifier = Modifier,
     // Larger mosaic tiles (2×2, 3×2, …) need a bigger source or the MD thumbnail visibly upscales.
     thumbnailSize: ThumbnailSize = GRID_THUMBNAIL_SIZE,
-    // The tile's outline; the Videos tab rounds its large tiles.
-    shape: Shape = RectangleShape,
-    // Large video tiles carry the duration pill and a corner play icon instead of a centered badge.
-    largeVideoTile: Boolean = false,
     isStarred: Boolean = false,
 ) {
     // Google-Photos multi-select: the thumbnail springs slightly smaller with rounded corners,
@@ -78,7 +73,7 @@ fun DocumentCard(
     Box(
         modifier = modifier
             .documentSharedBounds(document.id)
-            .clip(shape)
+            .clip(RectangleShape)
             // Muted frame, revealed only as the thumbnail shrinks; fully covered when unselected.
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
@@ -101,7 +96,6 @@ fun DocumentCard(
                 hasThumbnail = document.hasRenderedThumbnail,
                 size = thumbnailSize,
                 durationSeconds = document.duration_seconds,
-                largeVideoTile = largeVideoTile,
                 isStarred = isStarred,
                 modifier = Modifier.matchParentSize(),
             )

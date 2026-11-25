@@ -37,7 +37,7 @@ import com.reverie.app.data.realtime.DocumentJobEvents
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FakeDocumentDao
 import com.reverie.app.ui.screens.browse.BrowseFeedModel
-import com.reverie.app.ui.screens.browse.RecentActions
+import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
@@ -115,7 +115,7 @@ class ThumbnailArrivalTest {
             computation = Dispatchers.Unconfined,
             sharing = SharingStarted.Eagerly,
         )
-        val actions = RecentActions(emptySet(), {}, {}, {}, {})
+        val actions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
 
         assertThumbnailArrives {
             val state by feed.state.collectAsState()

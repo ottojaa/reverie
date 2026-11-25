@@ -33,7 +33,7 @@ fun FolderChipRow(chips: List<FolderChip>, selected: DocumentKind?, onSelect: (D
     ) {
         chips.forEach { chip ->
             ChoiceChip(
-                label = chip.kind?.let(::kindTitle) ?: "All",
+                label = chip.kind?.let { FeedSource.of(it).title } ?: "All",
                 count = chip.count,
                 isSelected = chip.kind == selected,
                 onClick = { onSelect(chip.kind) },

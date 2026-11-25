@@ -144,7 +144,7 @@ fun SettingsScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text("Files grid layout", style = MaterialTheme.typography.titleSmall)
+            Text("Photo grid layout", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             GridLayoutModeSelector(selected = settings.gridLayoutMode, onSelect = viewModel::setGridLayoutMode)
             // The feature-frequency knob only applies to the mosaic layout.

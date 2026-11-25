@@ -30,18 +30,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.ui.components.ProcessingStatusBadge
 
-/** What the title block says: the folder, "My Files" or a kind, and the line under it. */
+/** What the title block says: the folder, "My Files" or a list, and the line under it (blank: none). */
 data class BrowseTitle(
     val text: String,
     val subtitle: String,
     /** A folder page has the "Open in Canvas" menu. */
     val isFolder: Boolean,
-    /** The smaller title block (24/13sp) of a folder page or a kind screen; My Files keeps 32/15sp. */
+    /** The smaller title block (28/14sp) of a folder page or a list; My Files keeps 32/15sp. */
     val compact: Boolean = false,
 )
 
 /**
- * The part of Browse that slides away on scroll: back arrow (on a folder page or a kind screen), title,
+ * The part of Browse that slides away on scroll: back arrow (where there is somewhere to go back to), title,
  * subtitle and the processing pill. It paints its own opaque background because the list scrolls underneath it.
  *
  * @param actions buttons of the screen's own, between the processing pill and the ⋮ menu.
@@ -72,20 +72,22 @@ fun BrowseHeader(
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title.text,
-                    fontSize = if (title.compact) 24.sp else 32.sp,
-                    lineHeight = if (title.compact) 30.sp else 40.sp,
+                    fontSize = if (title.compact) 28.sp else 32.sp,
+                    lineHeight = if (title.compact) 34.sp else 40.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = title.subtitle,
-                    fontSize = if (title.compact) 13.sp else 15.sp,
-                    lineHeight = if (title.compact) 18.sp else 22.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (title.subtitle.isNotBlank()) {
+                    Text(
+                        text = title.subtitle,
+                        fontSize = if (title.compact) 14.sp else 15.sp,
+                        lineHeight = if (title.compact) 20.sp else 22.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             ProcessingStatusBadge(count = processingCount, onClick = onProcessingClick)
             actions()

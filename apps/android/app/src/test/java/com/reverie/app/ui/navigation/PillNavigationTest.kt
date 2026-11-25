@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.reverie.app.domain.search.SearchScope
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -33,9 +34,9 @@ class PillNavigationTest {
 
     private val pages = mapOf(
         Routes.LIBRARY to emptyList(),
-        Routes.PHOTOS to emptyList(),
         Routes.FOLDER to Routes.folderArguments,
-        Routes.KIND to Routes.kindArguments,
+        Routes.PHOTOS to Routes.photosArguments,
+        Routes.FEED to Routes.feedArguments,
         Routes.FAVOURITES to emptyList(),
         Routes.SEARCH to Routes.searchArguments,
         Routes.DOCUMENT to Routes.documentArguments,
@@ -195,7 +196,7 @@ class PillNavigationTest {
         button("Library").assertExists()
         go(Routes.FAVOURITES)
         search().assertExists()
-        go(Routes.kind("files"))
+        go(Routes.feed(FeedSource.FILES))
         search().assertDoesNotExist()
         tap("Photos")
         search().assertDoesNotExist()

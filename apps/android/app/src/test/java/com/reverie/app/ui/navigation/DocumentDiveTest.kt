@@ -22,9 +22,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.FavouriteDto
+import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.settings.FolderViewMode
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.PhotoResultTile
@@ -34,14 +34,13 @@ import com.reverie.app.ui.screens.browse.DashboardBody
 import com.reverie.app.ui.screens.browse.DashboardState
 import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedLayout
+import com.reverie.app.ui.screens.browse.FeedList
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.FolderBody
 import com.reverie.app.ui.screens.browse.FolderState
-import com.reverie.app.ui.screens.browse.KindFeed
-import com.reverie.app.ui.screens.browse.RecentActions
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.doc
-import com.reverie.app.ui.screens.browse.routeOf
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteFixtures
 import com.reverie.app.ui.theme.ReverieTheme
@@ -118,9 +117,9 @@ class DocumentDiveTest {
             reverieComposable(Routes.FOLDER, Routes.folderArguments) {
                 Recorded(Routes.FOLDER) { Folder() }
             }
-            reverieComposable(Routes.KIND, Routes.kindArguments) { entry ->
-                val route = entry.arguments?.getString("kind")
-                Recorded(Routes.KIND) { Kind(DocumentKind.entries.first { routeOf(it) == route }) }
+            reverieComposable(Routes.FEED, Routes.feedArguments) { entry ->
+                val source = FeedSource.ofArgument(entry.arguments?.getString("source"))
+                Recorded(Routes.FEED) { Feed(source) }
             }
             reverieComposable(Routes.SEARCH, Routes.searchArguments) { Recorded(Routes.SEARCH) { Search() } }
             reverieComposable(Routes.DOCUMENT, Routes.documentArguments) { entry ->
@@ -144,7 +143,7 @@ class DocumentDiveTest {
             listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp), today = today, zone = zone,
             actions = DashboardActions(
                 onOpenKind = {},
-                recent = RecentActions(emptySet(), {}, {}, {}, {}),
+                recent = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
                 onOpenFavourite = { nav.openFavourite(FavouriteDestination.Document(it.id, null)) },
             ),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {}, favourites = favourites,
@@ -163,12 +162,12 @@ class DocumentDiveTest {
     }
 
     @Composable
-    private fun Kind(kind: DocumentKind) {
-        KindFeed(
-            kind = kind, documents = documents.filter { it.id == kind.name.lowercase() }, hasMore = false,
+    private fun Feed(source: FeedSource) {
+        FeedList(
+            source = source, documents = documents.filter { source.filter.holds(it.kind) }, hasMore = false,
             listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp), layout = layout,
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
-            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, onHeading = {},
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {},
         )
     }
 
@@ -218,9 +217,9 @@ class DocumentDiveTest {
         compose.waitForIdle()
     }
 
-    @Test fun `no row flies between the dashboard and a kind screen`() {
+    @Test fun `no row flies between the dashboard and a list screen`() {
         compose.setContent { Host() }
-        DocumentKind.entries.forEach { assertSlides(Routes.LIBRARY, Routes.kind(routeOf(it))) }
+        FeedSource.entries.forEach { assertSlides(Routes.LIBRARY, Routes.feed(it)) }
     }
 
     @Test fun `no row flies between the dashboard and a folder page or search`() {
@@ -236,12 +235,20 @@ class DocumentDiveTest {
         assertDives("file")
     }
 
-    @Test fun `a document opened from a kind screen dives into the viewer and shrinks back`() {
+    @Test fun `a document opened from a list screen dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
-        DocumentKind.entries.forEach {
-            show(Routes.kind(routeOf(it)))
-            assertDives(it.name.lowercase())
+        listOf(FeedSource.PHOTOS to "image", FeedSource.VIDEOS to "video", FeedSource.FILES to "file").forEach { (source, id) ->
+            show(Routes.feed(source))
+            assertDives(id)
         }
+    }
+
+    @Test fun `a document opened from the lists of mixed documents dives into the viewer and shrinks back`() {
+        compose.setContent { Host() }
+        show(Routes.feed(FeedSource.MEDIA))
+        assertDives("video")
+        show(Routes.feed(FeedSource.RECENT))
+        assertDives("file")
     }
 
     @Test fun `a document opened from a folder tile dives into the viewer and shrinks back`() {
@@ -276,12 +283,12 @@ class DocumentDiveTest {
         assertEquals(dashboardKey, imageKeys[Routes.DOCUMENT])
 
         compose.runOnUiThread { nav.popBackStack() }
-        show(Routes.kind(routeOf(DocumentKind.IMAGE)))
+        show(Routes.feed(FeedSource.PHOTOS))
         compose.runOnUiThread { nav.openDocument(nav.currentBackStackEntry!!, "image") }
         compose.waitForIdle()
-        val kindKey = imageKeys.getValue(Routes.KIND)
-        assertEquals(kindKey, imageKeys[Routes.DOCUMENT])
-        assertNotEquals(dashboardKey, kindKey)
+        val feedKey = imageKeys.getValue(Routes.FEED)
+        assertEquals(feedKey, imageKeys[Routes.DOCUMENT])
+        assertNotEquals(dashboardKey, feedKey)
 
         compose.runOnUiThread { nav.popBackStack() }
         show(Routes.folder("f1"))

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteFixtures
@@ -170,10 +171,10 @@ class ReturnScrollTest {
     @Test fun `swiping on from a starred document over a folder page scrolls no list`() =
         starredOver(FOLDER_ROUTE, swipeTo = FARTHER)
 
-    @Test fun `a starred document over a file-type page scrolls no list`() = starredOver(KIND_ROUTE, swipeTo = null)
+    @Test fun `a starred document over a file-type page scrolls no list`() = starredOver(FILES_ROUTE, swipeTo = null)
 
     @Test fun `swiping on from a starred document over a file-type page scrolls no list`() =
-        starredOver(KIND_ROUTE, swipeTo = FARTHER)
+        starredOver(FILES_ROUTE, swipeTo = FARTHER)
 
     @Test fun `a document from Recently added scrolls it to the document last shown`() {
         tapFirstRow()
@@ -193,7 +194,7 @@ class ReturnScrollTest {
 
     @Test fun `a document from a folder page scrolls that page and nothing else`() = onlyThatListScrolls(FOLDER_ROUTE)
 
-    @Test fun `a document from a file-type page scrolls that page and nothing else`() = onlyThatListScrolls(KIND_ROUTE)
+    @Test fun `a document from a file-type page scrolls that page and nothing else`() = onlyThatListScrolls(FILES_ROUTE)
 
     private fun showResults(viewMode: ViewMode) {
         act { app.nav.navigate(Routes.search()) }
@@ -226,7 +227,7 @@ class ReturnScrollTest {
         const val FAR = "d25"
         const val FARTHER = "d26"
         val FOLDER_ROUTE = Routes.folder(FOLDER)
-        val KIND_ROUTE = Routes.kind("files")
+        val FILES_ROUTE = Routes.feed(FeedSource.FILES)
         const val WAIT_MS = 10_000L
     }
 }
