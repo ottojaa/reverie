@@ -5,15 +5,15 @@ Recorded by Paparazzi (`FavouritesScreenshotTest`); the PNGs the test verifies a
 The boards are from the design canvas (https://claude.ai/artifact/GXPaKcnrUGaYueFb7c4oAC), filled with their own sample
 data. Blurhashes stand in for thumbnails, and menus are drawn in place because a screenshot test draws no popup.
 
-- `stars_dark_board-then-renders.png`: the stars board, then the viewer star and its message, the folder and file menus,
-  and the badges on photo and video cards, file rows, a collection and its folder rows.
-- `shelf_dark_board-then-renders.png`: the shelf board and Collections with the shelf; below, every kind of card,
-  including a private one locked and open.
-- `dashboard-strip_dark_board-then-renders.png`: the dashboard board and the Files dashboard with the strip, then with an
-  empty library; below, every kind of tile. Only the strip is ported from that board.
-- `screen_dark_board-then-renders.png`: the screen board, then the screen under All, Folders and Files.
-- `states-dark.png`: nothing starred, a failed first load, and a narrow phone at a large font size.
-- `light.png`: the same renders in light.
+Each file shows a board, then the app's renders of the same surface in dark and in light.
+
+- `stars.png`: the viewer star and its message, the folder and file menus, and the badges on photo and video cards,
+  file rows, a collection and its folder rows.
+- `shelf.png`: Collections with the shelf; below, every kind of card, including a private one locked and open.
+- `dashboard-strip.png`: the Files dashboard with the strip, with a library and with an empty one; below, every kind of
+  tile. Only the strip is ported from that board.
+- `screen.png`: the Favourites screen under All, Folders and Files.
+- `states.png` (no board): nothing starred, a failed first load, and a narrow phone at a large font size.
 
 Where the app differs from the boards, on purpose:
 
