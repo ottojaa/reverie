@@ -1,7 +1,6 @@
 import type { TreeDragHandlers } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { findFolder, flattenTree, searchTree } from '@/lib/folders/tree.js';
-import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Plus } from 'lucide-react';
@@ -122,7 +121,6 @@ function FolderRows({ rows }: { rows: FolderTreeRowProps[] }) {
 
 /** The sidebar's folders, to any depth. */
 export function FolderTree({ tree, currentId, dragHandlersRef, onNewFolder, onClose }: FolderTreeProps) {
-    const isMobile = useIsMobile();
     const [query, setQuery] = useState('');
     const isFiltering = query.trim().length > 0;
     const { openIds, open, toggle } = useOpenFolders(tree, currentId);
@@ -143,7 +141,7 @@ export function FolderTree({ tree, currentId, dragHandlersRef, onNewFolder, onCl
         onToggle: isFiltering ? undefined : toggle,
         dragKind: drag.active?.type ?? null,
         isDragSource: draggedIds.has(folder.id),
-        isDragDisabled: isFiltering || isMobile,
+        isDragDisabled: isFiltering,
         dropZone: drag.over && drag.over.zone !== 'top' && drag.over.targetId === folder.id ? drag.over.zone : null,
         actions,
         onClose,
