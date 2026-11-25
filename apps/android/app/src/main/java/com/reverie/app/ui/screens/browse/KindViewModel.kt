@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,7 +51,7 @@ class KindViewModel @Inject constructor(
     override val favourites get() = session.favourites
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
-    val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
+    val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
 
     init {
         session.keepUnfinishedLive(cache)
@@ -74,7 +75,7 @@ class KindViewModel @Inject constructor(
 
     override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
-    fun clearFocusedDocument() = session.clearFocusedDocument()
+    fun clearViewerFocus() = session.clearViewerFocus()
 
     fun deleteSelected() = session.deleteSelected()
 

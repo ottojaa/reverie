@@ -33,16 +33,16 @@ class DocumentSequenceHolder @Inject constructor() {
     var current: DocumentSequence? = null
         private set
 
-    /** The document the viewer is currently showing, so the origin grid can scroll to it on return. */
-    private val _focused = MutableStateFlow<String?>(null)
-    val focused: StateFlow<String?> = _focused.asStateFlow()
+    /** What the viewer is showing, so the screen it was opened from can scroll to it on return. */
+    private val _focus = MutableStateFlow<ViewerFocus?>(null)
+    val focus: StateFlow<ViewerFocus?> = _focus.asStateFlow()
 
     fun set(sequence: DocumentSequence) {
         current = sequence
     }
 
-    fun setFocused(id: String?) {
-        _focused.value = id
+    fun setFocus(focus: ViewerFocus?) {
+        _focus.value = focus
     }
 
     fun clear() {

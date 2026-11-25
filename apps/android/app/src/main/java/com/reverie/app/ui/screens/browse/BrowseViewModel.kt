@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +46,7 @@ class BrowseViewModel @Inject constructor(
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
     val favourites get() = session.favourites
-    val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
+    val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
 
     init {
         session.keepUnfinishedLive(cache)
@@ -73,7 +74,7 @@ class BrowseViewModel @Inject constructor(
 
     fun prefetch(document: DocumentDto) = session.prefetch(document)
 
-    fun clearFocusedDocument() = session.clearFocusedDocument()
+    fun clearViewerFocus() = session.clearViewerFocus()
 
     fun deleteSelected() = session.deleteSelected()
 
