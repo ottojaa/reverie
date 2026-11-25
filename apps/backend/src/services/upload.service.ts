@@ -73,6 +73,7 @@ export class UploadService {
     /**
      * Upload multiple files (with user context for storage quotas)
      * @param clientSessionId - Optional client-provided session ID for WebSocket correlation (avoids race with job events)
+     * @param folderId - Left out: the top level.
      * @param conflictStrategy - When 'replace', delete existing docs in folder with same filename first. When 'keep_both', auto-rename with (n) suffix.
      * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to each newly created document (for save-as-copy from image editor).
      */
@@ -87,7 +88,7 @@ export class UploadService {
         const sessionId = clientSessionId ?? randomUUID();
         const resolvedFolderId = folderId ?? null;
 
-        if (conflictStrategy === 'replace' && resolvedFolderId) {
+        if (conflictStrategy === 'replace') {
             await this.trashDocumentsInFolderByFilenames(
                 userId,
                 resolvedFolderId,
@@ -97,7 +98,7 @@ export class UploadService {
 
         let effectiveFilenames: string[] | undefined;
 
-        if (conflictStrategy === 'keep_both' && resolvedFolderId) {
+        if (conflictStrategy === 'keep_both') {
             const existing = await this.getFilenamesInFolder(userId, resolvedFolderId);
             effectiveFilenames = [];
             const taken = new Set(existing);
@@ -139,11 +140,15 @@ export class UploadService {
     }
 
     /**
-     * Get original_filename of all documents in a folder (for duplicate naming).
+     * Get original_filename of all documents in a folder, or at the top level (for duplicate naming).
      */
-    async getFilenamesInFolder(userId: string, folderId: string): Promise<string[]> {
+    async getFilenamesInFolder(userId: string, folderId: string | null): Promise<string[]> {
         const rows = await excludeTrashed(
-            db.selectFrom('documents').select('original_filename').where('user_id', '=', userId).where('folder_id', '=', folderId),
+            db
+                .selectFrom('documents')
+                .select('original_filename')
+                .where('user_id', '=', userId)
+                .where('folder_id', folderId === null ? 'is' : '=', folderId),
             '',
         ).execute();
 
@@ -181,10 +186,10 @@ export class UploadService {
     }
 
     /**
-     * Send documents in a folder that have one of the given filenames to the trash (used for the
+     * Send documents in a folder (or at the top level) that have one of the given filenames to the trash (used for the
      * replace strategy). The files stay until the trash is purged; see trash.service.
      */
-    async trashDocumentsInFolderByFilenames(userId: string, folderId: string, filenames: string[]): Promise<void> {
+    async trashDocumentsInFolderByFilenames(userId: string, folderId: string | null, filenames: string[]): Promise<void> {
         if (filenames.length === 0) return;
 
         await excludeTrashed(
@@ -192,7 +197,7 @@ export class UploadService {
                 .updateTable('documents')
                 .set({ deleted_at: new Date() })
                 .where('user_id', '=', userId)
-                .where('folder_id', '=', folderId)
+                .where('folder_id', folderId === null ? 'is' : '=', folderId)
                 .where('original_filename', 'in', filenames),
             '',
         ).execute();

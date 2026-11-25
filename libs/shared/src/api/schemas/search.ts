@@ -33,7 +33,8 @@ const ParsedQueryBaseSchema = z.object({
 
     // Location filters
     folders: z.array(z.string()).optional(),
-    folderIds: z.array(UuidSchema).optional(),
+    // The request's `folder_id`: everything else is narrowed to this folder and what is beneath it
+    scopeFolderId: UuidSchema.optional(),
 
     // Property filters
     hasText: z.boolean().optional(),
@@ -70,6 +71,8 @@ export type SortBy = z.infer<typeof SortByEnum>;
 // All filtering is expressed inside the `q` DSL (see libs/shared/src/search/query-tokens.ts)
 export const SearchQuerySchema = PaginationQuerySchema.extend({
     q: z.string().min(0).default(''), // Allow empty for browsing
+    /** Search only this folder and everything beneath it. */
+    folder_id: UuidSchema.optional(),
     sort_by: SortByEnum.default('relevance'),
     sort_order: z.enum(['asc', 'desc']).default('desc'),
     // Not z.coerce.boolean(): that turns the query-string "false" into true
@@ -144,7 +147,7 @@ export type SimilarImagesResponse = z.infer<typeof SimilarImagesResponseSchema>;
 export const SearchResultSchema = DocumentSearchResultSchema;
 export type SearchResult = DocumentSearchResult;
 
-// A single collection/folder hit (from the `folders` table, discriminated by `folder_type`).
+// A single folder hit (from the `folders` table).
 export const CollectionSearchResultSchema = z.object({
     result_type: z.literal('collection'),
 
@@ -153,7 +156,8 @@ export const CollectionSearchResultSchema = z.object({
     path: z.string(),
     description: z.string().nullable(),
     emoji: z.string().nullable(),
-    folder_type: FolderTypeSchema, // 'collection' | 'folder'
+    /** @deprecated 'collection' for a folder at the top level, else 'folder'. */
+    folder_type: FolderTypeSchema,
     document_count: z.number(),
 
     // Highlighted excerpt of the matched name/description
@@ -238,6 +242,8 @@ export type SuggestionType = z.infer<typeof SuggestionTypeEnum>;
 export const SuggestQuerySchema = z.object({
     type: SuggestionTypeEnum,
     q: z.string().min(1),
+    /** Suggest only from this folder and everything beneath it. */
+    folder_id: UuidSchema.optional(),
     limit: z.coerce.number().min(1).max(20).default(10),
 });
 
@@ -266,6 +272,8 @@ export type RecentSearchesResponse = z.infer<typeof RecentSearchesResponseSchema
 
 export const FacetsQuerySchema = z.object({
     q: z.string().min(0).default(''),
+    /** Count only this folder and everything beneath it. */
+    folder_id: UuidSchema.optional(),
 });
 
 export type FacetsQuery = z.infer<typeof FacetsQuerySchema>;

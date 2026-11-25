@@ -2,12 +2,11 @@ import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { assertDocumentsOpen } from '../../services/document-access';
 import { loadFolderLocks } from '../../services/folder-locks';
-import { getFolderService } from '../../services/folder.service';
+import { findLiveFolder } from '../../services/folders/load';
 import { getUploadService, type ConflictStrategy, type UploadedFile } from '../../services/upload.service';
 import { discardUploadedFiles, receiveUploadedFile } from '../../utils/upload-files';
 
 const uploadService = getUploadService();
-const folderService = getFolderService();
 
 export default async function (fastify: FastifyInstance) {
     // Upload images endpoint (requires authentication)
@@ -59,27 +58,19 @@ export default async function (fastify: FastifyInstance) {
                     return reply.badRequest('No files provided');
                 }
 
-                // Require a folder
-                if (!folderId) {
-                    return reply.badRequest('folder_id is required');
+                // No folder_id means the top level.
+                if (folderId && !(await findLiveFolder(userId, folderId))) {
+                    return reply.badRequest('Folder not found');
                 }
-
-                const folder = await folderService.getFolder(folderId, userId);
-
-                if (!folder || folder.type !== 'folder') {
-                    return reply.badRequest('Folder not found or documents can only be uploaded to folders');
-                }
-
-                const resolvedFolderId = folder.id;
 
                 // Uploading into a locked folder would reveal its filenames (duplicate handling); copying
                 // metadata reads another document. Both need the folder's lock open.
                 const locks = await loadFolderLocks(fastify, request, userId);
-                locks.assertOpen(resolvedFolderId);
+                locks.assertOpen(folderId ?? null);
 
                 if (copyMetadataFromDocumentId) await assertDocumentsOpen(locks, userId, [copyMetadataFromDocumentId]);
 
-                const result = await uploadService.uploadFiles(files, userId, resolvedFolderId, sessionId, conflictStrategy, copyMetadataFromDocumentId);
+                const result = await uploadService.uploadFiles(files, userId, folderId, sessionId, conflictStrategy, copyMetadataFromDocumentId);
 
                 return {
                     session_id: result.sessionId,

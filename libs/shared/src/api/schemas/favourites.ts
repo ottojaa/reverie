@@ -3,14 +3,14 @@ import { UuidSchema } from './common.js';
 import { DocumentSchema } from './documents.js';
 import { FolderCoverSchema, FolderSchema } from './folders.js';
 
-/** What can be starred. Collections count as folders. */
+/** What can be starred. */
 export const FavouriteTypeSchema = z.enum(['folder', 'document']);
 
 export type FavouriteType = z.infer<typeof FavouriteTypeSchema>;
 
 export const FavouriteFolderSchema = FolderSchema.extend({
     document_count: z.number(),
-    /** As in the folder tree: null for collections. */
+    /** As in the folder tree. */
     cover: FolderCoverSchema.nullable(),
 });
 
@@ -25,7 +25,7 @@ export const FavouriteLocationSchema = z.object({
 export type FavouriteLocation = z.infer<typeof FavouriteLocationSchema>;
 
 /**
- * One starred item. A private one (a private folder or collection, anything inside one) is anonymous, whether
+ * One starred item. A private one (a private folder, anything beneath one) is anonymous, whether
  * or not its lock is open: `location`, `folder` and `document` are all null. Otherwise exactly one of
  * `folder` and `document` is set, matching `type`.
  */
@@ -38,7 +38,7 @@ export const FavouriteSchema = z.object({
     locked: z.boolean(),
     /** The folder id POST /vault/unlock opens to reach a private item; null for other items. */
     lock_id: UuidSchema.nullable(),
-    /** The chain of parents, collection first. */
+    /** The chain of parent folders, from the top level down. */
     location: z.array(FavouriteLocationSchema).nullable(),
     folder: FavouriteFolderSchema.nullable(),
     document: DocumentSchema.nullable(),

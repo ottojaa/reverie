@@ -2,6 +2,7 @@ import { TEXT_DOCUMENT_CATEGORIES, type DateRange, type ParsedQuery } from '@rev
 import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database } from '../db/schema';
+import { inNamedFoldersSql, outsideNamedFoldersSql, withinFolderSql } from '../services/folders/scope';
 import { excludePrivateDocuments, excludeTrashed } from '../services/privacy';
 import { resolveRelativeDate } from './query-parser';
 
@@ -163,7 +164,12 @@ function applyDateRangeFilter<T extends SearchQueryBase>(query: T, dateRange: Da
  * Apply negation filters to query. A dimension in `omit` skips its negated
  * filters together with its positive ones.
  */
-function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<ParsedQuery> | undefined, omit?: ReadonlySet<FilterDimension>): T {
+function applyNegations<T extends SearchQueryBase>(
+    query: T,
+    negations: Partial<ParsedQuery> | undefined,
+    userId: string,
+    omit?: ReadonlySet<FilterDimension>,
+): T {
     if (!negations) return query;
 
     // Negated types
@@ -212,17 +218,7 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
 
     // Negated folders
     if (!omit?.has('folders') && negations.folders?.length) {
-        query = query.where((eb) => {
-            const conditions = negations.folders!.map((folder) => {
-                if (folder.startsWith('/')) {
-                    return eb('f.path' as any, '!=', folder);
-                }
-
-                return sql<SqlBool>`f.path NOT ILIKE ${`%${folder}%`}`;
-            });
-
-            return eb.and(conditions);
-        }) as T;
+        query = query.where(outsideNamedFoldersSql('d.folder_id', userId, negations.folders)) as T;
     }
 
     return query;
@@ -231,7 +227,8 @@ function applyNegations<T extends SearchQueryBase>(query: T, negations: Partial<
 /**
  * Apply all ParsedQuery filters (plus user scoping and privacy exclusion) to a
  * documents query. Dimensions listed in `omit` are skipped entirely — positive
- * and negated filters alike. User scoping and privacy are never omittable.
+ * and negated filters alike. User scoping, privacy and the folder the search is
+ * scoped to (`scopeFolderId`) are never omittable.
  * `alsoMatchIds` lets documents that matched by meaning stand in for the full-text match.
  */
 export function applySearchFilters(
@@ -246,6 +243,8 @@ export function applySearchFilters(
     query = query.where('d.user_id', '=', userId);
     query = excludePrivateDocuments(query, privateFolderIds, 'd.');
     query = excludeTrashed(query, 'd.');
+
+    if (parsed.scopeFolderId) query = query.where(withinFolderSql('d.folder_id', userId, parsed.scopeFolderId));
 
     // Full-text search
     if (!omit?.has('fullText') && parsed.fullText) {
@@ -305,25 +304,9 @@ export function applySearchFilters(
         query = applyDateRangeFilter(query, parsed.extractedDateRange, 'd.extracted_date');
     }
 
-    // Folder filter (paths and ids share the dimension)
+    // Folder filter: any of the named folders, with everything beneath them
     if (!omit?.has('folders') && parsed.folders?.length) {
-        query = query.where((eb) => {
-            const conditions = parsed.folders!.map((folder) => {
-                if (folder.startsWith('/')) {
-                    // Exact path match
-                    return eb('f.path' as any, '=', folder);
-                }
-
-                // Partial match
-                return sql<SqlBool>`f.path ILIKE ${'%' + folder + '%'}`;
-            });
-
-            return eb.or(conditions);
-        });
-    }
-
-    if (!omit?.has('folders') && parsed.folderIds?.length) {
-        query = query.where('d.folder_id', 'in', parsed.folderIds);
+        query = query.where(inNamedFoldersSql('d.folder_id', userId, parsed.folders));
     }
 
     // Has text filter
@@ -385,5 +368,5 @@ export function applySearchFilters(
     }
 
     // Apply negations
-    return applyNegations(query, parsed.negations, omit);
+    return applyNegations(query, parsed.negations, userId, omit);
 }

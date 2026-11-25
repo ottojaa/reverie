@@ -1,6 +1,8 @@
 import { sql, type SqlBool } from 'kysely';
 import type { SearchFacets, FacetItem, ParsedQuery } from '@reverie/shared';
 import { db } from '../db/kysely';
+import { loadFolderTree } from '../services/folders/load';
+import { isNamedBy } from '../services/folders/scope';
 import { applySearchFilters, applyTypesFilter, documentJoins, type FilterDimension, type SearchQueryBase } from './filter-application';
 
 /**
@@ -129,26 +131,39 @@ async function getFormatFacets(parsed: ParsedQuery, userId: string, privateFolde
 }
 
 /**
- * Folder facets (top folders by document count)
+ * Folder facets (top folders by document count). A folder counts everything beneath it too, as the `folder:`
+ * filter it stands for does.
  */
 async function getFolderFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
-    const results = await narrowedBase(parsed, userId, privateFolderIds, ['folders'], alsoMatchIds)
-        .select(['f.path', countDistinctDocuments.as('count')])
-        .where('f.path', 'is not', null)
-        .groupBy('f.path')
-        .orderBy(sql`count(DISTINCT d.id)`, 'desc')
-        .limit(10)
-        .execute();
+    const [direct, tree] = await Promise.all([
+        narrowedBase(parsed, userId, privateFolderIds, ['folders'], alsoMatchIds)
+            .select(['d.folder_id', countDistinctDocuments.as('count')])
+            .where('d.folder_id', 'is not', null)
+            .groupBy('d.folder_id')
+            .execute(),
+        loadFolderTree(userId),
+    ]);
+    const counts = new Map<string, number>();
+    // In a search scoped to a folder, the folders above it are not choices.
+    const above = new Set(parsed.scopeFolderId ? tree.ancestors(parsed.scopeFolderId).map((folder) => folder.id) : []);
 
-    const items = results
-        .filter((row) => row.path)
-        .map((row) => ({
-            name: row.path,
-            count: row.count,
-            selected: parsed.folders?.includes(row.path) ?? false,
-        }));
+    for (const row of direct) {
+        // A folder with a matching public document has only public folders above it.
+        const chain = [...tree.ancestors(row.folder_id!), tree.folder(row.folder_id!)];
 
-    return appendMissingSelected(items, parsed.folders);
+        for (const folder of chain) {
+            if (!folder || folder.deleted_at !== null || above.has(folder.id)) continue;
+
+            counts.set(folder.path, (counts.get(folder.path) ?? 0) + row.count);
+        }
+    }
+
+    const items = [...counts]
+        .sort(([pathA, a], [pathB, b]) => b - a || pathA.localeCompare(pathB))
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count, selected: parsed.folders?.some((value) => isNamedBy(name, value)) ?? false }));
+
+    return appendMissingSelected(items, parsed.folders, isNamedBy);
 }
 
 /**

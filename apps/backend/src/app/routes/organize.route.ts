@@ -27,11 +27,13 @@ export default async function (fastify: FastifyInstance) {
             const userId = request.user.id;
             const { operations } = request.body;
 
-            // Moves take documents out of their folders, so every source folder's lock must be open.
+            // Moves take documents out of their folders, so every source folder's lock must be open. The
+            // destinations' locks are checked where they are resolved.
             const documentIds = operations.flatMap((op) => (op.type === 'move' || op.type === 'create_and_move' ? op.document_ids : []));
-            await assertDocumentsOpen(await loadFolderLocks(fastify, request, userId), userId, documentIds);
+            const locks = await loadFolderLocks(fastify, request, userId);
+            await assertDocumentsOpen(locks, userId, documentIds);
 
-            return executeOrganize({ operations, userId });
+            return executeOrganize({ operations, userId, locks });
         },
     );
 }

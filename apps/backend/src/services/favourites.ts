@@ -3,9 +3,11 @@ import { db } from '../db/kysely.js';
 import type { Favourite as DbFavourite, Folder as DbFolder } from '../db/schema.js';
 import { TAKEN_AT_SQL } from './document-list-filters.js';
 import { serializeDocument } from './document-serializer.js';
-import { loadFolderCovers } from './document-summary.js';
 import type { FolderLocks } from './folder-locks.js';
-import { hasCover, serializeFolder } from './folder-serializer.js';
+import { serializeFolder } from './folder-serializer.js';
+import { loadFolderTree } from './folders/load.js';
+import { EMPTY_ROLLUP, loadFolderRollups, type FolderRollup } from './folders/rollup.js';
+import type { FolderTree } from './folders/snapshot.js';
 import { excludeTrashed } from './privacy.js';
 
 const ID_COLUMN = { document: 'document_id', folder: 'folder_id' } as const;
@@ -39,10 +41,6 @@ export async function fetchLockFolderId(userId: string, type: FavouriteType, id:
     return document?.folder_id ?? null;
 }
 
-function fetchLiveFolders(userId: string) {
-    return excludeTrashed(db.selectFrom('folders').selectAll().where('user_id', '=', userId), '').execute();
-}
-
 function fetchLiveDocuments(userId: string, ids: string[]) {
     if (ids.length === 0) return Promise.resolve([]);
 
@@ -51,56 +49,31 @@ function fetchLiveDocuments(userId: string, ids: string[]) {
     return excludeTrashed(query, '').execute();
 }
 
-async function countDocuments(userId: string, folderIds: string[]): Promise<Map<string | null, number>> {
-    if (folderIds.length === 0) return new Map();
-
-    const query = db
-        .selectFrom('documents')
-        .select(['folder_id', db.fn.countAll().as('count')])
-        .where('user_id', '=', userId)
-        .where('folder_id', 'in', folderIds)
-        .groupBy('folder_id');
-    const rows = await excludeTrashed(query, '').execute();
-
-    return new Map(rows.map((row) => [row.folder_id, Number(row.count)]));
-}
-
 /** What the items of one list are built from. */
 interface ListContext {
     locks: FolderLocks;
-    folders: Map<string, DbFolder>;
+    tree: FolderTree<DbFolder>;
     documents: Map<string, Awaited<ReturnType<typeof fetchLiveDocuments>>[number]>;
-    counts: Awaited<ReturnType<typeof countDocuments>>;
-    covers: Awaited<ReturnType<typeof loadFolderCovers>>;
+    rollups: Map<string, FolderRollup>;
 }
 
 async function loadListContext(userId: string, stars: DbFavourite[], locks: FolderLocks): Promise<ListContext> {
     const documentIds = stars.flatMap((star) => star.document_id ?? []);
-    const [folderRows, documentRows] = await Promise.all([fetchLiveFolders(userId), fetchLiveDocuments(userId, documentIds)]);
-    const folders = new Map(folderRows.map((folder) => [folder.id, folder]));
+    const [tree, documentRows] = await Promise.all([loadFolderTree(userId), fetchLiveDocuments(userId, documentIds)]);
     // Only public folders are described, so only they are counted and covered.
-    const shown = stars.flatMap((star) => folders.get(star.folder_id ?? '') ?? []).filter((folder) => !locks.isPrivate(folder.id));
-    const [counts, covers] = await Promise.all([
-        countDocuments(
-            userId,
-            shown.map((folder) => folder.id),
-        ),
-        loadFolderCovers(
-            userId,
-            shown.filter((folder) => hasCover(folder, locks)).map((folder) => folder.id),
-        ),
-    ]);
+    const shown = stars.flatMap((star) => star.folder_id ?? []).filter((id) => !locks.isPrivate(id));
+    const rollups = await loadFolderRollups(userId, tree, shown, locks);
 
-    return { locks, folders, documents: new Map(documentRows.map((document) => [document.id, document])), counts, covers };
+    return { locks, tree, documents: new Map(documentRows.map((document) => [document.id, document])), rollups };
 }
 
-/** The parents from `parentId` up, collection first. */
-function toLocation(parentId: string | null, folders: ListContext['folders']): FavouriteLocation[] {
-    const parent = parentId === null ? undefined : folders.get(parentId);
+/** The live folders from the top level down to `folderId`, itself included. */
+function toLocation(folderId: string | null, tree: ListContext['tree']): FavouriteLocation[] {
+    const folder = folderId === null ? undefined : tree.folder(folderId);
 
-    if (!parent) return [];
+    if (!folder) return [];
 
-    return [...toLocation(parent.parent_id, folders), { id: parent.id, name: parent.name }];
+    return [...tree.ancestors(folder.id), folder].filter((step) => step.deleted_at === null).map(({ id, name }) => ({ id, name }));
 }
 
 /** A private item, built from nothing but its star and its lock: no name, location or payload. */
@@ -119,23 +92,21 @@ function toPrivateFavourite(base: Pick<Favourite, 'type' | 'id' | 'starred_at'>,
 const PUBLIC_FLAGS = { private: false, locked: false, lock_id: null } as const;
 
 function toFolderFavourite(star: DbFavourite, folderId: string, context: ListContext): Favourite | null {
-    const folder = context.folders.get(folderId);
+    const folder = context.tree.folder(folderId);
 
-    if (!folder) return null;
+    if (!folder || folder.deleted_at !== null) return null;
 
     const base = { type: 'folder', id: folder.id, starred_at: star.starred_at.toISOString() } as const;
 
     if (context.locks.isPrivate(folder.id)) return toPrivateFavourite(base, folder.id, context.locks);
 
+    const { document_count, cover } = context.rollups.get(folder.id) ?? EMPTY_ROLLUP;
+
     return {
         ...base,
         ...PUBLIC_FLAGS,
-        location: toLocation(folder.parent_id, context.folders),
-        folder: {
-            ...serializeFolder(folder, context.locks),
-            document_count: context.counts.get(folder.id) ?? 0,
-            cover: context.covers.get(folder.id) ?? null,
-        },
+        location: toLocation(folder.parent_id, context.tree),
+        folder: { ...serializeFolder(folder, context.locks), document_count, cover },
         document: null,
     };
 }
@@ -154,7 +125,7 @@ async function toDocumentFavourite(star: DbFavourite, documentId: string, contex
     return {
         ...base,
         ...PUBLIC_FLAGS,
-        location: toLocation(document.folder_id, context.folders),
+        location: toLocation(document.folder_id, context.tree),
         folder: null,
         document: await serializeDocument(document, context.locks),
     };

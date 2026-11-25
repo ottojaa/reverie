@@ -5,7 +5,6 @@ import { join } from 'path';
 import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
 import type { User } from '../db/schema.js';
-import { getFolderService } from './folder.service.js';
 import { getStorageService } from './storage.service.js';
 
 const SALT_ROUNDS = 12;
@@ -94,7 +93,6 @@ export async function createUser(options: CreateUserOptions): Promise<CreatedUse
     }
 
     await createStorageDirectory(storagePath);
-    await getFolderService().createDefaultFolderForUser(created.id);
 
     return {
         user: created,

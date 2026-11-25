@@ -7,42 +7,45 @@ import {
     UuidSchema,
     type CreateFolderRequest,
     type Folder,
-    type FolderCover,
     type FolderWithChildren,
     type ReorderFoldersRequest,
     type UpdateFolderRequest,
 } from '@reverie/shared';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Folder as DbFolder } from '../../db/schema';
-import { loadFolderCovers } from '../../services/document-summary';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
-import { hasCover, serializeFolder } from '../../services/folder-serializer';
-import { getFolderService } from '../../services/folder.service';
-
-const folderService = getFolderService();
-
-type TreeNode = DbFolder & { children: unknown[]; document_count: number };
+import { serializeFolder } from '../../services/folder-serializer';
+import { loadFolderTree } from '../../services/folders/load';
+import { EMPTY_ROLLUP, loadFolderRollups, type FolderRollup } from '../../services/folders/rollup';
+import type { FolderTree } from '../../services/folders/snapshot';
+import { trashFolder } from '../../services/folders/trash';
+import { createFolder, reorderFolders, toSharedParentId, updateFolder } from '../../services/folders/writes';
 
 export default async function (fastify: FastifyInstance) {
+    /** The request user's folders, and the lock state of the same moment. */
+    async function loadTreeAndLocks(request: FastifyRequest): Promise<{ tree: FolderTree<DbFolder>; locks: FolderLocks }> {
+        const tree = await loadFolderTree(request.user.id);
+
+        return { tree, locks: await loadFolderLocks(fastify, request, request.user.id, tree) };
+    }
+
     // List root folders (requires authentication)
     fastify.get<{ Reply: Folder[] }>(
         '/folders',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'List root-level folders',
+                description: 'List the top-level folders',
                 response: {
                     200: z.array(FolderSchema),
                 },
             },
         },
         async function (request) {
-            const userId = request.user.id;
-            const locks = await loadFolderLocks(fastify, request, userId);
-            const folders = await folderService.listChildren(null, userId);
+            const { tree, locks } = await loadTreeAndLocks(request);
 
-            return folders.map((folder) => serializeFolder(folder, locks));
+            return tree.children(null).map((folder) => serializeFolder(folder, locks));
         },
     );
 
@@ -59,12 +62,16 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request) {
-            const userId = request.user.id;
-            const locks = await loadFolderLocks(fastify, request, userId);
-            const tree = await folderService.getFolderTree(userId);
-            const covers = await loadFolderCovers(userId, collectCoverFolderIds(tree, locks));
+            const { tree, locks } = await loadTreeAndLocks(request);
+            const roots = tree.children(null);
+            const rollups = await loadFolderRollups(
+                request.user.id,
+                tree,
+                roots.map((folder) => folder.id),
+                locks,
+            );
 
-            return tree.map((node) => serializeFolderWithChildren(node, locks, covers));
+            return roots.map((folder) => toTreeNode(folder, { tree, locks, rollups }));
         },
     );
 
@@ -84,8 +91,18 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            await folderService.reorderFolders(userId, request.body.updates);
+            const { tree, locks } = await loadTreeAndLocks(request);
+            const { updates } = request.body;
+
+            // Reordering what a locked folder holds needs that folder open.
+            locks.assertOpen(
+                toSharedParentId(
+                    tree,
+                    updates.map((update) => update.id),
+                ),
+            );
+
+            await reorderFolders(request.user.id, updates);
             reply.status(204).send();
         },
     );
@@ -107,17 +124,15 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            const folder = await folderService.getFolder(request.params.id, userId);
+            const { tree, locks } = await loadTreeAndLocks(request);
+            const folder = tree.folder(request.params.id);
 
-            if (!folder) {
+            if (!folder || folder.deleted_at !== null) {
                 return reply.notFound('Folder not found');
             }
 
-            // A locked folder's own row stays readable (title only, `locked: true`); one hidden by its
-            // locked collection is refused like its contents.
-            const locks = await loadFolderLocks(fastify, request, userId);
-
+            // A locked folder's own row stays readable (title only, `locked: true`); one hidden by a
+            // locked folder above it is refused like its contents.
             if (locks.isHidden(folder.id)) locks.assertOpen(folder.id);
 
             return serializeFolder(folder, locks);
@@ -141,12 +156,10 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request) {
-            const userId = request.user.id;
-            const locks = await loadFolderLocks(fastify, request, userId);
+            const { tree, locks } = await loadTreeAndLocks(request);
             locks.assertOpen(request.params.id);
-            const children = await folderService.listChildren(request.params.id, userId);
 
-            return children.map((folder) => serializeFolder(folder, locks));
+            return tree.children(request.params.id).map((folder) => serializeFolder(folder, locks));
         },
     );
 
@@ -168,13 +181,13 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const { name, parent_id, description, emoji, type } = request.body;
+            const { name, parent_id, description, emoji } = request.body;
             const locks = await loadFolderLocks(fastify, request, userId);
 
-            // Creating under a locked collection would reveal which names it already holds.
+            // Creating under a locked folder would reveal which names it already holds.
             locks.assertOpen(parent_id ?? null);
 
-            const folder = await folderService.createFolder(userId, name, parent_id, description, emoji, type);
+            const folder = await createFolder(userId, { name, parentId: parent_id, description, emoji });
             reply.status(201);
 
             return serializeFolder(folder, locks);
@@ -201,14 +214,18 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-
-            // Moving a folder out of its lock, or making it public, would expose what the lock hides, so
-            // that lock must be open. Making a folder private exposes nothing and needs no unlock.
+            const { id } = request.params;
+            const { is_private, parent_id } = request.body;
             const before = await loadFolderLocks(fastify, request, userId);
 
-            if (request.body.is_private === false || request.body.parent_id !== undefined) before.assertOpen(request.params.id);
+            // Moving a folder out of its lock, or making it public, would expose what the lock hides, so
+            // that lock must be open, and so must the lock of where it goes. A folder inside a locked one
+            // takes no changes at all. Making a folder private exposes nothing and needs no unlock.
+            if (before.isHidden(id) || is_private === false || parent_id !== undefined) before.assertOpen(id);
 
-            const folder = await folderService.updateFolder(request.params.id, userId, request.body);
+            before.assertOpen(parent_id ?? null);
+
+            const folder = await updateFolder(userId, id, request.body);
 
             return serializeFolder(folder, await loadFolderLocks(fastify, request, userId));
         },
@@ -222,7 +239,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Move a folder to the trash (its documents go with it)',
+                description: 'Move a folder to the trash, with everything in it',
                 params: z.object({ id: UuidSchema }),
                 response: {
                     204: z.null(),
@@ -230,32 +247,30 @@ export default async function (fastify: FastifyInstance) {
             },
         },
         async function (request, reply) {
-            const userId = request.user.id;
-            await folderService.deleteFolder(request.params.id, userId);
+            const { id } = request.params;
+            const locks = await loadFolderLocks(fastify, request, request.user.id);
+
+            if (locks.isHidden(id)) locks.assertOpen(id);
+
+            await trashFolder(request.user.id, id);
             reply.status(204).send();
         },
     );
 }
 
-/** A locked collection shows no folders; a locked folder shows no documents (its count reads 0) and no cover. */
-function serializeFolderWithChildren(node: TreeNode, locks: FolderLocks, covers: Map<string, FolderCover>): FolderWithChildren {
-    const locked = locks.isLocked(node.id);
-
-    return {
-        ...serializeFolder(node, locks),
-        children: locked ? [] : (node.children as TreeNode[]).map((child) => serializeFolderWithChildren(child, locks, covers)),
-        document_count: locked ? 0 : node.document_count,
-        cover: covers.get(node.id) ?? null,
-    };
+interface TreeContext {
+    tree: FolderTree<DbFolder>;
+    locks: FolderLocks;
+    rollups: Map<string, FolderRollup>;
 }
 
-/** The folders of the tree whose cover is built. A closed lock hides its subtree, which is never walked. */
-function collectCoverFolderIds(nodes: TreeNode[], locks: FolderLocks): string[] {
-    return nodes.flatMap((node) => {
-        if (locks.isLocked(node.id)) return [];
+/** A locked folder shows nothing it holds: no folders, no counts, no cover. */
+function toTreeNode(folder: DbFolder, context: TreeContext): FolderWithChildren {
+    const children = context.locks.isLocked(folder.id) ? [] : context.tree.children(folder.id);
 
-        const own = hasCover(node, locks) ? [node.id] : [];
-
-        return [...own, ...collectCoverFolderIds(node.children as TreeNode[], locks)];
-    });
+    return {
+        ...serializeFolder(folder, context.locks),
+        ...(context.rollups.get(folder.id) ?? EMPTY_ROLLUP),
+        children: children.map((child) => toTreeNode(child, context)),
+    };
 }

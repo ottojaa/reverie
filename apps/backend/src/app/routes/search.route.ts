@@ -92,7 +92,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const facets = await getFacetsOnly(request.query.q, userId);
+            const facets = await getFacetsOnly(request.query.q, userId, request.query.folder_id);
 
             return { facets };
         },
@@ -220,7 +220,7 @@ export default async function (fastify: FastifyInstance) {
                         name: 'folder',
                         syntax: 'folder:<path>',
                         examples: ['folder:/vacation/2024', 'folder:receipts'],
-                        description: 'Filter by folder path',
+                        description: 'Filter by folder path or name, including everything beneath it',
                     },
                     {
                         name: 'tag',

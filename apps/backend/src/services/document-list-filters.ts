@@ -9,6 +9,8 @@ export interface DocumentListFilters {
     userId: string;
     /** Set: that folder's documents (the caller has checked its lock). Unset: everything outside the private folders. */
     folderId?: string;
+    /** Only the documents in no folder. */
+    topLevel?: boolean;
     privateFolderIds: string[];
     category?: string;
     dateFrom?: string;
@@ -42,11 +44,13 @@ export function applyDocumentListFilters<O>(
     query: SelectQueryBuilder<Database, 'documents', O>,
     filters: DocumentListFilters,
 ): SelectQueryBuilder<Database, 'documents', O> {
-    const { userId, folderId, privateFolderIds, category, dateFrom, dateTo, processing, kind } = filters;
+    const { userId, folderId, topLevel, privateFolderIds, category, dateFrom, dateTo, processing, kind } = filters;
 
     let filtered = excludeTrashed(query.where('user_id', '=', userId), '');
 
     filtered = folderId ? filtered.where('folder_id', '=', folderId) : excludePrivateDocuments(filtered, privateFolderIds, '');
+
+    if (topLevel) filtered = filtered.where('folder_id', 'is', null);
 
     if (category) filtered = filtered.where('document_category', '=', category);
 
@@ -70,3 +74,10 @@ export const TAKEN_AT_SQL = sql<Date | null>`(SELECT pm.taken_at FROM photo_meta
 
 /** The order of photos and videos: date taken, else upload date, newest first; id keeps offset paging stable. */
 export const TAKEN_OR_CREATED_SQL = sql`coalesce(${TAKEN_AT_SQL}, documents.created_at)`;
+
+/**
+ * A screenshot or a screen recording, by its category or its filename (macOS, Android and iOS names). Such files
+ * rank last wherever a few documents stand for many: folder covers and kind previews.
+ */
+export const IS_SCREEN_CAPTURE_SQL = sql<boolean>`(coalesce(documents.document_category, '') = 'screenshot'
+    OR documents.original_filename ~* 'screen[ ._-]?(shot|capture|grab|recording)|^screen-[0-9]{8}|^rpreplay')`;
