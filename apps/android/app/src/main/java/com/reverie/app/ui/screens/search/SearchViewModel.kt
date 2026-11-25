@@ -14,6 +14,7 @@ import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.repository.SearchRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
+import com.reverie.app.ui.screens.viewer.ViewerFocus
 import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.domain.search.addFilter
 import com.reverie.app.domain.search.getFilterTokens
@@ -101,11 +102,11 @@ class SearchViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val control = MutableStateFlow(SearchControl())
 
-    /** The document the viewer is showing, so the grid can scroll it into view on return. */
-    val focusedDocumentId: StateFlow<String?> get() = sequenceHolder.focused
+    /** What the viewer is showing, so the grid can scroll it into view on return from a viewer opened here. */
+    val viewerFocus: StateFlow<ViewerFocus?> get() = sequenceHolder.focus
 
     /** Consume the focus signal once the grid has scrolled to it, so later list updates don't re-scroll. */
-    fun clearFocusedDocument() = sequenceHolder.setFocused(null)
+    fun clearViewerFocus() = sequenceHolder.setFocus(null)
 
     val uiState: StateFlow<SearchUiState> = combine(
         query,

@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
+import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
 /** One kind of Browse as a screen of its own: Photos, Videos or Files, paged, selectable and swipeable in the viewer. */
@@ -24,7 +25,7 @@ fun KindScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    val focusedId = returnedDocumentId(viewModel.viewerFocus)
     val layoutMode by viewModel.gridLayoutMode.collectAsStateWithLifecycle()
     val featureEvery by viewModel.mosaicFeatureEvery.collectAsStateWithLifecycle()
     val openDocument = rememberOpenDocument(onDocumentClick)
@@ -72,7 +73,7 @@ fun KindScreen(
             layout = layout,
             actions = actions,
             focusedId = focusedId,
-            onFocusConsumed = viewModel::clearFocusedDocument,
+            onFocusConsumed = viewModel::clearViewerFocus,
             onLoadMore = viewModel::loadMore,
             slot = slot,
         )

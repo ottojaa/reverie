@@ -133,7 +133,10 @@ fun ReverieNavGraph(
     }
 }
 
-/** A viewer origin that is no screen's: nothing matches it, so the viewer opens and closes with a plain fade. */
+/**
+ * A viewer origin that is no screen's: nothing matches it, so the viewer opens and closes with a plain fade
+ * and no list scrolls on return.
+ */
 private const val NO_DIVE_ORIGIN = "none"
 
 /** Switches to a bottom-nav tab, keeping each tab's back stack as it was. */
@@ -149,7 +152,7 @@ internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentI
 
 /**
  * A starred document opens with [NO_DIVE_ORIGIN]: what was tapped is a favourites tile, and a list on the
- * same screen may hold the document too, whose row would otherwise fly into the viewer.
+ * same screen may hold the document too, whose row would otherwise fly into the viewer and be scrolled to.
  */
 internal fun NavHostController.openFavourite(destination: FavouriteDestination) {
     when (destination) {

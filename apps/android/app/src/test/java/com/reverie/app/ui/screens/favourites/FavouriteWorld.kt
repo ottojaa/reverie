@@ -9,6 +9,7 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FakeDocumentDao
@@ -51,6 +52,9 @@ internal class FavouriteWorld {
 
     /** What GET /documents/{id} answers with. */
     @Volatile var served: List<DocumentDto> = emptyList()
+
+    /** What the document listing answers with: all of it on one page, narrowed to a folder when asked for one. */
+    @Volatile var listed: List<DocumentDto> = emptyList()
 
     /** While set, a PUT waits for it before it is answered. */
     @Volatile var putGate: CompletableDeferred<Unit>? = null
@@ -97,6 +101,7 @@ internal class FavouriteWorld {
         val document = served.firstOrNull { path == "documents/${it.id}" && request.method == HttpMethod.Get }
         if (document != null) return reply(ApiJson.encodeToString(DocumentDto.serializer(), document))
         return when {
+            path == "documents" && request.method == HttpMethod.Get && listed.isNotEmpty() -> replyListing(request)
             path == "favourites" -> {
                 // Taken before the wait: a slow answer carries what the server knew when asked.
                 val asked = items
@@ -112,6 +117,13 @@ internal class FavouriteWorld {
             path == "folders/tree" -> reply(ApiJson.encodeToString(ListSerializer(FolderWithChildren.serializer()), tree))
             else -> reply("", HttpStatusCode.NoContent)
         }
+    }
+
+    private fun MockRequestHandleScope.replyListing(request: HttpRequestData): HttpResponseData {
+        val folderId = request.url.parameters["folder_id"]
+        val items = listed.filter { folderId == null || it.folder_id == folderId }
+        val page = Paginated(items, total = items.size, limit = items.size, offset = 0)
+        return reply(ApiJson.encodeToString(Paginated.serializer(DocumentDto.serializer()), page))
     }
 
     private fun MockRequestHandleScope.reply(content: String, status: HttpStatusCode = HttpStatusCode.OK) = respond(

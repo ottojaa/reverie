@@ -39,8 +39,8 @@ object Routes {
     const val KIND = "browse/kind/{kind}"
     fun kind(kind: String) = "browse/kind/$kind"
 
-    // `from` is the back-stack entry id of the screen whose tile the viewer grows out of (see LocalDiveOrigin),
-    // or a value that is no entry's id when there is no such tile.
+    // `from` is the back-stack entry id of the screen whose list opened the viewer (see LocalDiveOrigin): the
+    // viewer grows out of its tile and it scrolls on return. A value that is no entry's id when no list did.
     // Optional `ar` (aspect ratio) lets the document-open container transform size itself correctly
     // from the very first frame instead of waiting for the record to load.
     const val DOCUMENT = "document/{id}?from={from}&ar={ar}"

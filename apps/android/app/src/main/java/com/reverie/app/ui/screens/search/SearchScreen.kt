@@ -71,6 +71,7 @@ import com.reverie.app.ui.components.QuickFilterChips
 import com.reverie.app.ui.components.SearchResultRow
 import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.util.dateBucket
+import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private sealed interface OpenSheet {
@@ -127,7 +128,7 @@ fun SearchScreen(
     }
     // Return-transform sync: when the viewer swiped to another result, scroll the grid so that tile is
     // laid out, so popping back lands the shared-element container transform on it (else a plain fade).
-    val focusedId by viewModel.focusedDocumentId.collectAsStateWithLifecycle()
+    val focusedId = returnedDocumentId(viewModel.viewerFocus)
     LaunchedEffect(focusedId, state.results) {
         val id = focusedId ?: return@LaunchedEffect
         if (state.viewMode != ViewMode.GRID) return@LaunchedEffect
@@ -135,7 +136,7 @@ fun SearchScreen(
         if (index < 0) return@LaunchedEffect
         if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) gridState.scrollToItem(index)
         // Consume it so later result updates (e.g. a thumbnail-complete refetch) don't re-scroll here.
-        viewModel.clearFocusedDocument()
+        viewModel.clearViewerFocus()
     }
     // Mirror the header visibility onto the shell's bottom nav (honored when hide-nav-on-scroll is on).
     LaunchedEffect(chromeVisible) { barScroll?.value = chromeVisible }
