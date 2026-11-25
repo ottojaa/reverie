@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -20,9 +19,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,9 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,9 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.repository.FavouritesState
+import com.reverie.app.ui.components.ChoiceChip
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.StarIcon
 import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.theme.ReverieTheme
 
 /** The Favourites screen's three chips. */
 enum class FavouriteFilter(val label: String, val emptyNote: String) {
@@ -123,28 +121,9 @@ private fun FilterChips(selected: FavouriteFilter, onFilter: (FavouriteFilter) -
         Modifier.padding(horizontal = 20.dp, vertical = 16.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FavouriteFilter.entries.forEach { filter -> Chip(filter.label, filter == selected) { onFilter(filter) } }
-    }
-}
-
-@Composable
-private fun Chip(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .heightIn(min = 36.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (isSelected) colors.primaryContainer else colors.surfaceContainer)
-            .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-            color = if (isSelected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-        )
+        FavouriteFilter.entries.forEach { filter ->
+            ChoiceChip(filter.label, isSelected = filter == selected, onClick = { onFilter(filter) })
+        }
     }
 }
 
@@ -154,11 +133,11 @@ private fun FavouriteCard(item: FavouriteDto, actions: FavouritesActions, modifi
         FavouritePicture(item, FavouritePictureStyle.GRID, Modifier.fillMaxWidth().height(112.dp)) {
             IconButton(onClick = { actions.onUnstar(item) }, modifier = Modifier.align(Alignment.TopEnd).size(44.dp)) {
                 // The scrim keeps the star legible on a bright photo.
-                Box(Modifier.size(30.dp).background(Color(0x66121212), RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(30.dp).background(Color(0x66121212), CircleShape), contentAlignment = Alignment.Center) {
                     StarIcon(
                         filled = true,
                         contentDescription = "Remove from favourites",
-                        tint = Color(0xFFFBBF24),
+                        tint = ReverieTheme.extendedColors.starOnScrim,
                         modifier = Modifier.size(20.dp),
                     )
                 }

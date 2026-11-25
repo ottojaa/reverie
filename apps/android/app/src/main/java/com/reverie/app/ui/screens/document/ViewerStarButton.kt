@@ -14,7 +14,7 @@ import com.reverie.app.data.api.model.FavouriteKey
 import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.ui.components.StarIcon
-import com.reverie.app.ui.components.starColor
+import com.reverie.app.ui.theme.ReverieTheme
 
 /**
  * The viewer's one-tap star for the document on screen. Disabled until the favourites are known, so
@@ -33,7 +33,7 @@ fun ViewerStarButton(
     val onSurface = MaterialTheme.colorScheme.onSurface
     val tint = when {
         !enabled -> onSurface.copy(alpha = 0.38f)
-        isStarred -> starColor()
+        isStarred -> ReverieTheme.extendedColors.star
         else -> onSurface
     }
     IconButton(
@@ -42,7 +42,7 @@ fun ViewerStarButton(
         modifier = modifier
             .size(44.dp)
             .clip(CircleShape)
-            .background(if (isStarred) Color(0x26FBBF24) else Color.Transparent),
+            .background(if (isStarred) ReverieTheme.extendedColors.starContainer else Color.Transparent),
     ) {
         StarIcon(
             filled = isStarred,

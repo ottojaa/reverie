@@ -34,9 +34,8 @@ fun RowMenu(
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    initiallyOpen: Boolean = false,
 ) {
-    var open by remember { mutableStateOf(initiallyOpen) }
+    var open by remember { mutableStateOf(false) }
     // The Box makes the menu anchor to the button, not to the parent Row.
     Box(modifier) {
         IconButton(onClick = { open = true }) {

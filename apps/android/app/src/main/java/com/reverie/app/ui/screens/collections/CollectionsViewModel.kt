@@ -34,9 +34,9 @@ data class CollectionsUiState(
     val tree: List<FolderWithChildren> = emptyList(),
     /** Cover per folder id, from the last tree fetch. Empty until one succeeds (and offline after a restart). */
     val covers: Map<String, FolderCoverDto> = emptyMap(),
-    /** The header's counts, over the whole tree: the filter does not change them. */
     /** Folders per collection id over the whole tree: the filter only trims the rows, not the "N folders" line. */
     val folderCounts: Map<String, Int> = emptyMap(),
+    /** The header's counts, over the whole tree: the filter does not change them. */
     val collectionCount: Int = 0,
     val folderCount: Int = 0,
     val isRefreshing: Boolean = false,
