@@ -168,7 +168,7 @@ internal fun NavHostController.openFavourite(destination: FavouriteDestination) 
 /**
  * A nav destination that shared-element transforms (document open) can bridge to and from: it exposes its
  * [AnimatedContentScope] via [LocalNavAnimatedContentScope], and via [LocalDiveOrigin] the screen whose
- * documents it matches: its own, or for the viewer (the one route with `from`) the screen that opened it.
+ * documents it matches: its own, or for the viewer (the one route with `from`) the one its caller named.
  */
 internal fun NavGraphBuilder.reverieComposable(
     route: String,
