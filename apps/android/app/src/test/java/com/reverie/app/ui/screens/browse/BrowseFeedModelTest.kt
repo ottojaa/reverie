@@ -2,6 +2,9 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.FileTotalsDto
+import com.reverie.app.data.api.model.KindTotalsDto
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.repository.PageResult
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** A server holding [library], two rows to a page, that writes each page it serves into [cache] like the repository does. */
-private class FakeServer(library: List<DocumentDto>) {
+internal class FakeServer(library: List<DocumentDto>) {
     private var library = library
     val cache = MutableStateFlow<List<DocumentDto>>(emptyList())
     val requests = mutableListOf<Pair<DocumentKind?, Int>>()
@@ -41,6 +44,15 @@ private class FakeServer(library: List<DocumentDto>) {
     fun dropStale(kind: DocumentKind?, keep: Set<String>) {
         reconciled += keep
         cache.update { rows -> rows.filter { it.id in keep || (kind != null && it.kind != kind) } }
+    }
+
+    fun summary(): DocumentSummaryDto {
+        fun countOf(kind: DocumentKind) = library.count { it.kind == kind }
+        return DocumentSummaryDto(
+            image = KindTotalsDto(countOf(DocumentKind.IMAGE)),
+            video = KindTotalsDto(countOf(DocumentKind.VIDEO)),
+            file = FileTotalsDto(countOf(DocumentKind.FILE)),
+        )
     }
 
     /** Removes [ids] from the server only, as a delete on another device does: the cache doesn't hear of it. */

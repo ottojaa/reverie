@@ -41,7 +41,7 @@ import javax.inject.Singleton
 /** A resolved, ready-to-enqueue download: a signed file URL + the name to save it under. */
 data class DownloadTarget(val url: String, val filename: String)
 
-/** What both Browse screens show around their lists: the folder, connectivity, processing and any load error. */
+/** What the Browse screens show around their lists: the folder, connectivity, processing and any load error. */
 data class SessionUi(
     val folder: FolderDto? = null,
     val isOffline: Boolean = false,
@@ -71,9 +71,10 @@ class BrowseDeps @Inject constructor(
 private data class SessionControl(val error: String? = null, val lockedFolderId: String? = null)
 
 /**
- * What the dashboard and a kind screen do the same way, held once: the lock prompt and load errors, the
- * viewer hand-off, delete and download of the selection, the document warm-up, the processing watchers,
- * the grid settings, and the signals that documents changed (a delete anywhere, uploads finishing).
+ * What the dashboard, a folder page and a kind screen do the same way, held once: the lock prompt and
+ * load errors, the viewer hand-off, delete and download of the selection, the document warm-up, the
+ * processing watchers, the grid settings, and the signals that documents changed (a delete anywhere,
+ * uploads finishing).
  *
  * The owner (a view model) passes [selection] and [clearSelection] for its own feeds, [refresh] to re-read
  * after a password unlock, and [onContentChanged] for what it re-reads when the library changes.
@@ -99,6 +100,8 @@ class BrowseSession(
 
     /** Password prompt for a locked folder; a successful unlock re-fetches the list and the tree. */
     val unlocker = FolderUnlocker(deps.vault, scope) {
+        // The lock is open: stop showing it, and let the new read set it again if the server still refuses.
+        beginRefresh()
         refresh()
         runCatching { deps.folders.refresh() }
     }
@@ -210,8 +213,8 @@ class BrowseSession(
     }
 
     /**
-     * Both screens stay alive while one is on top of the other, so a delete on either, or uploads finishing
-     * (once, when the last one is done, not per file), must reach both.
+     * A screen stays alive while another is on top of it, so a delete on any of them, or uploads finishing
+     * (once, when the last one is done, not per file), must reach them all.
      */
     private fun watchContentChanges() {
         scope.launch { deps.documents.contentChanges.collect { changed() } }

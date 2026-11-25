@@ -12,32 +12,22 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-
-private val STAR_ON_DARK = Color(0xFFFBBF24)
-private val STAR_ON_LIGHT = Color(0xFFD97706) // deeper, to keep its contrast on a light surface
-private val BADGE_SCRIM = Color(0xC7121212)
-
-/** The favourite star's amber for the theme that is showing. */
-@Composable
-fun starColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) STAR_ON_DARK else STAR_ON_LIGHT
+import com.reverie.app.ui.theme.ReverieTheme
 
 @Composable
 fun StarIcon(
     filled: Boolean,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
-    tint: Color = starColor(),
+    tint: Color = ReverieTheme.extendedColors.star,
 ) {
     Icon(
         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarOutline,
@@ -50,8 +40,8 @@ fun StarIcon(
 /** The badge on a starred item's picture. The same in both themes: it sits on the picture. */
 @Composable
 fun StarredBadge(modifier: Modifier = Modifier) {
-    Box(modifier.size(22.dp).background(BADGE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
-        StarIcon(filled = true, contentDescription = "Favourite", tint = STAR_ON_DARK, modifier = Modifier.size(13.dp))
+    Box(modifier.size(22.dp).background(ON_PICTURE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
+        StarIcon(filled = true, contentDescription = "Favourite", tint = ReverieTheme.extendedColors.starOnScrim, modifier = Modifier.size(13.dp))
     }
 }
 

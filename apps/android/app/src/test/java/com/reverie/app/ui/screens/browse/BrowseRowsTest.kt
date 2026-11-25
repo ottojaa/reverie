@@ -69,6 +69,14 @@ class BrowseRowsTest {
         assertEquals(-1, rowIndexOf(rows(DocumentKind.IMAGE, mixed.filter { it.id.startsWith("p") }), "v1"))
     }
 
+    @Test fun `a folder row shows the date its chip sorts by`() {
+        val photo = doc("p", created = "2026-11-21T10:00:00Z", taken = "2026-06-03T10:00:00.000Z", name = "p.jpg")
+        fun dateUnder(chip: DocumentKind?) = folderRowMeta(photo, chip, today, ZoneOffset.UTC).substringAfterLast(" · ")
+
+        assertEquals("3 Jun", dateUnder(DocumentKind.IMAGE))
+        assertEquals("21 Nov", dateUnder(null))
+    }
+
     @Test fun `scrolling near the end asks for more only while there is more`() {
         assertFalse(isNearEnd(lastVisibleIndex = 2, rowCount = 10, hasMore = true))
         assertTrue(isNearEnd(lastVisibleIndex = 7, rowCount = 10, hasMore = true))
@@ -97,15 +105,18 @@ class BrowseRowsTest {
     }
 
     @Test fun `the dashboard's subtitle counts the scope's files`() {
-        assertEquals("248 files", dashboardSubtitle(248, null))
-        assertEquals("1 file", dashboardSubtitle(1, ""))
-        assertEquals("Trips · 3 files", dashboardSubtitle(3, "Trips"))
+        assertEquals("248 files", dashboardSubtitle(248))
+        assertEquals("1 file", folderSubtitle(1, null, ""))
+        assertEquals("Trips · 3 files", folderSubtitle(3, null, "Trips"))
+        assertEquals("4 of 31 files", folderSubtitle(31, 4, null))
+        assertEquals("Trips · 1 of 1 file", folderSubtitle(1, 1, "Trips"))
+        assertEquals("Trips", folderSubtitle(null, null, "Trips"))
     }
 
     @Test fun `a kind screen's subtitle names its total and the scope`() {
-        assertEquals("38 photos · My Files", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"))
-        assertEquals("1 photo · Trips", kindSubtitle(DocumentKind.IMAGE, 1, "Trips"))
-        assertEquals("19 videos · My Files", kindSubtitle(DocumentKind.VIDEO, 19, "My Files"))
-        assertEquals("191 files · My Files", kindSubtitle(DocumentKind.FILE, 191, "My Files"))
+        assertEquals("38 photos · My Files", kindSubtitle(DocumentKind.IMAGE, 38))
+        assertEquals("1 photo · My Files", kindSubtitle(DocumentKind.IMAGE, 1))
+        assertEquals("19 videos · My Files", kindSubtitle(DocumentKind.VIDEO, 19))
+        assertEquals("191 files · My Files", kindSubtitle(DocumentKind.FILE, 191))
     }
 }

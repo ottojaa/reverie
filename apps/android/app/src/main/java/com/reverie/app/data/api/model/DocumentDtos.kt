@@ -269,7 +269,7 @@ data class TopTypeDto(val ext: String, val count: Int)
 @Serializable
 data class FileTotalsDto(val count: Int = 0, val bytes: Long = 0, val top_types: List<TopTypeDto> = emptyList())
 
-/** What a scope (the library or one folder) holds per kind: the figures behind the Browse dashboard's cards. */
+/** What a scope (the library or one folder) holds per kind: the figures behind the dashboard's cards and a folder page's chips. */
 @Serializable
 data class DocumentSummaryDto(
     val image: KindTotalsDto = KindTotalsDto(),

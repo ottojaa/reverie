@@ -19,7 +19,7 @@ import com.reverie.app.ui.components.painterCache
  */
 internal object CollectionsFixtures {
     private const val STAMP = "2026-11-01T00:00:00.000Z"
-    private val hashes = listOf("LEHV6nWB2yk8pyo0adR*.7kCMdnj", "L6PZfSi_.AyE_3t7t7R**0o#DgR4", "LKO2?U%2Tw=w]~RBVZRi};RPxuwH", "L9AB*A%LPqWF_3ofWFj[IUWBM{WB")
+    val hashes = listOf("LEHV6nWB2yk8pyo0adR*.7kCMdnj", "L6PZfSi_.AyE_3t7t7R**0o#DgR4", "LKO2?U%2Tw=w]~RBVZRi};RPxuwH", "L9AB*A%LPqWF_3ofWFj[IUWBM{WB")
 
     fun node(
         id: String,

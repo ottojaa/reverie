@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -21,14 +24,18 @@ import androidx.navigation.navArgument
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.data.settings.FolderViewMode
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.PhotoResultTile
+import com.reverie.app.ui.screens.browse.ChromeSlot
 import com.reverie.app.ui.screens.browse.DashboardActions
 import com.reverie.app.ui.screens.browse.DashboardBody
 import com.reverie.app.ui.screens.browse.DashboardState
 import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedLayout
 import com.reverie.app.ui.screens.browse.FeedState
+import com.reverie.app.ui.screens.browse.FolderBody
+import com.reverie.app.ui.screens.browse.FolderState
 import com.reverie.app.ui.screens.browse.KindFeed
 import com.reverie.app.ui.screens.browse.RecentActions
 import com.reverie.app.ui.screens.browse.RowActions
@@ -74,6 +81,7 @@ class DocumentDiveTest {
 
     /** The key each route's screen last gave the image. */
     private val imageKeys = mutableMapOf<String, String>()
+    private var folderView by mutableStateOf(FolderViewMode.GRID)
 
     @Composable
     private fun Host() {
@@ -98,17 +106,11 @@ class DocumentDiveTest {
             popEnterTransition = { reveriePopEnter() },
             popExitTransition = { reveriePopExit() },
         ) {
-            reverieComposable(Screen.Files.route) { Recorded(Screen.Files.route) { Dashboard(inFolder = false) } }
+            reverieComposable(Screen.Files.route) { Recorded(Screen.Files.route) { Dashboard() } }
             reverieComposable(Routes.FOLDER, listOf(navArgument("folderId") { type = NavType.StringType })) {
-                Recorded(Routes.FOLDER) { Dashboard(inFolder = true) }
+                Recorded(Routes.FOLDER) { Folder() }
             }
-            reverieComposable(
-                Routes.KIND,
-                listOf(
-                    navArgument("kind") { type = NavType.StringType },
-                    navArgument("folderId") { type = NavType.StringType; nullable = true; defaultValue = null },
-                ),
-            ) { entry ->
+            reverieComposable(Routes.KIND, listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
                 val route = entry.arguments?.getString("kind")
                 Recorded(Routes.KIND) { Kind(DocumentKind.entries.first { routeOf(it) == route }) }
             }
@@ -134,12 +136,23 @@ class DocumentDiveTest {
     }
 
     @Composable
-    private fun Dashboard(inFolder: Boolean) {
+    private fun Dashboard() {
         DashboardBody(
             state = DashboardState(recent = FeedState(FeedDocuments(documents, total = 3, hasMore = false, fetched = true))),
             listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp), today = today, zone = zone,
             actions = DashboardActions(onOpenKind = {}, recent = RecentActions(emptySet(), {}, {}, {}, {})),
-            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, inFolder = inFolder, onUpload = {},
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
+        )
+    }
+
+    @Composable
+    private fun Folder() {
+        FolderBody(
+            state = FolderState(feed = FeedState(FeedDocuments(documents, total = 3, hasMore = false, fetched = true))),
+            viewMode = folderView,
+            actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
+            today = today, zone = zone, focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
+            slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),
         )
     }
 
@@ -201,12 +214,6 @@ class DocumentDiveTest {
         DocumentKind.entries.forEach { assertSlides(Screen.Files.route, Routes.kind(routeOf(it))) }
     }
 
-    @Test fun `no row flies between a folder page and its kind screen`() {
-        compose.setContent { Host() }
-        show(Routes.folder("f1"))
-        DocumentKind.entries.forEach { assertSlides(Routes.FOLDER, Routes.kind(routeOf(it), "f1")) }
-    }
-
     @Test fun `no row flies between the dashboard and a folder page or search`() {
         compose.setContent { Host() }
         assertSlides(Screen.Files.route, Routes.folder("f1"))
@@ -228,10 +235,25 @@ class DocumentDiveTest {
         }
     }
 
-    @Test fun `a document opened from a folder page or search dives into the viewer and shrinks back`() {
+    @Test fun `a document opened from a folder tile dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
         show(Routes.folder("f1"))
+        assertDives("image", aspect = 1.5f)
+        assertDives("video")
         assertDives("file")
+    }
+
+    @Test fun `a document opened from a folder list row dives into the viewer and shrinks back`() {
+        folderView = FolderViewMode.LIST
+        compose.setContent { Host() }
+        show(Routes.folder("f1"))
+        assertDives("image", aspect = 1.5f)
+        assertDives("video")
+        assertDives("file")
+    }
+
+    @Test fun `a document opened from search dives into the viewer and shrinks back`() {
+        compose.setContent { Host() }
         show(Screen.Search.route)
         assertDives("image")
     }
@@ -251,6 +273,14 @@ class DocumentDiveTest {
         val kindKey = imageKeys.getValue(Routes.KIND)
         assertEquals(kindKey, imageKeys[Routes.DOCUMENT])
         assertNotEquals(dashboardKey, kindKey)
+
+        compose.runOnUiThread { nav.popBackStack() }
+        show(Routes.folder("f1"))
+        compose.runOnUiThread { nav.openDocument(nav.currentBackStackEntry!!, "image") }
+        compose.waitForIdle()
+        val folderKey = imageKeys.getValue(Routes.FOLDER)
+        assertEquals(folderKey, imageKeys[Routes.DOCUMENT])
+        assertNotEquals(dashboardKey, folderKey)
     }
 
     private companion object {

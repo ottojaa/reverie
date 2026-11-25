@@ -11,7 +11,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.FavouriteKey
+import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.api.model.mediaAspectOrNull
+import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.viewer.isImageDocument
 import com.reverie.app.ui.screens.viewer.isVideoDocument
 import java.time.LocalDate
@@ -44,4 +47,44 @@ fun rememberOpenDocument(onDocumentClick: (documentId: String, aspect: Float?) -
             latest(document.id, if (isMedia) document.mediaAspectOrNull() else null)
         }
     }
+}
+
+/** A screen of documents, as far as touching one of them is concerned. */
+interface DocumentListHandler {
+    val favourites: FavouriteController
+
+    fun enterSelection(id: String)
+
+    fun toggleSelect(id: String)
+
+    /** Hand the shown list's order to the viewer. */
+    fun prepareSequence()
+
+    fun prefetch(document: DocumentDto)
+}
+
+/** Tap opens (or, once something is selected, selects); long press starts or extends a selection. */
+internal fun documentRowActions(
+    handler: DocumentListHandler,
+    selectedIds: Set<String>,
+    starredIds: Set<String>,
+    openDocument: (DocumentDto) -> Unit,
+): RowActions {
+    val selecting = selectedIds.isNotEmpty()
+    return RowActions(
+        selected = { it.id in selectedIds },
+        onClick = { doc ->
+            if (selecting) {
+                handler.toggleSelect(doc.id)
+            } else {
+                // Publish the shown list's order so the viewer swipes through it and nothing else.
+                handler.prepareSequence()
+                handler.prefetch(doc)
+                openDocument(doc)
+            }
+        },
+        onLongClick = { doc -> if (selecting) handler.toggleSelect(doc.id) else handler.enterSelection(doc.id) },
+        starred = { it.id in starredIds },
+        onToggleStar = { handler.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
+    )
 }

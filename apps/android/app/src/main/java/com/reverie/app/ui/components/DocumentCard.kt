@@ -129,7 +129,7 @@ fun DocumentCard(
 }
 
 @Composable
-private fun PrivateLockBadge(modifier: Modifier = Modifier) {
+internal fun PrivateLockBadge(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(24.dp)

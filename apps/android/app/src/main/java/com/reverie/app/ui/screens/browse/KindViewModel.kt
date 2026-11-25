@@ -16,19 +16,17 @@ import javax.inject.Inject
 class KindViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
-) : ViewModel() {
-
-    val folderId: String? = savedStateHandle["folderId"]
+) : ViewModel(), DocumentListHandler {
 
     /** Photos, Videos or Files; an unknown route argument opens Photos. */
     val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
 
-    private val cache = deps.documents.observeDocuments(folderId)
+    private val cache = deps.documents.observeDocuments(null)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
         scope = viewModelScope,
-        folderId = folderId,
+        folderId = null,
         deps = deps,
         selection = { feed.selectedIds },
         clearSelection = { feed.clearSelection() },
@@ -40,16 +38,16 @@ class KindViewModel @Inject constructor(
         scope = viewModelScope,
         kind = kind,
         cache = cache,
-        fetchPage = { offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, kind) },
+        fetchPage = { offset -> deps.documents.refresh(null, BROWSE_PAGE_SIZE, offset, kind) },
         onFirstPageFailed = session::onRefreshFailed,
-        reconcile = { keep -> if (folderId == null) deps.documents.dropStaleInLibrary(kind, keep) },
+        reconcile = { keep -> deps.documents.dropStaleInLibrary(kind, keep) },
         sharing = SharingStarted.Eagerly,
     )
 
     val state: StateFlow<FeedState> get() = feed.state
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
-    val favourites get() = session.favourites
+    override val favourites get() = session.favourites
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
     val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
@@ -65,16 +63,16 @@ class KindViewModel @Inject constructor(
 
     fun loadMore() = feed.loadMore()
 
-    fun enterSelection(id: String) = feed.enterSelection(listOf(id))
+    override fun enterSelection(id: String) = feed.enterSelection(listOf(id))
 
-    fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
+    override fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
 
     fun clearSelection() = feed.clearSelection()
 
     /** Hand this kind's loaded documents, and only those, to the viewer. Call right before navigating into a document. */
-    fun prepareSequence() = session.publish(feed.prepareSequence())
+    override fun prepareSequence() = session.publish(feed.prepareSequence())
 
-    fun prefetch(document: DocumentDto) = session.prefetch(document)
+    override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
     fun clearFocusedDocument() = session.clearFocusedDocument()
 

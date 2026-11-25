@@ -66,7 +66,7 @@ class BrowseNavigationTest {
         DashboardBody(
             state = state, listState = listState, contentPadding = PaddingValues(top = 0.dp, bottom = 24.dp), today = today, zone = zone,
             actions = DashboardActions(onOpenKind = { nav.navigate("kind") }, recent = RecentActions(emptySet(), {}, {}, {}, {})),
-            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, inFolder = false, onUpload = {},
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
         )
     }
 

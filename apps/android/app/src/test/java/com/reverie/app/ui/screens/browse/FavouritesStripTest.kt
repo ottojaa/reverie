@@ -40,7 +40,7 @@ class FavouritesStripTest {
     private var list: LazyListState? = null
     private val calls = mutableListOf<String>()
 
-    private fun show(inFolder: Boolean = false, documents: List<DocumentDto> = files) = compose.setContent {
+    private fun show(documents: List<DocumentDto> = files) = compose.setContent {
         val listState = rememberLazyListState()
         list = listState
         ReverieTheme {
@@ -58,26 +58,15 @@ class FavouritesStripTest {
                     onSeeAllFavourites = { calls += "all" },
                 ),
                 focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = {}, error = null,
-                inFolder = inFolder, onUpload = {}, favourites = favourites,
+                onUpload = {}, favourites = favourites,
             )
         }
-    }
-
-    private fun assertNoStrip() {
-        compose.onNodeWithText("Favourites").assertDoesNotExist()
     }
 
     @Test fun `no favourites, no strip`() {
         show()
 
-        assertNoStrip()
-    }
-
-    @Test fun `inside a folder there is no strip`() {
-        favourites = FavouriteFixtures.all
-        show(inFolder = true)
-
-        assertNoStrip()
+        compose.onNodeWithText("Favourites").assertDoesNotExist()
     }
 
     @Test fun `the strip arrives on top of a list already shown, and opens what is tapped`() {

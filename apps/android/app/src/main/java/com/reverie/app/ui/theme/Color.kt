@@ -191,7 +191,17 @@ data class ReverieExtendedColors(
     val onInfoContainer: Color,
     /** The semantic "card" surface — resolves to a different container level per theme. */
     val card: Color,
+    /** The favourite star on a themed surface. */
+    val star: Color,
+    /** The favourite star on a dark scrim over a picture: the same in both themes. */
+    val starOnScrim: Color,
+    /** The wash behind a lit star button. */
+    val starContainer: Color,
 )
+
+private val StarAmber = Color(0xFFFBBF24)
+private val StarAmberDeep = Color(0xFFD97706) // keeps its contrast on a light surface
+private val StarWash = Color(0x26FBBF24)
 
 val LightExtendedColors = ReverieExtendedColors(
     success = Color(0xFF16A34A),
@@ -207,6 +217,9 @@ val LightExtendedColors = ReverieExtendedColors(
     infoContainer = Color(0xFFDEE9FC),
     onInfoContainer = Color(0xFF11296B),
     card = LightSurfaceContainerLowest,
+    star = StarAmberDeep,
+    starOnScrim = StarAmber,
+    starContainer = StarWash,
 )
 
 val DarkExtendedColors = ReverieExtendedColors(
@@ -223,6 +236,9 @@ val DarkExtendedColors = ReverieExtendedColors(
     infoContainer = Color(0xFF16324A),
     onInfoContainer = Color(0xFFC9E1F7),
     card = DarkSurfaceContainer,
+    star = StarAmber,
+    starOnScrim = StarAmber,
+    starContainer = StarWash,
 )
 
 val LocalReverieColors = staticCompositionLocalOf { LightExtendedColors }

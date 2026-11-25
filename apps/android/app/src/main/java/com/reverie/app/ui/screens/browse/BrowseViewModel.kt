@@ -1,6 +1,5 @@
 package com.reverie.app.ui.screens.browse
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
@@ -11,22 +10,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 
-/** The dashboard (My Files, or inside a folder): picture cards over Recently added. */
+/** The dashboard (My Files): picture cards over Recently added. */
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
 ) : ViewModel() {
 
-    val folderId: String? = savedStateHandle["folderId"]
-
     // One Room observer for the whole screen: the three feeds and the unfinished-document watcher share it.
-    private val cache = deps.documents.observeDocuments(folderId)
+    private val cache = deps.documents.observeDocuments(null)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
         scope = viewModelScope,
-        folderId = folderId,
+        folderId = null,
         deps = deps,
         selection = { model.selectedIds },
         clearSelection = { model.clearSelection() },
@@ -37,10 +33,10 @@ class BrowseViewModel @Inject constructor(
     private val model: DashboardModel = DashboardModel(
         scope = viewModelScope,
         cache = cache,
-        summary = deps.documents.summary(folderId),
-        fetchPage = { kind, offset -> deps.documents.refresh(folderId, if (kind == null) BROWSE_PAGE_SIZE else previewLimit(kind), offset, kind) },
-        fetchSummary = { deps.documents.fetchSummary(folderId) },
-        dropStale = { kind, keep -> dropStaleInLibrary(kind, keep) },
+        summary = deps.documents.summary(null),
+        fetchPage = { kind, offset -> deps.documents.refresh(null, if (kind == null) BROWSE_PAGE_SIZE else previewLimit(kind), offset, kind) },
+        fetchSummary = { deps.documents.fetchSummary(null) },
+        dropStale = deps.documents::dropStaleInLibrary,
         onFirstPageFailed = session::onRefreshFailed,
         sharing = SharingStarted.Eagerly,
     )
@@ -56,8 +52,8 @@ class BrowseViewModel @Inject constructor(
     }
 
     fun refresh(initial: Boolean = false) {
-        // Pulling on the library root re-reads its favourites strip too.
-        if (folderId == null) favourites.load()
+        // Pulling re-reads the favourites strip too.
+        favourites.load()
         session.beginRefresh()
         model.refresh(initial)
     }
@@ -82,11 +78,6 @@ class BrowseViewModel @Inject constructor(
     fun deleteSelected() = session.deleteSelected()
 
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
-
-    // A folder reconciles itself (see DocumentRepository.refresh); only the whole library needs this.
-    private suspend fun dropStaleInLibrary(kind: DocumentKind?, keep: Set<String>) {
-        if (folderId == null) deps.documents.dropStaleInLibrary(kind, keep)
-    }
 
     private fun previewLimit(kind: DocumentKind): Int = if (kind == DocumentKind.IMAGE) PHOTO_PREVIEW_COUNT else 1
 }

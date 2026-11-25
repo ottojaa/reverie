@@ -103,7 +103,7 @@ class BrowseScreenshotTest {
             DashboardBody(
                 state = state, listState = listState, contentPadding = PaddingValues(bottom = 24.dp),
                 today = today, zone = zone, actions = noActions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
-                error = null, inFolder = false, onUpload = {},
+                error = null, onUpload = {},
             )
         }
         ReverieTheme {
@@ -119,7 +119,7 @@ class BrowseScreenshotTest {
                 // The list sits right under the header, as BrowseChrome places it.
                 Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle("My Files", dashboardSubtitle(248, null), isFolder = false),
+                        title = BrowseTitle("My Files", dashboardSubtitle(248), isFolder = false),
                         processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = null,
                     )
                     Box(Modifier.weight(1f)) { body() }
@@ -195,7 +195,7 @@ class BrowseScreenshotTest {
                         visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), isFolder = false, compact = true),
+                        title = BrowseTitle("Photos", kindSubtitle(DocumentKind.IMAGE, 38), isFolder = false, compact = true),
                         processingCount = 2, onProcessingClick = {}, onCanvas = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )
@@ -221,19 +221,19 @@ class BrowseScreenshotTest {
     @Test fun dashboardScrolled() = paparazzi.snapshot { Dashboard(dashboardState(), scrolledTo = 3) }
 
     @Test fun kindPhotos() = paparazzi.snapshot {
-        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), photoLibrary)
+        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38), photoLibrary)
     }
 
     @Test fun kindVideos() = paparazzi.snapshot {
-        KindScreen(DocumentKind.VIDEO, "Videos", kindSubtitle(DocumentKind.VIDEO, 19, "My Files"), videoLibrary)
+        KindScreen(DocumentKind.VIDEO, "Videos", kindSubtitle(DocumentKind.VIDEO, 19), videoLibrary)
     }
 
     @Test fun kindFiles() = paparazzi.snapshot {
-        KindScreen(DocumentKind.FILE, "Files", kindSubtitle(DocumentKind.FILE, 191, "My Files"), fileLibrary)
+        KindScreen(DocumentKind.FILE, "Files", kindSubtitle(DocumentKind.FILE, 191), fileLibrary)
     }
 
     @Test fun kindPhotosScrolled() = paparazzi.snapshot {
-        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38, "My Files"), photoLibrary, scrolledTo = 3)
+        KindScreen(DocumentKind.IMAGE, "Photos", kindSubtitle(DocumentKind.IMAGE, 38), photoLibrary, scrolledTo = 3)
     }
 
     /** A 320dp-wide phone and the longest names he has: half-width cards and row names have to hold. */

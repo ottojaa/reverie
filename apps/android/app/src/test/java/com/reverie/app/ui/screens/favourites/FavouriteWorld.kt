@@ -5,6 +5,7 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.FavouritesApi
 import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.VaultApi
+import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderWithChildren
@@ -28,6 +29,7 @@ import io.ktor.client.request.HttpResponseData
 import io.ktor.content.TextContent
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
@@ -46,6 +48,9 @@ internal class FavouriteWorld {
     @Volatile var items: List<FavouriteDto> = emptyList()
 
     @Volatile var tree: List<FolderWithChildren> = emptyList()
+
+    /** What GET /documents/{id} answers with. */
+    @Volatile var served: List<DocumentDto> = emptyList()
 
     /** While set, a PUT waits for it before it is answered. */
     @Volatile var putGate: CompletableDeferred<Unit>? = null
@@ -74,7 +79,7 @@ internal class FavouriteWorld {
     val favourites = FavouritesRepository(FavouritesApi(client), vault, documents, scope)
     val sequences = DocumentSequenceHolder()
     val collectionFocus = CollectionFocus()
-    private val folders = FolderRepository(folderDao, FoldersApi(client), NoopPurger, Dispatchers.Unconfined)
+    val folders = FolderRepository(folderDao, FoldersApi(client), NoopPurger, Dispatchers.Unconfined)
     val deps = FavouriteDeps(favourites, vault, documents, folders, sequences, collectionFocus)
 
     fun controller() = FavouriteController(deps, scope)
@@ -89,6 +94,8 @@ internal class FavouriteWorld {
         val body = (request.body as? TextContent)?.text.orEmpty()
         requests += "${request.method.value} $path $body".trim()
         if (isOffline) throw IOException("offline")
+        val document = served.firstOrNull { path == "documents/${it.id}" && request.method == HttpMethod.Get }
+        if (document != null) return reply(ApiJson.encodeToString(DocumentDto.serializer(), document))
         return when {
             path == "favourites" -> {
                 // Taken before the wait: a slow answer carries what the server knew when asked.
