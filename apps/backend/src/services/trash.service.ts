@@ -142,9 +142,7 @@ export class TrashService {
             .filter((folder) => isUnitRoot(tree, folder))
             .sort((a, b) => b.deleted_at!.getTime() - a.deleted_at!.getTime());
         // A document that went to the trash with its folder (same timestamp) is part of that folder's entry.
-        const standalone = documents.filter(
-            (doc) => doc.folder_id === null || tree.folder(doc.folder_id)?.deleted_at?.getTime() !== doc.deleted_at?.getTime(),
-        );
+        const standalone = documents.filter((doc) => doc.folder_id === null || tree.folder(doc.folder_id)?.deleted_at?.getTime() !== doc.deleted_at?.getTime());
 
         return {
             documents: standalone,

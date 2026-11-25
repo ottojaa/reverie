@@ -9,8 +9,8 @@ import { clusterCompleteLinkage, type Cluster, type SimilarPair } from './cluste
  * a private folder and "not duplicates" take effect on the next read without any invalidation.
  *
  * Which pairs count: both images are the owner's, live (not trashed), in the same partition, and the pair is not dismissed.
- * The partition is "outside every private folder" or "inside one lock" (a private folder, or a private collection with all its
- * folders), so a private image is grouped only with images behind the same lock and never shows up outside it.
+ * The partition is "outside every private folder" or "inside one lock" (a private folder and every folder beneath it),
+ * so a private image is grouped only with images behind the same lock and never shows up outside it.
  */
 
 export interface DuplicateScope {

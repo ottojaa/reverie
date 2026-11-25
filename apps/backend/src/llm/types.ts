@@ -23,7 +23,7 @@ export type LlmSkipReason =
     | 'no_text_no_vision' // Image without text, vision disabled
     | 'no_text_content' // Empty or no extractable text
     | 'ocr_confidence_too_low' // OCR quality too poor
-    | 'private' // Item is locked (own flag, folder or collection): never sent to the LLM
+    | 'private' // In a private folder, or beneath one: never sent to the LLM
     | 'photo' // Photos (and images not yet classified) never go to vision: they stay on the server
     | 'trashed' // Item is in the trash: no point spending a call on it
     | 'user_opted_out' // User disabled for this document

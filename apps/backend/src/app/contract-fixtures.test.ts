@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import sensible from '@fastify/sensible';
 import { DocumentListResponseSchema, FolderTreeResponseSchema, SearchResponseSchema } from '@reverie/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -31,7 +32,7 @@ import searchRoute from './routes/search.route.js';
  * when a route's answer no longer matches its committed fixture. To accept the new answer, run it with
  * UPDATE_FIXTURES=1 and then `npx nx format:write`.
  */
-const FIXTURES = new URL('../../../../libs/shared/src/fixtures/', import.meta.url);
+const FIXTURES = join(__dirname, '../../../../libs/shared/src/fixtures');
 
 /** The seeded ids are random, so each is written as a fixed one: folders start with 1, documents with 2, the user with 3. */
 function toFixedIds(library: ContractLibrary): Array<[string, string]> {
@@ -104,7 +105,7 @@ describeDb('contract fixtures', () => {
     }
 
     function expectFixture(name: string, actual: unknown) {
-        const file = new URL(name, FIXTURES);
+        const file = join(FIXTURES, name);
 
         if (process.env['UPDATE_FIXTURES']) writeFileSync(file, JSON.stringify(actual, null, 4) + '\n');
 

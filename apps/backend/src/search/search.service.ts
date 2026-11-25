@@ -64,7 +64,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     const semantic = await getSemanticSearch().load(parsed, ctx);
     const facetsPromise = query.include_facets ? generateFacets(parsed, options.userId, privateFolderIds, semantic.ids) : Promise.resolve(undefined);
 
-    // Collections/folders only join the results for plain text relevance searches (see shouldSearchFolders).
+    // Folders only join the results for plain text relevance searches (see shouldSearchFolders).
     const { results, total } = shouldSearchFolders(parsed, query)
         ? await searchInterleaved(parsed, ctx, queryOptions, semantic)
         : await searchDocumentsPaged(parsed, ctx, queryOptions, semantic);

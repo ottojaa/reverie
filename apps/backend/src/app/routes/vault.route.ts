@@ -40,7 +40,7 @@ export default async function (fastify: FastifyInstance) {
             config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Unlock one private folder (or collection) with the account password. Other folders stay locked.',
+                description: 'Unlock one private folder, and what is beneath it, with the account password. Other folders stay locked.',
                 tags: ['Vault'],
                 body: VaultUnlockRequestSchema,
                 response: { 200: VaultStatusSchema, 400: VaultErrorSchema, 401: VaultErrorSchema },

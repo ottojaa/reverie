@@ -167,7 +167,11 @@ describeDb('folder locks over HTTP', () => {
             }
 
             expect((await session.unlock(folders.vaultInner.id)).status).toBe(200);
-            expect((await session.get('/folders/' + folders.vaultMiddle.id)).body).toMatchObject({ is_private: false, lock_id: folders.vault.id, locked: false });
+            expect((await session.get('/folders/' + folders.vaultMiddle.id)).body).toMatchObject({
+                is_private: false,
+                lock_id: folders.vault.id,
+                locked: false,
+            });
             expect((await session.get('/documents?folder_id=' + folders.vaultInner.id)).body.items.map((d: { id: string }) => d.id)).toEqual([
                 docs.inVaultInner,
             ]);

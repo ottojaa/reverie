@@ -161,12 +161,7 @@ function toRollup(own: Holdings, all: Holdings, isPrivate: boolean): FolderRollu
  * The rollups of the given live folders and of every folder beneath them. A folder behind a closed lock has no
  * entry (see EMPTY_ROLLUP) and nothing of its documents is read.
  */
-export async function loadFolderRollups(
-    userId: string,
-    tree: FolderTree<Folder>,
-    folderIds: string[],
-    locks: FolderLocks,
-): Promise<Map<string, FolderRollup>> {
+export async function loadFolderRollups(userId: string, tree: FolderTree<Folder>, folderIds: string[], locks: FolderLocks): Promise<Map<string, FolderRollup>> {
     const scope = new Map(folderIds.flatMap((id) => tree.subtree(id)).map((folder) => [folder.id, folder]));
     const open = Array.from(scope.keys()).filter((id) => !locks.isLocked(id));
     const own = await fetchOwnHoldings(

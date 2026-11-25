@@ -122,12 +122,7 @@ export async function fetchHasPassword(userId: string): Promise<boolean> {
  * The lock state of the request's user: their private folders and which locks this session opened. A caller that
  * already read the folder tree passes it, so the locks describe the same moment and the table is read once.
  */
-export async function loadFolderLocks(
-    fastify: FastifyInstance,
-    request: FastifyRequest,
-    userId: string,
-    tree?: FolderTree<FolderNode>,
-): Promise<FolderLocks> {
+export async function loadFolderLocks(fastify: FastifyInstance, request: FastifyRequest, userId: string, tree?: FolderTree<FolderNode>): Promise<FolderLocks> {
     const [lockOf, enforced] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId), fetchHasPassword(userId)]);
 
     return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId)), enforced);

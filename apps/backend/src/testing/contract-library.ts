@@ -21,18 +21,16 @@ export interface ContractLibrary {
     documentIds: string[];
 }
 
-const FOLDER_DATE = new Date('2026-01-01T09:00:00Z');
-
 async function seedFolders(db: Kysely<Database>, userId: string) {
-    const photos = await seedFolder(db, userId, 'Photos');
-    const trips = await seedFolder(db, userId, 'Trips', { parent: photos });
-    const norway = await seedFolder(db, userId, 'Norway', { parent: trips });
-    const party = await seedFolder(db, userId, 'Surprise party', { parent: photos, isPrivate: true });
-    const receipts = await seedFolder(db, userId, 'Receipts');
-    const taxes = await seedFolder(db, userId, 'Taxes', { isPrivate: true });
-    const statements = await seedFolder(db, userId, 'Statements', { parent: taxes });
-
-    await db.updateTable('folders').set({ created_at: FOLDER_DATE }).where('user_id', '=', userId).execute();
+    const seed = (name: string, options: Parameters<typeof seedFolder>[3] = {}) =>
+        seedFolder(db, userId, name, { ...options, createdAt: new Date('2026-01-01T09:00:00Z') });
+    const photos = await seed('Photos');
+    const trips = await seed('Trips', { parent: photos });
+    const norway = await seed('Norway', { parent: trips });
+    const party = await seed('Surprise party', { parent: photos, isPrivate: true });
+    const receipts = await seed('Receipts');
+    const taxes = await seed('Taxes', { isPrivate: true });
+    const statements = await seed('Statements', { parent: taxes });
 
     return {
         photos: photos.id,

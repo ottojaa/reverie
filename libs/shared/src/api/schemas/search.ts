@@ -169,7 +169,7 @@ export const CollectionSearchResultSchema = z.object({
 
 export type CollectionSearchResult = z.infer<typeof CollectionSearchResultSchema>;
 
-// Unified search hit: documents and collections/folders interleaved by relevance.
+// Unified search hit: documents and folders ('collection' hits) interleaved by relevance.
 export const SearchHitSchema = z.discriminatedUnion('result_type', [DocumentSearchResultSchema, CollectionSearchResultSchema]);
 
 export type SearchHit = z.infer<typeof SearchHitSchema>;

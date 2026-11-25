@@ -11,7 +11,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 
 ## Features
 
-- **File management**: Upload, browse, and organize any file type in a two-level hierarchy (collections → folders); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
+- **File management**: Upload, browse, and organize any file type in folders nested to any depth (files can also sit at the top level); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
 - **OCR**: Extract text from images/PDFs via PaddleOCR (default) or Tesseract.js
 - **AI processing**: Claude-powered summaries, titles, tags, entities, topics, categories, and extracted dates; optional vision for images without text
 - **Library agent**: Admin-only chat in the web app that searches, moves, renames and tags documents through the same tool registry as `/mcp`; every write can be undone ([setup](#in-app-agent))
@@ -19,7 +19,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **Full-text search**: Filter DSL + faceted search (date, category, type, tags, location from EXIF), autocomplete, and a command palette in web
 - **Document viewer**: PDF, images, video, and text via a viewer registry, with an AI insight panel; in-app image crop editor and video trim editor
 - **Thumbnails**: WebP thumbnails + blurhash for images, PDFs, Office docs (via LibreOffice), video frames, and text/code
-- **Private folders**: Mark a collection or folder private and it gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
+- **Private folders**: Mark a folder private and it, with everything beneath it, gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
 - **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
 - **Auth**: JWT + rotating refresh tokens, optional sign-in with any OpenID Connect provider (Google, Authentik, Keycloak, Authelia, ...); multi-user with admin user management

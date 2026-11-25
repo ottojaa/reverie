@@ -68,7 +68,7 @@ export async function seedFolder(
     db: Kysely<Database>,
     userId: string,
     name: string,
-    opts: { parent?: { id: string; path: string }; isPrivate?: boolean; deleted?: boolean } = {},
+    opts: { parent?: { id: string; path: string }; isPrivate?: boolean; deleted?: boolean; createdAt?: Date } = {},
 ): Promise<{ id: string; path: string }> {
     const path = (opts.parent?.path ?? '') + '/' + name;
     const row = await db
@@ -84,6 +84,7 @@ export async function seedFolder(
             type: opts.parent ? 'folder' : 'collection',
             is_private: opts.isPrivate ?? false,
             deleted_at: opts.deleted ? new Date() : null,
+            created_at: opts.createdAt,
         })
         .returning('id')
         .executeTakeFirstOrThrow();

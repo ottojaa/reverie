@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { UuidSchema } from './common.js';
 
 /**
- * Folder locks: each private folder (or private collection, which locks its folders) is its own
- * lock. Unlocking asks for the account password and opens exactly that one lock for the app
+ * Folder locks: each private folder is a lock over itself and everything beneath it, however deep
+ * (a private folder inside another one belongs to the outer lock; see Folder.lock_id). Unlocking
+ * asks for the account password and opens exactly that one lock for the app
  * session (an httpOnly session cookie that lasts until app quit or logout; there is no idle
  * timeout). Private documents are never returned outside their own folder, locked or not: not
  * in "All documents", search, facets, suggestions or counts. Users without an account password
@@ -11,7 +12,7 @@ import { UuidSchema } from './common.js';
  */
 
 // POST /vault/unlock: re-enter the account login password to open one folder's lock.
-// `folder_id` is the private folder or collection to open (a trashed one is accepted too, so it
+// `folder_id` is any folder behind the lock to open (a trashed one is accepted too, so it
 // can be browsed and restored from the trash).
 export const VaultUnlockRequestSchema = z.object({
     password: z.string().min(1),
