@@ -1,4 +1,4 @@
-package com.reverie.app.ui.screens.collections
+package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -27,8 +28,6 @@ import coil.request.CachePolicy
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderCoverTileDto
 import com.reverie.app.domain.model.ThumbnailSize
-import com.reverie.app.ui.components.DocumentThumbnail
-import com.reverie.app.ui.components.FileKindBlock
 
 internal val COVER_SIZE = 44.dp
 private val COVER_SHAPE = RoundedCornerShape(11.dp)
@@ -40,14 +39,14 @@ private val TILE_GAP = 1.dp
  * shows it; one without shows its kind-tinted block. No tiles shows the folder icon.
  */
 @Composable
-fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier) {
+fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier, size: Dp = COVER_SIZE, shape: Shape = COVER_SHAPE) {
     val tiles = cover?.tiles.orEmpty().take(4)
     if (tiles.isEmpty()) {
-        CoverIconBlock(Icons.Outlined.Folder, MaterialTheme.colorScheme.onSurfaceVariant, modifier)
+        CoverIconBlock(Icons.Outlined.Folder, MaterialTheme.colorScheme.onSurfaceVariant, modifier, size = size, shape = shape)
         return
     }
 
-    CoverTiles(tiles, TILE_GAP, modifier.size(COVER_SIZE).clip(COVER_SHAPE))
+    CoverTiles(tiles, TILE_GAP, modifier.size(size).clip(shape))
 }
 
 /** One to four cover tiles filling [modifier]'s bounds, [gap] apart. */
@@ -100,9 +99,17 @@ private fun Tile(tile: FolderCoverTileDto, modifier: Modifier, compact: Boolean 
 
 /** The cover's slot holding one icon: an empty folder, or a locked one. */
 @Composable
-fun CoverIconBlock(icon: ImageVector, tint: Color, modifier: Modifier = Modifier, background: Color = MaterialTheme.colorScheme.surfaceContainerHighest, iconSize: Dp = 20.dp) {
+fun CoverIconBlock(
+    icon: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    background: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    iconSize: Dp = 20.dp,
+    size: Dp = COVER_SIZE,
+    shape: Shape = COVER_SHAPE,
+) {
     Box(
-        modifier.size(COVER_SIZE).clip(COVER_SHAPE).background(background),
+        modifier.size(size).clip(shape).background(background),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))

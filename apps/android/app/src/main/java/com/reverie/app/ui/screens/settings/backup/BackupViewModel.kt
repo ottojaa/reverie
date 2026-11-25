@@ -3,7 +3,6 @@ package com.reverie.app.ui.screens.settings.backup
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.BackupMedia
 import com.reverie.app.data.backup.BackupMediaSource
@@ -19,17 +18,16 @@ import com.reverie.app.data.backup.scanPending
 import com.reverie.app.data.backup.toAlbums
 import com.reverie.app.data.local.dao.BackupDao
 import com.reverie.app.data.repository.FolderRepository
-import com.reverie.app.ui.screens.collections.FolderFormData
-import com.reverie.app.ui.screens.upload.FolderPickerSection
-import com.reverie.app.ui.screens.upload.toPickerSections
-import com.reverie.app.ui.screens.upload.withoutPrivateFolders
+import com.reverie.app.data.repository.VaultRepository
+import com.reverie.app.ui.screens.destination.Destination
+import com.reverie.app.ui.screens.destination.DestinationBrowser
+import com.reverie.app.ui.screens.destination.DestinationRules
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -58,14 +56,13 @@ class BackupViewModel @Inject constructor(
     private val mediaSource: BackupMediaSource,
     private val dao: BackupDao,
     private val folderRepository: FolderRepository,
+    vault: VaultRepository,
 ) : ViewModel() {
 
     private val device = MutableStateFlow(DeviceSnapshot())
 
-    /** Destination choices: no private folders, since backup must not write into one. */
-    val pickerSections: StateFlow<List<FolderPickerSection>> = folderRepository.observeTree()
-        .map { toPickerSections(withoutPrivateFolders(it)) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Picks the folder backups go into. */
+    val destinations = DestinationBrowser(folderRepository, vault, viewModelScope)
 
     val state: StateFlow<BackupUiState> = combine(
         settingsRepository.settings,
@@ -136,34 +133,17 @@ class BackupViewModel @Inject constructor(
         }
     }
 
-    fun setDestination(id: String, label: String) = change { settingsRepository.setDestination(id, label) }
-
-    /** Creates a normal (never private) folder from the picker and uses it as the destination. */
-    fun createFolder(parentId: String?, form: FolderFormData) {
-        viewModelScope.launch {
-            val created = runCatching {
-                folderRepository.create(
-                    CreateFolderRequest(
-                        name = form.name,
-                        parent_id = parentId,
-                        description = form.description,
-                        emoji = form.emoji,
-                    ),
-                )
-            }.getOrNull() ?: return@launch
-            settingsRepository.setDestination(created.id, created.name)
-            reapply()
-        }
+    /** Opens the destination browser: a folder is required, and never a private one. */
+    fun pickDestination() {
+        destinations.show(
+            DestinationRules(allowPrivate = false, allowTop = false),
+            startAt = state.value.settings.folderId,
+        )
     }
 
-    fun createCollection(form: FolderFormData) {
-        viewModelScope.launch {
-            runCatching {
-                folderRepository.create(
-                    CreateFolderRequest(name = form.name, description = form.description, emoji = form.emoji),
-                )
-            }
-        }
+    fun setDestination(destination: Destination) {
+        val folderId = destination.folderId ?: return
+        change { settingsRepository.setDestination(folderId, destination.name) }
     }
 
     fun backUpNow() {

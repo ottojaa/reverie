@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.collections
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -24,6 +24,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.ui.components.CoverMosaic
+import com.reverie.app.ui.components.LockedCover
 import com.reverie.app.ui.components.StarIcon
 
 internal val CARD_SHAPE = RoundedCornerShape(18.dp)

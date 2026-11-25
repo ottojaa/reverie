@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,12 +23,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.AppViewModel
-import com.reverie.app.ui.screens.upload.UploadReviewSheet
+import com.reverie.app.ui.screens.upload.UploadDialog
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.theme.ReverieTheme
 import dagger.hilt.android.AndroidEntryPoint
 
-/** Receives files shared from other apps and drops the user straight into the upload review. */
+/** Receives files shared from other apps and drops the user straight onto the upload screen. */
 @AndroidEntryPoint
 class ShareReceiverActivity : ComponentActivity() {
 
@@ -59,10 +60,8 @@ class ShareReceiverActivity : ComponentActivity() {
                             AuthState.Unknown -> Unit
                         }
                     }
-                    LaunchedEffect(review, started) {
-                        if (started && review == null) finish()
-                    }
-                    UploadReviewSheet(viewModel = uploadViewModel)
+                    FinishWhenUploadCloses(review != null, ::finish)
+                    UploadDialog(uploadViewModel)
                 }
             }
         }
@@ -74,5 +73,15 @@ class ShareReceiverActivity : ComponentActivity() {
         Intent.ACTION_SEND_MULTIPLE ->
             IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
         else -> emptyList()
+    }
+}
+
+/** Ends the share target once its upload screen has closed, having first been open. */
+@Composable
+internal fun FinishWhenUploadCloses(isOpen: Boolean, finish: () -> Unit) {
+    var wasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(isOpen) {
+        if (isOpen) wasOpen = true
+        if (!isOpen && wasOpen) finish()
     }
 }

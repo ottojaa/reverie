@@ -7,14 +7,16 @@ import com.reverie.app.data.api.model.CheckContentRequest
 import com.reverie.app.data.api.model.CheckContentResult
 import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.local.dao.UploadDao
-import com.reverie.app.data.local.entity.UploadItemEntity
 import com.reverie.app.data.upload.ContentHasher
 import com.reverie.app.data.upload.HashProgress
 import com.reverie.app.data.upload.UploadEnqueuer
 import com.reverie.app.data.upload.UploadStager
 import com.reverie.app.di.IoDispatcher
+import com.reverie.app.domain.upload.UploadProgress
+import com.reverie.app.domain.upload.toUploadProgress
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -47,10 +49,12 @@ class UploadRepository @Inject constructor(
     private val enqueuer: UploadEnqueuer,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    /** Count of files currently queued/uploading/processing — drives the status pill. */
+    /** Count of files currently queued/uploading/processing. */
     fun observeActiveCount(): Flow<Int> = uploadDao.observeActive().map { it.size }
 
-    fun observeItems(sessionId: String): Flow<List<UploadItemEntity>> = uploadDao.observeItems(sessionId)
+    /** What the progress bar shows; null when there is nothing to report. */
+    fun observeProgress(): Flow<UploadProgress?> =
+        combine(uploadDao.observeAllItems(), uploadDao.observeRunningSessions(), ::toUploadProgress)
 
     /** SHA-256 of each picked file, read straight from its URI; null for one that can't be read. */
     suspend fun hashContents(uris: List<Uri>, onProgress: (HashProgress) -> Unit): List<String?> = hasher.hashAll(uris, onProgress)
@@ -73,5 +77,5 @@ class UploadRepository @Inject constructor(
         sessionId
     }
 
-    suspend fun clearCompleted() = withContext(io) { uploadDao.clearCompletedItems() }
+    suspend fun clearFinished() = withContext(io) { uploadDao.clearFinishedItems() }
 }

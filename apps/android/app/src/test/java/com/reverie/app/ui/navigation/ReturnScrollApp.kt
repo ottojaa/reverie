@@ -146,7 +146,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
 
     @Composable
     private fun uploads(): UploadViewModel = viewModel {
-        UploadViewModel(context, deps.uploads, MediaStorePhotoSource(context, Dispatchers.Unconfined), world.folders)
+        UploadViewModel(context, deps.uploads, MediaStorePhotoSource(context, Dispatchers.Unconfined), world.folders, world.vault)
     }
 
     @Composable

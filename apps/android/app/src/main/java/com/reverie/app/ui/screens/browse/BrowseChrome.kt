@@ -50,7 +50,6 @@ import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.ReverieFab
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
-import com.reverie.app.ui.components.UploadStatusPill
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import com.reverie.app.ui.navigation.bottomBarInset
@@ -59,7 +58,8 @@ import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteHost
 import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
 import com.reverie.app.ui.screens.upload.UploadActionSheet
-import com.reverie.app.ui.screens.upload.UploadReviewSheet
+import com.reverie.app.ui.screens.upload.UploadDialog
+import com.reverie.app.ui.screens.upload.UploadProgressBar
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.util.enqueueDownload
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -119,8 +119,6 @@ fun BrowseChrome(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val activeUploads by uploadViewModel.activeCount.collectAsStateWithLifecycle()
-    val review by uploadViewModel.review.collectAsStateWithLifecycle()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCanvasSoon by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
@@ -214,13 +212,12 @@ fun BrowseChrome(
                         .offset { IntOffset(0, max(headerPx + scrollBehavior.state.heightOffset.roundToInt(), chipsPx)) },
                 )
 
-                if (activeUploads > 0 && review == null) {
-                    UploadStatusPill(
-                        count = activeUploads,
-                        onClick = { showUploadActions = true },
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarInset() + 16.dp),
-                    )
-                }
+                UploadProgressBar(
+                    viewModel = uploadViewModel,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 16.dp, end = 16.dp, bottom = bottomBarInset() + 16.dp),
+                )
             }
         }
     }
@@ -235,7 +232,7 @@ fun BrowseChrome(
             onDismiss = { showUploadActions = false },
         )
     }
-    UploadReviewSheet(viewModel = uploadViewModel)
+    UploadDialog(uploadViewModel)
 
     if (showProcessing) {
         ProcessingSheet(

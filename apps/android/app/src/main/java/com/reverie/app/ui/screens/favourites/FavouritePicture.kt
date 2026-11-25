@@ -35,7 +35,7 @@ import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.ON_PICTURE_SCRIM
 import com.reverie.app.ui.components.SectionIcon
-import com.reverie.app.ui.screens.collections.CoverTiles
+import com.reverie.app.ui.components.CoverTiles
 import com.reverie.app.ui.screens.collections.collectionAccent
 import com.reverie.app.ui.screens.collections.current
 

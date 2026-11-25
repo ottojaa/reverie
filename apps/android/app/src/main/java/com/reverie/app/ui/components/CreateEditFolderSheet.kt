@@ -1,4 +1,4 @@
-package com.reverie.app.ui.screens.collections
+package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,10 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.reverie.app.ui.components.SectionIcon
 
 data class FolderFormData(
     val name: String,
@@ -53,7 +55,14 @@ private val CURATED_ICONS = listOf(
     "leaf", "sun", "paw-print", "dumbbell", "code", "shield",
 )
 
-/** Create/edit a collection or folder: emoji, name, description, private toggle. */
+/** The characters a folder name cannot hold: it is one segment of the folder's path. */
+private val PATH_SEPARATORS = charArrayOf('/', '\\', '\u0000')
+
+/** Whether the server takes [name] as a folder name: 1 to 255 characters, trimmed, no path separator. */
+fun isValidFolderName(name: String): Boolean =
+    name.trim().length in 1..255 && name.none { it in PATH_SEPARATORS }
+
+/** Create or edit a folder: icon, name, description and, with [allowPrivate], the private switch. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateEditFolderSheet(
@@ -61,12 +70,16 @@ fun CreateEditFolderSheet(
     initial: FolderFormData?,
     onSubmit: (FolderFormData) -> Unit,
     onDismiss: () -> Unit,
+    allowPrivate: Boolean = true,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var emoji by remember { mutableStateOf(initial?.emoji) }
     var isPrivate by remember { mutableStateOf(initial?.isPrivate ?: false) }
+    val submit = {
+        if (isValidFolderName(name)) onSubmit(FolderFormData(name.trim(), emoji, description.trim().ifBlank { null }, isPrivate))
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -99,6 +112,14 @@ fun CreateEditFolderSheet(
                 onValueChange = { name = it },
                 label = { Text("Name") },
                 singleLine = true,
+                isError = name.any { it in PATH_SEPARATORS },
+                supportingText = if (name.any { it in PATH_SEPARATORS }) {
+                    { Text("A name can't contain / or \\") }
+                } else {
+                    null
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
@@ -107,20 +128,25 @@ fun CreateEditFolderSheet(
                 label = { Text("Description (optional)") },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Private", style = MaterialTheme.typography.titleSmall)
-                    Text("Hidden from search; revealed only when unlocked", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = isPrivate, onCheckedChange = { isPrivate = it })
-            }
+            if (allowPrivate) PrivateSwitch(isPrivate, onChange = { isPrivate = it })
 
             Button(
-                onClick = { onSubmit(FolderFormData(name.trim(), emoji, description.trim().ifBlank { null }, isPrivate)) },
-                enabled = name.isNotBlank(),
+                onClick = submit,
+                enabled = isValidFolderName(name),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (initial == null) "Create" else "Save") }
         }
+    }
+}
+
+@Composable
+private fun PrivateSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Private", style = MaterialTheme.typography.titleSmall)
+            Text("Hidden from search; revealed only when unlocked", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

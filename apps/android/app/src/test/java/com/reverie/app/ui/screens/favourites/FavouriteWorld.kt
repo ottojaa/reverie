@@ -5,9 +5,11 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.FavouritesApi
 import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.VaultApi
+import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
+import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.PrivateDocumentStore
@@ -113,10 +115,29 @@ internal class FavouriteWorld {
                 if (failure == null) reply("", HttpStatusCode.NoContent) else reply(failure.second, failure.first)
             }
             path == "vault/unlock" -> reply("""{"unlocked":true,"has_password":true}""")
+            path == "folders" && request.method == HttpMethod.Post -> replyCreated(body)
             path == "folders/tree" -> reply(ApiJson.encodeToString(ListSerializer(FolderWithChildren.serializer()), tree))
             else -> reply("", HttpStatusCode.NoContent)
         }
     }
+
+    /** Adds the asked-for folder to [tree], under its parent, and answers with it. */
+    private fun MockRequestHandleScope.replyCreated(body: String): HttpResponseData {
+        val asked = ApiJson.decodeFromString(CreateFolderRequest.serializer(), body)
+        val node = FolderWithChildren(
+            id = "new-${asked.name}", parent_id = asked.parent_id, name = asked.name, path = "/${asked.name}",
+            sort_order = 0, is_private = false, created_at = "2026-11-25T00:00:00Z", updated_at = "2026-11-25T00:00:00Z",
+        )
+        tree = if (asked.parent_id == null) tree + node else tree.map { it.adopting(node) }
+        val folder = FolderDto(
+            id = node.id, parent_id = node.parent_id, name = node.name, path = node.path, sort_order = 0,
+            is_private = false, created_at = node.created_at, updated_at = node.updated_at,
+        )
+        return reply(ApiJson.encodeToString(FolderDto.serializer(), folder))
+    }
+
+    private fun FolderWithChildren.adopting(node: FolderWithChildren): FolderWithChildren =
+        if (id == node.parent_id) copy(children = children + node) else copy(children = children.map { it.adopting(node) })
 
     private fun MockRequestHandleScope.replyListing(request: HttpRequestData): HttpResponseData {
         val folderId = request.url.parameters["folder_id"]

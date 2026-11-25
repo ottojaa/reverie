@@ -35,9 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,7 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.MediaAccess
 import com.reverie.app.data.backup.backupPermissionsToRequest
-import com.reverie.app.ui.screens.upload.FolderPickerSheet
+import com.reverie.app.ui.screens.destination.DestinationPickerDialog
 import com.reverie.app.ui.theme.ReverieTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,8 +56,6 @@ fun BackupSettingsScreen(
     viewModel: BackupViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val sections by viewModel.pickerSections.collectAsStateWithLifecycle()
-    var showPicker by remember { mutableStateOf(false) }
     val askPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         viewModel.onPermissionsAnswered()
     }
@@ -91,24 +86,14 @@ fun BackupSettingsScreen(
             StatusCard(state, onBackUpNow = viewModel::backUpNow)
             BackupCard("Backup") {
                 SwitchRow("Back up automatically", "New photos and videos upload on their own, even with the app closed.", state.settings.enabled, viewModel::setEnabled)
-                DestinationRow(state.settings.folderName) { showPicker = true }
+                DestinationRow(state.settings.folderName, onClick = viewModel::pickDestination)
                 SwitchRow("Wi-Fi only", "Only back up on an unmetered network.", state.settings.wifiOnly, viewModel::setWifiOnly)
             }
             AlbumsCard(state.albums, state.selectedBuckets, viewModel::toggleAlbum)
         }
     }
 
-    if (showPicker) {
-        FolderPickerSheet(
-            sections = sections,
-            loading = false,
-            selectedId = state.settings.folderId,
-            onSelect = { viewModel.setDestination(it.id, it.label); showPicker = false },
-            onCreateFolder = { parentId, form -> viewModel.createFolder(parentId, form); showPicker = false },
-            onCreateCollection = viewModel::createCollection,
-            onDismiss = { showPicker = false },
-        )
-    }
+    DestinationPickerDialog(viewModel.destinations, onSelect = viewModel::setDestination)
 }
 
 @Composable

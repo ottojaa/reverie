@@ -42,7 +42,7 @@ import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.doc
-import com.reverie.app.ui.screens.collections.CoverMosaic
+import com.reverie.app.ui.components.CoverMosaic
 import com.reverie.app.ui.theme.ReverieTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
