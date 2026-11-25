@@ -24,6 +24,8 @@ sealed class Screen(
     data object Settings : Screen("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 
     companion object {
+        // Reach this (or Routes.tabRoutes) before any tab object: a tab touched first initialises this
+        // list while it is itself half-built, which leaves a null in it.
         val bottomNavItems = listOf(Files, Collections, Search, Settings)
     }
 }
@@ -38,11 +40,12 @@ object Routes {
     fun kind(kind: String, folderId: String? = null) =
         "browse/kind/$kind" + (folderId?.let { "?folderId=$it" } ?: "")
 
+    // `from` is the back-stack entry id of the screen that opened the viewer (see LocalDiveOrigin).
     // Optional `ar` (aspect ratio) lets the document-open container transform size itself correctly
     // from the very first frame instead of waiting for the record to load.
-    const val DOCUMENT = "document/{id}?ar={ar}"
-    fun document(id: String, aspect: Float? = null) =
-        "document/$id" + (aspect?.let { "?ar=$it" } ?: "")
+    const val DOCUMENT = "document/{id}?from={from}&ar={ar}"
+    fun document(id: String, from: String, aspect: Float? = null) =
+        "document/$id?from=$from" + (aspect?.let { "&ar=$it" } ?: "")
 
     const val FAVOURITES = "favourites"
 

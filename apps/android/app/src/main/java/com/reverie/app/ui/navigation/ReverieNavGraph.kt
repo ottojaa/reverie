@@ -39,34 +39,34 @@ fun ReverieNavGraph(
         popEnterTransition = { reveriePopEnter() },
         popExitTransition = { reveriePopExit() },
     ) {
-        reverieComposable(Screen.Files.route) {
+        reverieComposable(Screen.Files.route) { entry ->
             BrowseScreen(
-                onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
+                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
-                onFavourite = navController::openFavourite,
+                onFavourite = { navController.openFavourite(entry, it) },
                 onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
             )
         }
 
-        composable(Screen.Collections.route) {
+        composable(Screen.Collections.route) { entry ->
             CollectionsScreen(
                 onOpenFolder = { navController.navigate(Routes.folder(it)) },
                 onOpenAllDocuments = { navController.openTab(Screen.Files) },
-                onFavourite = navController::openFavourite,
+                onFavourite = { navController.openFavourite(entry, it) },
                 onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
             )
         }
 
-        reverieComposable(Routes.FAVOURITES) {
+        reverieComposable(Routes.FAVOURITES) { entry ->
             FavouritesScreen(
                 onBack = { navController.popBackStack() },
-                onGo = navController::openFavourite,
+                onGo = { navController.openFavourite(entry, it) },
             )
         }
 
-        reverieComposable(Screen.Search.route) {
+        reverieComposable(Screen.Search.route) { entry ->
             SearchScreen(
-                onDocumentClick = { navController.navigate(Routes.document(it)) },
+                onDocumentClick = { navController.openDocument(entry, it) },
                 onOpenFolder = { navController.navigate(Routes.folder(it)) },
             )
         }
@@ -96,10 +96,10 @@ fun ReverieNavGraph(
         ) { entry ->
             val folderId = entry.arguments?.getString("folderId")
             BrowseScreen(
-                onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
+                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onOpenKind = { navController.navigate(Routes.kind(routeOf(it), folderId)) },
                 onBack = { navController.popBackStack() },
-                onFavourite = navController::openFavourite,
+                onFavourite = { navController.openFavourite(entry, it) },
             )
         }
 
@@ -110,11 +110,11 @@ fun ReverieNavGraph(
                 navArgument("kind") { type = NavType.StringType },
                 navArgument("folderId") { type = NavType.StringType; nullable = true; defaultValue = null },
             ),
-        ) {
+        ) { entry ->
             KindScreen(
-                onDocumentClick = { id, aspect -> navController.navigate(Routes.document(id, aspect)) },
+                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onBack = { navController.popBackStack() },
-                onFavourite = navController::openFavourite,
+                onFavourite = { navController.openFavourite(entry, it) },
             )
         }
 
@@ -122,6 +122,7 @@ fun ReverieNavGraph(
             route = Routes.DOCUMENT,
             arguments = listOf(
                 navArgument("id") { type = NavType.StringType },
+                navArgument("from") { type = NavType.StringType },
                 navArgument("ar") { type = NavType.FloatType; defaultValue = -1f },
             ),
         ) { entry ->
@@ -143,7 +144,11 @@ private fun NavHostController.openTab(tab: Screen) = navigate(tab.route) {
     restoreState = true
 }
 
-private fun NavHostController.openFavourite(destination: FavouriteDestination) {
+/** Opens the viewer from [origin]'s screen, so the tile there dives into it. */
+internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentId: String, aspect: Float? = null) =
+    navigate(Routes.document(documentId, origin.id, aspect))
+
+private fun NavHostController.openFavourite(origin: NavBackStackEntry, destination: FavouriteDestination) {
     when (destination) {
         is FavouriteDestination.Folder -> navigate(Routes.folder(destination.id))
         // The screen reads which collection to show from CollectionFocus. A restored tab may have
@@ -152,20 +157,24 @@ private fun NavHostController.openFavourite(destination: FavouriteDestination) {
             openTab(Screen.Collections)
             popBackStack(Screen.Collections.route, inclusive = false)
         }
-        is FavouriteDestination.Document -> navigate(Routes.document(destination.id, destination.aspect))
+        is FavouriteDestination.Document -> openDocument(origin, destination.id, destination.aspect)
     }
 }
 
 /**
- * A nav destination that exposes its [AnimatedContentScope] via [LocalNavAnimatedContentScope] so
- * shared-element transforms (document open) can bridge across destinations.
+ * A nav destination that shared-element transforms (document open) can bridge to and from: it exposes its
+ * [AnimatedContentScope] via [LocalNavAnimatedContentScope], and via [LocalDiveOrigin] the screen whose
+ * documents it matches: its own, or for the viewer (the one route with `from`) the screen that opened it.
  */
-private fun NavGraphBuilder.reverieComposable(
+internal fun NavGraphBuilder.reverieComposable(
     route: String,
     arguments: List<NamedNavArgument> = emptyList(),
     content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
 ) = composable(route, arguments) { entry ->
-    CompositionLocalProvider(LocalNavAnimatedContentScope provides this) {
+    CompositionLocalProvider(
+        LocalNavAnimatedContentScope provides this,
+        LocalDiveOrigin provides (entry.arguments?.getString("from") ?: entry.id),
+    ) {
         content(entry)
     }
 }

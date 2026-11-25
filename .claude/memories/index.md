@@ -94,3 +94,8 @@ Format each entry as a short dated bullet:
 - `2026-11-25` — **A private name must never reach a favourites surface.** `GET /favourites` builds a private entry from a literal with every payload field null (open lock or not), and the Android `FavouritesRepository` (memory only) draws cards only from those server items: never build a card from a document or folder the client already holds. Favourite thumbnails load with `CachePolicy.READ_ONLY`, so a favourite that later turns private leaves nothing on disk to purge.
 - `2026-11-25` — **Content added later above a `LazyColumn`'s first item stays scrolled out of sight**: the list anchors on the first visible item's key. The Files dashboard's favourites strip therefore shares the kind cards' item (`DashboardBody`), which also leaves `LEAD_ITEMS` alone.
 - `2026-11-25` — **Paparazzi wide snapshots:** changing `screenWidth`/`screenHeight` on `DeviceConfig.PIXEL_5` renders them swapped unless `orientation = ScreenOrientation.LANDSCAPE` is set too (`FavouritesScreenshotTest`).
+
+## Android navigation
+
+- `2026-11-25` — **Shared document bounds are keyed per list screen.** `documentSharedBounds` needs `LocalDiveOrigin`, which only `reverieComposable` provides, so a list or viewer destination wrapped in plain `composable` gets no dive. Open the viewer through `openDocument(entry, …)`; keyed by document alone, rows morph between list screens.
+- `2026-11-25` — **A tab `Screen` object touched before `Routes` / `Screen.bottomNavItems` leaves a null in that list** (companion init runs while the tab is half-built; it surfaces as an NPE in `Motion.kt`). `MainShell` reads `Routes` first; a test hosting its own `NavHost` must touch `Routes.tabRoutes` before any `Screen`.
