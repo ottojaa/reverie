@@ -189,7 +189,7 @@ class ThumbnailArrivalTest {
     /** Shows [content] as the app does, with the real processing tracker running. */
     private fun show(content: @Composable () -> Unit) {
         val tracker = ProcessingTracker(repository, events, flowOf(true), scope, refreshWindow = Duration.ZERO)
-        val missed = MissedThumbnails(repository, tracker)
+        val missed = MissedThumbnails(repository, tracker, scope)
         compose.setContent { RetryMissedThumbnails(missed) { ReverieTheme(content = content) } }
     }
 

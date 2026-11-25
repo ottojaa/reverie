@@ -7,6 +7,7 @@ import com.reverie.app.data.local.entity.DocumentEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import java.util.concurrent.CopyOnWriteArrayList
 
 internal class FakeDocumentDao : DocumentDao {
     val rows = MutableStateFlow<List<DocumentEntity>>(emptyList())
@@ -16,8 +17,11 @@ internal class FakeDocumentDao : DocumentDao {
         rows.map { list -> list.filter { it.folderId == folderId } }
     override fun observeById(id: String): Flow<DocumentEntity?> =
         rows.map { list -> list.firstOrNull { it.id == id } }
-    override fun observeIdsWithFinishedThumbnail(ids: List<String>): Flow<List<String>> = rows.map { list ->
-        list.filter { it.id in ids && it.thumbnailStatus in setOf("COMPLETE", "FAILED", "SKIPPED") }.map { it.id }
+    /** The ids of every thumbnail status query, in the order they were made. */
+    val statusQueries = CopyOnWriteArrayList<Set<String>>()
+    override fun observeIdsWithThumbnailStatus(ids: List<String>, statuses: List<String>): Flow<List<String>> {
+        statusQueries += ids.toSet()
+        return rows.map { list -> list.filter { it.id in ids && it.thumbnailStatus in statuses }.map { it.id } }
     }
     override suspend fun getById(id: String): DocumentEntity? = rows.value.firstOrNull { it.id == id }
     override suspend fun upsertAll(documents: List<DocumentEntity>) {

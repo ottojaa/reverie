@@ -21,7 +21,7 @@ val LocalOnThumbnailMissed = compositionLocalOf<(String) -> Unit> { {} }
 @Composable
 fun RetryMissedThumbnails(thumbnails: MissedThumbnails, content: @Composable () -> Unit) {
     LaunchedEffect(thumbnails) { thumbnails.follow() }
-    val awaited by thumbnails.awaited.collectAsStateWithLifecycle(emptySet())
+    val awaited by thumbnails.awaited.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalAwaitedThumbnails provides awaited,
         LocalOnThumbnailMissed provides thumbnails::add,
