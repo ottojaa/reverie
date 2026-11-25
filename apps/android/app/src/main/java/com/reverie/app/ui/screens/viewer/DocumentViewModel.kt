@@ -100,7 +100,7 @@ class DocumentViewModel @Inject constructor(
     private var currentId: String? = null
 
     init {
-        favourites.load()
+        if (!favourites.state.value.isLoaded) favourites.load()
         // Refetch the visible document when its processing settles (thumbnail/OCR/LLM), so the
         // toolbar/insights update live — mirrors the old single-document behavior for the current page.
         viewModelScope.launch {

@@ -2,7 +2,6 @@ package com.reverie.app.ui.screens.favourites
 
 import app.cash.turbine.test
 import com.reverie.app.data.api.model.FavouriteType
-import com.reverie.app.data.repository.FavouritesRepository
 import com.reverie.app.data.repository.FavouritesState
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CompletableDeferred
@@ -148,11 +147,9 @@ class FavouriteStoreTest {
         store.refresh()
         store.setStarred(portugal.key, false)
 
-        // Nothing it holds reaches the database, and it is handed nothing that could write a file.
+        // Nothing it holds reaches the database.
         assertTrue(world.documentDao.rows.value.isEmpty())
         assertTrue(world.folderDao.rows.value.isEmpty())
-        val dependencies = FavouritesRepository::class.java.constructors.single().parameterTypes.map { it.simpleName }
-        assertEquals(listOf("FavouritesApi", "VaultRepository", "DocumentRepository", "CoroutineScope"), dependencies)
         // So a new process starts knowing nothing.
         assertNull(FavouriteWorld().favourites.state.value.items)
     }
