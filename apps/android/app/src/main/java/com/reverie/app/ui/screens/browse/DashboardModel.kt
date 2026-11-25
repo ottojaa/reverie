@@ -128,17 +128,7 @@ class DashboardModel(
     }
 
     /** A failed read leaves the last figures standing (or none): the cards must never show a guess. */
-    private fun refreshSummary() {
-        scope.launch {
-            try {
-                fetchSummary()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // Offline or the server is down: keep what is shown.
-            }
-        }
-    }
+    private fun refreshSummary() = scope.readQuietly { fetchSummary() }
 
     fun loadMore() = recent.loadMore()
 
@@ -164,5 +154,18 @@ class DashboardModel(
             ids = state.map(::idsOf).distinctUntilChanged(),
             loadMore = recent::loadMore,
         )
+    }
+}
+
+/** Runs [read]; a failure (offline, or the server is down) is dropped, so whatever is shown stays. */
+internal fun CoroutineScope.readQuietly(read: suspend () -> Unit) {
+    launch {
+        try {
+            read()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Nothing to report: see above.
+        }
     }
 }

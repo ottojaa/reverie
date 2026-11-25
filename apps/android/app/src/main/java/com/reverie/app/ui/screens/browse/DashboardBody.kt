@@ -37,7 +37,7 @@ class DashboardActions(
 private const val LEAD_ITEMS = 2
 
 /**
- * Browse's body: the favourites strip (library root only), the picture cards, then Recently added.
+ * The dashboard's body: the favourites strip, the picture cards, then Recently added.
  * Stateless: the screen hands it the state and what to do, so the same body is drawn in a screenshot or a
  * navigation test.
  */
@@ -53,21 +53,19 @@ fun DashboardBody(
     onFocusConsumed: () -> Unit,
     onLoadMore: () -> Unit,
     error: String?,
-    inFolder: Boolean,
     onUpload: () -> Unit,
     modifier: Modifier = Modifier,
     favourites: List<FavouriteDto> = emptyList(),
 ) {
     val recent = state.recent.documents
-    val strip = if (inFolder) emptyList() else favourites
     if (isFirstLoad(recent, error) && state.cards.isEmpty()) {
         LoadingGrid(contentPadding)
         return
     }
     if (recent.fetched && recent.documents.isEmpty()) {
         Column(modifier.fillMaxSize()) {
-            Strip(strip, actions)
-            EmptyList(emptyTitle(null, inFolder), contentPadding, onUpload)
+            Strip(favourites, actions)
+            EmptyList(emptyTitle(null), contentPadding, onUpload)
         }
         return
     }
@@ -78,7 +76,7 @@ fun DashboardBody(
         // above the one the list is anchored to, would stay scrolled out of sight.
         item(key = "cards", contentType = "cards") {
             Column {
-                Strip(strip, actions)
+                Strip(favourites, actions)
                 KindCards(state.cards, state.photoPreview, state.videoPreview, actions.onOpenKind)
             }
         }

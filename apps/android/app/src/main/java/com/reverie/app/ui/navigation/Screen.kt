@@ -35,10 +35,9 @@ object Routes {
     const val FOLDER = "folder/{folderId}"
     fun folder(folderId: String) = "folder/$folderId"
 
-    /** One kind of Browse (photos, videos, files) as its own screen, optionally inside a folder. */
-    const val KIND = "browse/kind/{kind}?folderId={folderId}"
-    fun kind(kind: String, folderId: String? = null) =
-        "browse/kind/$kind" + (folderId?.let { "?folderId=$it" } ?: "")
+    /** One kind of the whole library (photos, videos, files) as its own screen. */
+    const val KIND = "browse/kind/{kind}"
+    fun kind(kind: String) = "browse/kind/$kind"
 
     // `from` is the back-stack entry id of the screen that opened the viewer (see LocalDiveOrigin).
     // Optional `ar` (aspect ratio) lets the document-open container transform size itself correctly

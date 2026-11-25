@@ -16,15 +16,14 @@ import com.reverie.app.ui.screens.upload.UploadViewModel
 import java.time.ZoneId
 
 /**
- * Browse (My Files, or inside a folder): picture cards for Photos, Videos and Files over the Recently
- * added list. A card opens its kind as a screen of its own ([onOpenKind]).
+ * My Files: picture cards for Photos, Videos and Files over the Recently added list. A card opens its
+ * kind as a screen of its own ([onOpenKind]).
  */
 @Composable
 fun BrowseScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
     onOpenKind: (DocumentKind) -> Unit,
     modifier: Modifier = Modifier,
-    onBack: (() -> Unit)? = null,
     onFavourite: (FavouriteDestination) -> Unit = {},
     onSeeAllFavourites: () -> Unit = {},
     viewModel: BrowseViewModel = hiltViewModel(),
@@ -39,13 +38,12 @@ fun BrowseScreen(
     // Held by the destination's back-stack entry, so coming back from a kind screen finds the list where it was.
     val listState = rememberLazyListState()
     val latestOnOpenKind by rememberUpdatedState(onOpenKind)
-    val isFolder = viewModel.folderId != null
     val selectedIds = state.recent.selectedIds
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val starredIds = favourites.starredDocumentIds
     val latestOnSeeAll by rememberUpdatedState(onSeeAllFavourites)
-    // The strip is re-read each time the library root comes back to the front.
-    if (!isFolder) LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.favourites.load() }
+    // The strip is re-read each time this screen comes back to the front.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.favourites.load() }
 
     val actions = remember(viewModel, selectedIds, starredIds) {
         DashboardActions(
@@ -58,19 +56,19 @@ fun BrowseScreen(
 
     BrowseChrome(
         title = BrowseTitle(
-            text = browseTitleOf(isFolder, ui.folder),
-            subtitle = dashboardSubtitleOf(state.total, ui.folder?.description),
-            isFolder = isFolder,
+            text = "My Files",
+            subtitle = state.total?.let(::dashboardSubtitle).orEmpty(),
+            isFolder = false,
         ),
         ui = ui,
-        folderId = viewModel.folderId,
+        folderId = null,
         isRefreshing = state.recent.isRefreshing,
         isEmpty = state.recent.documents.documents.isEmpty(),
         selection = ChromeSelection(selectedIds.size, viewModel::clearSelection, viewModel::deleteSelected, viewModel::downloadSelected),
         unlocker = viewModel.unlocker,
         onRefresh = { viewModel.refresh() },
         onRetry = { viewModel.refresh(initial = true) },
-        onBack = onBack,
+        onBack = null,
         onOpenDocument = openDocument,
         uploadViewModel = uploadViewModel,
         favourites = viewModel.favourites,
@@ -88,7 +86,6 @@ fun BrowseScreen(
             onFocusConsumed = viewModel::clearFocusedDocument,
             onLoadMore = viewModel::loadMore,
             error = ui.error,
-            inFolder = isFolder,
             onUpload = slot.onUpload,
             modifier = slot.modifier,
             favourites = favourites.visible,
@@ -123,6 +120,3 @@ private fun recentActions(
         onGroupLongClick = { group -> if (selecting) viewModel.toggleSelect(group.docIds()) else viewModel.enterSelection(group.docIds()) },
     )
 }
-
-private fun dashboardSubtitleOf(total: Int?, description: String?): String =
-    if (total == null) description.orEmpty() else dashboardSubtitle(total, description)

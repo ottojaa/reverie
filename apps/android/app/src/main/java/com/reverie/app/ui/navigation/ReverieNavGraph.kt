@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.reverie.app.ui.screens.browse.BrowseScreen
+import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.KindScreen
 import com.reverie.app.ui.screens.browse.routeOf
 import com.reverie.app.ui.screens.collections.CollectionsScreen
@@ -94,10 +95,8 @@ fun ReverieNavGraph(
             route = Routes.FOLDER,
             arguments = listOf(navArgument("folderId") { type = NavType.StringType }),
         ) { entry ->
-            val folderId = entry.arguments?.getString("folderId")
-            BrowseScreen(
+            FolderScreen(
                 onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-                onOpenKind = { navController.navigate(Routes.kind(routeOf(it), folderId)) },
                 onBack = { navController.popBackStack() },
                 onFavourite = { navController.openFavourite(entry, it) },
             )
@@ -106,10 +105,7 @@ fun ReverieNavGraph(
         // A kind pushed over the dashboard: its own list state, paging and selection; back finds the dashboard as it was.
         reverieComposable(
             route = Routes.KIND,
-            arguments = listOf(
-                navArgument("kind") { type = NavType.StringType },
-                navArgument("folderId") { type = NavType.StringType; nullable = true; defaultValue = null },
-            ),
+            arguments = listOf(navArgument("kind") { type = NavType.StringType }),
         ) { entry ->
             KindScreen(
                 onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },

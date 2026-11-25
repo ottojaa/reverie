@@ -173,8 +173,9 @@ fun TypeBadge(doc: DocumentDto, size: Dp = 36.dp) {
     }
 }
 
+/** A row's ⋮ button and its menu. */
 @Composable
-private fun FileMenu(doc: DocumentDto, actions: RowActions) {
+internal fun FileMenu(doc: DocumentDto, actions: RowActions) {
     var open by remember { mutableStateOf(false) }
     // The menu anchors to the Box around its button.
     Box {

@@ -34,15 +34,18 @@ import com.reverie.app.ui.components.ProcessingStatusBadge
 data class BrowseTitle(
     val text: String,
     val subtitle: String,
-    /** A folder's Browse has the "Open in Canvas" menu. */
+    /** A folder page has the "Open in Canvas" menu. */
     val isFolder: Boolean,
-    /** A kind screen's smaller title block (24/13sp); Browse and folders keep 32/15sp. */
+    /** The smaller title block (24/13sp) of a folder page or a kind screen; My Files keeps 32/15sp. */
     val compact: Boolean = false,
 )
 
 /**
- * The part of Browse that slides away on scroll: back arrow (inside a folder or a kind screen), title,
+ * The part of Browse that slides away on scroll: back arrow (on a folder page or a kind screen), title,
  * subtitle and the processing pill. It paints its own opaque background because the list scrolls underneath it.
+ *
+ * @param actions buttons of the screen's own, between the processing pill and the ⋮ menu.
+ * @param below a row of the screen's own under the title block, sliding away with it.
  */
 @Composable
 fun BrowseHeader(
@@ -52,6 +55,8 @@ fun BrowseHeader(
     onCanvas: () -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    actions: @Composable () -> Unit = {},
+    below: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -83,8 +88,10 @@ fun BrowseHeader(
                 )
             }
             ProcessingStatusBadge(count = processingCount, onClick = onProcessingClick)
+            actions()
             if (title.isFolder) FolderMenu(onCanvas)
         }
+        below()
     }
 }
 

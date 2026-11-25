@@ -2,6 +2,10 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.kind
+import com.reverie.app.ui.components.fileTypeLabel
+import com.reverie.app.util.formatBytes
+import com.reverie.app.util.formatDuration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -29,6 +33,8 @@ sealed interface FeedItem {
 private const val VIDEO_COLUMNS = 2
 private val dayWithYear = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
 private val dayInYear = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+private val rowDay = DateTimeFormatter.ofPattern("d MMM", Locale.US)
+private val rowDayWithYear = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 
 private fun instantOf(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
@@ -64,10 +70,39 @@ fun dayLabel(day: LocalDate, today: LocalDate): String {
 
 private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
 
-/** The dashboard's subtitle: the scope's server total ("248 files"), after the folder's description when it has one. */
-fun dashboardSubtitle(total: Int, description: String?): String {
-    val counted = count(total, "file", "files")
+/** The dashboard's subtitle: the library's server total ("248 files"). */
+fun dashboardSubtitle(total: Int): String = count(total, "file", "files")
+
+/**
+ * A folder page's subtitle: its description, then how many files it holds ("31 files"), or under a kind chip
+ * how many of them that chip lists ("4 of 31 files").
+ *
+ * @param total null while unknown, which leaves only the description.
+ * @param matching the selected chip's count; null under All.
+ */
+fun folderSubtitle(total: Int?, matching: Int?, description: String?): String {
+    if (total == null) return description.orEmpty()
+    val held = count(total, "file", "files")
+    val counted = if (matching == null) held else "$matching of $held"
     return if (description.isNullOrBlank()) counted else "$description · $counted"
+}
+
+/**
+ * A folder list row's second line: "JPG · 3.4 MB · 21 Jun", with a video's length after its type. The date is
+ * the one the list of [listed] (null is All) is sorted by: date taken for Photos and Videos when the file has
+ * one, else the upload date. It carries its year when that isn't this year.
+ */
+fun folderRowMeta(doc: DocumentDto, listed: DocumentKind?, today: LocalDate, zone: ZoneId): String {
+    val sortsByTaken = listed == DocumentKind.IMAGE || listed == DocumentKind.VIDEO
+    // The date taken is a local clock reading stored as UTC (see monthOf), so it is read as written.
+    val taken = if (sortsByTaken) instantOf(doc.taken_at)?.atOffset(ZoneOffset.UTC)?.toLocalDate() else null
+    val day = taken ?: instantOf(doc.created_at)?.atZone(zone)?.toLocalDate()
+    return listOfNotNull(
+        fileTypeLabel(doc.mime_type, doc.original_filename),
+        doc.duration_seconds?.takeIf { doc.kind == DocumentKind.VIDEO }?.let(::formatDuration),
+        formatBytes(doc.size_bytes),
+        day?.format(if (day.year == today.year) rowDay else rowDayWithYear),
+    ).joinToString(" · ")
 }
 
 /** A kind screen's title. */
@@ -77,14 +112,14 @@ fun kindTitle(kind: DocumentKind): String = when (kind) {
     DocumentKind.FILE -> "Files"
 }
 
-/** A kind screen's subtitle: "38 photos · My Files", or the folder's name in place of "My Files". */
-fun kindSubtitle(kind: DocumentKind, total: Int, scopeName: String): String {
+/** A kind screen's subtitle: "38 photos · My Files". */
+fun kindSubtitle(kind: DocumentKind, total: Int): String {
     val counted = when (kind) {
         DocumentKind.IMAGE -> count(total, "photo", "photos")
         DocumentKind.VIDEO -> count(total, "video", "videos")
         DocumentKind.FILE -> count(total, "file", "files")
     }
-    return "$counted · $scopeName"
+    return "$counted · My Files"
 }
 
 /**

@@ -18,17 +18,15 @@ class KindViewModel @Inject constructor(
     private val deps: BrowseDeps,
 ) : ViewModel() {
 
-    val folderId: String? = savedStateHandle["folderId"]
-
     /** Photos, Videos or Files; an unknown route argument opens Photos. */
     val kind: DocumentKind = kindOfRoute(savedStateHandle["kind"])
 
-    private val cache = deps.documents.observeDocuments(folderId)
+    private val cache = deps.documents.observeDocuments(null)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
         scope = viewModelScope,
-        folderId = folderId,
+        folderId = null,
         deps = deps,
         selection = { feed.selectedIds },
         clearSelection = { feed.clearSelection() },
@@ -40,9 +38,9 @@ class KindViewModel @Inject constructor(
         scope = viewModelScope,
         kind = kind,
         cache = cache,
-        fetchPage = { offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, kind) },
+        fetchPage = { offset -> deps.documents.refresh(null, BROWSE_PAGE_SIZE, offset, kind) },
         onFirstPageFailed = session::onRefreshFailed,
-        reconcile = { keep -> if (folderId == null) deps.documents.dropStaleInLibrary(kind, keep) },
+        reconcile = { keep -> deps.documents.dropStaleInLibrary(kind, keep) },
         sharing = SharingStarted.Eagerly,
     )
 

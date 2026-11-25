@@ -215,7 +215,7 @@ class FavouritesScreenshotTest {
                     ),
                     listState = rememberLazyListState(), contentPadding = PaddingValues(bottom = 24.dp), today = today, zone = zone,
                     actions = DashboardActions(onOpenKind = {}, recent = RecentActions(emptySet(), {}, {}, {}, {}, starredIds = setOf("d-invoice"))),
-                    focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, inFolder = false, onUpload = {},
+                    focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
                     favourites = favourites,
                 )
             }

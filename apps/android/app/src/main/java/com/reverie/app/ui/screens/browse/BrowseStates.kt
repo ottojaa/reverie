@@ -51,9 +51,9 @@ fun EmptyList(title: String, contentPadding: PaddingValues, onUpload: () -> Unit
 fun isFirstLoad(documents: FeedDocuments, error: String?): Boolean =
     documents.documents.isEmpty() && (documents.isLoading || (!documents.fetched && !documents.failed && error == null))
 
-/** The empty state's title for the feed of [kind]; null is Recently added. */
-fun emptyTitle(kind: DocumentKind?, inFolder: Boolean): String = when (kind) {
-    null -> if (inFolder) "This folder is empty" else "No documents yet"
+/** The empty state's title for the list of [kind]; null is every kind. */
+fun emptyTitle(kind: DocumentKind?): String = when (kind) {
+    null -> "No documents yet"
     DocumentKind.IMAGE -> "No photos yet"
     DocumentKind.VIDEO -> "No videos yet"
     DocumentKind.FILE -> "No files yet"

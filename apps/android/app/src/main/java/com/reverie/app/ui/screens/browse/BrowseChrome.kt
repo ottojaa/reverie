@@ -72,7 +72,7 @@ class ChromeSlot(
     /** Places the body under the header and lets it follow the header as it slides away. */
     val modifier: Modifier,
     val contentPadding: PaddingValues,
-    /** Tells the date chip which group is at the top of the list (a kind screen); the dashboard never calls it. */
+    /** Tells the date chip which group is at the top of the list (a kind screen); the other screens never call it. */
     val onHeading: (FeedItem.Header?) -> Unit,
     /** Opens the upload sheet (the empty state's button). */
     val onUpload: () -> Unit,
@@ -87,7 +87,7 @@ class ChromeSelection(
 )
 
 /**
- * Everything around a Browse list that the dashboard and a kind screen share: the header that slides
+ * Everything around a Browse list that the dashboard, a folder page and a kind screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
  * the upload button and sheets, the delete confirmation and the password prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].
@@ -112,6 +112,8 @@ fun BrowseChrome(
     favourites: FavouriteController,
     modifier: Modifier = Modifier,
     onFavourite: (FavouriteDestination) -> Unit = {},
+    headerActions: @Composable () -> Unit = {},
+    belowHeader: @Composable () -> Unit = {},
     body: @Composable (ChromeSlot) -> Unit,
 ) {
     val context = LocalContext.current
@@ -178,6 +180,8 @@ fun BrowseChrome(
                         .align(Alignment.TopCenter)
                         .onSizeChanged { headerPx = it.height }
                         .graphicsLayer { translationY = scrollBehavior.state.heightOffset },
+                    actions = headerActions,
+                    below = belowHeader,
                 )
 
                 // Selection bar overlays the header (opaque) so entering selection never moves the list.
@@ -321,14 +325,6 @@ private fun BottomBarFollowsHeader(scrollBehavior: TopAppBarScrollBehavior) {
         snapshotFlow { scrollBehavior.state.collapsedFraction > 0.5f }
             .distinctUntilChanged()
             .collect { collapsed -> bar.value = !collapsed }
-    }
-}
-
-fun browseTitleOf(isFolder: Boolean, folder: com.reverie.app.data.api.model.FolderDto?): String {
-    if (!isFolder) return "My Files"
-    return buildString {
-        folder?.emoji?.let { append("$it  ") }
-        append(folder?.name ?: "Folder")
     }
 }
 

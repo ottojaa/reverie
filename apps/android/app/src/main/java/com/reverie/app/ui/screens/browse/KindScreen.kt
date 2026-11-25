@@ -48,12 +48,12 @@ fun KindScreen(
     BrowseChrome(
         title = BrowseTitle(
             text = kindTitle(kind),
-            subtitle = if (documents.fetched) kindSubtitle(kind, documents.total, ui.folder?.name ?: if (viewModel.folderId == null) "My Files" else "Folder") else "",
+            subtitle = if (documents.fetched) kindSubtitle(kind, documents.total) else "",
             isFolder = false,
             compact = true,
         ),
         ui = ui,
-        folderId = viewModel.folderId,
+        folderId = null,
         isRefreshing = state.isRefreshing,
         isEmpty = documents.documents.isEmpty(),
         selection = ChromeSelection(state.selectedIds.size, viewModel::clearSelection, viewModel::deleteSelected, viewModel::downloadSelected),
@@ -71,7 +71,6 @@ fun KindScreen(
             kind = kind,
             state = state,
             error = ui.error,
-            inFolder = viewModel.folderId != null,
             listState = listState,
             layout = layout,
             actions = actions,
@@ -89,7 +88,6 @@ fun KindBody(
     kind: DocumentKind,
     state: FeedState,
     error: String?,
-    inFolder: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     layout: FeedLayout,
     actions: RowActions,
@@ -104,7 +102,7 @@ fun KindBody(
         return
     }
     if (documents.fetched && documents.documents.isEmpty()) {
-        EmptyList(emptyTitle(kind, inFolder), slot.contentPadding, slot.onUpload)
+        EmptyList(emptyTitle(kind), slot.contentPadding, slot.onUpload)
         return
     }
     KindFeed(
