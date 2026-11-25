@@ -19,10 +19,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
@@ -97,8 +95,6 @@ class DocumentDiveTest {
 
     @Composable
     private fun Host() {
-        // Loaded before any Screen object, as MainShell does (see Screen.bottomNavItems).
-        Routes.tabRoutes
         nav = rememberNavController()
         ReverieTheme {
             SharedTransitionLayout {
@@ -112,29 +108,22 @@ class DocumentDiveTest {
     private fun Graph() {
         NavHost(
             nav,
-            startDestination = Screen.Files.route,
+            startDestination = Routes.LIBRARY,
             enterTransition = { reverieEnter() },
             exitTransition = { reverieExit() },
             popEnterTransition = { reveriePopEnter() },
             popExitTransition = { reveriePopExit() },
         ) {
-            reverieComposable(Screen.Files.route) { Recorded(Screen.Files.route) { Dashboard() } }
-            reverieComposable(Routes.FOLDER, listOf(navArgument("folderId") { type = NavType.StringType })) {
+            reverieComposable(Routes.LIBRARY) { Recorded(Routes.LIBRARY) { Dashboard() } }
+            reverieComposable(Routes.FOLDER, Routes.folderArguments) {
                 Recorded(Routes.FOLDER) { Folder() }
             }
-            reverieComposable(Routes.KIND, listOf(navArgument("kind") { type = NavType.StringType })) { entry ->
+            reverieComposable(Routes.KIND, Routes.kindArguments) { entry ->
                 val route = entry.arguments?.getString("kind")
                 Recorded(Routes.KIND) { Kind(DocumentKind.entries.first { routeOf(it) == route }) }
             }
-            reverieComposable(Screen.Search.route) { Recorded(Screen.Search.route) { Search() } }
-            reverieComposable(
-                Routes.DOCUMENT,
-                listOf(
-                    navArgument("id") { type = NavType.StringType },
-                    navArgument("from") { type = NavType.StringType },
-                    navArgument("ar") { type = NavType.FloatType; defaultValue = -1f },
-                ),
-            ) { entry ->
+            reverieComposable(Routes.SEARCH, Routes.searchArguments) { Recorded(Routes.SEARCH) { Search() } }
+            reverieComposable(Routes.DOCUMENT, Routes.documentArguments) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
                 // As in the pager, the page on screen carries the key.
                 Recorded(Routes.DOCUMENT) { Box(Modifier.fillMaxSize().documentSharedBounds(swipedTo ?: id)) }
@@ -231,13 +220,13 @@ class DocumentDiveTest {
 
     @Test fun `no row flies between the dashboard and a kind screen`() {
         compose.setContent { Host() }
-        DocumentKind.entries.forEach { assertSlides(Screen.Files.route, Routes.kind(routeOf(it))) }
+        DocumentKind.entries.forEach { assertSlides(Routes.LIBRARY, Routes.kind(routeOf(it))) }
     }
 
     @Test fun `no row flies between the dashboard and a folder page or search`() {
         compose.setContent { Host() }
-        assertSlides(Screen.Files.route, Routes.folder("f1"))
-        assertSlides(Screen.Files.route, Screen.Search.route)
+        assertSlides(Routes.LIBRARY, Routes.folder("f1"))
+        assertSlides(Routes.LIBRARY, Routes.search())
     }
 
     @Test fun `a document opened from the dashboard dives into the viewer and shrinks back`() {
@@ -274,7 +263,7 @@ class DocumentDiveTest {
 
     @Test fun `a document opened from search dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
-        show(Screen.Search.route)
+        show(Routes.search())
         assertDives("image")
     }
 
@@ -283,7 +272,7 @@ class DocumentDiveTest {
         compose.waitForIdle()
         compose.runOnUiThread { nav.openDocument(nav.currentBackStackEntry!!, "image") }
         compose.waitForIdle()
-        val dashboardKey = imageKeys.getValue(Screen.Files.route)
+        val dashboardKey = imageKeys.getValue(Routes.LIBRARY)
         assertEquals(dashboardKey, imageKeys[Routes.DOCUMENT])
 
         compose.runOnUiThread { nav.popBackStack() }
@@ -317,9 +306,9 @@ class DocumentDiveTest {
 
     @Test fun `a starred document opened from the dashboard strip moves none of the dashboard's rows`() {
         openFromStrip("image")
-        assertNotEquals(imageKeys[Screen.Files.route], imageKeys[Routes.DOCUMENT])
+        assertNotEquals(imageKeys[Routes.LIBRARY], imageKeys[Routes.DOCUMENT])
         assertFalse("the viewer shrank into a dashboard row", morphs { popBackStack() })
-        assertEquals(Screen.Files.route, currentRoute())
+        assertEquals(Routes.LIBRARY, currentRoute())
     }
 
     @Test fun `swiping to another starred document and going back moves none of the dashboard's rows`() {
@@ -327,7 +316,7 @@ class DocumentDiveTest {
         swipedTo = "video"
         compose.waitForIdle()
         assertFalse("the viewer shrank into a dashboard row", morphs { popBackStack() })
-        assertEquals(Screen.Files.route, currentRoute())
+        assertEquals(Routes.LIBRARY, currentRoute())
     }
 
     private companion object {

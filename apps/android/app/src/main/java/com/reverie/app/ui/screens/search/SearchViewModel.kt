@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
@@ -97,9 +98,11 @@ class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
     private val connectivity: ConnectivityMonitor,
     private val sequenceHolder: DocumentSequenceHolder,
+    savedState: SavedStateHandle,
 ) : ViewModel() {
 
-    private val query = MutableStateFlow("")
+    /** Starts as the query the screen was opened with (a smart view's, say), usually none. */
+    private val query = MutableStateFlow(savedState.get<String>("q").orEmpty())
     private val control = MutableStateFlow(SearchControl())
 
     /** What the viewer is showing, so the grid can scroll it into view on return from a viewer opened here. */

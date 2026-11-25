@@ -6,7 +6,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -17,12 +16,13 @@ import com.reverie.app.ui.screens.browse.BrowseScreen
 import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.KindScreen
 import com.reverie.app.ui.screens.browse.routeOf
-import com.reverie.app.ui.screens.collections.CollectionsScreen
 import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.search.SearchScreen
+import com.reverie.app.ui.screens.settings.ChangePasswordScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
+import com.reverie.app.ui.screens.settings.backup.BackupSettingsScreen
 
 @Composable
 fun ReverieNavGraph(
@@ -31,7 +31,7 @@ fun ReverieNavGraph(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Files.route,
+        startDestination = Routes.LIBRARY,
         modifier = modifier,
         // Material shared-axis motion (see Motion.kt): pushing a detail slides forward, back
         // reverses, and tab↔tab switches slide in the direction of the tab order.
@@ -40,96 +40,90 @@ fun ReverieNavGraph(
         popEnterTransition = { reveriePopEnter() },
         popExitTransition = { reveriePopExit() },
     ) {
-        reverieComposable(Screen.Files.route) { entry ->
-            BrowseScreen(
-                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-                onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
-                onFavourite = { navController.openFavourite(it) },
-                onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
-            )
-        }
+        tabs(navController)
+        lists(navController)
+        viewer(navController)
+        settings(navController)
+    }
+}
 
-        composable(Screen.Collections.route) {
-            CollectionsScreen(
-                onOpenFolder = { navController.navigate(Routes.folder(it)) },
-                onOpenAllDocuments = { navController.openTab(Screen.Files) },
-                onFavourite = { navController.openFavourite(it) },
-                onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
-            )
-        }
+/** The two roots of the bottom pill. */
+private fun NavGraphBuilder.tabs(navController: NavHostController) {
+    reverieComposable(Routes.LIBRARY) { entry ->
+        BrowseScreen(
+            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+            onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
+            onFavourite = { navController.openFavourite(it) },
+            onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
+        )
+    }
 
-        reverieComposable(Routes.FAVOURITES) {
-            FavouritesScreen(
-                onBack = { navController.popBackStack() },
-                onGo = { navController.openFavourite(it) },
-            )
-        }
+    reverieComposable(Routes.PHOTOS, listOf(navArgument("kind") { type = NavType.StringType; defaultValue = "photos" })) { entry ->
+        KindScreen(
+            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+            onBack = { navController.popBackStack() },
+            onFavourite = { navController.openFavourite(it) },
+        )
+    }
+}
 
-        reverieComposable(Screen.Search.route) { entry ->
-            SearchScreen(
-                onDocumentClick = { navController.openDocument(entry, it) },
-                onOpenFolder = { navController.navigate(Routes.folder(it)) },
-            )
-        }
+/** The screens pushed over a tab that list folders and documents. */
+private fun NavGraphBuilder.lists(navController: NavHostController) {
+    reverieComposable(Routes.FOLDER, Routes.folderArguments) { entry ->
+        FolderScreen(
+            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+            onBack = { navController.popBackStack() },
+            onFavourite = { navController.openFavourite(it) },
+        )
+    }
 
-        composable(Screen.Settings.route) {
-            SettingsScreen(
-                onChangePassword = { navController.navigate(Routes.SETTINGS_PASSWORD) },
-                onOpenBackup = { navController.navigate(Routes.SETTINGS_BACKUP) },
-            )
-        }
+    // A kind pushed over the Library: its own list state, paging and selection; back finds the Library as it was.
+    reverieComposable(Routes.KIND, Routes.kindArguments) { entry ->
+        KindScreen(
+            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+            onBack = { navController.popBackStack() },
+            onFavourite = { navController.openFavourite(it) },
+        )
+    }
 
-        composable(Routes.SETTINGS_BACKUP) {
-            com.reverie.app.ui.screens.settings.backup.BackupSettingsScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
+    reverieComposable(Routes.FAVOURITES) {
+        FavouritesScreen(
+            onBack = { navController.popBackStack() },
+            onGo = { navController.openFavourite(it) },
+        )
+    }
 
-        composable(Routes.SETTINGS_PASSWORD) {
-            com.reverie.app.ui.screens.settings.ChangePasswordScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
+    reverieComposable(Routes.SEARCH, Routes.searchArguments) { entry ->
+        SearchScreen(
+            onDocumentClick = { navController.openDocument(entry, it) },
+            onOpenFolder = { navController.navigate(Routes.folder(it)) },
+        )
+    }
+}
 
-        reverieComposable(
-            route = Routes.FOLDER,
-            arguments = listOf(navArgument("folderId") { type = NavType.StringType }),
-        ) { entry ->
-            FolderScreen(
-                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-                onBack = { navController.popBackStack() },
-                onFavourite = { navController.openFavourite(it) },
-            )
-        }
+private fun NavGraphBuilder.viewer(navController: NavHostController) {
+    reverieComposable(Routes.DOCUMENT, Routes.documentArguments) { entry ->
+        val aspect = (entry.arguments?.getFloat("ar") ?: -1f).takeIf { it > 0f }
+        DocumentScreen(
+            documentId = entry.arguments?.getString("id") ?: "",
+            aspect = aspect,
+            onBackClick = { navController.popBackStack() },
+        )
+    }
+}
 
-        // A kind pushed over the dashboard: its own list state, paging and selection; back finds the dashboard as it was.
-        reverieComposable(
-            route = Routes.KIND,
-            arguments = listOf(navArgument("kind") { type = NavType.StringType }),
-        ) { entry ->
-            KindScreen(
-                onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-                onBack = { navController.popBackStack() },
-                onFavourite = { navController.openFavourite(it) },
-            )
-        }
-
-        reverieComposable(
-            route = Routes.DOCUMENT,
-            arguments = listOf(
-                navArgument("id") { type = NavType.StringType },
-                navArgument("from") { type = NavType.StringType },
-                navArgument("ar") { type = NavType.FloatType; defaultValue = -1f },
-            ),
-        ) { entry ->
-            val documentId = entry.arguments?.getString("id") ?: ""
-            val aspect = (entry.arguments?.getFloat("ar") ?: -1f).takeIf { it > 0f }
-            DocumentScreen(
-                documentId = documentId,
-                aspect = aspect,
-                onBackClick = { navController.popBackStack() },
-            )
-        }
+private fun NavGraphBuilder.settings(navController: NavHostController) {
+    composable(Routes.SETTINGS) {
+        SettingsScreen(
+            onChangePassword = { navController.navigate(Routes.SETTINGS_PASSWORD) },
+            onOpenBackup = { navController.navigate(Routes.SETTINGS_BACKUP) },
+        )
+    }
+    composable(Routes.SETTINGS_BACKUP) {
+        BackupSettingsScreen(onBack = { navController.popBackStack() })
+    }
+    composable(Routes.SETTINGS_PASSWORD) {
+        ChangePasswordScreen(onBack = { navController.popBackStack() })
     }
 }
 
@@ -138,13 +132,6 @@ fun ReverieNavGraph(
  * and no list scrolls on return.
  */
 private const val NO_DIVE_ORIGIN = "none"
-
-/** Switches to a bottom-nav tab, keeping each tab's back stack as it was. */
-private fun NavHostController.openTab(tab: Screen) = navigate(tab.route) {
-    popUpTo(graph.findStartDestination().id) { saveState = true }
-    launchSingleTop = true
-    restoreState = true
-}
 
 /** Opens the viewer from [origin]'s screen, so the tile there dives into it. */
 internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentId: String, aspect: Float? = null) =

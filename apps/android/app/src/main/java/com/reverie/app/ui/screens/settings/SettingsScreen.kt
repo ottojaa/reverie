@@ -60,7 +60,7 @@ import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
 import com.reverie.app.ui.components.StorageMeter
 import com.reverie.app.ui.navigation.EasingPreset
-import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.navigation.navigationBarInset
 import com.reverie.app.ui.navigation.toEasingPreset
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.ui.theme.ThemeMode
@@ -86,7 +86,7 @@ fun SettingsScreen(
             .fillMaxWidth()
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + navigationBarInset()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(

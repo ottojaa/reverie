@@ -141,20 +141,6 @@ class ReturnScrollTest {
         assertAtTop("the dashboard")
     }
 
-    private fun starredFromCollections(swipeTo: String?) {
-        act { app.nav.navigate(Screen.Collections.route) }
-        tapStarredTile()
-        viewAndReturn(swipeTo)
-        assertEquals(Screen.Collections.route, currentRoute())
-        back()
-        assertAtTop("the dashboard")
-    }
-
-    @Test fun `a starred document from Collections scrolls no list`() = starredFromCollections(swipeTo = null)
-
-    @Test fun `swiping on from a starred document from Collections scrolls no list`() =
-        starredFromCollections(swipeTo = FARTHER)
-
     private fun starredFromFavourites(swipeTo: String?) {
         act { app.nav.navigate(Routes.FAVOURITES) }
         tapStarredTile()
@@ -210,7 +196,7 @@ class ReturnScrollTest {
     @Test fun `a document from a file-type page scrolls that page and nothing else`() = onlyThatListScrolls(KIND_ROUTE)
 
     private fun showResults(viewMode: ViewMode) {
-        act { app.nav.navigate(Screen.Search.route) }
+        act { app.nav.navigate(Routes.search()) }
         act {
             app.search.setViewMode(viewMode)
             app.search.setFreeText("pdf")

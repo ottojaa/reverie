@@ -54,8 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.ui.navigation.LocalBottomBarScrollState
-import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.navigation.navigationBarInset
 import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SearchFacets
@@ -96,11 +95,10 @@ fun SearchScreen(
     val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
         dateActive || state.activeValues(FilterKey.SIZE).isNotEmpty() || state.activeValues(FilterKey.HAS).isNotEmpty()
 
-    // Scroll states are hoisted so scrolling the results can collapse the search header + bottom nav,
+    // Scroll states are hoisted so scrolling the results can collapse the search header,
     // reclaiming vertical space for the results themselves.
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
-    val barScroll = LocalBottomBarScrollState.current
     // Saveable so it survives the round-trip into a document and back — otherwise it reset to `true`
     // and the scroll tracker below immediately re-collapsed it, shifting the results up (the old bug).
     var chromeVisible by rememberSaveable { mutableStateOf(true) }
@@ -138,9 +136,6 @@ fun SearchScreen(
         // Consume it so later result updates (e.g. a thumbnail-complete refetch) don't re-scroll here.
         viewModel.clearViewerFocus()
     }
-    // Mirror the header visibility onto the shell's bottom nav (honored when hide-nav-on-scroll is on).
-    LaunchedEffect(chromeVisible) { barScroll?.value = chromeVisible }
-
     Box(modifier = modifier.fillMaxSize().statusBarsPadding()) {
         val density = LocalDensity.current
         // The header (search field + filters + meta) is drawn as an OVERLAY on top of the results, not
@@ -324,7 +319,7 @@ private fun ResultsList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = topInset, bottom = bottomBarInset()),
+        contentPadding = PaddingValues(top = topInset, bottom = navigationBarInset()),
     ) {
         var lastBucket: String? = null
         state.results.forEach { hit ->
@@ -368,7 +363,7 @@ private fun ResultsGrid(
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Adaptive(minSize = 116.dp),
-        contentPadding = PaddingValues(top = topInset + 4.dp, bottom = 12.dp + bottomBarInset()),
+        contentPadding = PaddingValues(top = topInset + 4.dp, bottom = 12.dp + navigationBarInset()),
         verticalArrangement = Arrangement.spacedBy(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxSize(),
@@ -391,7 +386,7 @@ private fun IdleState(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = 16.dp, end = 16.dp, top = topInset + 16.dp, bottom = 16.dp + bottomBarInset()),
+            .padding(start = 16.dp, end = 16.dp, top = topInset + 16.dp, bottom = 16.dp + navigationBarInset()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (quickFilters.isNotEmpty()) {
