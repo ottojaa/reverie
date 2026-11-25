@@ -40,7 +40,7 @@ class GalleryThumbnailScreenshotTest {
     @androidx.compose.runtime.Composable
     private fun tile(id: String, mime: String, name: String, seconds: Double?) {
         GalleryThumbnail(
-            documentId = id, mimeType = mime, filename = name, blurhash = null, hasThumbnail = false,
+            documentId = id, mimeType = mime, filename = name, blurhash = null, hasThumbnail = false, isThumbnailReady = false,
             modifier = Modifier.padding(4.dp).size(112.dp), durationSeconds = seconds,
         )
     }

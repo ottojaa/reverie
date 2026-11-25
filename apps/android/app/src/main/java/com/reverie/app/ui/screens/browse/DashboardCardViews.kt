@@ -35,6 +35,7 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.TopTypeDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
@@ -129,6 +130,7 @@ private fun Thumb(doc: DocumentDto, modifier: Modifier) = DocumentThumbnail(
     filename = doc.original_filename,
     blurhash = doc.thumbnail_blurhash,
     hasThumbnail = doc.hasRenderedThumbnail,
+    isThumbnailReady = doc.isThumbnailReady,
     modifier = modifier,
     size = ThumbnailSize.MD,
 )

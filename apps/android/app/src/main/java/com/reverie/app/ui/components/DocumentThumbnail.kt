@@ -51,6 +51,8 @@ fun DocumentThumbnail(
     filename: String,
     blurhash: String?,
     hasThumbnail: Boolean,
+    // Whether the thumbnail job has finished. There can be a thumbnail to ask for before it has.
+    isThumbnailReady: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     // READ_ONLY reads a thumbnail some other screen already cached but never writes one.
@@ -66,6 +68,9 @@ fun DocumentThumbnail(
                     .data(ThumbnailRef(documentId, size))
                     .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
                     .diskCachePolicy(diskCachePolicy)
+                    // A load made before the thumbnail existed has failed, and Coil loads again only
+                    // when the request differs: this makes it differ once the job has finished.
+                    .setParameter("thumbnail_ready", isThumbnailReady)
                     .build(),
                 contentDescription = filename,
                 contentScale = ContentScale.Crop,
@@ -119,6 +124,7 @@ fun GalleryThumbnail(
     filename: String,
     blurhash: String?,
     hasThumbnail: Boolean,
+    isThumbnailReady: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     durationSeconds: Double? = null,
@@ -135,6 +141,7 @@ fun GalleryThumbnail(
             filename = filename,
             blurhash = blurhash,
             hasThumbnail = hasThumbnail,
+            isThumbnailReady = isThumbnailReady,
             size = size,
             modifier = Modifier.matchParentSize(),
         )

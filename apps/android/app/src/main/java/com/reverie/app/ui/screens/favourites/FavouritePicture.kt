@@ -30,6 +30,7 @@ import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
@@ -144,6 +145,7 @@ private fun DocumentPicture(document: DocumentDto, style: FavouritePictureStyle)
         filename = document.original_filename,
         blurhash = document.thumbnail_blurhash,
         hasThumbnail = true,
+        isThumbnailReady = document.isThumbnailReady,
         modifier = Modifier.fillMaxSize(),
         size = style.thumbnail,
         // Favourites never write to disk, so a file that turns private later leaves nothing from here.

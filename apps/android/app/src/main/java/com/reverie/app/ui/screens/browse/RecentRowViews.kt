@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
@@ -178,6 +179,7 @@ private fun Thumbnail(doc: DocumentDto, modifier: Modifier) = DocumentThumbnail(
     filename = doc.original_filename,
     blurhash = doc.thumbnail_blurhash,
     hasThumbnail = doc.hasRenderedThumbnail,
+    isThumbnailReady = doc.isThumbnailReady,
     modifier = modifier,
     size = ThumbnailSize.MD,
 )
