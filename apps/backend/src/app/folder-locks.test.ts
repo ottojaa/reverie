@@ -11,6 +11,8 @@ vi.mock('../queues/trim.queue', () => ({ addTrimJob: vi.fn() }));
 
 import { createAuthService } from '../services/auth.service.js';
 import { trashFolder } from '../services/folders/trash.js';
+import { lockFolders } from '../services/folders/transaction.js';
+import { countAdvisoryLockWaiters } from '../testing/advisory-locks.js';
 import { seedDocument, seedFolder } from '../testing/seed.js';
 import { describeDb, useWorld, type World } from '../testing/tool-world.js';
 import authPlugin from './plugins/auth.js';
@@ -540,6 +542,28 @@ describeDb('folder locks over HTTP', () => {
             expect((await setPrivate(true)).status).toBe(403);
             expect((await session.get('/documents?folder_id=' + hidden.id)).status).toBe(403);
             expect((await newSession().request('PATCH', '/folders/' + top.id, { is_private: true })).status).toBe(200);
+        });
+
+        it('judges two moves sent at once one after the other', async () => {
+            const { alice, db, folders } = world();
+            const { top } = await seedHidingFolder('Raced');
+            const empty = await seedFolder(db, alice, 'Waiting room');
+            const session = newSession();
+            const move = (id: string, parentId: string) => session.request('PATCH', '/folders/' + id, { parent_id: parentId });
+
+            await session.unlock(folders.vault.id);
+
+            // Either move alone is allowed; after the other one, it would open the lock beneath `top`.
+            // The folder lock is held until both wait for it, so both are under way before either writes.
+            const moves = await db.transaction().execute(async (trx) => {
+                await lockFolders(trx, alice);
+                const sent = [move(empty.id, folders.vault.id), move(top.id, empty.id)];
+                await vi.waitFor(async () => expect(await countAdvisoryLockWaiters(trx)).toBe(2));
+
+                return { sent: Promise.all(sent) };
+            });
+
+            expect((await moves.sent).map((response) => response.status).sort()).toEqual([200, 403]);
         });
 
         it('answers 404 for a change to a folder that does not exist, behind an opened lock too', async () => {

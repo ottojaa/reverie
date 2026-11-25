@@ -1,10 +1,9 @@
 import type { OrganizeTargetFolder } from '@reverie/shared';
-import { sql, type Kysely } from 'kysely';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('../../db/kysely', async () => ({ db: (await import('../../testing/db-proxy.js')).dbProxy.db }));
 
-import type { Database } from '../../db/schema.js';
+import { countAdvisoryLockWaiters } from '../../testing/advisory-locks.js';
 import { seedDocument, seedFolder } from '../../testing/seed.js';
 import { describeDb, useWorld } from '../../testing/tool-world.js';
 import { FolderLocks } from '../folder-locks.js';
@@ -14,15 +13,6 @@ import { lockFolders } from './transaction.js';
 
 describeDb('writes that touch documents and folders', () => {
     const ctx = useWorld();
-
-    async function countWaitingForFolderLock(db: Kysely<Database>): Promise<number> {
-        const { rows } = await sql<{ count: number }>`
-            SELECT count(*)::int AS count FROM pg_locks
-            WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
-        `.execute(db);
-
-        return rows[0]!.count;
-    }
 
     /**
      * Runs `work` while another folder write holds the user's folder lock, and has that write update the document
@@ -36,7 +26,7 @@ describeDb('writes that touch documents and folders', () => {
             await lockFolders(trx, alice);
             running = work();
             running.catch(() => undefined);
-            await vi.waitFor(async () => expect(await countWaitingForFolderLock(trx)).toBe(1));
+            await vi.waitFor(async () => expect(await countAdvisoryLockWaiters(trx)).toBe(1));
             await trx.updateTable('documents').set({ updated_at: new Date() }).where('id', '=', documentId).execute();
         });
 

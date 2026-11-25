@@ -1,8 +1,10 @@
 import { FolderLockedError } from '@reverie/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Kysely } from 'kysely';
 import type { JwtPayload } from '../app/plugins/auth.js';
 import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
+import type { Database } from '../db/schema.js';
 import type { FolderNode, FolderTree } from './folders/snapshot.js';
 import { loadLockMap, toLockMap, type LockMap } from './privacy.js';
 
@@ -122,18 +124,25 @@ function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId
     }
 }
 
-export async function fetchHasPassword(userId: string): Promise<boolean> {
-    const user = await db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
+export async function fetchHasPassword(userId: string, conn: Kysely<Database> = db): Promise<boolean> {
+    const user = await conn.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
 
     return !!user?.password_hash;
 }
 
 /**
  * The lock state of the request's user: their private folders and which locks this session opened. A caller that
- * already read the folder tree passes it, so the locks describe the same moment and the table is read once.
+ * already read the folder tree passes it, so the locks describe the same moment and the table is read once. One
+ * inside a transaction passes that too, so no second connection is needed while it holds locks.
  */
-export async function loadFolderLocks(fastify: FastifyInstance, request: FastifyRequest, userId: string, tree?: FolderTree<FolderNode>): Promise<FolderLocks> {
-    const [lockOf, enforced] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId), fetchHasPassword(userId)]);
+export async function loadFolderLocks(
+    fastify: FastifyInstance,
+    request: FastifyRequest,
+    userId: string,
+    tree?: FolderTree<FolderNode>,
+    conn: Kysely<Database> = db,
+): Promise<FolderLocks> {
+    const [lockOf, enforced] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId, conn), fetchHasPassword(userId, conn)]);
 
     return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId)), enforced);
 }

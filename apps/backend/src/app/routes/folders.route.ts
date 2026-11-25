@@ -19,6 +19,7 @@ import { serializeFolder } from '../../services/folder-serializer';
 import { loadFolderTree } from '../../services/folders/load';
 import { EMPTY_ROLLUP, loadFolderRollups, type FolderRollup } from '../../services/folders/rollup';
 import type { FolderTree } from '../../services/folders/snapshot';
+import { inFolderTransaction } from '../../services/folders/transaction';
 import { trashFolder } from '../../services/folders/trash';
 import { createFolder, reorderFolders, toSharedParentId, updateFolder } from '../../services/folders/writes';
 
@@ -237,11 +238,15 @@ export default async function (fastify: FastifyInstance) {
         async function (request) {
             const userId = request.user.id;
             const { id } = request.params;
-            const { tree, locks } = await loadTreeAndLocks(request);
 
-            assertMayChange(tree, locks, id, request.body);
+            // Checked and written under the folder lock, so no other change to the tree comes in between.
+            const folder = await inFolderTransaction(userId, async (trx) => {
+                const tree = await loadFolderTree(userId, trx);
 
-            const folder = await updateFolder(userId, id, request.body);
+                assertMayChange(tree, await loadFolderLocks(fastify, request, userId, tree, trx), id, request.body);
+
+                return updateFolder(userId, id, request.body, trx);
+            });
 
             return serializeFolder(folder, await loadFolderLocks(fastify, request, userId));
         },
