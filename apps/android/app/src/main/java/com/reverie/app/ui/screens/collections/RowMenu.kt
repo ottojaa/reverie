@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,10 +21,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.reverie.app.ui.components.FavouriteMenuItem
 
 /** The ⋮ button of a collection or folder row, and the menu it opens. */
 @Composable
 fun RowMenu(
+    isStarred: Boolean,
+    onToggleStar: () -> Unit,
     isPrivate: Boolean,
     onNewFolder: (() -> Unit)?,
     onEdit: () -> Unit,
@@ -39,14 +43,28 @@ fun RowMenu(
             Icon(Icons.Outlined.MoreVert, contentDescription = "Actions", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            RowMenuItems(isPrivate, onNewFolder, onEdit, onTogglePrivate, onDelete, onDone = { open = false })
+            RowMenuItems(
+                isStarred = isStarred,
+                onToggleStar = onToggleStar,
+                isPrivate = isPrivate,
+                onNewFolder = onNewFolder,
+                onEdit = onEdit,
+                onTogglePrivate = onTogglePrivate,
+                onDelete = onDelete,
+                onDone = { open = false },
+            )
         }
     }
 }
 
-/** The menu's items: New folder (collections only), Edit, Make private / Remove from private, Delete. */
+/**
+ * The menu's items: the favourite toggle, then New folder (collections only), Edit,
+ * Make private / Remove from private and Delete.
+ */
 @Composable
 fun RowMenuItems(
+    isStarred: Boolean,
+    onToggleStar: () -> Unit,
     isPrivate: Boolean,
     onNewFolder: (() -> Unit)?,
     onEdit: () -> Unit,
@@ -54,6 +72,8 @@ fun RowMenuItems(
     onDelete: () -> Unit,
     onDone: () -> Unit = {},
 ) {
+    FavouriteMenuItem(isStarred, onClick = { onDone(); onToggleStar() })
+    HorizontalDivider()
     if (onNewFolder != null) {
         DropdownMenuItem(
             text = { Text("New folder") },

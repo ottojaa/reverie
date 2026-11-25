@@ -55,6 +55,18 @@ export type Folder = Selectable<FoldersTable>;
 export type NewFolder = Insertable<FoldersTable>;
 export type FolderUpdate = Updateable<FoldersTable>;
 
+// Favourites table: one starred document or folder of a user (exactly one of the two ids is set)
+export interface FavouritesTable {
+    id: Generated<string>;
+    user_id: string;
+    document_id: string | null;
+    folder_id: string | null;
+    starred_at: ColumnType<Date, Date | undefined, never>;
+}
+
+export type Favourite = Selectable<FavouritesTable>;
+export type NewFavourite = Insertable<FavouritesTable>;
+
 // Documents table
 export interface DocumentsTable {
     id: Generated<string>;
@@ -481,4 +493,5 @@ export interface Database {
     duplicate_edges: DuplicateEdgesTable;
     document_duplicate_scans: DocumentDuplicateScansTable;
     duplicate_dismissals: DuplicateDismissalsTable;
+    favourites: FavouritesTable;
 }

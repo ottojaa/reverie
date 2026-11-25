@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.ui.components.SectionIcon
+import com.reverie.app.ui.components.StarIcon
 
 /** One collection: its header line, then its folders in a card, or the locked / empty stand-in. */
 @Composable
@@ -41,24 +42,32 @@ fun CollectionSection(
     actions: CollectionsActions,
     modifier: Modifier = Modifier,
     folderCount: Int = collection.children.size,
+    starredIds: Set<String> = emptySet(),
 ) {
     val accent = collectionAccent(collection.id).current()
 
     Column(modifier.padding(top = 18.dp)) {
-        CollectionHeader(collection, folderCount, accent, expanded, actions)
+        CollectionHeader(collection, folderCount, accent, expanded, collection.id in starredIds, actions)
         Box(Modifier.padding(top = 6.dp)) {
             when {
                 collection.locked -> LockedCollectionCard(accent, onClick = { actions.onUnlock(collection) })
                 !expanded -> Unit
                 collection.children.isEmpty() -> AddFolderButton(onClick = { actions.onNewFolder(collection.id) })
-                else -> FolderGroupCard(collection.children, covers, actions, accent)
+                else -> FolderGroupCard(collection.children, covers, actions, accent, starredIds = starredIds)
             }
         }
     }
 }
 
 @Composable
-private fun CollectionHeader(collection: FolderWithChildren, folderCount: Int, accent: Color, expanded: Boolean, actions: CollectionsActions) {
+private fun CollectionHeader(
+    collection: FolderWithChildren,
+    folderCount: Int,
+    accent: Color,
+    expanded: Boolean,
+    isStarred: Boolean,
+    actions: CollectionsActions,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -78,6 +87,10 @@ private fun CollectionHeader(collection: FolderWithChildren, folderCount: Int, a
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
+            if (isStarred) {
+                val starModifier = Modifier.align(Alignment.CenterVertically).padding(start = 6.dp).size(14.dp)
+                StarIcon(filled = true, contentDescription = "Favourite", modifier = starModifier)
+            }
             Text(
                 collectionSubtitle(collection, folderCount),
                 style = MaterialTheme.typography.bodySmall,
@@ -88,6 +101,8 @@ private fun CollectionHeader(collection: FolderWithChildren, folderCount: Int, a
         }
         PadlockOrChevron(collection, expanded)
         RowMenu(
+            isStarred = isStarred,
+            onToggleStar = { actions.onToggleStar(collection.id) },
             isPrivate = collection.is_private,
             onNewFolder = { actions.onNewFolder(collection.id) },
             onEdit = { actions.onEdit(collection) },

@@ -222,26 +222,28 @@ fun MosaicSectionView(
     selected: (DocumentDto) -> Boolean,
     onClick: (DocumentDto) -> Unit,
     onLongClick: (DocumentDto) -> Unit,
+    starred: (DocumentDto) -> Boolean = { false },
 ) {
+    val card: @Composable (MosaicTile) -> Unit = { MosaicCard(it, selected, starred, onClick, onLongClick) }
     when (section) {
         is MosaicRow -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
-            section.tiles.forEach { tile -> MosaicCard(tile, selected, onClick, onLongClick) }
+            section.tiles.forEach { tile -> card(tile) }
         }
         is MosaicBlock -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
             // Fillers pack into columns of `blockRows` stacked cells, beside the feature tile.
             val fillerColumns: @Composable () -> Unit = {
                 section.fillers.chunked(section.blockRows).forEach { column ->
                     Column(verticalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
-                        column.forEach { tile -> MosaicCard(tile, selected, onClick, onLongClick) }
+                        column.forEach { tile -> card(tile) }
                     }
                 }
             }
             if (section.featureOnLeft) {
-                MosaicCard(section.feature, selected, onClick, onLongClick)
+                card(section.feature)
                 fillerColumns()
             } else {
                 fillerColumns()
-                MosaicCard(section.feature, selected, onClick, onLongClick)
+                card(section.feature)
             }
         }
     }
@@ -251,6 +253,7 @@ fun MosaicSectionView(
 private fun MosaicCard(
     tile: MosaicTile,
     selected: (DocumentDto) -> Boolean,
+    starred: (DocumentDto) -> Boolean,
     onClick: (DocumentDto) -> Unit,
     onLongClick: (DocumentDto) -> Unit,
 ) {
@@ -262,6 +265,7 @@ private fun MosaicCard(
         onClick = { onClick(tile.doc) },
         onLongClick = { onLongClick(tile.doc) },
         thumbnailSize = thumbnailSize,
+        isStarred = starred(tile.doc),
         modifier = Modifier.width(tile.width.dp).height(tile.height.dp),
     )
 }

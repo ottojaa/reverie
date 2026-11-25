@@ -48,6 +48,7 @@ class BrowseViewModel @Inject constructor(
     val state: StateFlow<DashboardState> get() = model.state
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
+    val favourites get() = session.favourites
     val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
 
     init {
@@ -55,6 +56,8 @@ class BrowseViewModel @Inject constructor(
     }
 
     fun refresh(initial: Boolean = false) {
+        // Pulling on the library root re-reads its favourites strip too.
+        if (folderId == null) favourites.load()
         session.beginRefresh()
         model.refresh(initial)
     }

@@ -10,10 +10,13 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.UpdateFolderRequest
 import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.repository.AuthRepository
+import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.components.FolderUnlocker
+import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.favourites.FavouriteDeps
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -44,6 +47,7 @@ data class CollectionsUiState(
     val isOffline: Boolean = false,
     /** A message to show in a dialog until dismissed (e.g. the no-password hint). */
     val notice: String? = null,
+    val favourites: FavouritesState = FavouritesState(),
 ) {
     // While filtering, everything is force-expanded so matches are visible.
     fun isExpanded(id: String): Boolean = filter.isNotBlank() || id !in collapsedIds
@@ -55,7 +59,13 @@ class CollectionsViewModel @Inject constructor(
     private val vaultRepository: VaultRepository,
     authRepository: AuthRepository,
     connectivity: ConnectivityMonitor,
+    private val favouriteDeps: FavouriteDeps,
 ) : ViewModel() {
+
+    val favourites = FavouriteController(favouriteDeps, viewModelScope)
+
+    /** A collection another screen, or the shelf, asked to see here; null once it is on screen. */
+    val focusRequest: StateFlow<String?> = favouriteDeps.collectionFocus.requested
 
     private val collapsed = MutableStateFlow<Set<String>>(emptySet())
     private val filter = MutableStateFlow("")
@@ -77,7 +87,9 @@ class CollectionsViewModel @Inject constructor(
         afterUnlock = null
     }
 
-    private val chrome = combine(collapsed, filter, notice, refreshing) { c, f, n, r -> Chrome(c, f, n, r) }
+    private val chrome = combine(collapsed, filter, notice, refreshing, favourites.state) { c, f, n, r, s ->
+        Chrome(c, f, n, r, s)
+    }
 
     val uiState: StateFlow<CollectionsUiState> = combine(
         folderRepository.observeTree(),
@@ -100,13 +112,24 @@ class CollectionsViewModel @Inject constructor(
             storageQuota = user?.storage_quota_bytes ?: 0,
             isOffline = !online,
             notice = chrome.notice,
+            favourites = chrome.favourites,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CollectionsUiState())
 
-    private data class Chrome(val collapsed: Set<String>, val filter: String, val notice: String?, val refreshing: Boolean)
+    private data class Chrome(
+        val collapsed: Set<String>,
+        val filter: String,
+        val notice: String?,
+        val refreshing: Boolean,
+        val favourites: FavouritesState,
+    )
 
-    /** Quietly refetch the tree (on opening the tab and on returning to it); a failure leaves the cached one showing. */
+    /**
+     * Quietly refetch the tree and the favourites (on opening the tab and on returning to it); a
+     * failure leaves what is cached showing.
+     */
     fun refresh() {
+        favourites.load()
         viewModelScope.launch { runCatching { folderRepository.refresh() } }
     }
 
@@ -116,6 +139,7 @@ class CollectionsViewModel @Inject constructor(
         viewModelScope.launch {
             refreshing.value = true
             runCatching { folderRepository.refresh() }
+            favourites.refresh()
             refreshing.value = false
         }
     }
@@ -143,6 +167,16 @@ class CollectionsViewModel @Inject constructor(
 
     fun toggleExpand(id: String) = collapsed.update {
         if (id in it) it - id else it + id
+    }
+
+    /** Make sure a requested collection can be scrolled to: no filter hiding it, and opened out. */
+    fun reveal(id: String) {
+        filter.value = ""
+        collapsed.update { it - id }
+    }
+
+    fun focusShown() {
+        favouriteDeps.collectionFocus.requested.value = null
     }
 
     fun setFilter(text: String) {
@@ -181,6 +215,7 @@ class CollectionsViewModel @Inject constructor(
                 )
                 if (isPrivate) folderRepository.update(created.id, UpdateFolderRequest(is_private = true))
             }.onSuccess { if (isPrivate) warnIfNoPassword() }
+            favourites.load()
         }
     }
 
@@ -192,6 +227,7 @@ class CollectionsViewModel @Inject constructor(
                     UpdateFolderRequest(name = name, emoji = emoji ?: "", description = description ?: ""),
                 )
             }
+            favourites.load()
         }
     }
 
@@ -202,7 +238,11 @@ class CollectionsViewModel @Inject constructor(
     fun setPrivate(id: String, name: String, isPrivate: Boolean) {
         viewModelScope.launch {
             runCatching { folderRepository.update(id, UpdateFolderRequest(is_private = isPrivate)) }
-                .onSuccess { if (isPrivate) warnIfNoPassword() }
+                .onSuccess {
+                    // The shelf must drop a newly private folder's name at once.
+                    favourites.load()
+                    if (isPrivate) warnIfNoPassword()
+                }
                 .onFailure { onPrivacyChangeFailed(it, id, name, isPrivate) }
         }
     }
@@ -220,7 +260,10 @@ class CollectionsViewModel @Inject constructor(
     }
 
     fun delete(id: String) {
-        viewModelScope.launch { runCatching { folderRepository.delete(id) } }
+        viewModelScope.launch {
+            runCatching { folderRepository.delete(id) }
+            favourites.load()
+        }
     }
 
     private companion object {

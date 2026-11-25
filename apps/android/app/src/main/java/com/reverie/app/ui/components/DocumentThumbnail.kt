@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -122,6 +123,7 @@ fun GalleryThumbnail(
     size: ThumbnailSize = ThumbnailSize.MD,
     durationSeconds: Double? = null,
     largeVideoTile: Boolean = false,
+    isStarred: Boolean = false,
 ) {
     val kind = DocumentKind.of(mimeType)
     val isVideo = kind == DocumentKind.VIDEO
@@ -136,12 +138,18 @@ fun GalleryThumbnail(
             size = size,
             modifier = Modifier.matchParentSize(),
         )
-        if (isVideo && largeVideoTile) VideoCornerIcon(Modifier.align(Alignment.TopEnd).padding(8.dp))
         if (isVideo && !largeVideoTile) VideoPlayBadge(Modifier.align(Alignment.Center))
-        // A previewable document (a rendered PDF/office page) still needs a type marker; files with
-        // no preview already show their icon + name in the fill, so a corner chip would be redundant.
-        if (!isImage && !isVideo && hasThumbnail) {
-            FileTypeBadge(mime = mimeType, filename = filename, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+        // The top corner, shared: the favourite star, then a large video's play icon or a type chip.
+        Row(
+            modifier = Modifier.align(Alignment.TopEnd).padding(if (isVideo && largeVideoTile) 8.dp else 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isStarred) StarredBadge()
+            if (isVideo && largeVideoTile) VideoCornerIcon()
+            // A previewable document (a rendered PDF/office page) still needs a type marker; files with
+            // no preview already show their icon + name in the fill, so a corner chip would be redundant.
+            if (!isImage && !isVideo && hasThumbnail) FileTypeBadge(mime = mimeType, filename = filename)
         }
         // A video's length reads at a glance in the corner, Google-Photos style.
         if (isVideo && durationSeconds != null) {

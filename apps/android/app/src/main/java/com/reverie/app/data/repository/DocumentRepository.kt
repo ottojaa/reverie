@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
@@ -98,6 +100,11 @@ class DocumentRepository @Inject constructor(
     fun announceContentChanged() {
         contentChangesFlow.tryEmit(Unit)
     }
+
+    private val deletedIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Documents deleted from this device in this process, for lists that were snapshotted before. */
+    val deletedIds: StateFlow<Set<String>> = deletedIdsFlow.asStateFlow()
 
     /** The last summary [fetchSummary] read for [folderId] in this process; null before the first one. */
     fun summary(folderId: String?): Flow<DocumentSummaryDto?> = summaries.map { it[folderId] }.distinctUntilChanged()
@@ -260,6 +267,7 @@ class DocumentRepository @Inject constructor(
             fileUrls.remove(it)
             hlsUrls.remove(it)
         }
+        deletedIdsFlow.update { it + ids }
         announceContentChanged()
     }
 

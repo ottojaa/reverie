@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.ui.components.StarIcon
 
 internal val CARD_SHAPE = RoundedCornerShape(18.dp)
 internal val ROW_MIN_HEIGHT = 64.dp
@@ -36,6 +37,7 @@ fun FolderGroupCard(
     actions: CollectionsActions,
     accent: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
+    starredIds: Set<String> = emptySet(),
 ) {
     Column(
         modifier
@@ -46,7 +48,7 @@ fun FolderGroupCard(
     ) {
         folders.forEachIndexed { index, folder ->
             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHighest)
-            FolderRow(folder, covers[folder.id], accent, actions)
+            FolderRow(folder, covers[folder.id], accent, actions, isStarred = folder.id in starredIds)
         }
     }
 }
@@ -59,6 +61,7 @@ fun FolderRow(
     accent: androidx.compose.ui.graphics.Color,
     actions: CollectionsActions,
     modifier: Modifier = Modifier,
+    isStarred: Boolean = false,
 ) {
     Row(
         modifier
@@ -70,7 +73,7 @@ fun FolderRow(
     ) {
         if (folder.locked) LockedCover(accent) else CoverMosaic(cover)
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp)) {
-            FolderTitle(folder)
+            FolderTitle(folder, isStarred)
             Text(
                 text = if (folder.locked) "Locked · Tap to unlock" else folderSubtitle(cover, folder.document_count),
                 style = MaterialTheme.typography.bodySmall,
@@ -80,6 +83,8 @@ fun FolderRow(
             )
         }
         RowMenu(
+            isStarred = isStarred,
+            onToggleStar = { actions.onToggleStar(folder.id) },
             isPrivate = folder.is_private,
             onNewFolder = null,
             onEdit = { actions.onEdit(folder) },
@@ -90,7 +95,7 @@ fun FolderRow(
 }
 
 @Composable
-private fun FolderTitle(folder: FolderWithChildren) {
+private fun FolderTitle(folder: FolderWithChildren, isStarred: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = folder.name,
@@ -99,6 +104,9 @@ private fun FolderTitle(folder: FolderWithChildren) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
+        if (isStarred) {
+            StarIcon(filled = true, contentDescription = "Favourite", modifier = Modifier.padding(start = 6.dp).size(14.dp))
+        }
         if (!folder.is_private) return@Row
         // Private and open: an open padlock says it is readable this session. Closed: a shut one.
         Icon(
