@@ -164,12 +164,40 @@ images the classifier has not judged, private folders and the trash never reach 
 included. A local server reports tokens when it can; its cost is recorded as unknown, never invented. The
 agent and `/mcp` are not part of this. See [ROADMAP.md](ROADMAP.md).
 
+## MCP
+
+Claude Code, Claude Desktop and other MCP clients can work on your library through `/mcp` (Streamable HTTP).
+Create a token under **Settings → Library access (MCP)**; the dialog shows the command for Claude Code:
+
+```bash
+claude mcp add --transport http reverie https://api.example.com/mcp --header "Authorization: Bearer <token>"
+```
+
+The tools search and read documents, and tag, move, rename and add them. A token sees only its own user's
+library, never private folders or the trash, and there is no delete tool. Every write is logged and `undo_write`
+reverses it.
+
+Two tools add new documents. Both store and process them like a web upload, never overwrite a file (a taken name
+gets ` (1)`), and undoing them moves the new documents to the trash:
+
+- **`upload_local_files`** adds files from the computer the client runs on, so it needs a client with a shell, such
+  as Claude Code. MCP calls cannot carry file contents, so the tool answers with a `curl` command (curl 7.81 or
+  newer) that sends 1–50 files to `POST /mcp/upload`. It works once, within 15 minutes, for the one folder it was
+  made for. Ask for example: _"upload ~/Downloads/receipt.pdf to Receipts"_.
+- **`save_text_document`** saves text the model wrote (`.md`, `.txt`, `.csv` or `.json`, at most 256 KiB) as a new
+  document. It works in any client, Claude Desktop and the in-app agent included.
+
+The upload command points at `API_PUBLIC_URL` when it is set, otherwise at the address the `/mcp` request came in
+on (`X-Forwarded-Proto` and `X-Forwarded-Host`, or `Host`). **If your proxy serves the API under a path prefix**
+(say `https://example.com/api`), set `API_PUBLIC_URL` to that full address: the prefix cannot be told from the
+request.
+
 ## In-app agent
 
 The admin gets an **Agent** page in the web app: a chat with Claude working on their library. It is the
 stock Claude Code binary (`claude -p`) running in its own `reverie-agent` container, and its only tools are
 Reverie's `/mcp` (the same tool registry, with locked and trashed items hidden, photos as details only, no
-delete). Reverie runs no agent loop and uses no Anthropic API key for it: the container signs in once with
+delete, and no `upload_local_files`, since it has no files of its own). Reverie runs no agent loop and uses no Anthropic API key for it: the container signs in once with
 the admin's own Claude plan, so it is meant for a single admin who owns that plan. Other users never see it.
 Every write shows what changed and an **Undo** button.
 

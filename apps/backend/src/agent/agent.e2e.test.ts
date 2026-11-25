@@ -223,7 +223,7 @@ describeDb('in-app agent, end to end', () => {
                 '--tools',
                 '',
                 '--disallowedTools',
-                'Bash,BashOutput,KillShell,Read,Write,Edit,MultiEdit,NotebookEdit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite,Skill,SlashCommand,ExitPlanMode',
+                'Bash,BashOutput,KillShell,Read,Write,Edit,MultiEdit,NotebookEdit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite,Skill,SlashCommand,ExitPlanMode,mcp__reverie__upload_local_files',
                 '--allowedTools',
                 'mcp__reverie__*',
                 '--permission-mode',

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { lockAuditEntry, markUndone } from './audit';
+import { saveTextDocument, undoAddDocuments, uploadLocalFiles } from './documents-add';
 import { moveDocuments, renameDocument, undoMove, undoRenameDocument } from './documents-write';
 import { createFolder, renameFolder, undoCreateFolder, undoRenameFolder } from './folders-write';
 import { addTags, removeTags, undoAddTags, undoRemoveTags } from './tags';
@@ -15,6 +16,8 @@ const UNDOERS: Record<string, Undoer> = {
     [createFolder.name]: undoCreateFolder,
     [renameFolder.name]: undoRenameFolder,
     [renameDocument.name]: undoRenameDocument,
+    [uploadLocalFiles.name]: undoAddDocuments,
+    [saveTextDocument.name]: undoAddDocuments,
 };
 
 const undoSchema = z.object({
