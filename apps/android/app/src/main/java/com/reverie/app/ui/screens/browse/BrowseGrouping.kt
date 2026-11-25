@@ -80,7 +80,7 @@ fun dashboardSubtitle(total: Int): String = count(total, "file", "files")
  * @param total null while unknown, which leaves only the description.
  * @param matching the selected chip's count; null under All.
  */
-fun folderSubtitle(total: Int?, matching: Int?, description: String?): String {
+fun folderPageSubtitle(total: Int?, matching: Int?, description: String?): String {
     if (total == null) return description.orEmpty()
     val held = count(total, "file", "files")
     val counted = if (matching == null) held else "$matching of $held"

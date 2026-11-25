@@ -156,7 +156,7 @@ class FolderModelTest {
 
         assertTrue(locked.chips.isEmpty())
         assertTrue(locked.feed.documents.documents.isEmpty())
-        assertEquals("Trips", folderSubtitle(locked.total, locked.matching, "Trips"))
+        assertEquals("Trips", folderPageSubtitle(locked.total, locked.matching, "Trips"))
         assertEquals(f.state, f.state.unlessLocked(false))
     }
 

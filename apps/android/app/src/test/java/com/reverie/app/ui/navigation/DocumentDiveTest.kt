@@ -15,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -24,6 +26,7 @@ import androidx.navigation.navArgument
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.settings.FolderViewMode
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.PhotoResultTile
@@ -41,6 +44,8 @@ import com.reverie.app.ui.screens.browse.RecentActions
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.browse.routeOf
+import com.reverie.app.ui.screens.favourites.FavouriteDestination
+import com.reverie.app.ui.screens.favourites.FavouriteFixtures
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -83,6 +88,13 @@ class DocumentDiveTest {
     private val imageKeys = mutableMapOf<String, String>()
     private var folderView by mutableStateOf(FolderViewMode.GRID)
 
+    /** The dashboard's strip: the image and the video, which also have rows in Recently added. */
+    private val starred = documents.take(2).map { FavouriteFixtures.file(it.copy(original_filename = "starred ${it.id}")) }
+    private var favourites by mutableStateOf(emptyList<FavouriteDto>())
+
+    /** The document the viewer has been swiped to; null while it shows the one it opened on. */
+    private var swipedTo by mutableStateOf<String?>(null)
+
     @Composable
     private fun Host() {
         // Loaded before any Screen object, as MainShell does (see Screen.bottomNavItems).
@@ -124,7 +136,8 @@ class DocumentDiveTest {
                 ),
             ) { entry ->
                 val id = entry.arguments?.getString("id") ?: ""
-                Recorded(Routes.DOCUMENT) { Box(Modifier.fillMaxSize().documentSharedBounds(id)) }
+                // As in the pager, the page on screen carries the key.
+                Recorded(Routes.DOCUMENT) { Box(Modifier.fillMaxSize().documentSharedBounds(swipedTo ?: id)) }
             }
         }
     }
@@ -140,8 +153,12 @@ class DocumentDiveTest {
         DashboardBody(
             state = DashboardState(recent = FeedState(FeedDocuments(documents, total = 3, hasMore = false, fetched = true))),
             listState = rememberLazyListState(), contentPadding = PaddingValues(0.dp), today = today, zone = zone,
-            actions = DashboardActions(onOpenKind = {}, recent = RecentActions(emptySet(), {}, {}, {}, {})),
-            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
+            actions = DashboardActions(
+                onOpenKind = {},
+                recent = RecentActions(emptySet(), {}, {}, {}, {}),
+                onOpenFavourite = { nav.openFavourite(FavouriteDestination.Document(it.id, null)) },
+            ),
+            focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {}, favourites = favourites,
         )
     }
 
@@ -176,9 +193,12 @@ class DocumentDiveTest {
     }
 
     /** Runs [navigate] frame by frame and says whether a shared element moved between the screens on the way. */
-    private fun morphs(navigate: NavHostController.() -> Unit): Boolean {
+    private fun morphs(navigate: NavHostController.() -> Unit): Boolean =
+        morphsAfter { compose.runOnUiThread { nav.navigate() } }
+
+    private fun morphsAfter(act: () -> Unit): Boolean {
         compose.mainClock.autoAdvance = false
-        compose.runOnUiThread { nav.navigate() }
+        act()
         var moved = false
         repeat(TRANSITION_FRAMES) {
             compose.mainClock.advanceTimeByFrame()
@@ -281,6 +301,33 @@ class DocumentDiveTest {
         val folderKey = imageKeys.getValue(Routes.FOLDER)
         assertEquals(folderKey, imageKeys[Routes.DOCUMENT])
         assertNotEquals(dashboardKey, folderKey)
+    }
+
+    /** Taps the strip's tile for [documentId], once the same document's row below it is seen to dive. */
+    private fun openFromStrip(documentId: String) {
+        favourites = starred
+        compose.setContent { Host() }
+        // Without a row on screen to fly, the assertions that follow would hold for any key.
+        assertDives("image")
+        assertDives("video")
+        val tile = compose.onNodeWithText("starred $documentId")
+        assertFalse("a dashboard row flew into the viewer", morphsAfter { tile.performClick() })
+        assertEquals(Routes.DOCUMENT, currentRoute())
+    }
+
+    @Test fun `a starred document opened from the dashboard strip moves none of the dashboard's rows`() {
+        openFromStrip("image")
+        assertNotEquals(imageKeys[Screen.Files.route], imageKeys[Routes.DOCUMENT])
+        assertFalse("the viewer shrank into a dashboard row", morphs { popBackStack() })
+        assertEquals(Screen.Files.route, currentRoute())
+    }
+
+    @Test fun `swiping to another starred document and going back moves none of the dashboard's rows`() {
+        openFromStrip("image")
+        swipedTo = "video"
+        compose.waitForIdle()
+        assertFalse("the viewer shrank into a dashboard row", morphs { popBackStack() })
+        assertEquals(Screen.Files.route, currentRoute())
     }
 
     private companion object {

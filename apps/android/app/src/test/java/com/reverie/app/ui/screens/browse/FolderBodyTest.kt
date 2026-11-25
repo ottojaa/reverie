@@ -186,7 +186,7 @@ class FolderBodyTest {
         documents = emptyList()
         show()
 
-        compose.onNodeWithText("No documents yet").assertIsDisplayed()
+        compose.onNodeWithText("This folder is empty").assertIsDisplayed()
         compose.onNodeWithText("Upload").performClick()
 
         assertEquals(listOf("upload"), calls)

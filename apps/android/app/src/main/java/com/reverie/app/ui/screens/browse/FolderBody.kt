@@ -53,7 +53,8 @@ fun FolderBody(
         return
     }
     if (documents.fetched && documents.documents.isEmpty()) {
-        EmptyList(emptyTitle(state.selected), slot.contentPadding, slot.onUpload)
+        val title = state.selected?.let { emptyTitle(it) } ?: "This folder is empty"
+        EmptyList(title, slot.contentPadding, slot.onUpload)
         return
     }
     scrollPositions.SaveableStateProvider(state.selected?.name ?: "ALL") {
@@ -88,7 +89,7 @@ fun FolderBody(
                 if (isGrid) {
                     FolderTile(doc, actions)
                 } else {
-                    FolderRow(doc, folderRowMeta(doc, state.selected, today, zone), actions)
+                    FolderDocumentRow(doc, folderRowMeta(doc, state.selected, today, zone), actions)
                 }
             }
         }

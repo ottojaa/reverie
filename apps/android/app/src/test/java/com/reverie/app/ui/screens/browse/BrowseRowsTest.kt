@@ -106,11 +106,11 @@ class BrowseRowsTest {
 
     @Test fun `the dashboard's subtitle counts the scope's files`() {
         assertEquals("248 files", dashboardSubtitle(248))
-        assertEquals("1 file", folderSubtitle(1, null, ""))
-        assertEquals("Trips · 3 files", folderSubtitle(3, null, "Trips"))
-        assertEquals("4 of 31 files", folderSubtitle(31, 4, null))
-        assertEquals("Trips · 1 of 1 file", folderSubtitle(1, 1, "Trips"))
-        assertEquals("Trips", folderSubtitle(null, null, "Trips"))
+        assertEquals("1 file", folderPageSubtitle(1, null, ""))
+        assertEquals("Trips · 3 files", folderPageSubtitle(3, null, "Trips"))
+        assertEquals("4 of 31 files", folderPageSubtitle(31, 4, null))
+        assertEquals("Trips · 1 of 1 file", folderPageSubtitle(1, 1, "Trips"))
+        assertEquals("Trips", folderPageSubtitle(null, null, "Trips"))
     }
 
     @Test fun `a kind screen's subtitle names its total and the scope`() {

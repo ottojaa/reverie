@@ -96,7 +96,7 @@ class FolderScreenshotTest {
         val actions = RowActions(selected = { it.id in selectedIds }, onClick = {}, onLongClick = {}, starred = { it.id in starred })
         Column(Modifier.fillMaxSize()) {
             BrowseHeader(
-                title = BrowseTitle(name, folderSubtitle(state.total, state.matching, description), isFolder = true, compact = true),
+                title = BrowseTitle(name, folderPageSubtitle(state.total, state.matching, description), isFolder = true, compact = true),
                 processingCount = 0, onProcessingClick = {}, onCanvas = {}, onBack = {},
                 actions = { ViewSwitch(mode) {} },
                 below = { FolderChipRow(state.chips, state.selected) {} },
