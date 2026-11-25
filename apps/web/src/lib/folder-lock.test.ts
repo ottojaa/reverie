@@ -14,7 +14,7 @@ describe('toFolderLockState', () => {
         expect(toFolderLockState({ is_private: false, locked: false })).toBe('none');
     });
 
-    it('treats a folder locked through its collection as locked even without its own flag', () => {
+    it('treats a folder locked through a folder above it as locked even without its own flag', () => {
         expect(toFolderLockState({ is_private: false, locked: true })).toBe('locked');
     });
 });

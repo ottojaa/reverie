@@ -22,15 +22,12 @@ export function useOrganize() {
     return useContext(OrganizeContext);
 }
 
-export interface SortableTreeHandlers {
+/** What the sidebar's folder tree does with the drags of the layout's drag context. */
+export interface TreeDragHandlers {
     handleDragStart: (event: DragStartEvent) => void;
     handleDragOver: (event: DragOverEvent) => void;
-    handleDragMove: (...args: unknown[]) => void;
     handleDragEnd: (event: DragEndEvent) => void;
     handleDragCancel: (event: DragCancelEvent) => void;
-    resetState: () => void;
-    sensors?: ReturnType<typeof useDefaultSensors>;
-    announcements?: Announcements;
 }
 
 interface LayoutProps {
@@ -40,7 +37,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [organizeOpen, setOrganizeOpen] = useState(false);
-    const sortableTreeHandlersRef = useRef<SortableTreeHandlers | null>(null);
+    const treeDragHandlersRef = useRef<TreeDragHandlers | null>(null);
     const mainRef = useRef<HTMLElement | null>(null);
     const defaultSensors = useDefaultSensors();
 
@@ -76,19 +73,14 @@ export function Layout({ children }: LayoutProps) {
                         sensors={defaultSensors}
                         collisionDetection={pointerWithin}
                         measuring={dndMeasuring}
-                        accessibility={{
-                            get announcements() {
-                                return sortableTreeHandlersRef.current?.announcements ?? defaultAnnouncements;
-                            },
-                        }}
-                        onDragStart={(e) => sortableTreeHandlersRef.current?.handleDragStart?.(e)}
-                        onDragOver={(e) => sortableTreeHandlersRef.current?.handleDragOver?.(e)}
-                        onDragMove={(e) => sortableTreeHandlersRef.current?.handleDragMove?.(e)}
-                        onDragEnd={(e) => sortableTreeHandlersRef.current?.handleDragEnd?.(e)}
-                        onDragCancel={(e) => sortableTreeHandlersRef.current?.handleDragCancel?.(e)}
+                        accessibility={{ announcements: defaultAnnouncements }}
+                        onDragStart={(e) => treeDragHandlersRef.current?.handleDragStart(e)}
+                        onDragOver={(e) => treeDragHandlersRef.current?.handleDragOver(e)}
+                        onDragEnd={(e) => treeDragHandlersRef.current?.handleDragEnd(e)}
+                        onDragCancel={(e) => treeDragHandlersRef.current?.handleDragCancel(e)}
                     >
                         <div className="flex h-dvh overflow-hidden bg-background">
-                            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} sortableTreeHandlersRef={sortableTreeHandlersRef} />
+                            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} treeDragHandlersRef={treeDragHandlersRef} />
                             <div className="flex flex-1 flex-col overflow-hidden">
                                 <Header onMenuClick={() => setIsSidebarOpen((v) => !v)} />
                                 <GlobalDropzone>

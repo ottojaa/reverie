@@ -14,7 +14,6 @@ import {
     type DocumentKind,
     type DocumentOcrResult,
     type DocumentSummaryResponse,
-    type FolderWithChildren,
 } from '@reverie/shared';
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +21,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { apiClient } from './client';
 import { useAuth } from '../auth';
-import { folderCountDecrements, withoutDocuments } from './document-cache';
+import { withoutDocuments } from './document-cache';
 
 export type DocumentsResponse = {
     items: Document[];
@@ -39,6 +38,8 @@ interface UseDocumentsOptions {
     kind?: DocumentKind | undefined;
     /** Only documents whose text recognition, thumbnail or AI summary is still pending or running; `total` is then that count. */
     processing?: boolean | undefined;
+    /** With `kind`: order for a cover, screenshots and screen recordings last. Leave out for a list by date. */
+    preview?: boolean | undefined;
 }
 
 /** The query string of `GET /documents`: `kind` is sent only when set, so an omitted kind is exactly today's request. */
@@ -55,7 +56,14 @@ export function toDocumentListParams(options: UseDocumentsOptions): Record<strin
 
     if (options.processing) params.processing = 'true';
 
+    if (options.preview) params.preview = 'true';
+
     return params;
+}
+
+/** How the upload checks name where files are going: a folder, or null for the top level. */
+export function toDestinationParams(folderId: string | null): { folder_id: string } | { top_level: true } {
+    return folderId === null ? { top_level: true } : { folder_id: folderId };
 }
 
 export const documentsApi = {
@@ -90,11 +98,11 @@ export const documentsApi = {
         await apiClient.delete('/documents', { data: { ids } });
     },
 
-    async checkDuplicates(folderId: string, filenames: string[]): Promise<CheckDuplicatesResponse> {
+    async checkDuplicates(folderId: string | null, filenames: string[]): Promise<CheckDuplicatesResponse> {
         if (filenames.length === 0) return { duplicates: [] };
 
         const { data } = await apiClient.post('/documents/check-duplicates', {
-            folder_id: folderId,
+            ...toDestinationParams(folderId),
             filenames,
         });
 
@@ -102,15 +110,15 @@ export const documentsApi = {
     },
 
     /**
-     * Which of these files' content is already in the library, and whether the name is taken in `folderId`.
+     * Which of these files' content is already in the library, and whether the name is taken in `folderId` (null: the top level).
      * Results come back in the order of `files`; more than one request is made past the server's per-call limit.
      */
-    async checkContent(folderId: string | undefined, files: Array<{ name: string; sha256?: string }>): Promise<CheckContentResult[]> {
+    async checkContent(folderId: string | null, files: Array<{ name: string; sha256?: string }>): Promise<CheckContentResult[]> {
         const results: CheckContentResult[] = [];
 
         for (let start = 0; start < files.length; start += CHECK_CONTENT_MAX_FILES) {
             const { data } = await apiClient.post('/documents/check-content', {
-                ...(folderId && { folder_id: folderId }),
+                ...toDestinationParams(folderId),
                 files: files.slice(start, start + CHECK_CONTENT_MAX_FILES),
             });
 
@@ -138,7 +146,7 @@ export const documentsApi = {
         return JobIdResponseSchema.parse(data);
     },
 
-    async move(params: { document_ids: string[]; folder_id: string; conflict_strategy?: 'replace' | 'keep_both' }): Promise<void> {
+    async move(params: { document_ids: string[]; folder_id: string | null; conflict_strategy?: 'replace' | 'keep_both' }): Promise<void> {
         await apiClient.patch('/documents/move', params);
     },
 
@@ -443,30 +451,11 @@ export function useDeleteDocuments() {
         mutationFn: (ids: string[]) => documentsApi.delete(ids),
         onMutate: async (ids) => {
             await queryClient.cancelQueries({ queryKey: ['documents'] });
-            await queryClient.cancelQueries({ queryKey: ['sections', 'tree'] });
             const previous = queryClient.getQueriesData({ queryKey: ['documents'] });
-            const previousSections = queryClient.getQueryData<FolderWithChildren[]>(['sections', 'tree']);
 
             queryClient.setQueriesData({ queryKey: ['documents'] }, (old) => (old ? withoutDocuments(old, ids) : old));
 
-            if (previousSections) {
-                const decrements = folderCountDecrements(
-                    previous.map(([, data]) => data),
-                    ids,
-                );
-
-                if (decrements.size > 0) {
-                    const decrementFolderCount = (nodes: FolderWithChildren[]): FolderWithChildren[] =>
-                        nodes.map((node) => ({
-                            ...node,
-                            document_count: Math.max(0, node.document_count - (decrements.get(node.id) ?? 0)),
-                            children: decrementFolderCount(node.children),
-                        }));
-                    queryClient.setQueryData(['sections', 'tree'], decrementFolderCount(previousSections));
-                }
-            }
-
-            return { previous, previousSections };
+            return { previous };
         },
         onSuccess: (_, ids) => {
             toast.success(ids.length === 1 ? 'Document moved to Trash' : `${ids.length} documents moved to Trash`);
@@ -478,14 +467,11 @@ export function useDeleteDocuments() {
                 });
             }
 
-            if (context?.previousSections != null) {
-                queryClient.setQueryData(['sections', 'tree'], context.previousSections);
-            }
-
             toast.error('Failed to move documents to Trash');
         },
         onSettled: (_, __, ids) => {
             queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['sections'] });
             queryClient.invalidateQueries({ queryKey: ['user'] });
             queryClient.invalidateQueries({ queryKey: ['trash'] });
             ids.forEach((id) => queryClient.removeQueries({ queryKey: ['document', id] }));

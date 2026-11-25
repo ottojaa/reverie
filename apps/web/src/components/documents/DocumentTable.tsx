@@ -1,5 +1,6 @@
 import { useVirtualTable } from '@/lib/hooks/useVirtualTable';
-import { flattenSectionTree, useSections } from '@/lib/sections';
+import { flattenTree } from '@/lib/folders/tree.js';
+import { useSections } from '@/lib/sections';
 import type { Document } from '@reverie/shared';
 import { useMemo } from 'react';
 import { DocumentRow } from './DocumentRow';
@@ -18,7 +19,7 @@ interface DocumentTableProps {
 /** The Files view: newest first by upload date (the order the server pages in), so no column sorts. */
 export function DocumentTable({ documents, fetchNextPage, hasNextPage, showFolder, restoreScroll = true }: DocumentTableProps) {
     const { data: sections } = useSections();
-    const folderNames = useMemo(() => new Map(flattenSectionTree(sections ?? []).map((folder) => [folder.id, folder.name])), [sections]);
+    const folderNames = useMemo(() => new Map(flattenTree(sections ?? []).map(({ folder }) => [folder.id, folder.name])), [sections]);
     const orderedIds = useMemo(() => documents.map((d) => d.id), [documents]);
     const columns = tableColumns(showFolder);
     const { bodyRef, virtualizer, virtualItems, scrollMargin } = useVirtualTable({

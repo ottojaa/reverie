@@ -19,6 +19,5 @@ export {
 } from './documents';
 export type { CheckDuplicatesResponse, DocumentOcrResult, DocumentsResponse } from './documents';
 export { foldersApi } from './folders';
-export { organizeApi, useExecuteOrganize } from './organize';
 export { searchApi, useInfiniteSearch, useQuickFilters, useSearch, useSearchHelp, useSearchSuggestions } from './search';
 export { taughtLabelsApi, useTaughtLabels } from './taught-labels';

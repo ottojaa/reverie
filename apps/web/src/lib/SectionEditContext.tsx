@@ -26,7 +26,7 @@ export function SectionEditProvider({ children }: { children: ReactNode }) {
     return (
         <SectionEditContext.Provider value={{ openEdit }}>
             {children}
-            {section && <EditSectionModal open={section !== null} onOpenChange={(open) => !open && setSection(null)} section={section} mode={section.type} />}
+            {section && <EditSectionModal open={section !== null} onOpenChange={(open) => !open && setSection(null)} section={section} />}
         </SectionEditContext.Provider>
     );
 }

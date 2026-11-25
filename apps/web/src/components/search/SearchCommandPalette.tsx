@@ -1,3 +1,4 @@
+import { FolderFileCount } from '@/components/search/FolderFileCount';
 import { QuickFilterChips } from '@/components/search/QuickFilterChips';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { addFilter, type SearchHit, type SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { ArrowRight, Clock, FileText, Folder, FolderOpen, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, X } from 'lucide-react';
+import { ArrowRight, Clock, FileText, Folder, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -73,7 +74,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
             if (!searchQuery.trim()) return;
 
             onOpenChange(false);
-            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined } });
+            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined, folder_id: undefined } });
         },
         [navigate, onOpenChange],
     );
@@ -459,8 +460,6 @@ const resultCategoryIcons: Record<string, typeof FileText> = {
 
 function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: () => void }) {
     if (result.result_type === 'collection') {
-        const FolderIcon = result.folder_type === 'collection' ? FolderOpen : Folder;
-
         return (
             <Command.Item
                 value={`collection-${result.id}`}
@@ -469,13 +468,12 @@ function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: 
             >
                 <div className="flex size-7 shrink-0 items-center justify-center rounded bg-primary/10 text-sm">
                     {/* emoji can hold a lucide icon slug — SectionIcon resolves it (never render it as text) */}
-                    {result.emoji ? <SectionIcon value={result.emoji} className="size-3.5 text-primary" /> : <FolderIcon className="size-3.5 text-primary" />}
+                    {result.emoji ? <SectionIcon value={result.emoji} className="size-3.5 text-primary" /> : <Folder className="size-3.5 text-primary" />}
                 </div>
                 <div className="min-w-0 flex-1">
                     <span className="block truncate">{result.name}</span>
                     <p className="truncate text-xs text-muted-foreground">
-                        {result.folder_type === 'collection' ? 'Collection' : 'Folder'} · {result.document_count}{' '}
-                        {result.document_count === 1 ? 'document' : 'documents'}
+                        Folder · <FolderFileCount result={result} />
                     </p>
                 </div>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground opacity-0 [[aria-selected=true]>&]:opacity-100 [[data-selected=true]>&]:opacity-100" />

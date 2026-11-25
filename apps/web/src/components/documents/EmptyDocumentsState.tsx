@@ -66,7 +66,7 @@ export function EmptyDocumentsState({ isFolderView }: EmptyDocumentsStateProps) 
 
                     {!isFolderView && (
                         <motion.p variants={item} className="mt-10 text-xs tracking-wide text-muted-foreground/50">
-                            Organize your files with collections from the sidebar
+                            Organize your files with folders from the sidebar
                         </motion.p>
                     )}
                 </motion.div>

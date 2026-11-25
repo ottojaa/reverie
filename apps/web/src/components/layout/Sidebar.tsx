@@ -1,149 +1,43 @@
-import { CategorizedSections } from '@/components/categorizedSections';
-import { CreateSectionModal, type FolderMode } from '@/components/sections';
+import { FolderTree } from '@/components/folderTree/FolderTree';
+import { CreateSectionModal } from '@/components/sections';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/lib/api/users';
 import { useAuth } from '@/lib/auth';
-import { useConfirm } from '@/lib/confirm';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
-import { useSectionEdit } from '@/lib/SectionEditContext';
-import { useDeleteFolder, useReorderFolders, useSections, useUpdateFolder } from '@/lib/sections';
+import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
-import { useVault } from '@/lib/vault';
-import type { FolderWithChildren } from '@reverie/shared';
-import { Link, useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { Copy, LayoutGrid, Map, Trash2, X } from 'lucide-react';
+import { Link, useLocation, useParams } from '@tanstack/react-router';
+import { Copy, LayoutGrid, Map, Plus, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RefObject } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { useRef, useState } from 'react';
 import { Separator } from '../ui/separator';
 import { Skeleton } from '../ui/skeleton';
-import type { SortableTreeHandlers } from './Layout';
+import type { TreeDragHandlers } from './Layout';
 import { SidebarFooter } from './SidebarFooter';
 
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
-    sortableTreeHandlersRef?: RefObject<SortableTreeHandlers | null>;
+    treeDragHandlersRef: RefObject<TreeDragHandlers | null>;
 }
 
-export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: SidebarProps) {
+export function Sidebar({ isOpen = false, onClose, treeDragHandlersRef }: SidebarProps) {
     const params = useParams({ strict: false });
     const location = useLocation();
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { user: authUser } = useAuth();
     const { data: userFromQuery } = useUser();
     const { data: sections = [], isLoading } = useSections();
-    const confirm = useConfirm();
-    const navigate = useNavigate();
-    const { hasPassword } = useVault();
 
     const user = userFromQuery ?? authUser;
-    const deleteFolder = useDeleteFolder();
-    const reorderFolders = useReorderFolders();
-    const updateFolder = useUpdateFolder();
 
-    const { openEdit } = useSectionEdit();
-
-    // Create modal state
-    const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [createModalMode, setCreateModalMode] = useState<FolderMode>('folder');
-    const [createModalParent, setCreateModalParent] = useState<string | null>(null);
+    // Where the create dialog puts the new folder; undefined while it is closed, null for the top level.
+    const [newFolderParent, setNewFolderParent] = useState<string | null>();
 
     const navRef = useRef<HTMLElement>(null);
 
     const isMobile = useIsMobile();
-
-    const openCreateCollection = () => {
-        setCreateModalMode('collection');
-        setCreateModalParent(null);
-        setCreateModalOpen(true);
-    };
-
-    const openCreateFolder = (collectionId: string) => {
-        setCreateModalMode('folder');
-        setCreateModalParent(collectionId);
-        setCreateModalOpen(true);
-    };
-
-    useEffect(() => {
-        const handler = () => openCreateCollection();
-
-        window.addEventListener('reverie:openCreateCollection', handler);
-
-        return () => window.removeEventListener('reverie:openCreateCollection', handler);
-    }, []);
-
-    const handleEditSection = (section: FolderWithChildren) => {
-        openEdit(section);
-    };
-
-    const handleEditCategory = (category: FolderWithChildren) => {
-        openEdit(category);
-    };
-
-    const handleDeleteSection = async (section: FolderWithChildren) => {
-        const ok = await confirm({
-            title: 'Delete folder?',
-            description: `"${section.name}" will be deleted. Documents inside will remain but will no longer be in a folder. You can restore the folder from Trash.`,
-            confirmText: 'Delete',
-            variant: 'destructive',
-        });
-
-        if (ok) deleteFolder.mutate(section.id);
-    };
-
-    const handleDeleteCategory = async (category: FolderWithChildren) => {
-        const sectionCount = category.children.length;
-
-        if (sectionCount === 0) {
-            deleteFolder.mutate(category.id);
-
-            return;
-        }
-
-        const ok = await confirm({
-            title: 'Delete collection?',
-            description: `"${category.name}" and its ${sectionCount} folder${sectionCount !== 1 ? 's' : ''} will be deleted. Documents inside folders will remain but will no longer be in a folder. You can restore the collection from Trash.`,
-            confirmText: 'Delete',
-            variant: 'destructive',
-        });
-
-        if (ok) deleteFolder.mutate(category.id);
-    };
-
-    const handleTogglePrivate = async (folder: FolderWithChildren, makePrivate: boolean) => {
-        // Making a whole collection private affects everything inside it — confirm first.
-        if (makePrivate && folder.type === 'collection' && folder.children.length > 0) {
-            const folderCount = folder.children.length;
-            const docCount = folder.children.reduce((sum, child) => sum + child.document_count, 0);
-            const ok = await confirm({
-                title: 'Make collection private?',
-                description: `"${folder.name}" — its ${folderCount} folder${folderCount !== 1 ? 's' : ''} and ${docCount} file${docCount !== 1 ? 's' : ''} will only show inside it, never in All documents or search.`,
-                confirmText: 'Make private',
-            });
-
-            if (!ok) return;
-        }
-
-        updateFolder.mutate({ id: folder.id, data: { is_private: makePrivate } });
-
-        // Without an account password nothing can be locked, so say where to set one (never block).
-        if (makePrivate && hasPassword === false) {
-            toast.info('Private folders are only locked once your account has a password. Set one in Settings.', {
-                action: { label: 'Open Settings', onClick: () => void navigate({ to: '/settings' }) },
-            });
-        }
-    };
-
-    const handleSectionsChange = async (orderUpdates: Array<{ id: string; sort_order: number }>, parentChanges?: Array<{ id: string; parent_id: string }>) => {
-        // Persist parent changes first so backend has correct parent_id before reorder
-        if (parentChanges?.length) {
-            await Promise.all(parentChanges.map(({ id, parent_id }) => updateFolder.mutateAsync({ id, data: { parent_id } })));
-        }
-
-        reorderFolders.mutate(orderUpdates);
-    };
 
     const navContent = (
         <>
@@ -236,47 +130,44 @@ export function Sidebar({ isOpen = false, onClose, sortableTreeHandlersRef }: Si
                 <Separator className="bg-sidebar-border" />
 
                 {isLoading ? (
-                    <div className="space-y-0.5">
-                        {[0, 1, 2, 3, 4].map((i) => (
-                            <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ paddingLeft: 8 + (i % 2) * 20 }}>
-                                <Skeleton className="size-4 shrink-0 rounded" />
-                                <Skeleton className="size-4 shrink-0 rounded" />
-                                <Skeleton className="h-4 flex-1 max-w-[120px]" />
-                            </div>
-                        ))}
-                    </div>
+                    <>
+                        <div className="space-y-0.5">
+                            {[0, 1, 2, 3, 4].map((i) => (
+                                <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ paddingLeft: 8 + (i % 2) * 20 }}>
+                                    <Skeleton className="size-4 shrink-0 rounded" />
+                                    <Skeleton className="size-4 shrink-0 rounded" />
+                                    <Skeleton className="h-4 flex-1 max-w-[120px]" />
+                                </div>
+                            ))}
+                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-sidebar-accent"
+                            onClick={() => setNewFolderParent(null)}
+                        >
+                            <Plus className="size-4" />
+                            New folder
+                        </Button>
+                    </>
                 ) : (
-                    <CategorizedSections
-                        sections={sections}
-                        {...(currentSectionId !== undefined && { currentSectionId })}
-                        onSectionsChange={handleSectionsChange}
-                        onEditSection={handleEditSection}
-                        onEditCategory={handleEditCategory}
-                        onAddSection={(category) => openCreateFolder(category.id)}
-                        onAddCollection={openCreateCollection}
-                        onDeleteSection={handleDeleteSection}
-                        onDeleteCategory={handleDeleteCategory}
-                        onTogglePrivate={handleTogglePrivate}
+                    <FolderTree
+                        tree={sections}
+                        currentId={currentSectionId}
+                        dragHandlersRef={treeDragHandlersRef}
+                        onNewFolder={setNewFolderParent}
                         onClose={onClose}
-                        {...(sortableTreeHandlersRef != null && { treeDndHandlersRef: sortableTreeHandlersRef })}
                     />
-                )}
-                {isLoading && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        className="w-full justify-start gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                        onClick={openCreateCollection}
-                    >
-                        <span className="text-base">+</span>
-                        New collection
-                    </Button>
                 )}
             </nav>
 
             <SidebarFooter user={user} pathname={location.pathname} onClose={onClose} />
 
-            <CreateSectionModal open={createModalOpen} onOpenChange={setCreateModalOpen} parentId={createModalParent} mode={createModalMode} />
+            <CreateSectionModal
+                open={newFolderParent !== undefined}
+                onOpenChange={(open) => !open && setNewFolderParent(undefined)}
+                parentId={newFolderParent ?? null}
+            />
         </>
     );
 

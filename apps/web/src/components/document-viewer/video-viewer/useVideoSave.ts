@@ -21,12 +21,6 @@ export function useVideoSave({ document, start, end, saveAsCopy, onToggleEdit }:
     const cleanupRef = useRef<(() => void) | null>(null);
 
     const handleSave = useCallback(async () => {
-        if (saveAsCopy && !document.folder_id) {
-            toast.error('Document must be in a folder to save as copy');
-
-            return;
-        }
-
         setIsSaving(true);
         const sessionId = crypto.randomUUID();
 
@@ -88,7 +82,7 @@ export function useVideoSave({ document, start, end, saveAsCopy, onToggleEdit }:
             cleanupRef.current = null;
             unsubscribeFromSession(sessionId);
         }
-    }, [document.id, document.folder_id, start, end, saveAsCopy, onToggleEdit, navigate, queryClient]);
+    }, [document.id, start, end, saveAsCopy, onToggleEdit, navigate, queryClient]);
 
     return { handleSave, isSaving };
 }

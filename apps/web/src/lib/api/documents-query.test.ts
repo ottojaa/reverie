@@ -1,8 +1,15 @@
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Document } from '@reverie/shared';
 import { describe, expect, it } from 'vitest';
-import { folderCountDecrements, withoutDocuments, type DocumentsCache } from './document-cache';
-import { firstPageTotal, infiniteDocumentsKey, toDocumentListParams, toInfiniteDocumentsOptions, type DocumentsResponse } from './documents';
+import { withoutDocuments, type DocumentsCache } from './document-cache';
+import {
+    firstPageTotal,
+    infiniteDocumentsKey,
+    toDestinationParams,
+    toDocumentListParams,
+    toInfiniteDocumentsOptions,
+    type DocumentsResponse,
+} from './documents';
 
 function doc(id: string, folder_id: string | null = 'f1'): Document {
     return { id, folder_id } as Document;
@@ -49,6 +56,18 @@ describe('per-tab queries', () => {
     });
 });
 
+describe('cover previews and upload destinations', () => {
+    it('asks for cover ordering only when told to', () => {
+        expect(toDocumentListParams({ kind: 'image', preview: true })).toMatchObject({ preview: 'true' });
+        expect(toDocumentListParams({ kind: 'image' })).not.toHaveProperty('preview');
+    });
+
+    it('names the top level instead of leaving the folder out', () => {
+        expect(toDestinationParams(null)).toEqual({ top_level: true });
+        expect(toDestinationParams('f1')).toEqual({ folder_id: 'f1' });
+    });
+});
+
 describe('firstPageTotal', () => {
     it('is the total on the list own first page', () => {
         expect(firstPageTotal(infinite(58, [doc('a')], [doc('b')]))).toBe(58);
@@ -88,23 +107,5 @@ describe('deleting documents from overlapping caches', () => {
         const plain: DocumentsCache = { items: [photo, doc('x')], total: 2, limit: 24, offset: 0 };
 
         expect(withoutDocuments(plain, ['photo-1'])).toMatchObject({ total: 1, items: [{ id: 'x' }] });
-    });
-
-    it('counts the sidebar folder once however many caches hold the document', () => {
-        const decrements = folderCountDecrements([all, photos, files, undefined], ['photo-1']);
-
-        expect(decrements.get('f1')).toBe(1);
-        expect(decrements.size).toBe(1);
-    });
-
-    it('counts each deleted document against its own folder', () => {
-        const caches = [infinite(3, [doc('a', 'f1'), doc('b', 'f2'), doc('c', null)]), infinite(2, [doc('a', 'f1'), doc('b', 'f2')])];
-
-        const decrements = folderCountDecrements(caches, ['a', 'b', 'c']);
-
-        expect([...decrements]).toEqual([
-            ['f1', 1],
-            ['f2', 1],
-        ]);
     });
 });

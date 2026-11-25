@@ -13,7 +13,7 @@ import { Copy, Lock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 export const Route = createFileRoute('/duplicates')({
-    // A private folder or collection: its duplicates are listed apart from the rest, and only while its lock is open.
+    // A private folder: its duplicates are listed apart from the rest, and only while its lock is open.
     validateSearch: (search?: { folder?: string }): { folder?: string } => (typeof search?.folder === 'string' ? { folder: search.folder } : {}),
     component: DuplicatesPage,
 });

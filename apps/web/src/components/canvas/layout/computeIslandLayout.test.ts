@@ -2,7 +2,11 @@ import type { FolderWithChildren } from '@reverie/shared';
 import { describe, expect, it } from 'vitest';
 import { computeIslandLayout, ISLAND_RADIUS } from './computeIslandLayout.js';
 
-function folder(overrides: Partial<FolderWithChildren> & { id: string }): FolderWithChildren {
+function folder(overrides: Partial<FolderWithChildren> & { id: string; files?: number }): FolderWithChildren {
+    const { files = 10, children = [], ...fields } = overrides;
+    // A node's counts cover its whole subtree.
+    const total = children.reduce((sum, child) => sum + child.kind_counts.file, files);
+
     return {
         parent_id: null,
         name: 'Folder ' + overrides.id,
@@ -11,28 +15,28 @@ function folder(overrides: Partial<FolderWithChildren> & { id: string }): Folder
         emoji: null,
         sort_order: 0,
         type: 'folder',
+        is_private: false,
+        lock_id: null,
+        locked: false,
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-01T00:00:00.000Z',
-        children: [],
-        document_count: 10,
+        children,
+        kind_counts: { image: 0, video: 0, file: total },
+        document_count: files,
         cover: null,
-        ...overrides,
+        ...fields,
     };
 }
 
 const tree: FolderWithChildren[] = [
     folder({
-        id: 'c1',
-        type: 'collection',
+        id: 't1',
         name: 'Taxes',
         sort_order: 0,
-        children: [
-            folder({ id: 'f1', sort_order: 0, document_count: 40 }),
-            folder({ id: 'f2', sort_order: 1, children: [folder({ id: 'f3', sort_order: 0 })] }),
-        ],
+        children: [folder({ id: 'f2', sort_order: 1, children: [folder({ id: 'f3', files: 4 })] }), folder({ id: 'f1', sort_order: 0, files: 40 })],
     }),
-    folder({ id: 'c2', type: 'collection', name: 'House', sort_order: 1, children: [folder({ id: 'f4', sort_order: 0 })] }),
-    folder({ id: 'f5', sort_order: 2, document_count: 0 }),
+    folder({ id: 't2', name: 'House', sort_order: 1, children: [folder({ id: 'f4' })] }),
+    folder({ id: 't3', sort_order: 2, files: 0 }),
 ];
 
 describe('computeIslandLayout', () => {
@@ -40,22 +44,27 @@ describe('computeIslandLayout', () => {
         expect(computeIslandLayout(tree)).toEqual(computeIslandLayout(tree));
     });
 
-    it('creates one island per folder, flattening nested folders into their collection cluster', () => {
+    it('gives every folder an island, clustered under its top-level folder', () => {
         const islands = computeIslandLayout(tree);
-        const byId = new Map(islands.map((i) => [i.id, i]));
 
-        expect(islands).toHaveLength(5);
-        expect(byId.get('f1')?.collectionId).toBe('c1');
-        expect(byId.get('f3')?.collectionId).toBe('c1');
-        expect(byId.get('f4')?.collectionId).toBe('c2');
+        expect(islands.map((i) => [i.id, i.clusterId])).toEqual([
+            ['t1', 't1'],
+            ['f1', 't1'],
+            ['f2', 't1'],
+            ['f3', 't1'],
+            ['t2', 't2'],
+            ['f4', 't2'],
+            ['t3', 't3'],
+        ]);
+        expect(islands.find((i) => i.id === 'f3')?.clusterName).toBe('Taxes');
     });
 
-    it('groups loose top-level folders into a synthetic cluster without a collection', () => {
-        const islands = computeIslandLayout(tree);
-        const loose = islands.find((i) => i.id === 'f5');
+    it("counts only a folder's own documents on its island", () => {
+        const counts = new Map(computeIslandLayout(tree).map((i) => [i.id, i.documentCount]));
 
-        expect(loose?.collectionId).toBeNull();
-        expect(loose?.collectionName).toBeNull();
+        expect(counts.get('t1')).toBe(10);
+        expect(counts.get('f2')).toBe(10);
+        expect(counts.get('f3')).toBe(4);
     });
 
     it('never overlaps islands', () => {
@@ -79,28 +88,19 @@ describe('computeIslandLayout', () => {
     });
 
     it('lines cluster folders up left to right on a shared row', () => {
-        const islands = computeIslandLayout(tree);
-        const c1 = islands.filter((i) => i.collectionId === 'c1');
+        const t1 = computeIslandLayout(tree).filter((i) => i.clusterId === 't1');
 
         // ≤5 folders → a single row: identical z, strictly increasing x.
-        expect(new Set(c1.map((i) => i.position.z)).size).toBe(1);
+        expect(new Set(t1.map((i) => i.position.z)).size).toBe(1);
 
-        const xs = c1.map((i) => i.position.x);
+        const xs = t1.map((i) => i.position.x);
 
         expect([...xs].sort((a, b) => a - b)).toEqual(xs);
     });
 
     it('wraps rows after five folders, keeping rows aligned', () => {
-        const many = [
-            folder({
-                id: 'big',
-                type: 'collection',
-                name: 'Big',
-                children: Array.from({ length: 7 }, (_, i) => folder({ id: 'm' + i, sort_order: i })),
-            }),
-        ];
-        const islands = computeIslandLayout(many);
-        const zs = new Set(islands.map((i) => i.position.z));
+        const many = [folder({ id: 'big', children: Array.from({ length: 6 }, (_, i) => folder({ id: 'm' + i, sort_order: i })) })];
+        const zs = new Set(computeIslandLayout(many).map((i) => i.position.z));
 
         expect(zs.size).toBe(2);
     });

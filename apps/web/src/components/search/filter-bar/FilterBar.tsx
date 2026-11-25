@@ -7,12 +7,14 @@ import { cn } from '@/lib/utils';
 import { formatFilterChip, isKnownFilter, removeFilter, type QueryToken } from '@reverie/shared';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { DateFilterPill } from './DateFilterPill';
 import { FILTER_DIMENSIONS } from './filter-defs';
-import { FilterPill, PANEL_EASE, pillBaseClass, pillStateClass } from './FilterPill';
+import { FilterPill } from './FilterPill';
+import { FolderFilterPill } from './FolderFilterPill';
 import { MobileFilterDrawer } from './MobileFilterDrawer';
 import { countMorePanelFilters, MoreFiltersPanel } from './MoreFiltersPanel';
+import { PANEL_EASE, pillBaseClass, pillStateClass } from './pill-style';
 
 interface FilterBarProps {
     search: SearchQueryState;
@@ -63,14 +65,17 @@ export function FilterBar({ search, total }: FilterBarProps) {
     return (
         <div className="flex flex-wrap items-center gap-1.5">
             {[...primaryDims, ...promotedDims].map((dimension) => (
-                <FilterPill
-                    key={dimension.key}
-                    dimension={dimension}
-                    activeValues={filterValues.get(dimension.key) ?? []}
-                    facetItems={facets?.[dimension.facetKey] ?? []}
-                    onToggleValue={search.toggleFilterValue}
-                    onClearDimension={search.removeDimension}
-                />
+                <Fragment key={dimension.key}>
+                    {/* The folder pill sits just before Tags */}
+                    {dimension.key === 'tag' && <FolderFilterPill folderId={search.folderId} onChange={search.setFolderId} />}
+                    <FilterPill
+                        dimension={dimension}
+                        activeValues={filterValues.get(dimension.key) ?? []}
+                        facetItems={facets?.[dimension.facetKey] ?? []}
+                        onToggleValue={search.toggleFilterValue}
+                        onClearDimension={search.removeDimension}
+                    />
+                </Fragment>
             ))}
 
             <DateFilterPill
@@ -111,7 +116,7 @@ export function FilterBar({ search, total }: FilterBarProps) {
 
             {/* Tokens the pills don't manage (negations, scopes) — still visible, still removable */}
             {unmanagedTokens.map((token) => (
-                <span key={token.raw + token.value} className={cn(pillBaseClass, pillStateClass(true), 'cursor-default')}>
+                <span key={token.raw + token.value} className={cn(pillBaseClass, pillStateClass(true), 'inline-flex cursor-default items-center')}>
                     <span className="max-w-48 truncate">{formatUnmanagedLabel(token)}</span>
                     <Button
                         type="button"

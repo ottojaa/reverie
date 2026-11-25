@@ -18,6 +18,8 @@ import { apiClient } from './client';
 
 export interface SearchParams {
     q: string;
+    /** Search only this folder and everything beneath it. */
+    folder_id?: string;
     sort_by?: 'relevance' | 'uploaded' | 'date' | 'filename' | 'size';
     sort_order?: 'asc' | 'desc';
     limit?: number;

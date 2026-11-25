@@ -13,7 +13,7 @@ export function toTrashItemKey(entry: TrashItem): string {
     return `${entry.kind}:${entry.item.id}`;
 }
 
-/** A private folder or collection whose lock is closed arrives as a bare row without a name. */
+/** A private folder whose lock is closed arrives as a bare row without a name. */
 export function isLockedFolderEntry(entry: TrashItem): boolean {
     return entry.kind === 'folder' && entry.item.locked;
 }
@@ -27,6 +27,14 @@ export function toPurgeLabel(purgeAt: string, now: Date = new Date()): string {
     if (days === 1) return 'Purges tomorrow';
 
     return `Purges in ${days} days`;
+}
+
+/** "Folder" with what comes back with it. A locked folder counts nothing. */
+export function toTrashFolderDetail({ folder_count, document_count }: TrashFolder): string {
+    const subfolders = folder_count > 0 ? [`${folder_count} ${folder_count === 1 ? 'subfolder' : 'subfolders'}`] : [];
+    const files = document_count > 0 ? [`${document_count} ${document_count === 1 ? 'file' : 'files'}`] : [];
+
+    return ['Folder', ...subfolders, ...files].join(' · ');
 }
 
 function TrashThumbnail({ entry }: { entry: TrashItem }) {
@@ -81,7 +89,7 @@ export function TrashRow({ entry, selected, busy, onToggle, onRestore, onUnlock,
     const isFolder = entry.kind === 'folder';
     const isLocked = isLockedFolderEntry(entry);
     const name = isFolder ? (isLocked ? 'Locked folder' : entry.item.name) : entry.item.original_filename;
-    const detail = isFolder ? (entry.item.type === 'collection' ? 'Collection' : 'Folder') : formatFileSize(entry.item.size_bytes);
+    const detail = entry.kind === 'folder' ? toTrashFolderDetail(entry.item) : formatFileSize(entry.item.size_bytes);
 
     return (
         <li className={cn('flex flex-wrap items-center gap-3 px-4 py-3 transition-colors sm:flex-nowrap', selected && 'bg-accent/10')}>

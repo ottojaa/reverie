@@ -61,7 +61,7 @@ export const agentChatKey = (id: string) => ['agent', 'chat', id] as const;
 
 /** Queries whose results an agent write can change. */
 export function invalidateLibraryQueries(queryClient: ReturnType<typeof useQueryClient>): void {
-    for (const key of ['documents', 'folders', 'search', 'sections']) queryClient.invalidateQueries({ queryKey: [key] });
+    for (const key of ['documents', 'search', 'sections']) queryClient.invalidateQueries({ queryKey: [key] });
 }
 
 export function useAgentStatus(enabled: boolean) {

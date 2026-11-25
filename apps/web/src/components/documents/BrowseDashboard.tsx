@@ -10,6 +10,7 @@ import { DocumentRowsSkeleton } from './DocumentSkeleton';
 import { EmptyDocumentsState } from './EmptyDocumentsState';
 import { KindCards } from './KindCards';
 import { RecentTable } from './RecentTable';
+import { SubfolderList } from './SubfolderList';
 
 const PHOTO_PREVIEWS = 6;
 // A page folds into far fewer rows (a camera-roll batch is one), so a bigger first page is what fills the screen without a second request.
@@ -27,11 +28,12 @@ export function BrowseDashboard({ sectionId }: BrowseDashboardProps) {
     const recent = useInfiniteDocuments({ folderId, limit: RECENT_PAGE_SIZE });
     const { isLocked, unlock } = useLockedFolderPrompt(recent.error);
     const summary = useDocumentSummary(folderId, !isLocked);
-    const photos = useDocuments({ folderId, kind: 'image', limit: PHOTO_PREVIEWS }, !isLocked);
-    const videos = useDocuments({ folderId, kind: 'video', limit: 1 }, !isLocked);
+    const photos = useDocuments({ folderId, kind: 'image', limit: PHOTO_PREVIEWS, preview: true }, !isLocked);
+    const videos = useDocuments({ folderId, kind: 'video', limit: 1, preview: true }, !isLocked);
     const documents = useMemo(() => recent.data?.pages.flatMap((page) => page.items) ?? [], [recent.data]);
     const showSkeleton = useDelayedFlag(recent.isLoading, SKELETON_DELAY_MS);
     const isEmpty = !recent.isLoading && !recent.error && documents.length === 0;
+    const subfolders = section?.children ?? [];
     const fileCount = summary.data ? summary.data.image.count + summary.data.video.count + summary.data.file.count : null;
 
     return (
@@ -44,7 +46,9 @@ export function BrowseDashboard({ sectionId }: BrowseDashboardProps) {
 
             {recent.error && !isLocked && <LoadFailedBanner />}
 
-            {isEmpty && <EmptyDocumentsState isFolderView={!!sectionId} />}
+            {!isLocked && <SubfolderList folders={subfolders} />}
+
+            {isEmpty && subfolders.length === 0 && <EmptyDocumentsState isFolderView={!!sectionId} />}
 
             {!isLocked && !recent.error && !isEmpty && (
                 <>
