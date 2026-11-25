@@ -43,8 +43,6 @@ fun SearchResultRow(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
             filename = hit.filename,
             blurhash = hit.blurhash,
             hasThumbnail = !hit.blurhash.isNullOrBlank(),
-            // A search hit carries no job status: a load that fails is tried again only when the row is drawn anew.
-            isThumbnailReady = true,
             size = ThumbnailSize.SM,
             modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
         )
@@ -117,8 +115,6 @@ fun PhotoResultTile(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
         filename = hit.filename,
         blurhash = hit.blurhash,
         hasThumbnail = !hit.blurhash.isNullOrBlank(),
-        // As in [SearchResultRow]: a search hit carries no job status.
-        isThumbnailReady = true,
         size = ThumbnailSize.MD,
         durationSeconds = hit.duration_seconds,
         modifier = modifier

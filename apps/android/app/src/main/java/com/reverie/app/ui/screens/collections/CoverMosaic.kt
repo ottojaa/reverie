@@ -90,8 +90,6 @@ private fun Tile(tile: FolderCoverTileDto, modifier: Modifier, compact: Boolean 
         filename = tile.original_filename,
         blurhash = tile.thumbnail_blurhash,
         hasThumbnail = true,
-        // A cover tile carries no job status: a load that fails is tried again only when the tile is drawn anew.
-        isThumbnailReady = true,
         modifier = modifier,
         size = ThumbnailSize.SM,
         // A cover may read a thumbnail another screen cached, but never writes one: a folder that

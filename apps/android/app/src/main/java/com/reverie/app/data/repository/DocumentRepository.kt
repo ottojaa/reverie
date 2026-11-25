@@ -130,6 +130,12 @@ class DocumentRepository @Inject constructor(
         }.flowOn(io)
     }
 
+    /** Ids of the documents held here whose thumbnail job has not finished. */
+    fun observeAwaitingThumbnail(): Flow<Set<String>> =
+        combine(documentDao.observeIdsAwaitingThumbnail(), privateStore.documents) { cached, private ->
+            cached.toSet() + private.values.filterNot { it.thumbnail_status.isTerminal }.map { it.id }
+        }.distinctUntilChanged().flowOn(io)
+
     fun observeDocument(id: String): Flow<DocumentDto?> {
         // distinctUntilChanged (entity-level) drops the re-map on every unrelated Room write to this
         // row (touchAccessed, the open-time fetch upsert); flowOn(io) keeps toDto's JSON parse off

@@ -3,6 +3,8 @@ package com.reverie.app.ui.components
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -17,6 +19,8 @@ import coil.request.SuccessResult
 import com.reverie.app.data.api.ApiJson
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.FolderCoverDto
+import com.reverie.app.data.api.model.FolderCoverTileDto
 import com.reverie.app.data.api.model.JobEventDto
 import com.reverie.app.data.api.model.JobEventType
 import com.reverie.app.data.api.model.JobStatus
@@ -34,6 +38,7 @@ import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.doc
+import com.reverie.app.ui.screens.collections.CoverMosaic
 import com.reverie.app.ui.theme.ReverieTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -52,10 +57,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.builtins.serializer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,9 +75,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration
 
 /**
- * A new image upload already has its blurhash while its thumbnail is still being made. The row on
- * screen must load the thumbnail once the job finishes, through the same feed, tracker and cache the
- * app uses, without anything asking the list to refresh.
+ * A new image upload already has its blurhash while its thumbnail is still being made. Whatever shows
+ * it must load the thumbnail once the job finishes, through the same tracker and cache the app uses,
+ * without anything asking a list to refresh.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -82,6 +89,12 @@ class ThumbnailArrivalTest {
     private val server = Server()
     private val thumbnails = ThumbnailEndpoint()
     private val events = JobEvents()
+    private val repository = server.repository()
+
+    @Before fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        Coil.setImageLoader(ImageLoader.Builder(context).components { add(thumbnails) }.build())
+    }
 
     @After fun tearDown() {
         scope.cancel()
@@ -89,27 +102,6 @@ class ThumbnailArrivalTest {
     }
 
     @Test fun `a new upload's row loads its thumbnail once it is ready, with no refresh`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        Coil.setImageLoader(ImageLoader.Builder(context).components { add(thumbnails) }.build())
-        val feed = showRecentlyAdded()
-        compose.waitUntil(TIMEOUT) { thumbnails.served.isNotEmpty() && "new" in events.joined }
-        assertEquals("only the blurhash can be shown so far", false, thumbnails.served.last())
-
-        thumbnails.rendered = true
-        server.document = server.document.copy(thumbnail_status = JobStatus.COMPLETE)
-        events.complete("new")
-
-        compose.waitUntil(TIMEOUT) {
-            feed.state.value.documents.documents.single().thumbnail_status == JobStatus.COMPLETE
-        }
-        compose.waitForIdle()
-        assertTrue("the row loaded the thumbnail: ${thumbnails.served}", thumbnails.served.last())
-        assertEquals("the list itself was read only when it opened", 1, server.listReads)
-    }
-
-    private fun showRecentlyAdded(): BrowseFeedModel {
-        val repository = server.repository()
-        ProcessingTracker(repository, events, flowOf(true), scope, refreshWindow = Duration.ZERO)
         val feed = BrowseFeedModel(
             scope = scope,
             kind = null,
@@ -119,24 +111,53 @@ class ThumbnailArrivalTest {
             sharing = SharingStarted.Eagerly,
         )
         val actions = RecentActions(emptySet(), {}, {}, {}, {})
-        compose.setContent {
+
+        assertThumbnailArrives {
             val state by feed.state.collectAsState()
-            ReverieTheme {
-                Column {
-                    state.documents.documents.forEach {
-                        RecentEntryView(RecentEntry.Row(RecentRow.Single(it)), actions, LocalDate.of(2026, 11, 25), ZoneOffset.UTC)
-                    }
+            Column {
+                state.documents.documents.forEach {
+                    RecentEntryView(RecentEntry.Row(RecentRow.Single(it)), actions, LocalDate.of(2026, 11, 25), ZoneOffset.UTC)
                 }
             }
         }
-        return feed
+
+        assertEquals("the list itself was read only when it opened", 1, server.listReads)
+    }
+
+    /** A cover tile comes from the folder tree and carries no job status of its own. */
+    @Test fun `a folder cover loads a new upload's thumbnail once it is ready`() {
+        val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
+
+        assertThumbnailArrives { CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+
+        assertEquals("no list was read", 0, server.listReads)
+    }
+
+    /** Shows [content] as the app does, then finishes the upload's thumbnail job. */
+    private fun assertThumbnailArrives(content: @Composable () -> Unit) {
+        ProcessingTracker(repository, events, flowOf(true), scope, refreshWindow = Duration.ZERO)
+        val awaiting = repository.observeAwaitingThumbnail().stateIn(scope, SharingStarted.Eagerly, emptySet())
+        compose.setContent {
+            val ids by awaiting.collectAsState()
+            CompositionLocalProvider(LocalAwaitingThumbnails provides ids) { ReverieTheme(content = content) }
+        }
+        compose.waitUntil(TIMEOUT) { thumbnails.served.isNotEmpty() && "new" in events.joined }
+        assertEquals("only the blurhash can be shown so far", false, thumbnails.served.last())
+
+        thumbnails.rendered = true
+        server.document = server.document.copy(thumbnail_status = JobStatus.COMPLETE)
+        events.complete("new")
+
+        compose.waitUntil(TIMEOUT) { "new" !in awaiting.value }
+        compose.waitForIdle()
+        assertTrue("the thumbnail was loaded: ${thumbnails.served}", thumbnails.served.last())
     }
 
     /** The documents API over one fresh image upload: blurhash known, thumbnail pending. */
     private class Server {
         @Volatile var document: DocumentDto = doc("new").copy(
             thumbnail_status = JobStatus.PENDING,
-            thumbnail_blurhash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+            thumbnail_blurhash = BLURHASH,
         )
 
         /** How often the list was read, apart from the tracker asking what is processing. */
@@ -167,7 +188,7 @@ class ThumbnailArrivalTest {
         }
     }
 
-    /** The thumbnail endpoint: "not found" until the job has rendered one, like the server. */
+    /** The thumbnail endpoint: fails until the job has rendered one, like the server. */
     private class ThumbnailEndpoint : Interceptor {
         @Volatile var rendered = false
 
@@ -210,5 +231,8 @@ class ThumbnailArrivalTest {
         override suspend fun clearSession() {}
     }
 
-    private companion object { const val TIMEOUT = 10_000L }
+    private companion object {
+        const val TIMEOUT = 10_000L
+        const val BLURHASH = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+    }
 }

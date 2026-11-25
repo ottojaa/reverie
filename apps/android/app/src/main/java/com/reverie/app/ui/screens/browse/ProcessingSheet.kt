@@ -41,7 +41,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
-import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.EmptyState
@@ -189,7 +188,6 @@ private fun RowThumbnail(document: DocumentDto) {
             filename = document.original_filename,
             blurhash = document.thumbnail_blurhash,
             hasThumbnail = true,
-            isThumbnailReady = document.isThumbnailReady,
             modifier = modifier,
             size = ThumbnailSize.SM,
         )

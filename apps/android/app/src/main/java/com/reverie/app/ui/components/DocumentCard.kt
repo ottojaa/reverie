@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
-import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
@@ -100,7 +99,6 @@ fun DocumentCard(
                 filename = document.original_filename,
                 blurhash = document.thumbnail_blurhash,
                 hasThumbnail = document.hasRenderedThumbnail,
-                isThumbnailReady = document.isThumbnailReady,
                 size = thumbnailSize,
                 durationSeconds = document.duration_seconds,
                 largeVideoTile = largeVideoTile,

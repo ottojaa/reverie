@@ -128,14 +128,10 @@ data class DocumentTagDto(
  * The precise signal is `thumbnail_paths != null`, but the Room cache drops that field
  * (Mappers.toDto), and both the grid and viewer read through the cache. The blurhash is the
  * cache-safe proxy. It does not say the thumbnail exists yet: an image gets its blurhash at
- * upload, so until [isThumbnailReady] the request may well 404.
+ * upload, so the request may well fail until the thumbnail job has finished.
  */
 val DocumentDto.hasRenderedThumbnail: Boolean
     get() = !thumbnail_blurhash.isNullOrBlank()
-
-/** True once the thumbnail job has finished. */
-val DocumentDto.isThumbnailReady: Boolean
-    get() = thumbnail_status == JobStatus.COMPLETE
 
 /** True while the thumbnail, text recognition or AI summary is still pending or running. */
 val DocumentDto.isStillProcessing: Boolean

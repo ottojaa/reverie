@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
-import com.reverie.app.data.api.model.isThumbnailReady
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
@@ -130,7 +129,6 @@ private fun FolderPicture(doc: DocumentDto, modifier: Modifier, labelSize: TextU
         filename = doc.original_filename,
         blurhash = doc.thumbnail_blurhash,
         hasThumbnail = true,
-        isThumbnailReady = doc.isThumbnailReady,
         modifier = modifier,
     )
 }

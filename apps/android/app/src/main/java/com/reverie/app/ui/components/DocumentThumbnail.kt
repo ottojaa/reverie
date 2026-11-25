@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +39,13 @@ import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatDuration
 
 /**
+ * Ids of the documents whose thumbnail job has not finished, provided once around the app. A
+ * composition local so that every thumbnail has it, also on cards that carry no job status (folder
+ * covers, search results).
+ */
+val LocalAwaitingThumbnails = compositionLocalOf<Set<String>> { emptySet() }
+
+/**
  * The thumbnail fill for a document: a cropped image, or — when there's no rendered preview — a
  * centered file-type icon over a subtle type-colored wash, with the filename beneath it so files
  * with no picture (binaries, archives, .apk, …) are still tellable apart at a glance. Primitive
@@ -51,8 +59,6 @@ fun DocumentThumbnail(
     filename: String,
     blurhash: String?,
     hasThumbnail: Boolean,
-    // Whether the thumbnail job has finished. There can be a thumbnail to ask for before it has.
-    isThumbnailReady: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     // READ_ONLY reads a thumbnail some other screen already cached but never writes one.
@@ -68,9 +74,10 @@ fun DocumentThumbnail(
                     .data(ThumbnailRef(documentId, size))
                     .memoryCacheKey(thumbnailMemoryCacheKey(documentId, size))
                     .diskCachePolicy(diskCachePolicy)
-                    // A load made before the thumbnail existed has failed, and Coil loads again only
-                    // when the request differs: this makes it differ once the job has finished.
-                    .setParameter("thumbnail_ready", isThumbnailReady)
+                    // There can be a thumbnail to ask for before the job has made it. Such a load
+                    // fails, and Coil loads again only when the request differs: this makes it differ
+                    // once the job has finished.
+                    .setParameter("awaiting_thumbnail", documentId in LocalAwaitingThumbnails.current)
                     .build(),
                 contentDescription = filename,
                 contentScale = ContentScale.Crop,
@@ -124,7 +131,6 @@ fun GalleryThumbnail(
     filename: String,
     blurhash: String?,
     hasThumbnail: Boolean,
-    isThumbnailReady: Boolean,
     modifier: Modifier = Modifier,
     size: ThumbnailSize = ThumbnailSize.MD,
     durationSeconds: Double? = null,
@@ -141,7 +147,6 @@ fun GalleryThumbnail(
             filename = filename,
             blurhash = blurhash,
             hasThumbnail = hasThumbnail,
-            isThumbnailReady = isThumbnailReady,
             size = size,
             modifier = Modifier.matchParentSize(),
         )
