@@ -30,15 +30,25 @@ import androidx.compose.ui.layout.ContentScale
 val LocalSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
 val LocalNavAnimatedContentScope = staticCompositionLocalOf<AnimatedVisibilityScope?> { null }
 
-fun documentBoundsKey(documentId: String): String = "document-$documentId"
+/**
+ * The back-stack entry id of the screen a document is opened from: a list screen's own, and in the viewer
+ * that of the list that opened it. Provided by each nav destination alongside its AnimatedContentScope.
+ */
+val LocalDiveOrigin = staticCompositionLocalOf<String?> { null }
+
+/**
+ * The origin is part of the key because the same document is often on two list screens (the dashboard and a
+ * kind screen): keyed by the document alone, its row would morph from one to the other as they slide.
+ */
+fun documentBoundsKey(originId: String, documentId: String): String = "document-$originId-$documentId"
 
 // Portion of the dive over which mismatched contents crossfade (see documentSharedBounds).
 private const val DIVE_CROSSFADE_FRACTION = 0.4f
 
 /**
- * Marks a composable as the shared container for a document — the grid tile and the viewer share
- * the same key, so the tile expands into the viewer (and shrinks back on return). A no-op when the
- * scopes aren't present (previews, tests, or a screen outside the shared-transition layout).
+ * Marks a composable as the shared container for a document — a list's tile and the viewer opened from
+ * that list share the same key, so the tile expands into the viewer (and shrinks back on return). A no-op
+ * when the scopes or the origin aren't present (previews, tests, or a screen outside the shared-transition layout).
  *
  * [crossfade] = false (media): both ends draw the SAME cropped thumbnail, so there is no fade at
  * all — fading identical content only produced the washed/translucent "flash" — and the child is
@@ -56,13 +66,14 @@ private const val DIVE_CROSSFADE_FRACTION = 0.4f
 fun Modifier.documentSharedBounds(documentId: String, crossfade: Boolean = false): Modifier {
     val sharedScope = LocalSharedTransitionScope.current ?: return this
     val navScope = LocalNavAnimatedContentScope.current ?: return this
+    val origin = LocalDiveOrigin.current ?: return this
     val spec = MotionTuning.spec
     val diveEasing = spec.diveEasing.toEasing()
     val fadeMs = (spec.diveMs * DIVE_CROSSFADE_FRACTION).toInt()
 
     return with(sharedScope) {
         this@documentSharedBounds.sharedBounds(
-            rememberSharedContentState(key = documentBoundsKey(documentId)),
+            rememberSharedContentState(key = documentBoundsKey(origin, documentId)),
             animatedVisibilityScope = navScope,
             enter = if (crossfade) fadeIn(tween(fadeMs)) else EnterTransition.None,
             exit = if (crossfade) fadeOut(tween(fadeMs, delayMillis = spec.diveMs - fadeMs)) else ExitTransition.None,
