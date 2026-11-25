@@ -44,24 +44,24 @@ fun ReverieNavGraph(
             BrowseScreen(
                 onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onOpenKind = { navController.navigate(Routes.kind(routeOf(it))) },
-                onFavourite = { navController.openFavourite(entry, it) },
+                onFavourite = { navController.openFavourite(it) },
                 onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
             )
         }
 
-        composable(Screen.Collections.route) { entry ->
+        composable(Screen.Collections.route) {
             CollectionsScreen(
                 onOpenFolder = { navController.navigate(Routes.folder(it)) },
                 onOpenAllDocuments = { navController.openTab(Screen.Files) },
-                onFavourite = { navController.openFavourite(entry, it) },
+                onFavourite = { navController.openFavourite(it) },
                 onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
             )
         }
 
-        reverieComposable(Routes.FAVOURITES) { entry ->
+        reverieComposable(Routes.FAVOURITES) {
             FavouritesScreen(
                 onBack = { navController.popBackStack() },
-                onGo = { navController.openFavourite(entry, it) },
+                onGo = { navController.openFavourite(it) },
             )
         }
 
@@ -98,7 +98,7 @@ fun ReverieNavGraph(
             FolderScreen(
                 onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onBack = { navController.popBackStack() },
-                onFavourite = { navController.openFavourite(entry, it) },
+                onFavourite = { navController.openFavourite(it) },
             )
         }
 
@@ -110,7 +110,7 @@ fun ReverieNavGraph(
             KindScreen(
                 onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
                 onBack = { navController.popBackStack() },
-                onFavourite = { navController.openFavourite(entry, it) },
+                onFavourite = { navController.openFavourite(it) },
             )
         }
 
@@ -133,6 +133,9 @@ fun ReverieNavGraph(
     }
 }
 
+/** A viewer origin that is no screen's: nothing matches it, so the viewer opens and closes with a plain fade. */
+private const val NO_DIVE_ORIGIN = "none"
+
 /** Switches to a bottom-nav tab, keeping each tab's back stack as it was. */
 private fun NavHostController.openTab(tab: Screen) = navigate(tab.route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
@@ -144,7 +147,11 @@ private fun NavHostController.openTab(tab: Screen) = navigate(tab.route) {
 internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentId: String, aspect: Float? = null) =
     navigate(Routes.document(documentId, origin.id, aspect))
 
-private fun NavHostController.openFavourite(origin: NavBackStackEntry, destination: FavouriteDestination) {
+/**
+ * A starred document opens with [NO_DIVE_ORIGIN]: what was tapped is a favourites tile, and a list on the
+ * same screen may hold the document too, whose row would otherwise fly into the viewer.
+ */
+internal fun NavHostController.openFavourite(destination: FavouriteDestination) {
     when (destination) {
         is FavouriteDestination.Folder -> navigate(Routes.folder(destination.id))
         // The screen reads which collection to show from CollectionFocus. A restored tab may have
@@ -153,7 +160,8 @@ private fun NavHostController.openFavourite(origin: NavBackStackEntry, destinati
             openTab(Screen.Collections)
             popBackStack(Screen.Collections.route, inclusive = false)
         }
-        is FavouriteDestination.Document -> openDocument(origin, destination.id, destination.aspect)
+        is FavouriteDestination.Document ->
+            navigate(Routes.document(destination.id, NO_DIVE_ORIGIN, destination.aspect))
     }
 }
 

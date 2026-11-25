@@ -76,7 +76,7 @@ fun FolderTile(doc: DocumentDto, actions: RowActions, modifier: Modifier = Modif
 /** A folder's document as a row: picture, name, [meta] line and overflow menu. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FolderRow(doc: DocumentDto, meta: String, actions: RowActions, modifier: Modifier = Modifier) {
+fun FolderDocumentRow(doc: DocumentDto, meta: String, actions: RowActions, modifier: Modifier = Modifier) {
     val selected = actions.selected(doc)
     Row(
         modifier = modifier

@@ -32,7 +32,8 @@ val LocalNavAnimatedContentScope = staticCompositionLocalOf<AnimatedVisibilitySc
 
 /**
  * The back-stack entry id of the screen a document is opened from: a list screen's own, and in the viewer
- * that of the list that opened it. Provided by each nav destination alongside its AnimatedContentScope.
+ * that of the list that opened it, or a value no screen has when it dives from no list. Provided by each
+ * nav destination alongside its AnimatedContentScope.
  */
 val LocalDiveOrigin = staticCompositionLocalOf<String?> { null }
 

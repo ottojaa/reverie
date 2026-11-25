@@ -31,7 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.ui.components.ChoiceChip
+import com.reverie.app.ui.components.ON_PICTURE_BUTTON_SCRIM
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.StarIcon
 import com.reverie.app.ui.navigation.bottomBarInset
@@ -133,7 +133,7 @@ private fun FavouriteCard(item: FavouriteDto, actions: FavouritesActions, modifi
         FavouritePicture(item, FavouritePictureStyle.GRID, Modifier.fillMaxWidth().height(112.dp)) {
             IconButton(onClick = { actions.onUnstar(item) }, modifier = Modifier.align(Alignment.TopEnd).size(44.dp)) {
                 // The scrim keeps the star legible on a bright photo.
-                Box(Modifier.size(30.dp).background(Color(0x66121212), CircleShape), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(30.dp).background(ON_PICTURE_BUTTON_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
                     StarIcon(
                         filled = true,
                         contentDescription = "Remove from favourites",

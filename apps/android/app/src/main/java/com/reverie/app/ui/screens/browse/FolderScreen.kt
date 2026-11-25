@@ -39,7 +39,7 @@ fun FolderScreen(
     BrowseChrome(
         title = BrowseTitle(
             text = ui.folder?.name ?: "Folder",
-            subtitle = folderSubtitle(shown.total, shown.matching, ui.folder?.description),
+            subtitle = folderPageSubtitle(shown.total, shown.matching, ui.folder?.description),
             isFolder = true,
             compact = true,
         ),
