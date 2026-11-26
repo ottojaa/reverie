@@ -61,8 +61,8 @@ sealed interface PickedStep {
 }
 
 /**
- * The requests that move or delete [picked]: documents first, then one per folder. What lies inside a picked
- * folder goes with it and gets no request of its own. A [needed] test leaves out what has nothing to be done.
+ * The requests that move or delete [picked]: documents first, then one per folder. A [needed] test leaves out
+ * what has nothing to be done. What lies inside a folder that gets a request goes with it and gets none of its own.
  */
 fun toSteps(
     picked: Picked,
@@ -72,12 +72,13 @@ fun toSteps(
 ): List<PickedStep> {
     // The tree's copy knows the folder's parent; a search hit's stand-in may not.
     val folders = picked.folders.map { tree.find(it.id) ?: it }
-    val subtrees = folders.associate { it.id to tree.subtreeIds(it.id) }
+    val needed = folders.filter(isFolderNeeded)
+    val subtrees = needed.associate { it.id to tree.subtreeIds(it.id) }
     val covered = subtrees.values.flatten().toSet()
-    val outermost = folders.filterNot { folder -> subtrees.any { (id, within) -> id != folder.id && folder.id in within } }
+    val outermost = needed.filterNot { folder -> subtrees.any { (id, within) -> id != folder.id && folder.id in within } }
     val loose = picked.documents.filterNot { it.folderId in covered }.filter(isDocumentNeeded)
 
-    val folderSteps = outermost.filter(isFolderNeeded).map { folder ->
+    val folderSteps = outermost.map { folder ->
         val within = subtrees.getValue(folder.id)
         val inside = picked.documents.filter { it.folderId in within }.map { it.id }
         PickedStep.Folder(folder, settles = (inside + folders.map { it.id }.filter { it in within }).toSet())

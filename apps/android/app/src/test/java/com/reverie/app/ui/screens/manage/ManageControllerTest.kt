@@ -150,7 +150,9 @@ class ManageControllerTest {
     @Test fun `a folder chosen to stay where it is sends nothing and is done with`() {
         manage.pickDestination(Picked(folders = listOf(trips))) { gone += it }
         manage.moveTo(Destination(null, "Library"))
+        awaitDone(1)
 
+        assertEquals(listOf(setOf("Trips")), gone)
         assertEquals(emptyList<String>(), sent("PATCH"))
     }
 

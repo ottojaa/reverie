@@ -176,12 +176,12 @@ class ManageController(
         onGone: (Set<String>) -> Unit,
         perform: suspend (PickedStep) -> Unit,
     ) {
-        val step = steps.firstOrNull() ?: return
+        // With no request left nothing is left to do, for what needed no request either.
+        val step = steps.firstOrNull() ?: return onGone(all)
         attempt {
             perform(step)
             val rest = steps.drop(1)
-            // After the last request nothing is left to do, for what needed no request either.
-            onGone(if (rest.isEmpty()) all else step.settles)
+            if (rest.isNotEmpty()) onGone(step.settles)
             sendInTurn(rest, all, onGone, perform)
         }
     }

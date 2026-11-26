@@ -127,6 +127,18 @@ class ManageRulesTest {
         assertEquals(emptyList<Any>(), requests(steps))
     }
 
+    @Test fun `a folder that stays where it is takes nothing with it`() {
+        val picked = Picked(
+            documents = listOf(file("in", "Trips"), file("deep", "Japan")),
+            folders = listOf(trips, japan),
+        )
+
+        // A move to the top level, where Trips already is.
+        val steps = toSteps(picked, tree, { it.folderId != null }, { it.parent_id != null })
+
+        assertEquals(listOf("in" to setOf("in"), "Japan" to setOf("Japan", "deep")), requests(steps))
+    }
+
     @Test fun `documents sharing a name travel in one request`() {
         val others = (1..99).map { doc("d$it", name = "d$it.jpg").toPicked() }
         val twins = listOf(doc("t1", name = "twin.jpg"), doc("t2", name = "twin.jpg")).map { it.toPicked() }
