@@ -1,6 +1,5 @@
 package com.reverie.app.ui.screens.manage
 
-import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.model.ConflictStrategy
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FavouriteKey
@@ -12,12 +11,11 @@ import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.components.FolderFormData
-import com.reverie.app.ui.components.FolderUnlocker
+import com.reverie.app.ui.components.LockedActions
 import com.reverie.app.ui.screens.destination.Destination
 import com.reverie.app.ui.screens.destination.DestinationBrowser
 import com.reverie.app.ui.screens.destination.DestinationRules
 import com.reverie.app.ui.screens.favourites.FavouriteController
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -26,7 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
 
 private const val CHANGE_FAILED = "Couldn't save the change."
 private const val NO_PASSWORD_NOTICE = "Private folders only lock once your account has a password."
@@ -79,8 +76,14 @@ class ManageController(
     val browser = DestinationBrowser(folders, vault, scope)
     private var picking: Picking? = null
 
-    private var afterUnlock: (() -> Unit)? = null
-    val unlocker = FolderUnlocker(vault, scope) { afterUnlock?.invoke() }
+    private val locked = LockedActions(
+        vault, scope, CHANGE_FAILED,
+        folderName = { id -> FolderTree(folders.observeTree().first()).find(id)?.name },
+        onFailure = { messages.send(it) },
+    )
+
+    /** The password prompt for a change a closed lock refused. */
+    val unlocker get() = locked.unlocker
 
     fun openMenu(folder: FolderWithChildren) =
         show(ManageDialog.Menu(folder, favourites.state.value.isStarred(folder.toKey())))
@@ -186,21 +189,5 @@ class ManageController(
         shown.value = next
     }
 
-    private fun attempt(action: suspend () -> Unit) {
-        scope.launch {
-            try {
-                action()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val lockedId = (e as? ReverieApiException)?.lockedFolderId()
-                if (lockedId == null) {
-                    messages.send((e as? ReverieApiException)?.userMessage() ?: CHANGE_FAILED)
-                    return@launch
-                }
-                afterUnlock = { attempt(action) }
-                unlocker.request(lockedId, FolderTree(folders.observeTree().first()).find(lockedId)?.name)
-            }
-        }
-    }
+    private fun attempt(action: suspend () -> Unit) = locked.attempt(action)
 }

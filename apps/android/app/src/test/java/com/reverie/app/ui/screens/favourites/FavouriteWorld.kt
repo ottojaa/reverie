@@ -4,6 +4,8 @@ import com.reverie.app.data.api.ApiJson
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.FavouritesApi
 import com.reverie.app.data.api.FoldersApi
+import com.reverie.app.data.api.ServerUrlProvider
+import com.reverie.app.data.api.TrashApi
 import com.reverie.app.data.api.VaultApi
 import com.reverie.app.data.api.model.CheckDuplicatesResponse
 import com.reverie.app.data.api.model.CreateFolderRequest
@@ -14,6 +16,7 @@ import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.Paginated
+import com.reverie.app.data.api.model.TrashListDto
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.repository.DocumentRepository
@@ -22,6 +25,7 @@ import com.reverie.app.data.repository.FakeFolderDao
 import com.reverie.app.data.repository.FavouritesRepository
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.NoopPurger
+import com.reverie.app.data.repository.TrashRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
@@ -49,7 +53,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.serialization.builtins.ListSerializer
 
-/** A server answering the favourites, vault, folder and document calls, with the real repositories on top. */
+/** A server answering the favourites, vault, folder, document and trash calls, with the real repositories on top. */
 internal class FavouriteWorld {
     /** What GET /favourites answers. */
     @Volatile var items: List<FavouriteDto> = emptyList()
@@ -73,7 +77,7 @@ internal class FavouriteWorld {
     /** Answers for the next PUTs, in order; after they run out a PUT succeeds. */
     val putFailures = ArrayDeque<Pair<HttpStatusCode, String>>()
 
-    /** Answers for the next folder writes and document moves, in order, null for success; then all succeed. */
+    /** Answers for the next folder writes, document moves and trash changes, in order, null for success; then all succeed. */
     val writeAnswers = ArrayDeque<Pair<HttpStatusCode, String>?>()
 
     /** The names POST /documents/check-duplicates reports as taken. */
@@ -81,6 +85,9 @@ internal class FavouriteWorld {
 
     /** What GET /vault/status says about the account. */
     @Volatile var hasPassword = true
+
+    /** What GET /trash answers. */
+    @Volatile var trash = TrashListDto(retention_days = 30)
 
     val requests = CopyOnWriteArrayList<String>()
 
@@ -101,6 +108,9 @@ internal class FavouriteWorld {
     val deps = FavouriteDeps(favourites, vault, documents, folders, sequences)
 
     fun controller() = FavouriteController(deps, scope)
+
+    fun trashRepository(serverUrl: ServerUrlProvider) =
+        TrashRepository(TrashApi(client), folders, documents, serverUrl, Dispatchers.Unconfined)
 
     /** Wait until the server has been asked [count] times for [request]. */
     suspend fun awaitRequests(request: String, count: Int) {
@@ -134,6 +144,8 @@ internal class FavouriteWorld {
             path == "documents/check-duplicates" ->
                 reply(ApiJson.encodeToString(CheckDuplicatesResponse.serializer(), CheckDuplicatesResponse(takenNames)))
             path == "documents/move" || path.startsWith("folders/") -> replyWrite(path)
+            path == "trash" -> reply(ApiJson.encodeToString(TrashListDto.serializer(), trash))
+            path.startsWith("trash/") -> replyTrashWrite()
             else -> reply("", HttpStatusCode.NoContent)
         }
     }
@@ -145,6 +157,12 @@ internal class FavouriteWorld {
         val id = path.removePrefix("folders/").takeIf { path.startsWith("folders/") }
         val node = id?.let { FolderTree(tree).find(it) } ?: return reply("", HttpStatusCode.NoContent)
         return reply(ApiJson.encodeToString(FolderDto.serializer(), node.toFolder()))
+    }
+
+    private fun MockRequestHandleScope.replyTrashWrite(): HttpResponseData {
+        val failure = writeAnswers.removeFirstOrNull()
+        if (failure != null) return reply(failure.second, failure.first)
+        return reply("""{"documents":1,"folders":0}""")
     }
 
     private fun FolderWithChildren.toFolder() = FolderDto(

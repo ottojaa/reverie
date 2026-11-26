@@ -118,7 +118,7 @@ class DocumentViewModel @Inject constructor(
     fun observeDocument(id: String): Flow<DocumentDto?> = documentRepository.observeDocument(id)
 
     /** Signed URL for [id] — served from the repository's app-scoped cache (warmed on tap) or fetched. */
-    suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(::absolute)
+    suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(serverUrlProvider::toAbsolute)
 
     /** The original's and the HLS renditions' signed URLs for [id], made absolute; both from one fetch. */
     suspend fun signedUrls(id: String): SignedUrls? = documentRepository.signedUrls(id)?.let(::absoluteUrls)
@@ -205,8 +205,5 @@ class DocumentViewModel @Inject constructor(
     }
 
     private fun absoluteUrls(urls: SignedUrls): SignedUrls =
-        SignedUrls(absolute(urls.fileUrl), urls.hlsUrl?.let(::absolute))
-
-    private fun absolute(url: String): String =
-        if (url.startsWith("http")) url else serverUrlProvider.current().removeSuffix("/") + url
+        SignedUrls(serverUrlProvider.toAbsolute(urls.fileUrl), urls.hlsUrl?.let(serverUrlProvider::toAbsolute))
 }

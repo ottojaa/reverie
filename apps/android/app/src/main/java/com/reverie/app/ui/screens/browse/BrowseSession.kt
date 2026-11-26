@@ -152,7 +152,7 @@ class BrowseSession(
         scope.launch {
             val raw = deps.documents.fileUrl(document.id) ?: return@launch
             if (DocumentKind.of(document.mime_type) == DocumentKind.IMAGE) {
-                deps.imageLoader.enqueue(ImageRequest.Builder(deps.appContext).data(absolute(raw)).build())
+                deps.imageLoader.enqueue(ImageRequest.Builder(deps.appContext).data(deps.serverUrl.toAbsolute(raw)).build())
             }
         }
     }
@@ -217,7 +217,7 @@ class BrowseSession(
             val targets = ids.mapNotNull { id ->
                 runCatching {
                     val doc = deps.documents.fetchDocument(id)
-                    doc.file_url?.let { DownloadTarget(absolute(it), doc.original_filename) }
+                    doc.file_url?.let { DownloadTarget(deps.serverUrl.toAbsolute(it), doc.original_filename) }
                 }.getOrNull()
             }
             clearSelection()
@@ -245,9 +245,6 @@ class BrowseSession(
         refreshFolders()
         onContentChanged()
     }
-
-    private fun absolute(url: String): String =
-        if (url.startsWith("http")) url else deps.serverUrl.current().removeSuffix("/") + url
 
     private fun messageFor(throwable: Throwable): String =
         (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load documents."

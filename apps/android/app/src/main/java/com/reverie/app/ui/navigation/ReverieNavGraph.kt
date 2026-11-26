@@ -23,6 +23,7 @@ import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.ChangePasswordScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
 import com.reverie.app.ui.screens.settings.backup.BackupSettingsScreen
+import com.reverie.app.ui.screens.trash.TrashScreen
 
 @Composable
 fun ReverieNavGraph(
@@ -72,7 +73,7 @@ private fun NavHostController.libraryLinks() = LibraryLinks(
     onOpenList = { navigate(Routes.feed(it)) },
     onOpenFavourites = { navigate(Routes.FAVOURITES) },
     onSearch = { navigate(Routes.search(query = it)) },
-    onOpenTrash = {},
+    onOpenTrash = { navigate(Routes.TRASH) },
 )
 
 private fun NavHostController.accountLinks() = AccountLinks(
@@ -114,6 +115,10 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onBack = { navController.popBackStack() },
             onOpenFolder = { navController.openFolder(it) },
         )
+    }
+
+    composable(Routes.TRASH) {
+        TrashScreen(onBack = { navController.popBackStack() })
     }
 
     reverieComposable(Routes.SEARCH, Routes.searchArguments) { entry ->

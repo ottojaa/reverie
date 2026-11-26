@@ -293,6 +293,12 @@ class DocumentRepository @Inject constructor(
         announceContentChanged()
     }
 
+    /** Documents brought back from the trash: they are no longer deleted, and every list reads again. */
+    fun announceRestored(ids: List<String>) {
+        deletedIdsFlow.update { it - ids.toSet() }
+        announceContentChanged()
+    }
+
     suspend fun rename(id: String, filename: String): DocumentDto = withContext(io) {
         val dto = documentsApi.rename(id, filename)
         absorb(listOf(dto))

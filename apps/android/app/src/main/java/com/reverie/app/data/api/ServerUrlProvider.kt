@@ -35,5 +35,8 @@ class ServerUrlProvider @Inject constructor(
 
     fun current(): String = _base.value
 
+    /** [url] as it is when it names its host; a server-relative one, as signed file URLs are, under the current base. */
+    fun toAbsolute(url: String): String = if (url.startsWith("http")) url else current().removeSuffix("/") + url
+
     private fun normalize(url: String): String = url.trim().removeSuffix("/") + "/"
 }
