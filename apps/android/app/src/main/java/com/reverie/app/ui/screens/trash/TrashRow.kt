@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,24 +29,34 @@ import coil.request.ImageRequest
 import com.reverie.app.data.api.model.TrashDocumentDto
 import com.reverie.app.ui.components.CoverIconBlock
 import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.SelectablePicture
 import com.reverie.app.ui.components.rememberBlurhashPainter
+import com.reverie.app.ui.components.selectedBackground
 import java.time.Instant
 
 private val PICTURE_SIZE = 52.dp
 
-/** One item in the trash. It cannot be opened, so a tap and a hold both ask what to do with it. */
+/** One item in the trash. It cannot be opened: a tap asks what to do with it, and a hold selects it. */
 @Composable
-fun TrashRow(item: TrashItem, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TrashRow(
+    item: TrashItem,
+    now: Instant,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .selectedBackground(selected)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Select")
             .heightIn(min = PICTURE_SIZE + 18.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        TrashPicture(item)
+        SelectablePicture(selected, PICTURE_SIZE) { TrashPicture(item) }
         Column(Modifier.weight(1f)) {
             Text(
                 item.name,
@@ -65,13 +73,6 @@ fun TrashRow(item: TrashItem, now: Instant, onClick: () -> Unit, modifier: Modif
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (item is TrashItem.Folder && item.folder.locked) return@Row
-        Icon(
-            Icons.Outlined.MoreVert,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
-        )
     }
 }
 

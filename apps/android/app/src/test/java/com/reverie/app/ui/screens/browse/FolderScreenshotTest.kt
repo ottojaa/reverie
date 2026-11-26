@@ -21,9 +21,11 @@ import com.reverie.app.data.api.model.MediaDatesDto
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.BLURHASHES
-import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.photoCover
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.PickedTopBar
+import com.reverie.app.ui.screens.manage.RowSelection
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
@@ -127,13 +129,18 @@ class FolderScreenshotTest {
             Box(Modifier.weight(1f)) {
                 FolderBody(
                     state = state, name = name, description = description,
-                    links = FolderLinks(covers, starredIds = setOf("Lisbon"), onOpen = {}, onOpenCrumb = {}),
+                    links = FolderLinks(
+                        covers, starredIds = setOf("Lisbon"), onOpen = {}, onOpenCrumb = {},
+                        selection = RowSelection(selectedIds),
+                    ),
                     layout = layout, actions = actions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
                     error = null, slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onHeading = {}, onUpload = {}),
                 )
             }
         }
-        if (selectedIds.isNotEmpty()) SelectionTopBar(selectedIds.size, onClose = {}, onDownload = {}, onMove = {}, onDelete = {})
+        val listed = state.media.documents + state.files?.documents.orEmpty()
+        val picked = pickFrom(selectedIds, listed, state.node?.children.orEmpty())
+        if (!picked.isEmpty) PickedTopBar(picked, isStarred = false, canDownload = true, onClose = {}, onPick = {})
     }
 
     private fun shoot(state: String, folder: FolderState, description: String? = null) =
@@ -155,6 +162,11 @@ class FolderScreenshotTest {
     @Test fun selection() = shoot(
         "selection",
         folder("Portugal – 2025", media = trip.take(6), files = files, selectedIds = setOf(trip[0].id, trip[1].id, boardingPass.id)),
+    )
+
+    @Test fun oneFolderSelected() = shoot(
+        "oneFolderSelected",
+        folder("Trips", media = trip.take(3), children = subfolders, selectedIds = setOf(subfolders.first().id)),
     )
 
     /** A 320dp-wide phone with long names and a deep path. */

@@ -5,6 +5,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
+import com.reverie.app.ui.screens.manage.Picked
+import com.reverie.app.ui.screens.manage.PickedDocument
+import com.reverie.app.ui.screens.manage.PickedTopBar
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,11 +29,25 @@ class SelectionTopBarTest {
 
     @Test fun `a large count stays whole on one line on a narrow phone`() {
         compose.setContent {
-            ReverieTheme { SelectionTopBar(count = 1252, onClose = {}, onDownload = {}, onMove = {}, onDelete = {}) }
+            ReverieTheme { PickedTopBar(photos(1252), isStarred = false, canDownload = false, onClose = {}, onPick = {}) }
         }
 
+        assertWholeOnOneLine("1252 selected")
+    }
+
+    @Test fun `where the words do not fit beside every action the count stands alone`() {
+        compose.setContent {
+            ReverieTheme { PickedTopBar(photos(1252), isStarred = false, canDownload = true, onClose = {}, onPick = {}) }
+        }
+
+        assertWholeOnOneLine("1252")
+    }
+
+    private fun photos(count: Int) = Picked(documents = List(count) { PickedDocument("$it", null, "$it.jpg") })
+
+    private fun assertWholeOnOneLine(title: String) {
         val layouts = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText("1252 selected").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        compose.onNodeWithText(title).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
 
         assertEquals(1, layouts.single().lineCount)
         assertFalse("the count is cut off", layouts.single().hasVisualOverflow)

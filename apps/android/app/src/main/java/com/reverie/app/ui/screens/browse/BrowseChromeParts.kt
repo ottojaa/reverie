@@ -9,7 +9,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
@@ -53,21 +52,3 @@ internal fun UnlockSheetHost(unlocker: FolderUnlocker) {
     val prompt by unlocker.prompt.collectAsStateWithLifecycle()
     prompt?.let { VaultUnlockSheet(prompt = it, onSubmit = unlocker::submit, onDismiss = unlocker::dismiss) }
 }
-
-@Composable
-internal fun DeleteDocumentsDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    ConfirmDialog(
-        title = "Delete $count ${plural(count)}?",
-        message = if (count == 1) {
-            "It goes to the trash, where you can restore it."
-        } else {
-            "They go to the trash, where you can restore them."
-        },
-        confirmLabel = "Delete",
-        destructive = true,
-        onConfirm = onConfirm,
-        onDismiss = onDismiss,
-    )
-}
-
-internal fun plural(n: Int): String = if (n == 1) "file" else "files"

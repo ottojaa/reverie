@@ -23,6 +23,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.components.ComingSoonSheet
 import com.reverie.app.ui.components.CreateEditFolderSheet
+import com.reverie.app.ui.screens.manage.RowSelection
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -55,7 +57,11 @@ fun FolderScreen(
     val name = shown.node?.name ?: ui.folder?.name ?: "Folder"
     val isEmpty = shown.isEmptyOfDocuments && shown.node?.children.isNullOrEmpty()
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
-    val selectedIds = shown.selectedIds
+    val picked = remember(shown) {
+        val documents = shown.media.documents + shown.files?.documents.orEmpty()
+        pickFrom(shown.selectedIds, documents, shown.node?.children.orEmpty())
+    }
+    val selectedIds = picked.ids
     val starredIds = favourites.starredDocumentIds
     val actions = remember(viewModel, selectedIds, starredIds) {
         documentRowActions(viewModel, selectedIds, starredIds, openDocument)
@@ -68,7 +74,7 @@ fun FolderScreen(
         folderId = viewModel.folderId,
         isRefreshing = shown.isRefreshing,
         isEmpty = isEmpty,
-        selection = ChromeSelection(selectedIds.size, viewModel::clearSelection, viewModel::moveSelected, viewModel::deleteSelected, viewModel::downloadSelected),
+        selection = ChromeSelection(picked, viewModel.selection, viewModel::download),
         unlocker = viewModel.unlocker,
         onRefresh = { viewModel.refresh() },
         onRetry = { viewModel.refresh(initial = true) },
@@ -93,7 +99,13 @@ fun FolderScreen(
             state = shown,
             name = name,
             description = ui.folder?.description,
-            links = FolderLinks(covers, favourites.starredFolderIds, onOpenFolder, onOpenCrumb, onHold = viewModel.manage::openMenu),
+            links = FolderLinks(
+                covers = covers,
+                starredIds = favourites.starredFolderIds,
+                onOpen = onOpenFolder,
+                onOpenCrumb = onOpenCrumb,
+                selection = RowSelection(selectedIds, viewModel.selection::toggle),
+            ),
             layout = layout,
             actions = actions,
             focusedId = focusedId,

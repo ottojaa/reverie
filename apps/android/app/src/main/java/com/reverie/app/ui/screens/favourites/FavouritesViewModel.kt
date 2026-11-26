@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.screens.manage.ManageController
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.coroutineScope
@@ -20,7 +21,10 @@ class FavouritesViewModel @Inject constructor(private val deps: FavouriteDeps) :
 
     val favourites = FavouriteController(deps, viewModelScope)
 
-    /** Folder menus, and moving folders. */
+    /** The favourites selected. */
+    val selection = Selection()
+
+    /** Changing what is selected. */
     val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, viewModelScope)
 
     val folders: StateFlow<CachedFolders> = deps.folders.observeCached()

@@ -32,8 +32,6 @@ class FeedViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = null,
         deps = deps,
-        selection = { feed.selectedDocuments },
-        clearSelection = { feed.clearSelection() },
         refresh = { feed.refresh() },
         onContentChanged = { feed.contentChanged() },
     )
@@ -57,6 +55,7 @@ class FeedViewModel @Inject constructor(
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
     override val favourites get() = session.favourites
+    override val selection get() = feed.selection
     val manage get() = session.manage
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
@@ -73,22 +72,14 @@ class FeedViewModel @Inject constructor(
 
     fun loadMore() = feed.loadMore()
 
-    override fun enterSelection(id: String) = feed.enterSelection(listOf(id))
-
-    override fun toggleSelect(id: String) = feed.toggleSelect(listOf(id))
-
     /** A tap on a group opens or closes it; while selecting, it selects or deselects all of it. */
     fun tapGroup(group: RecentRow.Group) {
-        if (feed.selectedIds.isNotEmpty()) return feed.toggleSelect(group.docIds())
+        if (selection.ids.value.isNotEmpty()) return holdGroup(group)
         openGroups.update { if (group.key in it) it - group.key else it + group.key }
     }
 
-    fun holdGroup(group: RecentRow.Group) {
-        if (feed.selectedIds.isNotEmpty()) return feed.toggleSelect(group.docIds())
-        feed.enterSelection(group.docIds())
-    }
-
-    fun clearSelection() = feed.clearSelection()
+    /** A long press selects all of a group, or deselects it when all of it is selected. */
+    fun holdGroup(group: RecentRow.Group) = selection.toggle(group.docIds())
 
     /** Hand the shown list's documents, in the order shown, to the viewer. Call right before opening one. */
     override fun prepareSequence(opened: DocumentDto) {
@@ -100,9 +91,5 @@ class FeedViewModel @Inject constructor(
 
     fun clearViewerFocus() = session.clearViewerFocus()
 
-    fun moveSelected() = session.moveSelected()
-
-    fun deleteSelected() = session.deleteSelected()
-
-    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
+    fun download(ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) = session.download(ids, onTargets)
 }

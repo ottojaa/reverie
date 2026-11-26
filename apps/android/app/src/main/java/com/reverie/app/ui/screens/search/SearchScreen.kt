@@ -12,6 +12,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SearchFacets
 import com.reverie.app.domain.search.FilterKey
+import com.reverie.app.ui.navigation.navigationBarInset
+import com.reverie.app.ui.screens.manage.PickingPage
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 
 @Composable
@@ -23,33 +26,37 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedIds by viewModel.selection.ids.collectAsStateWithLifecycle()
+    val picked = remember(state, selectedIds) { state.picked(selectedIds) }
     var openSheet by remember { mutableStateOf<SearchSheet?>(null) }
     val scroll = rememberSearchScroll()
     ReturnToViewedResult(viewModel, state, scroll)
-    SearchBody(
-        state = state,
-        modifier = modifier,
-        scroll = scroll,
-        actions = SearchActions(
-            onBack = onBack,
-            onType = viewModel::setFreeText,
-            onSubmit = viewModel::rememberSubmitted,
-            onRemoveScope = viewModel::removeScope,
-            onOpenSheet = { sheet ->
-                openSheet = sheet
-                if (sheet != SearchSheet.Date) viewModel.ensureBaseFacets()
-            },
-            onClearFilters = viewModel::clearFilters,
-            onSort = viewModel::setSort,
-            onViewMode = viewModel::setViewMode,
-            onApplyQuery = viewModel::setQuery,
-            onRemoveRecent = viewModel::removeRecent,
-            // Publish the result order so the viewer can swipe between hits, then open the tapped one.
-            onOpenDocument = { id -> viewModel.rememberOpened(); viewModel.prepareSequence(); onDocumentClick(id) },
-            onOpenFolder = { id -> viewModel.rememberOpened(); onOpenFolder(id) },
-            onLoadMore = viewModel::loadMore,
-        ),
-    )
+    PickingPage(picked, viewModel.selection, viewModel.manage, viewModel.favourites, modifier, navigationBarInset()) {
+        SearchBody(
+            state = state,
+            scroll = scroll,
+            actions = SearchActions(
+                onBack = onBack,
+                onType = viewModel::setFreeText,
+                onSubmit = viewModel::rememberSubmitted,
+                onRemoveScope = viewModel::removeScope,
+                onOpenSheet = { sheet ->
+                    openSheet = sheet
+                    if (sheet != SearchSheet.Date) viewModel.ensureBaseFacets()
+                },
+                onClearFilters = viewModel::clearFilters,
+                onSort = viewModel::setSort,
+                onViewMode = viewModel::setViewMode,
+                onApplyQuery = viewModel::setQuery,
+                onRemoveRecent = viewModel::removeRecent,
+                // Publish the result order so the viewer can swipe between hits, then open the tapped one.
+                onOpenDocument = { id -> viewModel.rememberOpened(); viewModel.prepareSequence(); onDocumentClick(id) },
+                onOpenFolder = { id -> viewModel.rememberOpened(); onOpenFolder(id) },
+                onLoadMore = viewModel::loadMore,
+                selection = RowSelection(picked.ids, viewModel.selection::toggle),
+            ),
+        )
+    }
     openSheet?.let { FilterSheet(it, state, viewModel, onOpenSheet = { next -> openSheet = next }) }
 }
 

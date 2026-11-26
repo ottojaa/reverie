@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.search
 
 import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.api.model.SearchFacets
 import com.reverie.app.data.api.model.SearchHit
@@ -13,6 +14,8 @@ import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.domain.search.getFilterTokens
 import com.reverie.app.domain.search.getFreeText
 import com.reverie.app.domain.search.tokenizeQuery
+import com.reverie.app.ui.screens.manage.Picked
+import com.reverie.app.ui.screens.manage.PickedDocument
 
 enum class ViewMode { LIST, GRID }
 
@@ -146,3 +149,19 @@ internal fun defaultViewMode(ask: SearchAsk, folders: CachedFolders): ViewMode {
 }
 
 private val PHOTO_VALUES = setOf("photo", "image", "screenshot", "graphic")
+
+/** What [ids] picks out of the results on show. */
+internal fun SearchUiState.picked(ids: Set<String>): Picked {
+    if (ids.isEmpty()) return Picked()
+    val documents = results.filterIsInstance<DocumentSearchResult>().filter { it.document_id in ids }
+    val hits = results.filterIsInstance<CollectionSearchResult>().filter { it.id in ids }
+    return Picked(
+        documents = documents.map { PickedDocument(it.document_id, it.folder_id, it.filename) },
+        folders = hits.map { folders.byId[it.id] ?: it.toFolder() },
+    )
+}
+
+/** A folder hit the cached tree does not hold, with as much as the hit tells of it. */
+internal fun CollectionSearchResult.toFolder() = FolderWithChildren(
+    id = id, name = name, path = path, sort_order = 0, is_private = false, created_at = "", updated_at = "",
+)

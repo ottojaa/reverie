@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.repository.PageResult
 import com.reverie.app.ui.screens.viewer.DocumentSequence
@@ -32,7 +33,6 @@ data class FeedState(
 
 private data class Control(
     val cursor: FeedCursor = FeedCursor(),
-    val selectedIds: Set<String> = emptySet(),
     val isRefreshing: Boolean = false,
 )
 
@@ -56,6 +56,7 @@ class BrowseFeedModel(
     private val reconcile: suspend (readIds: Set<String>) -> Unit = {},
     computation: CoroutineDispatcher = Dispatchers.Default,
     sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
+    val selection: Selection = Selection(),
 ) {
     private val control = MutableStateFlow(Control())
     private var reads: FeedReads? = null
@@ -65,14 +66,9 @@ class BrowseFeedModel(
         combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> deriveFeed(docs, filter, cursor) }
             .flowOn(computation)
 
-    val state: StateFlow<FeedState> = combine(derived, control) { documents, c ->
-        FeedState(documents, c.selectedIds, c.isRefreshing)
+    val state: StateFlow<FeedState> = combine(derived, control, selection.ids) { documents, c, selectedIds ->
+        FeedState(documents, selectedIds, c.isRefreshing)
     }.stateIn(scope, sharing, FeedState())
-
-    val selectedIds: Set<String> get() = control.value.selectedIds
-
-    /** The selected documents, as the feed holds them now. */
-    val selectedDocuments: List<DocumentDto> get() = state.value.documents.documents.filter { it.id in selectedIds }
 
     init {
         fetch(offset = 0, refreshing = false)
@@ -96,16 +92,6 @@ class BrowseFeedModel(
         if (cursor.stale) return fetch(offset = 0, refreshing = false)
         if (cursor.hasMore) fetch(offset = cursor.offset, refreshing = false)
     }
-
-    fun enterSelection(ids: Collection<String>) = control.update { it.copy(selectedIds = ids.toSet()) }
-
-    /** Selects [ids] together, or deselects them all when every one is already selected (a fold or stack row). */
-    fun toggleSelect(ids: Collection<String>) = control.update {
-        val all = it.selectedIds.containsAll(ids)
-        it.copy(selectedIds = if (all) it.selectedIds - ids.toSet() else it.selectedIds + ids)
-    }
-
-    fun clearSelection() = control.update { it.copy(selectedIds = emptySet()) }
 
     /**
      * The viewer's swipe order: this feed's loaded documents and nothing else. Its ids follow the feed as

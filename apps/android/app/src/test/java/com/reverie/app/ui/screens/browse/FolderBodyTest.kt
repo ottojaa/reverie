@@ -27,6 +27,7 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -73,7 +74,7 @@ class FolderBodyTest {
                     starredIds = emptySet(),
                     onOpen = { calls += "folder:$it" },
                     onOpenCrumb = { calls += "crumb:$it" },
-                    onHold = { calls += "hold folder:${it.id}" },
+                    selection = RowSelection(selected) { calls += "select folder:$it" },
                 ),
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = RowActions(
@@ -100,13 +101,23 @@ class FolderBodyTest {
         assertEquals(listOf("folder:Lisbon"), calls)
     }
 
-    @Test fun `a long press on a folder row asks for its actions`() {
+    @Test fun `a long press selects a folder row`() {
         folders = listOf(node("Lisbon", parent = "Portugal"))
         show()
 
         compose.onNodeWithText("Lisbon").performTouchInput { longClick() }
 
-        assertEquals(listOf("hold folder:Lisbon"), calls)
+        assertEquals(listOf("select folder:Lisbon"), calls)
+    }
+
+    @Test fun `while something is selected a tap on a folder selects it instead of opening it`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        selected = setOf("f2")
+        show()
+
+        compose.onNodeWithText("Lisbon").performClick()
+
+        assertEquals(listOf("select folder:Lisbon"), calls)
     }
 
     @Test fun `every breadcrumb step leads somewhere, the Library included, even from a folder one level down`() {

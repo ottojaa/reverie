@@ -135,11 +135,11 @@ class FolderModelTest {
     @Test fun `a selection spans both sections`() = runTest(UnconfinedTestDispatcher()) {
         val f = start(FakeServer(photos.take(2) + files))
 
-        f.model.enterSelection(listOf("f3"))
-        f.model.toggleSelect(listOf("p3"))
+        f.model.selection.toggle("f3")
+        f.model.selection.toggle("p3")
 
         assertEquals(setOf("f3", "p3"), f.state.selectedIds)
-        f.model.clearSelection()
+        f.model.selection.clear()
         assertTrue(f.state.selectedIds.isEmpty())
     }
 
@@ -182,7 +182,7 @@ class FolderModelTest {
 
     @Test fun `a locked folder shows nothing of what was read before it locked`() = runTest(UnconfinedTestDispatcher()) {
         val f = start(FakeServer(photos.take(2) + files.take(2)))
-        f.model.enterSelection(listOf("p3"))
+        f.model.selection.toggle("p3")
 
         val locked = f.state.unlessLocked(true)
 

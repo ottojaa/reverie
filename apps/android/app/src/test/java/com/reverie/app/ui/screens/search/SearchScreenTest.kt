@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Looper
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -24,6 +27,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.lifecycle.SavedStateHandle
@@ -91,6 +95,7 @@ class SearchScreenTest {
     private val requests = CopyOnWriteArrayList<Url>()
     private val calls = mutableListOf<String>()
     private lateinit var viewModel: SearchViewModel
+    private var back: OnBackPressedDispatcher? = null
     /** How many results the server says there are; it answers every page with [hit]. */
     private var total = 1
 
@@ -138,10 +143,11 @@ class SearchScreenTest {
 
     private fun open(vararg arguments: Pair<String, Any?>) {
         viewModel = SearchViewModel(
-            searches, world.folders, ConnectivityMonitor(context, scope), world.sequences,
+            searches, world.deps, ConnectivityMonitor(context, scope),
             SavedStateHandle(mapOf(*arguments)),
         )
         compose.setContent {
+            back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
             ReverieTheme {
                 SearchScreen(
                     onBack = { calls += "back" },
@@ -391,5 +397,51 @@ class SearchScreenTest {
         compose.onNodeWithContentDescription("Close search").performClick()
 
         assertEquals(listOf("back"), calls)
+    }
+
+    /** Search for the one result and hold it. */
+    private fun searchAndHold() {
+        open()
+        search("lisbon")
+        compose.onNodeWithText(hit.display_name).performTouchInput { longClick() }
+        awaitText("1 selected")
+    }
+
+    @Test fun `a held result is selected, and Back ends the selection and stays`() {
+        searchAndHold()
+
+        compose.runOnIdle { back?.onBackPressed() }
+
+        await { viewModel.selection.ids.value.isEmpty() }
+        compose.onNodeWithText("1 selected").assertDoesNotExist()
+        assertEquals(emptyList<String>(), calls)
+    }
+
+    @Test fun `while a result is selected a tap unselects it instead of opening it`() {
+        searchAndHold()
+
+        compose.onNodeWithText(hit.display_name).performClick()
+
+        await { viewModel.selection.ids.value.isEmpty() }
+        assertEquals(emptyList<String>(), calls)
+    }
+
+    @Test fun `another query ends the selection`() {
+        searchAndHold()
+
+        type(" tram")
+
+        await { viewModel.selection.ids.value.isEmpty() }
+    }
+
+    @Test fun `moving a selected result to Trash asks first and then searches again`() {
+        searchAndHold()
+
+        compose.onNodeWithContentDescription("Move to Trash").performClick()
+        awaitText("Move “tram.pdf” to Trash?")
+        pressInSheet(compose.onNodeWithText("Move to Trash"))
+
+        await { searched.size == 2 && viewModel.selection.ids.value.isEmpty() }
+        assertTrue("""DELETE documents {"ids":["tram"]}""" in world.requests)
     }
 }

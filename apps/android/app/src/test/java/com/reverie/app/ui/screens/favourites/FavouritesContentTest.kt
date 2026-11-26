@@ -27,6 +27,7 @@ import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,6 +47,7 @@ class FavouritesContentTest {
 
     private var state by mutableStateOf(FavouriteFixtures.loaded)
     private var focusedId by mutableStateOf<String?>(null)
+    private var selected by mutableStateOf(emptySet<String>())
     private var inputMode: InputModeManager? = null
     private val calls = mutableListOf<String>()
 
@@ -61,10 +63,9 @@ class FavouritesContentTest {
                 actions = FavouritesActions(
                     onBack = { calls += "back" },
                     onOpen = { calls += "open:${it.id}" },
-                    onUnstar = { calls += "unstar:${it.id}" },
-                    onHoldFolder = { calls += "hold:${it.id}" },
                     onRefresh = {},
                     onFocusConsumed = { focusedId = null },
+                    selection = RowSelection(selected) { calls += "select:$it" },
                 ),
                 isFetching = isFetching,
                 focusedId = focusedId,
@@ -123,25 +124,25 @@ class FavouritesContentTest {
         compose.onNodeWithText("Unlock to see").assertIsDisplayed()
     }
 
-    @Test fun `a long press on a folder asks for the folder's actions`() {
+    @Test fun `a long press selects every kind of favourite`() {
         show()
 
-        hold("Portugal - 2025")
+        listOf("Portugal - 2025", "invoice-march.pdf", "Builds", "Private").forEach(::hold)
+        compose.onNodeWithContentDescription("sunset.jpg").performTouchInput { longClick() }
 
-        assertEquals(listOf("hold:f-portugal"), calls)
+        val held = listOf("f-portugal", "d-invoice", "f-builds", "d-secret", "d-sunset")
+        assertEquals(held.map { "select:$it" }, calls)
     }
 
-    @Test fun `a long press on anything else offers to unstar it`() {
+    @Test fun `while something is selected a tap selects instead of opening`() {
+        selected = setOf("d-notes")
         show()
 
-        listOf("invoice-march.pdf", "Builds", "Private").forEach { name ->
-            hold(name)
-            compose.onNodeWithText("Remove from favourites").performClick()
-        }
-        compose.onNodeWithContentDescription("sunset.jpg").performTouchInput { longClick() }
-        compose.onNodeWithText("Remove from favourites").performClick()
+        compose.onNodeWithText("Portugal - 2025").performClick()
+        compose.onNodeWithContentDescription("sunset.jpg").performClick()
+        compose.onNodeWithText("Private").performClick()
 
-        assertEquals(listOf("unstar:d-invoice", "unstar:f-builds", "unstar:d-secret", "unstar:d-sunset"), calls)
+        assertEquals(listOf("select:f-portugal", "select:d-sunset", "select:d-secret"), calls)
     }
 
     @Test fun `Enter opens the focused row`() {

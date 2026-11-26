@@ -48,8 +48,6 @@ class LibraryViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = null,
         deps = deps,
-        selection = { model.selectedDocuments },
-        clearSelection = { model.clearSelection() },
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
     )
@@ -76,6 +74,7 @@ class LibraryViewModel @Inject constructor(
     val unlocker get() = session.unlocker
     val favourites get() = session.favourites
     val manage get() = session.manage
+    val selection get() = model.selection
     val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
 
     val backup: StateFlow<BackupStatus> = backupSource.observe()
@@ -103,8 +102,6 @@ class LibraryViewModel @Inject constructor(
 
     fun loadMore() = model.loadMore()
 
-    fun clearSelection() = model.clearSelection()
-
     fun clearViewerFocus() = session.clearViewerFocus()
 
     /** Makes a folder at the top level; its row appears with the refreshed tree. */
@@ -114,18 +111,12 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun moveSelected() = session.moveSelected()
-
-    fun deleteSelected() = session.deleteSelected()
-
-    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
+    fun download(ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) = session.download(ids, onTargets)
 
     private fun handlerOf(section: LibrarySection) = object : DocumentListHandler {
         override val favourites get() = session.favourites
 
-        override fun enterSelection(id: String) = model.enterSelection(id)
-
-        override fun toggleSelect(id: String) = model.toggleSelect(id)
+        override val selection get() = model.selection
 
         override fun prepareSequence(opened: DocumentDto) = session.publish(model.prepareSequence(section))
 

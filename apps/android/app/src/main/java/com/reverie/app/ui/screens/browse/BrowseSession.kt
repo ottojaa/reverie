@@ -74,19 +74,17 @@ private data class SessionControl(val error: String? = null, val lockedFolderId:
 
 /**
  * What the Library, a folder page and a list screen do the same way, held once: the lock prompt and
- * load errors, the viewer hand-off, delete, move and download of the selection, changing folders, the
- * document warm-up, the processing watchers, the grid settings, and the signals that the library changed
- * (a delete or a move anywhere, uploads finishing).
+ * load errors, the viewer hand-off, changing what is selected, downloading it, the document warm-up, the
+ * processing watchers, the grid settings, and the signals that the library changed (a delete or a move
+ * anywhere, uploads finishing).
  *
- * The owner (a view model) passes [selection] and [clearSelection] for its own feeds, [refresh] to re-read
- * after a password unlock, and [onContentChanged] for what it re-reads when the library changes.
+ * The owner (a view model) passes [refresh] to re-read after a password unlock, and [onContentChanged] for
+ * what it re-reads when the library changes.
  */
 class BrowseSession(
     private val scope: CoroutineScope,
     val folderId: String?,
     private val deps: BrowseDeps,
-    private val selection: () -> List<DocumentDto>,
-    private val clearSelection: () -> Unit,
     refresh: () -> Unit,
     private val onContentChanged: () -> Unit,
 ) {
@@ -111,7 +109,7 @@ class BrowseSession(
     /** Starring and opening favourites from this screen. */
     val favourites = FavouriteController(deps.favouriteDeps, scope)
 
-    /** Folder menus, and moving folders and documents. */
+    /** What the selection bar does to documents and folders. */
     val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, scope)
 
     /** How a photo grid arranges its tiles (user setting). */
@@ -194,25 +192,11 @@ class BrowseSession(
         }
     }
 
-    fun moveSelected() = manage.pickDocumentDestination(selection(), clearSelection)
-
-    fun deleteSelected() {
-        val ids = selection().map { it.id }
-        if (ids.isEmpty()) return
-        scope.launch {
-            // The repository announces the delete, which every open Browse screen answers (this one included).
-            runCatching { deps.documents.delete(ids) }
-            clearSelection()
-        }
-    }
-
     /**
-     * Resolve fresh signed URLs for the selected documents (the cached copies strip file_url) and
+     * Resolve fresh signed URLs for the documents [ids] (the cached copies strip file_url) and
      * hand them to [onTargets] to enqueue; the caller owns the platform DownloadManager.
      */
-    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) {
-        val ids = selection().map { it.id }
-        if (ids.isEmpty()) return
+    fun download(ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) {
         scope.launch {
             val targets = ids.mapNotNull { id ->
                 runCatching {
@@ -220,7 +204,6 @@ class BrowseSession(
                     doc.file_url?.let { DownloadTarget(deps.serverUrl.toAbsolute(it), doc.original_filename) }
                 }.getOrNull()
             }
-            clearSelection()
             onTargets(targets)
         }
     }

@@ -1,6 +1,8 @@
 package com.reverie.app.ui.screens.privatefolders
 
 import android.os.Looper
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -44,12 +46,14 @@ class PrivateFoldersScreenTest {
     }
     private val calls = mutableListOf<String>()
     private lateinit var viewModel: PrivateFoldersViewModel
+    private var back: OnBackPressedDispatcher? = null
 
     @After fun tearDown() = viewModel.viewModelScope.cancel()
 
     private fun open() {
         viewModel = PrivateFoldersViewModel(world.deps)
         compose.setContent {
+            back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
             ReverieTheme {
                 PrivateFoldersScreen(
                     onBack = { calls += "back" },
@@ -89,21 +93,37 @@ class PrivateFoldersScreenTest {
         assertEquals(listOf("folder:Vaulted", "back"), calls)
     }
 
-    @Test fun `a held row can be removed from private`() {
+    @Test fun `a held row is selected and can be removed from private`() {
         open()
         awaitText("Diary")
 
         compose.onNodeWithText("Diary").performTouchInput { longClick() }
-        awaitText("Remove from private")
+        awaitText("1 selected")
+        compose.onNodeWithContentDescription("More folder actions").performClick()
         compose.onNodeWithText("Remove from private").performSemanticsAction(SemanticsActions.OnClick)
 
         await { world.requests.any { it == """PATCH folders/Diary {"is_private":false}""" } }
+        assertEquals(emptyList<String>(), calls)
+    }
+
+    @Test fun `Back ends a selection before it leaves the screen`() {
+        open()
+        awaitText("Diary")
+        compose.onNodeWithText("Diary").performTouchInput { longClick() }
+        compose.onNodeWithText("Vaulted").performClick()
+        awaitText("2 selected")
+
+        compose.runOnIdle { back?.onBackPressed() }
+
+        await { viewModel.selection.ids.value.isEmpty() }
+        compose.onNodeWithText("2 selected").assertDoesNotExist()
+        assertEquals(emptyList<String>(), calls)
     }
 
     @Test fun `with no private folders it says how to make one`() {
         world.tree = listOf(node("Travel"))
         open()
 
-        awaitText("No private folders. To make one, hold a folder and choose Make private.")
+        awaitText("No private folders. To make one, hold a folder, then choose Make private from ⋮.")
     }
 }

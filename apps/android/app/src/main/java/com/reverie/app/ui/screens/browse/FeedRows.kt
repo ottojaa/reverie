@@ -1,34 +1,21 @@
 package com.reverie.app.ui.screens.browse
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,12 +23,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.ui.components.FavouriteMenuItem
 import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
 import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
+import com.reverie.app.ui.components.selectedBackground
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
@@ -57,7 +44,6 @@ class RowActions(
     val onClick: (DocumentDto) -> Unit,
     val onLongClick: (DocumentDto) -> Unit,
     val starred: (DocumentDto) -> Boolean = { false },
-    val onToggleStar: (DocumentDto) -> Unit = {},
     val onGroupClick: (RecentRow.Group) -> Unit = {},
     val onGroupLongClick: (RecentRow.Group) -> Unit = {},
 )
@@ -106,7 +92,7 @@ private fun SectionRow(title: String) {
     )
 }
 
-/** A file row: it stands on the page and has an overflow menu. */
+/** A file row: it stands on the page. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(doc: DocumentDto, actions: RowActions) {
@@ -115,10 +101,10 @@ private fun FileRow(doc: DocumentDto, actions: RowActions) {
         modifier = Modifier
             .fillMaxWidth()
             .documentSharedBounds(doc.id)
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+            .selectedBackground(selected)
             .combinedClickable(onClick = { actions.onClick(doc) }, onLongClick = { actions.onLongClick(doc) })
             .height(64.dp)
-            .padding(start = 20.dp, end = 8.dp),
+            .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -134,7 +120,6 @@ private fun FileRow(doc: DocumentDto, actions: RowActions) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        FileMenu(doc, actions)
     }
 }
 
@@ -146,33 +131,4 @@ fun fileMeta(doc: DocumentDto): String =
 @Composable
 fun TypeBadge(doc: DocumentDto, size: Dp = 36.dp) {
     FileKindBlock(doc.mime_type, doc.original_filename, Modifier.size(size).clip(MaterialTheme.shapes.medium))
-}
-
-/** A row's ⋮ button and its menu. */
-@Composable
-internal fun FileMenu(doc: DocumentDto, actions: RowActions) {
-    var open by remember { mutableStateOf(false) }
-    // The menu anchors to the Box around its button.
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FileMenuItems(doc, actions, onDone = { open = false })
-        }
-    }
-}
-
-/** The file menu's items. Open and Select are indented to line up with the starred item's text. */
-@Composable
-fun FileMenuItems(doc: DocumentDto, actions: RowActions, onDone: () -> Unit = {}) {
-    val indent: @Composable () -> Unit = { Spacer(Modifier.size(24.dp)) }
-    FavouriteMenuItem(actions.starred(doc)) { onDone(); actions.onToggleStar(doc) }
-    DropdownMenuItem(text = { Text("Open") }, leadingIcon = indent, onClick = { onDone(); actions.onClick(doc) })
-    DropdownMenuItem(text = { Text("Select") }, leadingIcon = indent, onClick = { onDone(); actions.onLongClick(doc) })
 }

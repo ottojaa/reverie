@@ -8,10 +8,12 @@ import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
 import com.reverie.app.data.connectivity.ConnectivityMonitor
-import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.SearchRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
-import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
+import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.favourites.FavouriteDeps
+import com.reverie.app.ui.screens.manage.ManageController
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.domain.search.SearchScope
@@ -40,11 +42,20 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
-    folderRepository: FolderRepository,
+    deps: FavouriteDeps,
     private val connectivity: ConnectivityMonitor,
-    private val sequenceHolder: DocumentSequenceHolder,
     private val savedState: SavedStateHandle,
 ) : ViewModel() {
+
+    private val sequenceHolder = deps.sequences
+
+    val favourites = FavouriteController(deps, viewModelScope)
+
+    /** The results selected. */
+    val selection = Selection()
+
+    /** Changing what is selected. */
+    val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, viewModelScope)
 
     /** Starts as the scope the screen was opened with, and its query (a smart view's, say; usually none). */
     private val input = MutableStateFlow(SearchInput(openedWith(savedState)))
@@ -61,7 +72,7 @@ class SearchViewModel @Inject constructor(
         control,
         searchRepository.observeRecent(),
         connectivity.isOnline,
-        folderRepository.observeCached(),
+        deps.folders.observeCached(),
     ) { typed, ctrl, recents, online, folders ->
         val (q, scope) = typed.ask
         SearchUiState(
@@ -102,6 +113,16 @@ class SearchViewModel @Inject constructor(
                 .debounce(300)
                 .collect { (ask, sort) -> runSearch(ask, sort.first, sort.second, offset = 0) }
         }
+        // Another search lists other things, so what was selected is no longer on show.
+        viewModelScope.launch { input.map { it.ask }.distinctUntilChanged().collect { selection.clear() } }
+        // A move or a delete changes what is found.
+        viewModelScope.launch { deps.documents.contentChanges.collect { searchAgain() } }
+        favourites.load()
+    }
+
+    private suspend fun searchAgain() {
+        val ctrl = control.value
+        runSearch(input.value.ask, ctrl.sortBy, ctrl.sortOrder, offset = 0)
     }
 
     /** Fetch the scope's facets so the filter sheets have options before/without a query. */

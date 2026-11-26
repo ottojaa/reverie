@@ -30,6 +30,7 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.domain.folderMeta
 import com.reverie.app.ui.components.Breadcrumb
 import com.reverie.app.ui.components.FolderRow
+import com.reverie.app.ui.screens.manage.RowSelection
 
 /** What the rows of the folders inside a folder are drawn from, and where they and the breadcrumb lead. */
 class FolderLinks(
@@ -39,8 +40,8 @@ class FolderLinks(
     val onOpen: (folderId: String) -> Unit,
     /** A breadcrumb step was tapped; null is the Library itself. */
     val onOpenCrumb: (folderId: String?) -> Unit,
-    /** A long press on a folder's row. */
-    val onHold: ((FolderWithChildren) -> Unit)? = null,
+    /** The folder rows' part in the page's selection. */
+    val selection: RowSelection = RowSelection(),
 )
 
 /**
@@ -130,8 +131,9 @@ private fun LazyListScope.folderRowItems(folders: List<FolderWithChildren>, link
             folder = folder,
             cover = links.covers[folder.id],
             meta = folderMeta(folder),
-            onClick = { links.onOpen(folder.id) },
-            onLongClick = links.onHold?.let { hold -> { hold(folder) } },
+            onClick = { links.selection.tap(folder.id) { links.onOpen(folder.id) } },
+            onLongClick = { links.selection.toggle(folder.id) },
+            selected = folder.id in links.selection,
             starred = folder.id in links.starredIds,
         )
     }

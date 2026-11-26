@@ -190,7 +190,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     @Composable
     private fun Search(entry: NavBackStackEntry) {
         search = viewModel {
-            SearchViewModel(searchRepository(), deps.folders, deps.connectivity, world.sequences, createSavedStateHandle())
+            SearchViewModel(searchRepository(), world.deps, deps.connectivity, createSavedStateHandle())
         }
         SearchScreen(
             onBack = { nav.popBackStack() },

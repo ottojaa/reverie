@@ -1,7 +1,7 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,23 +24,32 @@ import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatShortDate
 
 @Composable
-fun SearchResultRow(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SearchResultRow(
+    hit: DocumentSearchResult,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .selectedBackground(selected)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DocumentThumbnail(
-            documentId = hit.document_id,
-            mimeType = hit.mime_type,
-            filename = hit.filename,
-            blurhash = hit.blurhash,
-            hasThumbnail = !hit.blurhash.isNullOrBlank(),
-            size = ThumbnailSize.SM,
-            modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
-        )
+        SelectablePicture(selected, 56.dp) {
+            DocumentThumbnail(
+                documentId = hit.document_id,
+                mimeType = hit.mime_type,
+                filename = hit.filename,
+                blurhash = hit.blurhash,
+                hasThumbnail = !hit.blurhash.isNullOrBlank(),
+                size = ThumbnailSize.SM,
+                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
+            )
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -81,20 +90,31 @@ fun DateBucketHeader(label: String, modifier: Modifier = Modifier) {
  * container transform into the viewer. `blurhash` is the cache-safe "has a rendered preview" signal.
  */
 @Composable
-fun PhotoResultTile(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    GalleryThumbnail(
-        documentId = hit.document_id,
-        mimeType = hit.mime_type,
-        filename = hit.filename,
-        blurhash = hit.blurhash,
-        hasThumbnail = !hit.blurhash.isNullOrBlank(),
-        size = ThumbnailSize.MD,
-        durationSeconds = hit.duration_seconds,
+fun PhotoResultTile(
+    hit: DocumentSearchResult,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+) {
+    SelectableTile(
+        selected = selected,
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .documentSharedBounds(hit.document_id)
             .clip(RectangleShape)
-            .clickable(onClick = onClick),
-    )
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        GalleryThumbnail(
+            documentId = hit.document_id,
+            mimeType = hit.mime_type,
+            filename = hit.filename,
+            blurhash = hit.blurhash,
+            hasThumbnail = !hit.blurhash.isNullOrBlank(),
+            size = ThumbnailSize.MD,
+            durationSeconds = hit.duration_seconds,
+            modifier = Modifier.matchParentSize(),
+        )
+    }
 }

@@ -40,17 +40,17 @@ internal fun TrashDialogHost(viewModel: TrashViewModel) {
         ) {
             TrashMenu(
                 name = shown.item.name,
-                onRestore = { viewModel.restore(shown.item) },
-                onPurge = { viewModel.askToPurge(shown.item) },
+                onRestore = { viewModel.restore(listOf(shown.item)) },
+                onPurge = { viewModel.askToPurge(listOf(shown.item)) },
                 modifier = Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()),
             )
         }
         is TrashDialog.ConfirmPurge -> ConfirmDialog(
-            title = "Delete “${shown.item.name}” forever?",
-            message = purgeMessage(shown.item),
+            title = purgeTitle(shown.items),
+            message = purgeMessage(shown.items),
             confirmLabel = "Delete forever",
             destructive = true,
-            onConfirm = { viewModel.purge(shown.item) },
+            onConfirm = { viewModel.purge(shown.items) },
             onDismiss = viewModel::dismiss,
         )
     }

@@ -36,6 +36,9 @@ import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.PickedTopBar
+import com.reverie.app.ui.screens.manage.RowSelection
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
@@ -124,13 +127,18 @@ class LibraryScreenshotTest {
                     state = state,
                     marks = LibraryMarks(covers, starredFolderIds = setOf("Coding", "Photos"), favouriteCount = 5, backup = backup),
                     links = LibraryLinks(onOpenFolder = {}, onOpenList = {}, onOpenFavourites = {}, onSearch = {}, onOpenTrash = {}),
-                    actions = LibraryActions(rows, rows, onLoadMore = {}, onNewFolder = {}, onFocusConsumed = {}),
+                    actions = LibraryActions(
+                        rows, rows, onLoadMore = {}, onNewFolder = {}, onFocusConsumed = {},
+                        folders = RowSelection(selectedIds),
+                    ),
                     day = LibraryDay(LocalDate.of(2026, 11, 26), ZoneOffset.UTC),
                     slot = ChromeSlot(Modifier, PaddingValues(bottom = 96.dp), onHeading = {}, onUpload = {}),
                 )
             }
         }
         BottomPill(Tab.LIBRARY, onSelect = {}, showSearch = true, onSearch = {}, Modifier.align(Alignment.BottomCenter))
+        val picked = pickFrom(selectedIds, state.recent.documents.documents + state.unfiled.documents, state.folders)
+        if (!picked.isEmpty) PickedTopBar(picked, isStarred = false, canDownload = true, onClose = {}, onPick = {})
     }
 
     private fun shoot(name: String, state: LibraryState, backup: BackupStatus = BackupStatus.Complete) =
@@ -153,6 +161,12 @@ class LibraryScreenshotTest {
         full.copy(recent = full.recent.copy(selectedIds = setOf(added[0].id, screenshot.id))),
         BackupStatus.Waiting(3),
     )
+
+    @Test fun foldersSelected() {
+        resize(width = 780, height = 3200, dpi = Density.XHIGH)
+        val selected = setOf("Coding", "Importanter", added[0].id)
+        shoot("foldersSelected", full.copy(recent = full.recent.copy(selectedIds = selected)))
+    }
 
     @Test fun empty() = shoot(
         "empty",

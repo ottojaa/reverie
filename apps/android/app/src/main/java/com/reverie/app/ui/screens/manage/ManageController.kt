@@ -1,12 +1,10 @@
 package com.reverie.app.ui.screens.manage
 
 import com.reverie.app.data.api.model.ConflictStrategy
-import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.FavouriteKey
-import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.UpdateFolderRequest
 import com.reverie.app.data.repository.DocumentRepository
+import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.domain.FolderTree
@@ -28,35 +26,26 @@ import kotlinx.coroutines.flow.receiveAsFlow
 private const val CHANGE_FAILED = "Couldn't save the change."
 private const val NO_PASSWORD_NOTICE = "Private folders only lock once your account has a password."
 
-/** What the user is being asked, or offered, about a folder or a move. */
+/** What the user is being asked about a folder or a selection. */
 sealed interface ManageDialog {
-    data class Menu(val folder: FolderWithChildren, val isStarred: Boolean) : ManageDialog
-
     data class Rename(val folder: FolderWithChildren) : ManageDialog
 
-    data class ConfirmDelete(val folder: FolderWithChildren) : ManageDialog
+    data class ConfirmTrash(val picked: Picked, val onGone: (Set<String>) -> Unit) : ManageDialog
 
     /** Some of the documents about to move have names already [taken] at the destination. */
-    data class NameClash(val move: DocumentMove, val taken: List<String>) : ManageDialog
+    data class NameClash(val move: PickedMove, val taken: List<String>) : ManageDialog
 }
 
-/** Documents on their way to another folder; [onMoved] runs once all of them have arrived. */
-data class DocumentMove(
-    val documents: List<DocumentDto>,
-    val destination: Destination,
-    val onMoved: () -> Unit,
-)
+/** A selection on its way to [destination]; [onGone] hears which selected ids need nothing more. */
+data class PickedMove(val picked: Picked, val destination: Destination, val onGone: (Set<String>) -> Unit)
 
 /** What the destination browser was opened to move. */
-private sealed interface Picking {
-    data class Folder(val folder: FolderWithChildren) : Picking
-
-    data class Documents(val documents: List<DocumentDto>, val onMoved: () -> Unit) : Picking
-}
+private data class Picking(val picked: Picked, val onGone: (Set<String>) -> Unit)
 
 /**
- * Changing folders and moving documents: a folder row's menu, the dialogs that follow from it, and the
- * destination browser. A change a closed lock refuses asks for that folder's password and is then made again.
+ * Changing what is selected (favourites, move, trash) and a folder's name and privacy: the dialogs that
+ * ask first, and the destination browser. A change a closed lock refuses asks for that folder's password and
+ * is then made again.
  */
 class ManageController(
     private val folders: FolderRepository,
@@ -78,28 +67,25 @@ class ManageController(
 
     private val locked = LockedActions(
         vault, scope, CHANGE_FAILED,
-        folderName = { id -> FolderTree(folders.observeTree().first()).find(id)?.name },
+        folderName = { id -> tree().find(id)?.name },
         onFailure = { messages.send(it) },
     )
 
     /** The password prompt for a change a closed lock refused. */
     val unlocker get() = locked.unlocker
 
-    fun openMenu(folder: FolderWithChildren) =
-        show(ManageDialog.Menu(folder, favourites.state.value.isStarred(folder.toKey())))
+    val favouriteState: StateFlow<FavouritesState> get() = favourites.state
 
     fun askToRename(folder: FolderWithChildren) = show(ManageDialog.Rename(folder))
 
-    fun askToDelete(folder: FolderWithChildren) = show(ManageDialog.ConfirmDelete(folder))
+    fun askToTrash(picked: Picked, onGone: (Set<String>) -> Unit) = show(ManageDialog.ConfirmTrash(picked, onGone))
 
     fun dismiss() {
         shown.value = null
     }
 
-    fun toggleFavourite(folder: FolderWithChildren) {
-        dismiss()
-        favourites.toggle(folder.toKey(), confirm = true)
-    }
+    /** Stars everything in [picked], or unstars it all when all of it is starred already. */
+    fun toggleFavourites(picked: Picked) = favourites.toggleAll(picked.keys)
 
     fun rename(folderId: String, form: FolderFormData) {
         dismiss()
@@ -116,74 +102,99 @@ class ManageController(
         }
     }
 
-    fun delete(folderId: String) {
+    fun trash(question: ManageDialog.ConfirmTrash) {
         dismiss()
-        changeFolder { folders.delete(folderId) }
+        attempt {
+            val steps = toSteps(question.picked, tree())
+            sendInTurn(steps, question.picked.ids, question.onGone) { step -> trashStep(step) }
+        }
     }
 
-    /** Opens the destination browser for [folder], which cannot go into itself or anything beneath it. */
-    fun pickFolderDestination(folder: FolderWithChildren) {
-        dismiss()
-        picking = Picking.Folder(folder)
-        val excluded = FolderTree(listOf(folder)).subtreeIds(folder.id)
-        browser.show(DestinationRules(excluded = excluded), startAt = folder.parent_id)
-    }
-
-    /** Opens the destination browser for [selected], where they are now if they share a folder. */
-    fun pickDocumentDestination(selected: List<DocumentDto>, onMoved: () -> Unit) {
-        if (selected.isEmpty()) return
-        picking = Picking.Documents(selected, onMoved)
-        browser.show(startAt = selected.map { it.folder_id }.distinct().singleOrNull())
+    /** Opens the destination browser, where [picked] is now if all of it shares a folder. */
+    fun pickDestination(picked: Picked, onGone: (Set<String>) -> Unit) {
+        val parents = picked.documents.map { it.folderId } + picked.folders.map { it.parent_id }
+        if (parents.isEmpty()) return
+        picking = Picking(picked, onGone)
+        // A folder cannot go into itself or anything beneath it.
+        val within = FolderTree(picked.folders)
+        val excluded = picked.folders.flatMapTo(mutableSetOf()) { within.subtreeIds(it.id) }
+        browser.show(DestinationRules(excluded = excluded), startAt = parents.distinct().singleOrNull())
     }
 
     /** The destination browser's choice. */
     fun moveTo(destination: Destination) {
         val chosen = picking ?: return
         picking = null
-        when (chosen) {
-            is Picking.Folder -> moveFolder(chosen.folder, destination.folderId)
-            is Picking.Documents -> checkNames(DocumentMove(chosen.documents, destination, chosen.onMoved))
-        }
+        checkNames(PickedMove(chosen.picked, destination, chosen.onGone))
     }
 
     /** The answer to a name clash. */
-    fun resolveClash(move: DocumentMove, strategy: ConflictStrategy) {
+    fun resolveClash(move: PickedMove, strategy: ConflictStrategy) {
         dismiss()
-        send(toMoveBatches(move.documents), move, strategy)
+        attempt { send(move, steps(move), strategy) }
     }
 
-    private fun moveFolder(folder: FolderWithChildren, parentId: String?) {
-        if (folder.parent_id == parentId) return
-        changeFolder { folders.move(folder.id, parentId) }
+    /** Asks about names the destination already holds before anything moves. */
+    private fun checkNames(move: PickedMove) = attempt {
+        val steps = steps(move)
+        val arriving = steps.filterIsInstance<PickedStep.Documents>().flatMap { it.documents }.map { it.filename }
+        val taken = if (arriving.isEmpty()) emptyList() else documents.takenNames(move.destination.folderId, arriving)
+        if (taken.isNotEmpty()) return@attempt show(ManageDialog.NameClash(move, taken))
+        send(move, steps, strategy = null)
     }
 
     /**
-     * Asks about names the destination already holds. A document that is there already stays out of both the
-     * question and the move: replacing, the server would trash it as its own namesake.
+     * What a move has to send. What is at the destination already stays out of it: replacing, the server would
+     * trash such a document as its own namesake.
      */
-    private fun checkNames(move: DocumentMove) = attempt {
-        val arriving = move.copy(documents = move.documents.filter { it.folder_id != move.destination.folderId })
-        if (arriving.documents.isEmpty()) return@attempt
-        val taken = documents.takenNames(arriving.destination.folderId, arriving.documents.map { it.original_filename })
-        if (taken.isNotEmpty()) return@attempt show(ManageDialog.NameClash(arriving, taken))
-        send(toMoveBatches(arriving.documents), arriving, strategy = null)
+    private suspend fun steps(move: PickedMove): List<PickedStep> {
+        val folderId = move.destination.folderId
+        return toSteps(move.picked, tree(), { it.folderId != folderId }, { it.parent_id != folderId })
     }
 
-    /** One request at a time, each retried on its own: a request that went through must never be sent twice. */
-    private fun send(batches: List<List<DocumentDto>>, move: DocumentMove, strategy: ConflictStrategy?): Unit = attempt {
-        documents.move(batches.first().map { it.id }, move.destination.folderId, strategy)
-        val rest = batches.drop(1)
-        if (rest.isEmpty()) return@attempt move.onMoved()
-        send(rest, move, strategy)
+    private fun send(move: PickedMove, steps: List<PickedStep>, strategy: ConflictStrategy?) =
+        sendInTurn(steps, move.picked.ids, move.onGone) { step ->
+            when (step) {
+                is PickedStep.Documents ->
+                    documents.move(step.documents.map { it.id }, move.destination.folderId, strategy)
+                is PickedStep.Folder -> changing { folders.move(step.folder.id, move.destination.folderId) }
+            }
+        }
+
+    private suspend fun trashStep(step: PickedStep) = when (step) {
+        is PickedStep.Documents -> documents.delete(step.documents.map { it.id })
+        is PickedStep.Folder -> changing { folders.delete(step.folder.id) }
+    }
+
+    /**
+     * Sends the requests one at a time, each retried on its own after an unlock: one that went through must
+     * never be sent twice. A refused request stops there, and what it and the later ones hold stays selected.
+     */
+    private fun sendInTurn(
+        steps: List<PickedStep>,
+        all: Set<String>,
+        onGone: (Set<String>) -> Unit,
+        perform: suspend (PickedStep) -> Unit,
+    ) {
+        val step = steps.firstOrNull() ?: return
+        attempt {
+            perform(step)
+            val rest = steps.drop(1)
+            // After the last request nothing is left to do, for what needed no request either.
+            onGone(if (rest.isEmpty()) all else step.settles)
+            sendInTurn(rest, all, onGone, perform)
+        }
     }
 
     /** A change to a folder, after which every list reads again. */
-    private fun changeFolder(change: suspend () -> Unit) = attempt {
+    private suspend fun changing(change: suspend () -> Unit) {
         change()
         documents.announceContentChanged()
     }
 
-    private fun FolderWithChildren.toKey() = FavouriteKey(FavouriteType.FOLDER, id)
+    private fun changeFolder(change: suspend () -> Unit) = attempt { changing(change) }
+
+    private suspend fun tree() = FolderTree(folders.observeTree().first())
 
     private fun show(next: ManageDialog) {
         shown.value = next

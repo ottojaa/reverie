@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.trash
 
 import com.reverie.app.data.api.model.TrashDocumentDto
 import com.reverie.app.data.api.model.TrashFolderDto
+import com.reverie.app.data.api.model.TrashListDto
 import com.reverie.app.data.api.model.TrashSelectionRequest
 import com.reverie.app.domain.counted
 import com.reverie.app.util.formatBytes
@@ -31,10 +32,13 @@ sealed interface TrashItem {
     }
 }
 
-fun TrashItem.toSelection(): TrashSelectionRequest = when (this) {
-    is TrashItem.Folder -> TrashSelectionRequest(folder_ids = listOf(id))
-    is TrashItem.Document -> TrashSelectionRequest(document_ids = listOf(id))
-}
+/** Everything in the trash, folders first. */
+fun TrashListDto.toItems(): List<TrashItem> = folders.map(TrashItem::Folder) + documents.map(TrashItem::Document)
+
+fun List<TrashItem>.toSelection() = TrashSelectionRequest(
+    document_ids = filterIsInstance<TrashItem.Document>().map { it.id },
+    folder_ids = filterIsInstance<TrashItem.Folder>().map { it.id },
+)
 
 /** The line under an item's name: what it is, and how long it stays. */
 fun trashMeta(item: TrashItem, now: Instant): String {
@@ -45,8 +49,24 @@ fun trashMeta(item: TrashItem, now: Instant): String {
     return listOf(what, toTimeLeft(item.purgeAt, now)).filter { it.isNotEmpty() }.joinToString(" · ")
 }
 
-/** What the confirmation says goes when [item] is deleted for good. */
-fun purgeMessage(item: TrashItem): String {
+/** What the confirmation asks before [items] are deleted for good. */
+fun purgeTitle(items: List<TrashItem>): String {
+    val named = items.singleOrNull()?.let { "“${it.name}”" } ?: counted(items.size, "item")
+    return "Delete $named forever?"
+}
+
+/** What the confirmation says goes when [items] are deleted for good. */
+fun purgeMessage(items: List<TrashItem>): String {
+    val single = items.singleOrNull()
+    if (single != null) return purgeMessage(single)
+    return when (items.count { it is TrashItem.Folder }) {
+        0 -> CANNOT_UNDO
+        1 -> "Everything in the folder is deleted with it. $CANNOT_UNDO"
+        else -> "Everything in the folders is deleted with them. $CANNOT_UNDO"
+    }
+}
+
+private fun purgeMessage(item: TrashItem): String {
     if (item !is TrashItem.Folder) return CANNOT_UNDO
     val contents = toContents(item.folder)
     if (contents.isEmpty()) return CANNOT_UNDO

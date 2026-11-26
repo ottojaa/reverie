@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
-import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.domain.folderMeta
@@ -81,11 +80,17 @@ internal fun ResultsList(state: SearchUiState, actions: SearchActions, listState
                         }
                     }
                     item(key = hit.document_id) {
-                        SearchResultRow(hit = hit, onClick = { actions.onOpenDocument(hit.document_id) })
+                        val id = hit.document_id
+                        SearchResultRow(
+                            hit = hit,
+                            onClick = { actions.selection.tap(id) { actions.onOpenDocument(id) } },
+                            selected = id in actions.selection,
+                            onLongClick = { actions.selection.toggle(id) },
+                        )
                     }
                 }
                 is CollectionSearchResult -> item(key = "col-${hit.id}") {
-                    FolderHitRow(hit, state.folders, onClick = { actions.onOpenFolder(hit.id) })
+                    FolderHitRow(hit, state.folders, actions)
                 }
             }
         }
@@ -114,7 +119,13 @@ internal fun ResultsGrid(state: SearchUiState, actions: SearchActions, gridState
         modifier = Modifier.fillMaxSize(),
     ) {
         items(documents, key = { it.document_id }) { hit ->
-            PhotoResultTile(hit = hit, onClick = { actions.onOpenDocument(hit.document_id) })
+            val id = hit.document_id
+            PhotoResultTile(
+                hit = hit,
+                onClick = { actions.selection.tap(id) { actions.onOpenDocument(id) } },
+                selected = id in actions.selection,
+                onLongClick = { actions.selection.toggle(id) },
+            )
         }
         val offer = state.wholeLibraryOffer
         if (offer != null && documents.isNotEmpty() && !state.hasMore) {
@@ -136,19 +147,17 @@ private fun LoadMoreNearEnd(count: Int, hasMore: Boolean, onLoadMore: () -> Unit
 
 /** A folder among the results, drawn like its row anywhere else when the folder is cached. */
 @Composable
-private fun FolderHitRow(hit: CollectionSearchResult, folders: CachedFolders, onClick: () -> Unit) {
+private fun FolderHitRow(hit: CollectionSearchResult, folders: CachedFolders, actions: SearchActions) {
     val cached = folders.byId[hit.id]
     FolderRow(
         folder = cached ?: hit.toFolder(),
         cover = folders.covers[hit.id],
         meta = cached?.let(::folderMeta) ?: hit.path.trim('/'),
-        onClick = onClick,
+        onClick = { actions.selection.tap(hit.id) { actions.onOpenFolder(hit.id) } },
+        onLongClick = { actions.selection.toggle(hit.id) },
+        selected = hit.id in actions.selection,
     )
 }
-
-private fun CollectionSearchResult.toFolder() = FolderWithChildren(
-    id = id, name = name, path = path, sort_order = 0, is_private = false, created_at = "", updated_at = "",
-)
 
 @Composable
 private fun WholeLibraryRow(offer: String, onClick: () -> Unit) {

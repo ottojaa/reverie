@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.FavouriteDto
-import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.components.MOSAIC_GAP
@@ -37,6 +36,7 @@ import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.browse.BrowseHeader
 import com.reverie.app.ui.screens.browse.BrowseTitle
 import com.reverie.app.ui.screens.browse.PageTitle
+import com.reverie.app.ui.screens.manage.RowSelection
 
 private const val NOTHING_STARRED = "Nothing starred yet. Star a file or folder to find it here."
 private const val NOT_LOADED = "Couldn't load favourites. Pull down to try again."
@@ -44,10 +44,10 @@ private const val NOT_LOADED = "Couldn't load favourites. Pull down to try again
 data class FavouritesActions(
     val onBack: () -> Unit,
     val onOpen: (FavouriteDto) -> Unit,
-    val onUnstar: (FavouriteDto) -> Unit,
-    val onHoldFolder: (FolderWithChildren) -> Unit,
     val onRefresh: () -> Unit,
     val onFocusConsumed: () -> Unit = {},
+    /** The favourites' part in the screen's selection. */
+    val selection: RowSelection = RowSelection(),
 )
 
 /**

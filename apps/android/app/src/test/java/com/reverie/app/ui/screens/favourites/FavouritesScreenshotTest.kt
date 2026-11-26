@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,10 +30,11 @@ import com.reverie.app.ui.photoCover
 import com.reverie.app.ui.screens.browse.FeedLayout
 import com.reverie.app.ui.screens.browse.FeedList
 import com.reverie.app.ui.screens.browse.FeedSource
-import com.reverie.app.ui.screens.browse.FileMenuItems
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.screens.document.ViewerToolbar
+import com.reverie.app.ui.screens.manage.PickedTopBar
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.snapshotThemes
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -86,26 +85,6 @@ class FavouritesScreenshotTest {
                 FavouritePill(FavouriteController.ADDED)
                 FavouritePill(FavouriteController.REMOVED)
                 FavouritePill(FavouriteController.ADD_FAILED)
-            }
-        }
-    }
-
-    @Composable
-    private fun Menu(label: String, items: @Composable () -> Unit) {
-        Label(label)
-        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 6.dp, modifier = Modifier.padding(start = 16.dp).width(220.dp)) {
-            Column(Modifier.padding(vertical = 4.dp)) { items() }
-        }
-    }
-
-    // A popup is a window of its own that a screenshot test does not draw, so the items are drawn in place.
-    @Test fun menus() = both("menus") {
-        val file = fixtures.invoice.document!!
-        Column {
-            listOf(false, true).forEach { starred ->
-                Menu(if (starred) "File menu, a favourite" else "File menu") {
-                    FileMenuItems(file, RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { starred }))
-                }
             }
         }
     }
@@ -186,10 +165,12 @@ class FavouritesScreenshotTest {
 
     /** The screen over the pill it shows in the app. */
     @Composable
-    private fun Page(state: FavouritesState) {
+    private fun Page(state: FavouritesState, selected: Set<String> = emptySet()) {
         Box(Modifier.fillMaxSize()) {
-            FavouritesContent(state, folders, FavouritesActions({}, {}, {}, {}, {}))
+            FavouritesContent(state, folders, FavouritesActions({}, {}, {}, selection = RowSelection(selected)))
             BottomPill(Tab.LIBRARY, onSelect = {}, showSearch = true, onSearch = {}, Modifier.align(Alignment.BottomCenter))
+            val picked = pickFavourites(selected, state.visible, folders)
+            if (!picked.isEmpty) PickedTopBar(picked, isStarred = true, canDownload = false, onClose = {}, onPick = {})
         }
     }
 
@@ -200,6 +181,16 @@ class FavouritesScreenshotTest {
         FavouritesState(items = folderItems + shots + recording + archive + fixtures.invoice + fixtures.secret + unlocked),
         DeviceConfig.PIXEL_5.copy(screenHeight = 2900),
     )
+
+    // One of each kind of favourite is selected; the private one keeps only the star in the bar.
+    @Test fun screenSelection() = both("screenSelection") {
+        val items = folderItems + shots.take(3) + recording + archive + fixtures.secret
+        Page(FavouritesState(items = items), setOf(coding.id, shots.first().id, archive.id))
+    }
+
+    @Test fun screenSelectionLocked() = both("screenSelectionLocked") {
+        Page(FavouritesState(items = folderItems + fixtures.secret), setOf(fixtures.secret.id))
+    }
 
     @Test fun screenFolders() = screen("screenFolders", FavouritesState(items = folderItems))
 

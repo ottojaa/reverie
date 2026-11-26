@@ -120,18 +120,18 @@ class TrashScreenTest {
         assertTrue(world.requests.contains("GET folders/tree"))
     }
 
-    @Test fun `deleting a held folder for good is confirmed first, and cancelling sends nothing`() {
+    @Test fun `deleting a folder for good is confirmed first, and cancelling sends nothing`() {
         open()
         awaitText("Taxes")
 
-        compose.onNodeWithText("Taxes").performTouchInput { longClick() }
+        compose.onNodeWithText("Taxes").performClick()
         press("Delete forever")
         awaitText("The 2 folders and 14 files in it are deleted with it. This can't be undone.")
         press("Cancel")
         await { viewModel.dialog.value == null }
         assertEquals(emptyList<String>(), sent("POST trash/"))
 
-        compose.onNodeWithText("Taxes").performTouchInput { longClick() }
+        compose.onNodeWithText("Taxes").performClick()
         press("Delete forever")
         awaitText("Delete “Taxes” forever?")
         press("Delete forever")
@@ -140,12 +140,54 @@ class TrashScreenTest {
         assertEquals(listOf("""POST trash/purge {"folder_ids":["Taxes"]}"""), sent("POST trash/"))
     }
 
+    @Test fun `held and tapped items are restored together, and the selection ends`() {
+        open()
+        awaitText("Taxes")
+
+        compose.onNodeWithText("Taxes").performTouchInput { longClick() }
+        compose.onNodeWithText("receipt.pdf").performClick()
+        awaitText("2 selected")
+        compose.onNodeWithContentDescription("Restore").performClick()
+
+        awaitText("Restored")
+        assertEquals(
+            listOf("""POST trash/restore {"document_ids":["receipt"],"folder_ids":["Taxes"]}"""),
+            sent("POST trash/restore"),
+        )
+        assertEquals(emptySet<String>(), viewModel.selection.ids.value)
+    }
+
+    @Test fun `deleting a selection for good is confirmed first, and cancelling keeps it`() {
+        open()
+        awaitText("Taxes")
+        compose.onNodeWithText("Taxes").performTouchInput { longClick() }
+        compose.onNodeWithText("receipt.pdf").performClick()
+
+        compose.onNodeWithContentDescription("Delete forever").performClick()
+        awaitText("Delete 2 items forever?")
+        awaitText("Everything in the folder is deleted with it. This can't be undone.")
+        press("Cancel")
+        await { viewModel.dialog.value == null }
+
+        assertEquals(setOf("Taxes", "receipt"), viewModel.selection.ids.value)
+        assertEquals(emptyList<String>(), sent("POST trash/"))
+
+        compose.onNodeWithContentDescription("Delete forever").performClick()
+        press("Delete forever")
+
+        awaitText("Deleted for good")
+        assertEquals(
+            listOf("""POST trash/purge {"document_ids":["receipt"],"folder_ids":["Taxes"]}"""),
+            sent("POST trash/purge"),
+        )
+    }
+
     @Config(qualifiers = "w640dp-h360dp")
     @Test fun `on a short screen the menu opens far enough to show its last row`() {
         open()
         awaitText("receipt.pdf")
 
-        compose.onNodeWithText("receipt.pdf").performScrollTo().performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithText("receipt.pdf").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         awaitText("Delete forever")
 
         val bottom = compose.onNodeWithText("Delete forever").getUnclippedBoundsInRoot().bottom

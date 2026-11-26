@@ -27,7 +27,7 @@ import com.reverie.app.data.api.model.FolderWithChildren
 
 /**
  * One folder in a list: its cover (a padlock while it is locked), name, [meta] line and a chevron,
- * with a star after the name of a [starred] one.
+ * with a star after the name of a [starred] one. A [selected] row shows a check in the cover's place.
  */
 @Composable
 fun FolderRow(
@@ -38,27 +38,24 @@ fun FolderRow(
     modifier: Modifier = Modifier,
     coverSize: Dp = 52.dp,
     starred: Boolean = false,
+    selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .selectedBackground(selected)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-                onLongClickLabel = "Folder actions".takeIf { onLongClick != null },
+                onLongClickLabel = "Select".takeIf { onLongClick != null },
             )
             .heightIn(min = coverSize + 18.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        val shape = MaterialTheme.shapes.medium
-        if (folder.locked) {
-            CoverIconBlock(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurfaceVariant, size = coverSize, shape = shape)
-        } else {
-            CoverMosaic(cover, size = coverSize, shape = shape)
-        }
+        SelectablePicture(selected, coverSize) { FolderPicture(folder, cover, coverSize) }
         Column(Modifier.weight(1f)) {
             FolderName(folder.name, starred)
             if (meta.isNotEmpty()) FolderMetaLine(meta)
@@ -69,6 +66,16 @@ fun FolderRow(
             tint = MaterialTheme.colorScheme.outline,
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+@Composable
+private fun FolderPicture(folder: FolderWithChildren, cover: FolderCoverDto?, size: Dp) {
+    val shape = MaterialTheme.shapes.medium
+    if (folder.locked) {
+        CoverIconBlock(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurfaceVariant, size = size, shape = shape)
+    } else {
+        CoverMosaic(cover, size = size, shape = shape)
     }
 }
 

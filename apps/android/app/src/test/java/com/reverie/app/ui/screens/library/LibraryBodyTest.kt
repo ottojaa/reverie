@@ -37,6 +37,7 @@ import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -94,7 +95,7 @@ class LibraryBodyTest {
                     onLoadMore = {},
                     onNewFolder = { calls += "new folder" },
                     onFocusConsumed = { focus = LibraryFocus() },
-                    onHoldFolder = { calls += "hold folder:${it.id}" },
+                    folders = RowSelection(state.selectedIds) { calls += "select folder:$it" },
                 ),
                 day = LibraryDay(LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
@@ -190,12 +191,21 @@ class LibraryBodyTest {
         )
     }
 
-    @Test fun `a long press on a folder row asks for its actions`() {
+    @Test fun `a long press selects a folder row`() {
         show()
 
         compose.onNodeWithText("Travel").performTouchInput { longClick() }
 
-        assertEquals(listOf("hold folder:Travel"), calls)
+        assertEquals(listOf("select folder:Travel"), calls)
+    }
+
+    @Test fun `while something is selected a tap on a folder selects it instead of opening it`() {
+        state = state.copy(recent = state.recent.copy(selectedIds = setOf("loose1")))
+        show()
+
+        compose.onNodeWithText("Travel").performClick()
+
+        assertEquals(listOf("select folder:Travel"), calls)
     }
 
     @OptIn(ExperimentalTestApi::class)

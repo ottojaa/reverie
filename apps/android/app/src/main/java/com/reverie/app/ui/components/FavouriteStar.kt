@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -57,14 +56,4 @@ fun NameWithStar(
         Text(name, style = LocalTextStyle.current.merge(style), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (isStarred) StarIcon(filled = true, contentDescription = "Favourite", modifier = Modifier.size(14.dp))
     }
-}
-
-/** The menu item that stars an item, or unstars a starred one. */
-@Composable
-fun FavouriteMenuItem(isStarred: Boolean, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(if (isStarred) "Remove from favourites" else "Add to favourites") },
-        leadingIcon = { StarIcon(filled = isStarred) },
-        onClick = onClick,
-    )
 }

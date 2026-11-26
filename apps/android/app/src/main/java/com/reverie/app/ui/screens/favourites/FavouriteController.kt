@@ -15,6 +15,8 @@ import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,7 +82,13 @@ class FavouriteController(
 
     /** Star [key], or unstar it if it is starred. [confirm] also reports success. */
     fun toggle(key: FavouriteKey, confirm: Boolean = false) =
-        setStarred(key, !state.value.isStarred(key), confirm)
+        setStarred(listOf(key), !state.value.isStarred(key), confirm)
+
+    /** Star every one of [keys], or unstar them all when all are starred already; one notice for the lot. */
+    fun toggleAll(keys: List<FavouriteKey>) {
+        val isStarred = !keys.all(state.value::isStarred)
+        setStarred(keys.filter { state.value.isStarred(it) != isStarred }, isStarred, confirm = true)
+    }
 
     /** Open a favourite; one behind a closed lock asks for the password first. */
     fun open(item: FavouriteDto) {
@@ -101,20 +109,34 @@ class FavouriteController(
         unlocker.dismiss()
     }
 
-    private fun setStarred(key: FavouriteKey, isStarred: Boolean, confirm: Boolean) {
+    /**
+     * One request per item, as there is no batch one; each shows at once. Behind a closed lock the password is
+     * asked once for it, and what was refused is tried again.
+     */
+    private fun setStarred(keys: List<FavouriteKey>, isStarred: Boolean, confirm: Boolean) {
+        if (keys.isEmpty()) return
         scope.launch {
-            try {
-                deps.favourites.setStarred(key, isStarred)
-                if (confirm) report(if (isStarred) ADDED else REMOVED, isConfirmation = true)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val lockedId = (e as? ReverieApiException)?.lockedFolderId()
-                if (lockedId != null) askToUnlock(lockedId) { setStarred(key, isStarred, confirm) }
-                else report(if (isStarred) ADD_FAILED else REMOVE_FAILED)
+            val refused = keys.map { key -> async { refusal(key, isStarred)?.let { key to it } } }.awaitAll().filterNotNull()
+            val lockedId = refused.firstNotNullOfOrNull { (_, error) -> (error as? ReverieApiException)?.lockedFolderId() }
+            if (lockedId != null) {
+                askToUnlock(lockedId) { setStarred(refused.map { (key, _) -> key }, isStarred, confirm) }
+                return@launch
             }
+            if (refused.isNotEmpty()) return@launch report(if (isStarred) ADD_FAILED else REMOVE_FAILED)
+            if (confirm) report(if (isStarred) ADDED else REMOVED, isConfirmation = true)
         }
     }
+
+    /** Why the server did not take one write, or null once it has. */
+    private suspend fun refusal(key: FavouriteKey, isStarred: Boolean): Exception? =
+        try {
+            deps.favourites.setStarred(key, isStarred)
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e
+        }
 
     private fun askToUnlock(lockId: String, then: suspend () -> Unit) {
         afterUnlock = then

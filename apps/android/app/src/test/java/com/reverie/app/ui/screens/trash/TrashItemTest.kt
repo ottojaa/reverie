@@ -29,14 +29,31 @@ class TrashItemTest {
     }
 
     @Test fun `deleting a folder for good says what goes with it`() {
-        assertEquals("The 2 folders and 14 files in it are deleted with it. This can't be undone.", purgeMessage(folder(2, 14)))
-        assertEquals("The 1 file in it is deleted with it. This can't be undone.", purgeMessage(folder(files = 1)))
-        assertEquals("This can't be undone.", purgeMessage(folder()))
-        assertEquals("This can't be undone.", purgeMessage(file("2026-11-02T12:00:00Z")))
+        assertEquals(
+            "The 2 folders and 14 files in it are deleted with it. This can't be undone.",
+            purgeMessage(listOf(folder(2, 14))),
+        )
+        assertEquals("The 1 file in it is deleted with it. This can't be undone.", purgeMessage(listOf(folder(files = 1))))
+        assertEquals("This can't be undone.", purgeMessage(listOf(folder())))
+        assertEquals("This can't be undone.", purgeMessage(listOf(file("2026-11-02T12:00:00Z"))))
     }
 
-    @Test fun `an item is sent as the kind of thing it is`() {
-        assertEquals(listOf("Diary") to emptyList<String>(), folder().toSelection().let { it.folder_ids to it.document_ids })
-        assertEquals(emptyList<String>() to listOf("a"), file("").toSelection().let { it.folder_ids to it.document_ids })
+    @Test fun `deleting several for good counts them and says folders take their contents`() {
+        val files = listOf(file(""), file(""))
+
+        assertEquals("Delete 2 items forever?", purgeTitle(files))
+        assertEquals("Delete “Diary” forever?", purgeTitle(listOf(folder())))
+        assertEquals("This can't be undone.", purgeMessage(files))
+        assertEquals("Everything in the folder is deleted with it. This can't be undone.", purgeMessage(files + folder()))
+        assertEquals(
+            "Everything in the folders is deleted with them. This can't be undone.",
+            purgeMessage(listOf(folder(), folder())),
+        )
+    }
+
+    @Test fun `items are sent as the kinds of things they are`() {
+        val selection = listOf(folder(), file("")).toSelection()
+
+        assertEquals(listOf("Diary") to listOf("a"), selection.folder_ids to selection.document_ids)
     }
 }

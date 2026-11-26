@@ -146,14 +146,14 @@ class BrowseFeedModelTest {
     @Test fun `selection is the feed's own and a fold's members toggle together`() = runTest(UnconfinedTestDispatcher()) {
         val photos = start(DocumentFilter.IMAGES)
         val videos = start(DocumentFilter.VIDEOS, photos.server)
-        photos.model.enterSelection(listOf("p5"))
-        photos.model.toggleSelect(listOf("p4", "p3"))
+        photos.model.selection.toggle("p5")
+        photos.model.selection.toggle(listOf("p4", "p3"))
         assertEquals(setOf("p5", "p4", "p3"), photos.model.state.value.selectedIds)
         assertTrue(videos.model.state.value.selectedIds.isEmpty())
-        photos.model.toggleSelect(listOf("p4", "p3"))
-        assertEquals(setOf("p5"), photos.model.selectedIds)
-        photos.model.toggleSelect(listOf("p4", "p3"))
-        photos.model.clearSelection()
+        photos.model.selection.toggle(listOf("p4", "p3"))
+        assertEquals(setOf("p5"), photos.model.state.value.selectedIds)
+        photos.model.selection.toggle(listOf("p4", "p3"))
+        photos.model.selection.clear()
         assertTrue(photos.model.state.value.selectedIds.isEmpty())
     }
 

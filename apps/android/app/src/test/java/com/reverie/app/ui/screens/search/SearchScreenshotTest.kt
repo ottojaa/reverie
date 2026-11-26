@@ -1,5 +1,9 @@
 package com.reverie.app.ui.screens.search
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.reverie.app.data.api.model.CollectionSearchResult
@@ -10,6 +14,8 @@ import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.BLURHASHES
 import com.reverie.app.ui.photoCover
 import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.PickedTopBar
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
@@ -59,5 +65,29 @@ class SearchScreenshotTest {
         val state = page.copy(results = hits, total = hits.size)
 
         paparazzi.snapshotThemes("scopedList") { SearchBody(state, SearchActions()) }
+    }
+
+    @Composable
+    private fun Selected(state: SearchUiState, ids: Set<String>) = Box(Modifier.fillMaxSize()) {
+        SearchBody(state, SearchActions(selection = RowSelection(ids)))
+        PickedTopBar(state.picked(ids), isStarred = false, canDownload = false, onClose = {}, onPick = {})
+    }
+
+    @Test fun selectedPhotos() {
+        val photos = (0 until 9).map { hit(it, "IMG_20250823_${1000 + it}.jpg") }
+        val state = page.copy(results = photos, total = photos.size, viewMode = ViewMode.GRID)
+
+        paparazzi.snapshotThemes("selectedPhotos") { Selected(state, setOf("hit0", "hit4")) }
+    }
+
+    @Test fun selectedList() {
+        val hits = listOf(
+            CollectionSearchResult(id = "alfama", name = alfama.name, path = "/Travel/Portugal – 2025/${alfama.name}"),
+            hit(1, "Lisbon apartment booking confirmation – Rua dos Remédios 74.pdf", "application/pdf"),
+            hit(2, "Lisbon – view from Miradouro da Senhora do Monte at sunset.jpg"),
+        )
+        val state = page.copy(results = hits, total = hits.size)
+
+        paparazzi.snapshotThemes("selectedList") { Selected(state, setOf("alfama", "hit1")) }
     }
 }

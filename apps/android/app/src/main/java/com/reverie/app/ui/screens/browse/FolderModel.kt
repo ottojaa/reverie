@@ -6,6 +6,7 @@ import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.repository.PageResult
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.domain.isInPrivateTree
 import com.reverie.app.ui.screens.viewer.DocumentSequence
@@ -23,7 +24,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 
@@ -80,7 +80,7 @@ class FolderModel(
     private val computation: CoroutineDispatcher = Dispatchers.Default,
     sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
 ) {
-    private val selected = MutableStateFlow<Set<String>>(emptySet())
+    val selection = Selection()
     private val others = MutableStateFlow<BrowseFeedModel?>(null)
 
     private val media: BrowseFeedModel = feed(DocumentFilter.MEDIA) { error ->
@@ -94,7 +94,7 @@ class FolderModel(
     private val sections: Flow<Pair<FeedState, FeedState?>> =
         combine(media.state, others.flatMapLatest { it?.state ?: flowOf(null) }, ::Pair)
 
-    val state: StateFlow<FolderState> = combine(path, sections, summary, selected) { folders, (photos, files), figures, ids ->
+    val state: StateFlow<FolderState> = combine(path, sections, summary, selection.ids) { folders, (photos, files), figures, ids ->
         FolderState(
             node = folders.lastOrNull(),
             path = folders,
@@ -105,12 +105,6 @@ class FolderModel(
             isRefreshing = photos.isRefreshing || files?.isRefreshing == true,
         )
     }.stateIn(scope, sharing, FolderState())
-
-    val selectedIds: Set<String> get() = selected.value
-
-    /** The selected documents, as the page holds them now. */
-    val selectedDocuments: List<DocumentDto>
-        get() = with(state.value) { media.documents + files?.documents.orEmpty() }.filter { it.id in selectedIds }
 
     init {
         refreshSummary()
@@ -139,14 +133,6 @@ class FolderModel(
         if (media.state.value.documents.hasMore) return media.loadMore()
         others.value?.loadMore()
     }
-
-    fun enterSelection(ids: Collection<String>) = selected.update { ids.toSet() }
-
-    fun toggleSelect(ids: Collection<String>) = selected.update {
-        if (it.containsAll(ids)) it - ids.toSet() else it + ids
-    }
-
-    fun clearSelection() = selected.update { emptySet() }
 
     /** The viewer's swipe order: the section [opened] is listed in, day by day as the page shows it. */
     fun prepareSequence(opened: DocumentDto, zone: ZoneId = ZoneId.systemDefault()): DocumentSequence {

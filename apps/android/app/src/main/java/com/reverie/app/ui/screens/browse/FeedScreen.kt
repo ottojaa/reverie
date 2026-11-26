@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.search.SearchScope
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -51,9 +52,11 @@ fun FeedScreen(
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val starredIds = favourites.starredDocumentIds
 
-    val actions = remember(viewModel, state.selectedIds, starredIds) {
+    val picked = remember(state) { pickFrom(state.selectedIds, documents.documents) }
+    val selectedIds = picked.ids
+    val actions = remember(viewModel, selectedIds, starredIds) {
         documentRowActions(
-            viewModel, state.selectedIds, starredIds, openDocument,
+            viewModel, selectedIds, starredIds, openDocument,
             onGroupClick = viewModel::tapGroup,
             onGroupLongClick = viewModel::holdGroup,
         )
@@ -68,7 +71,7 @@ fun FeedScreen(
         folderId = null,
         isRefreshing = state.isRefreshing,
         isEmpty = documents.documents.isEmpty(),
-        selection = ChromeSelection(state.selectedIds.size, viewModel::clearSelection, viewModel::moveSelected, viewModel::deleteSelected, viewModel::downloadSelected),
+        selection = ChromeSelection(picked, viewModel.selection, viewModel::download),
         unlocker = viewModel.unlocker,
         onRefresh = { viewModel.refresh() },
         onRetry = { viewModel.refresh(initial = true) },

@@ -20,6 +20,8 @@ import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.local.toCacheableEntities
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
+import com.reverie.app.ui.screens.manage.ManageDialog
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.theme.ReverieTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,11 +102,14 @@ class FolderViewModelTest {
         await { viewModel.state.value.selectedIds == setOf("one", "two") }
     }
 
+    private fun picked() = pickFrom(viewModel.selection.ids.value, viewModel.state.value.files?.documents.orEmpty())
+
     @Test fun `deleting a selection of rows deletes those documents`() {
         show()
         selectOneAndTwo()
 
-        viewModel.deleteSelected()
+        viewModel.manage.askToTrash(picked(), viewModel.selection::remove)
+        viewModel.manage.trash(viewModel.manage.dialog.value as ManageDialog.ConfirmTrash)
 
         await { shownIds == listOf("three") }
         compose.onNodeWithText("one.pdf").assertDoesNotExist()
@@ -118,11 +123,10 @@ class FolderViewModelTest {
         selectOneAndTwo()
         var targets = emptyList<DownloadTarget>()
 
-        viewModel.downloadSelected { targets = it }
+        viewModel.download(picked().documents.map { it.id }) { targets = it }
 
         await { targets.isNotEmpty() }
         assertEquals(listOf("one.pdf", "two.pdf"), targets.map { it.filename }.sorted())
         assertEquals(true, targets.all { it.url.endsWith("/files/" + it.filename.removeSuffix(".pdf")) })
-        await { viewModel.state.value.selectedIds.isEmpty() }
     }
 }

@@ -1,10 +1,5 @@
 package com.reverie.app.ui.screens.browse
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,18 +31,21 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.domain.counted
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.ErrorState
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.ReverieRefreshBox
-import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteHost
 import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
 import com.reverie.app.ui.screens.manage.ManageController
 import com.reverie.app.ui.screens.manage.ManageHost
+import com.reverie.app.ui.screens.manage.Picked
+import com.reverie.app.ui.screens.manage.PickedSelection
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadDialog
 import com.reverie.app.ui.screens.upload.UploadProgressBar
@@ -70,19 +68,17 @@ class ChromeSlot(
     val onUpload: () -> Unit,
 )
 
-/** The selection and what happens to it. */
+/** What is selected in the body, and the download of it, which the screen's model prepares. */
 class ChromeSelection(
-    val count: Int,
-    val onClear: () -> Unit,
-    val onMove: () -> Unit,
-    val onDelete: () -> Unit,
-    val onDownload: ((List<DownloadTarget>) -> Unit) -> Unit,
+    val picked: Picked,
+    val selection: Selection,
+    val onDownload: (ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) -> Unit,
 )
 
 /**
  * Everything around a Browse list that the Library, a folder page and a list screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
- * the upload sheets, the delete confirmation, folder actions and the password prompt for a locked folder.
+ * the upload sheets, what the selection bar asks and the password prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].
  *
  * @param title null where the list carries its own title.
@@ -117,7 +113,6 @@ fun BrowseChrome(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var showDeleteConfirm by remember { mutableStateOf(false) }
     var showUploadActions by remember { mutableStateOf(false) }
     var showProcessing by remember { mutableStateOf(false) }
     LaunchedEffect(notices) { notices.collect { snackbarHostState.showSnackbar(it) } }
@@ -133,7 +128,7 @@ fun BrowseChrome(
     val density = LocalDensity.current
     // The banner never rises above the chips' row.
     val chipsPx = WindowInsets.statusBars.getTop(density) + with(density) { (CHIP_HEIGHT + CHIP_GAP * 2).roundToPx() }
-    val inSelection = selection.count > 0
+    val inSelection = !selection.picked.isEmpty
 
     // Pull-to-refresh wraps the whole Scaffold so its indicator floats over the header.
     ReverieRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = modifier) {
@@ -171,27 +166,20 @@ fun BrowseChrome(
                 )
 
                 // Selection bar overlays the header (opaque) so entering selection never moves the list.
-                AnimatedVisibility(
-                    visible = inSelection,
-                    enter = slideInVertically { -it } + fadeIn(),
-                    exit = slideOutVertically { -it } + fadeOut(),
+                PickedSelection(
+                    picked = selection.picked,
+                    selection = selection.selection,
+                    manage = manage,
                     modifier = Modifier.align(Alignment.TopCenter),
-                ) {
-                    SelectionTopBar(
-                        count = selection.count,
-                        onClose = selection.onClear,
-                        onDownload = {
-                            selection.onDownload { targets ->
-                                targets.forEach { enqueueDownload(context, it.url, it.filename) }
-                                if (targets.isNotEmpty()) {
-                                    scope.launch { snackbarHostState.showSnackbar(downloadStartedMessage(targets.size)) }
-                                }
+                    onDownload = { ids ->
+                        selection.onDownload(ids) { targets ->
+                            targets.forEach { enqueueDownload(context, it.url, it.filename) }
+                            if (targets.isNotEmpty()) {
+                                scope.launch { snackbarHostState.showSnackbar(downloadStartedMessage(targets.size)) }
                             }
-                        },
-                        onMove = selection.onMove,
-                        onDelete = { showDeleteConfirm = true },
-                    )
-                }
+                        }
+                    },
+                )
 
                 // Rides the header's bottom edge, but never rises above the chips' row.
                 OfflineBanner(
@@ -234,17 +222,6 @@ fun BrowseChrome(
         )
     }
 
-    if (showDeleteConfirm) {
-        DeleteDocumentsDialog(
-            count = selection.count,
-            onConfirm = {
-                showDeleteConfirm = false
-                selection.onDelete()
-            },
-            onDismiss = { showDeleteConfirm = false },
-        )
-    }
-
     ManageHost(manage, snackbarHostState)
     UnlockSheetHost(unlocker)
     FavouriteHost(favourites, snackbarHostState)
@@ -274,4 +251,4 @@ private fun BodyOrState(
     }
 }
 
-private fun downloadStartedMessage(n: Int): String = "Downloading $n ${plural(n)}"
+private fun downloadStartedMessage(n: Int): String = "Downloading ${counted(n, "file")}"

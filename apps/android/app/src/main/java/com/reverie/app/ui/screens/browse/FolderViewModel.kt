@@ -38,8 +38,6 @@ class FolderViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = folderId,
         deps = deps,
-        selection = { model.selectedDocuments },
-        clearSelection = { model.clearSelection() },
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
     )
@@ -67,6 +65,7 @@ class FolderViewModel @Inject constructor(
     val covers: StateFlow<Map<String, FolderCoverDto>> get() = deps.folders.covers
     val unlocker get() = session.unlocker
     override val favourites get() = session.favourites
+    override val selection get() = model.selection
     val manage get() = session.manage
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
@@ -84,12 +83,6 @@ class FolderViewModel @Inject constructor(
 
     fun loadMore() = model.loadMore()
 
-    override fun enterSelection(id: String) = model.enterSelection(listOf(id))
-
-    override fun toggleSelect(id: String) = model.toggleSelect(listOf(id))
-
-    fun clearSelection() = model.clearSelection()
-
     /** Hand the opened document's section to the viewer. Call right before opening one. */
     override fun prepareSequence(opened: DocumentDto) = session.publish(model.prepareSequence(opened))
 
@@ -104,9 +97,5 @@ class FolderViewModel @Inject constructor(
         }
     }
 
-    fun moveSelected() = session.moveSelected()
-
-    fun deleteSelected() = session.deleteSelected()
-
-    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) = session.downloadSelected(onTargets)
+    fun download(ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) = session.download(ids, onTargets)
 }

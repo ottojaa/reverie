@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,11 +31,11 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.browse.BrowseHeader
 import com.reverie.app.ui.screens.browse.BrowseTitle
-import com.reverie.app.ui.screens.favourites.FavouriteHost
-import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
-import com.reverie.app.ui.screens.manage.ManageHost
+import com.reverie.app.ui.screens.manage.PickingPage
+import com.reverie.app.ui.screens.manage.RowSelection
+import com.reverie.app.ui.screens.manage.pickFrom
 
-private const val NO_PRIVATE_FOLDERS = "No private folders. To make one, hold a folder and choose Make private."
+private const val NO_PRIVATE_FOLDERS = "No private folders. To make one, hold a folder, then choose Make private from ⋮."
 
 data class PrivateFoldersState(
     /** Null until the cached folders have been read. */
@@ -48,8 +47,9 @@ data class PrivateFoldersState(
 data class PrivateFoldersActions(
     val onBack: () -> Unit,
     val onOpenFolder: (String) -> Unit,
-    val onHoldFolder: (FolderWithChildren) -> Unit,
     val onRefresh: () -> Unit,
+    /** The folder rows' part in the screen's selection. */
+    val selection: RowSelection = RowSelection(),
 )
 
 /** The private folders, opened from the account sheet. A locked one asks for the password where it opens. */
@@ -62,21 +62,24 @@ fun PrivateFoldersScreen(
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val isPulling by viewModel.isPulling.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val selectedIds by viewModel.selection.ids.collectAsStateWithLifecycle()
+    val picked = remember(folders, selectedIds) { pickFrom(selectedIds, folders = folders.orEmpty()) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.load() }
 
     val starredIds = folders.orEmpty()
         .filter { favourites.isStarred(FavouriteKey(FavouriteType.FOLDER, it.id)) }
         .mapTo(mutableSetOf()) { it.id }
-    val actions = PrivateFoldersActions(onBack, onOpenFolder, viewModel.manage::openMenu, viewModel::pullToRefresh)
+    val actions = PrivateFoldersActions(
+        onBack = onBack,
+        onOpenFolder = onOpenFolder,
+        onRefresh = viewModel::pullToRefresh,
+        selection = RowSelection(picked.ids, viewModel.selection::toggle),
+    )
 
-    Box(Modifier.fillMaxSize()) {
+    PickingPage(picked, viewModel.selection, viewModel.manage, viewModel.favourites) {
         PrivateFoldersContent(PrivateFoldersState(folders, starredIds, isPulling), actions)
-        ReverieSnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomBarInset()))
     }
-    FavouriteHost(viewModel.favourites, snackbarHostState)
-    ManageHost(viewModel.manage, snackbarHostState)
 }
 
 @Composable
@@ -101,9 +104,10 @@ fun PrivateFoldersContent(state: PrivateFoldersState, actions: PrivateFoldersAct
                         folder = folder,
                         cover = null,
                         meta = folderMeta(folder),
-                        onClick = { actions.onOpenFolder(folder.id) },
-                        onLongClick = { actions.onHoldFolder(folder) },
+                        onClick = { actions.selection.tap(folder.id) { actions.onOpenFolder(folder.id) } },
+                        onLongClick = { actions.selection.toggle(folder.id) },
                         starred = folder.id in state.starredIds,
+                        selected = folder.id in actions.selection,
                     )
                 }
             }

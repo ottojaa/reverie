@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.search
 
 import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.domain.search.FilterKey
+import com.reverie.app.ui.screens.manage.RowSelection
 
 /** A filter sheet the header's pills open. */
 sealed interface SearchSheet {
@@ -26,4 +27,6 @@ data class SearchActions(
     val onOpenDocument: (String) -> Unit = {},
     val onOpenFolder: (String) -> Unit = {},
     val onLoadMore: () -> Unit = {},
+    /** The results' part in the page's selection. */
+    val selection: RowSelection = RowSelection(),
 )

@@ -11,10 +11,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.FavouriteKey
-import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.ui.screens.favourites.FavouriteController
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.ui.screens.viewer.isImageDocument
 import com.reverie.app.ui.screens.viewer.isVideoDocument
 import java.time.LocalDate
@@ -52,10 +51,7 @@ fun rememberOpenDocument(onDocumentClick: (documentId: String, aspect: Float?) -
 /** A screen of documents, as far as touching one of them is concerned. */
 interface DocumentListHandler {
     val favourites: FavouriteController
-
-    fun enterSelection(id: String)
-
-    fun toggleSelect(id: String)
+    val selection: Selection
 
     /** Hand the order of the list [opened] sits in to the viewer. */
     fun prepareSequence(opened: DocumentDto)
@@ -77,7 +73,7 @@ internal fun documentRowActions(
         selected = { it.id in selectedIds },
         onClick = { doc ->
             if (selecting) {
-                handler.toggleSelect(doc.id)
+                handler.selection.toggle(doc.id)
             } else {
                 // Publish the shown list's order so the viewer swipes through it and nothing else.
                 handler.prepareSequence(doc)
@@ -85,9 +81,8 @@ internal fun documentRowActions(
                 openDocument(doc)
             }
         },
-        onLongClick = { doc -> if (selecting) handler.toggleSelect(doc.id) else handler.enterSelection(doc.id) },
+        onLongClick = { doc -> handler.selection.toggle(doc.id) },
         starred = { it.id in starredIds },
-        onToggleStar = { handler.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
         onGroupClick = onGroupClick,
         onGroupLongClick = onGroupLongClick,
     )

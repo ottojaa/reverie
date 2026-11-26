@@ -260,11 +260,11 @@ class LibraryModelTest {
     @Test fun `one selection covers both lists`() = runTest(UnconfinedTestDispatcher()) {
         val f = start()
 
-        f.model.enterSelection("p3")
-        f.model.toggleSelect("l4")
+        f.model.selection.toggle("p3")
+        f.model.selection.toggle("l4")
         assertEquals(setOf("p3", "l4"), f.state.selectedIds)
 
-        f.model.clearSelection()
+        f.model.selection.clear()
         assertTrue(f.state.selectedIds.isEmpty())
     }
 }

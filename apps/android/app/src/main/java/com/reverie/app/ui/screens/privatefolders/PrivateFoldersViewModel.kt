@@ -7,6 +7,7 @@ import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDeps
 import com.reverie.app.ui.screens.manage.ManageController
+import com.reverie.app.ui.screens.manage.Selection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +31,10 @@ class PrivateFoldersViewModel @Inject constructor(private val deps: FavouriteDep
 
     val favourites = FavouriteController(deps, viewModelScope)
 
-    /** Folder menus, and moving folders. */
+    /** The folders selected. */
+    val selection = Selection()
+
+    /** Changing what is selected. */
     val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, viewModelScope)
 
     /** The private folders as cached; null until the cache has been read. */

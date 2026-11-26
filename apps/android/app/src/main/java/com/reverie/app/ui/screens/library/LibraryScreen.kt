@@ -23,6 +23,8 @@ import com.reverie.app.ui.screens.browse.ChromeSelection
 import com.reverie.app.ui.screens.browse.documentRowActions
 import com.reverie.app.ui.screens.browse.rememberOpenDocument
 import com.reverie.app.ui.screens.browse.rememberToday
+import com.reverie.app.ui.screens.manage.RowSelection
+import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -52,7 +54,11 @@ fun LibraryScreen(
     val today = rememberToday()
     val zone = remember { ZoneId.systemDefault() }
     var isNamingFolder by rememberSaveable { mutableStateOf(false) }
-    val selectedIds = state.selectedIds
+    val picked = remember(state) {
+        val documents = state.recent.documents.documents + state.unfiled.documents
+        pickFrom(state.selectedIds, documents, state.folders)
+    }
+    val selectedIds = picked.ids
     val starredIds = favourites.starredDocumentIds
     val actions = remember(viewModel, selectedIds, starredIds) {
         LibraryActions(
@@ -61,7 +67,7 @@ fun LibraryScreen(
             onLoadMore = viewModel::loadMore,
             onNewFolder = { isNamingFolder = true },
             onFocusConsumed = viewModel::clearViewerFocus,
-            onHoldFolder = viewModel.manage::openMenu,
+            folders = RowSelection(selectedIds, viewModel.selection::toggle),
         )
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
@@ -72,7 +78,7 @@ fun LibraryScreen(
         folderId = null,
         isRefreshing = state.recent.isRefreshing,
         isEmpty = state.isEmpty,
-        selection = ChromeSelection(selectedIds.size, viewModel::clearSelection, viewModel::moveSelected, viewModel::deleteSelected, viewModel::downloadSelected),
+        selection = ChromeSelection(picked, viewModel.selection, viewModel::download),
         unlocker = viewModel.unlocker,
         onRefresh = { viewModel.refresh() },
         onRetry = { viewModel.refresh(initial = true) },

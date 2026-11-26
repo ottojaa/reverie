@@ -25,7 +25,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.backup.BackupStatus
 import com.reverie.app.domain.folderMeta
@@ -37,6 +36,7 @@ import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.RowActions
+import com.reverie.app.ui.screens.manage.RowSelection
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -69,8 +69,8 @@ class LibraryActions(
     val onLoadMore: () -> Unit,
     val onNewFolder: () -> Unit,
     val onFocusConsumed: () -> Unit,
-    /** A long press on a folder's row. */
-    val onHoldFolder: (FolderWithChildren) -> Unit = {},
+    /** The folder rows' part in the Library's selection. */
+    val folders: RowSelection = RowSelection(),
 )
 
 /** The document the viewer was last on, in the section that opened it, until it has been brought into view. */
@@ -130,8 +130,9 @@ private fun LazyListScope.folderSection(
             folder = folder,
             cover = marks.folderCovers[folder.id],
             meta = folderMeta(folder),
-            onClick = { links.onOpenFolder(folder.id) },
-            onLongClick = { actions.onHoldFolder(folder) },
+            onClick = { actions.folders.tap(folder.id) { links.onOpenFolder(folder.id) } },
+            onLongClick = { actions.folders.toggle(folder.id) },
+            selected = folder.id in actions.folders,
             starred = folder.id in marks.starredFolderIds,
         )
     }

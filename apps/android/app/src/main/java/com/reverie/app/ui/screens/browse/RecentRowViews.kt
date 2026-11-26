@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -37,6 +36,7 @@ import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
+import com.reverie.app.ui.components.selectedBackground
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
@@ -108,7 +108,7 @@ private fun RowShell(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+            .selectedBackground(selected)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 64.dp)
             .padding(start = 20.dp + indent, end = 20.dp, top = 6.dp, bottom = 6.dp),

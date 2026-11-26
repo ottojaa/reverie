@@ -13,6 +13,7 @@ import com.reverie.app.ui.screens.browse.BrowseFeedModel
 import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.readQuietly
+import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -133,13 +134,8 @@ class LibraryModel(
         shown.copy(recent = added, unfiled = loose.documents)
     }.stateIn(scope, sharing, LibraryState())
 
-    val selectedIds: Set<String> get() = recent.selectedIds
-
-    /** The selected documents, from whichever section lists them. */
-    val selectedDocuments: List<DocumentDto>
-        get() = with(state.value) { recent.documents.documents + unfiled.documents }
-            .distinctBy { it.id }
-            .filter { it.id in selectedIds }
+    /** The Library's one selection, over both lists and the folders. */
+    val selection: Selection get() = recent.selection
 
     init {
         readOverview()
@@ -160,12 +156,6 @@ class LibraryModel(
 
     /** The next page of Recently added. */
     fun loadMore() = recent.loadMore()
-
-    fun enterSelection(id: String) = recent.enterSelection(listOf(id))
-
-    fun toggleSelect(id: String) = recent.toggleSelect(listOf(id))
-
-    fun clearSelection() = recent.clearSelection()
 
     /** The viewer's swipe order for a document opened from [section]. */
     fun prepareSequence(section: LibrarySection): DocumentSequence = when (section) {

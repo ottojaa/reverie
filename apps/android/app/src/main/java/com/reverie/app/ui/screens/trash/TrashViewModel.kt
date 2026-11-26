@@ -7,6 +7,7 @@ import com.reverie.app.data.api.model.TrashListDto
 import com.reverie.app.data.repository.TrashRepository
 import com.reverie.app.data.repository.VaultRepository
 import com.reverie.app.ui.components.LockedActions
+import com.reverie.app.ui.screens.manage.Selection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -30,11 +31,11 @@ data class TrashUiState(
     val isPulling: Boolean = false,
 )
 
-/** What the user is being offered, or asked, about one item. */
+/** What the user is being offered about one item, or asked before items are deleted for good. */
 sealed interface TrashDialog {
     data class Menu(val item: TrashItem) : TrashDialog
 
-    data class ConfirmPurge(val item: TrashItem) : TrashDialog
+    data class ConfirmPurge(val items: List<TrashItem>) : TrashDialog
 }
 
 @HiltViewModel
@@ -45,6 +46,9 @@ class TrashViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(TrashUiState())
     val uiState: StateFlow<TrashUiState> = _uiState.asStateFlow()
+
+    /** The items selected. */
+    val selection = Selection()
 
     private val _dialog = MutableStateFlow<TrashDialog?>(null)
     val dialog: StateFlow<TrashDialog?> = _dialog.asStateFlow()
@@ -76,28 +80,29 @@ class TrashViewModel @Inject constructor(
         load()
     }
 
-    /** A tap or hold on an item: a locked folder asks for its password, anything else offers what can be done. */
+    /** A tap on an item: a locked folder asks for its password, anything else offers what can be done. */
     fun open(item: TrashItem) {
         if (item is TrashItem.Folder && item.folder.locked) return locked.unlock(item.id)
         _dialog.value = TrashDialog.Menu(item)
     }
 
-    fun askToPurge(item: TrashItem) {
-        _dialog.value = TrashDialog.ConfirmPurge(item)
+    fun askToPurge(items: List<TrashItem>) {
+        _dialog.value = TrashDialog.ConfirmPurge(items)
     }
 
     fun dismiss() {
         _dialog.value = null
     }
 
-    fun restore(item: TrashItem) = change("Restored") { trash.restore(item.toSelection()) }
+    fun restore(items: List<TrashItem>) = change("Restored", items) { trash.restore(items.toSelection()) }
 
-    fun purge(item: TrashItem) = change("Deleted for good") { trash.purge(item.toSelection()) }
+    fun purge(items: List<TrashItem>) = change("Deleted for good", items) { trash.purge(items.toSelection()) }
 
-    private fun change(done: String, send: suspend () -> Unit) {
+    private fun change(done: String, items: List<TrashItem>, send: suspend () -> Unit) {
         dismiss()
         locked.attempt {
             send()
+            selection.remove(items.map { it.id })
             load()
             messages.send(done)
         }
