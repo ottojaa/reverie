@@ -1,15 +1,23 @@
 import { Button } from '@/components/ui/button';
-import type { FolderLockState } from '@/lib/folder-lock';
+import { toFolderLockState } from '@/lib/folders/privacy.js';
+import type { FolderWithChildren } from '@reverie/shared';
 import { Lock, LockOpen } from 'lucide-react';
 
-/**
- * Padlock on a private folder's row: a closed one is a button that asks for the password, an open one only
- * marks the folder as private. Public folders, and folders private through a parent, show nothing.
- */
-export function FolderLockBadge({ state, onUnlock }: { state: FolderLockState; onUnlock: () => void }) {
+interface FolderPadlockProps {
+    folder: Pick<FolderWithChildren, 'is_private' | 'locked'>;
+    /** Makes a closed padlock a button that opens the lock. Leave out inside another button or link. */
+    onUnlock?: () => void;
+}
+
+/** The padlock beside a private folder's name, closed or open. Public folders show nothing. */
+export function FolderPadlock({ folder, onUnlock }: FolderPadlockProps) {
+    const state = toFolderLockState(folder);
+
     if (state === 'none') return null;
 
     if (state === 'unlocked') return <LockOpen className="size-3.5 shrink-0 text-accent" aria-label="Private (unlocked)" />;
+
+    if (!onUnlock) return <Lock className="size-3.5 shrink-0 text-accent" aria-label="Locked" />;
 
     return (
         <Button

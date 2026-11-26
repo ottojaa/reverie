@@ -55,7 +55,7 @@ export function BrowseDashboard({ sectionId }: BrowseDashboardProps) {
 
     return (
         <BrowseFrame documents={documents}>
-            <BrowseHeader section={section} subtitle={sectionId ? folderSubtitle : librarySubtitle}>
+            <BrowseHeader section={section} isLocked={isLocked} subtitle={sectionId ? folderSubtitle : librarySubtitle}>
                 {sectionId && <FolderActions section={section} folderId={sectionId} isLoading={recent.isLoading} />}
             </BrowseHeader>
 

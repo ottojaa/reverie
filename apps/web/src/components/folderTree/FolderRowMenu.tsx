@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { isInheritedPrivate } from '@/lib/folders/tree.js';
+import { isInheritedPrivate } from '@/lib/folders/privacy.js';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { FolderPlus, Lock, LockOpen, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';

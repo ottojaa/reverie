@@ -2,18 +2,7 @@ import { FolderTreeResponseSchema, type FolderWithChildren } from '@reverie/shar
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { toDeleteFolderMessage, toMakePrivateMessage } from './confirm-text.js';
-import {
-    findFolder,
-    findFolderChain,
-    flattenTree,
-    isInheritedPrivate,
-    searchTree,
-    toIndent,
-    toOwnCount,
-    toPublicTree,
-    toTotalCount,
-    type FolderRow,
-} from './tree.js';
+import { findFolder, findFolderByPath, findFolderChain, flattenTree, searchTree, toIndent, toOwnCount, toTotalCount, type FolderRow } from './tree.js';
 
 // Photos { Surprise party (private, locked), Trips { Norway } }, Receipts, Taxes (private, open) { Statements }
 const tree = FolderTreeResponseSchema.parse(
@@ -69,17 +58,10 @@ describe('finding folders', () => {
         expect(findFolder(tree, null)).toBeNull();
         expect(findFolderChain(tree, 'missing')).toEqual([]);
     });
-});
 
-describe('privacy', () => {
-    it('drops private folders and everything inside them from the public tree', () => {
-        expect(toLines(flattenTree(toPublicTree(tree)))).toEqual(['0 Photos', '1 Trips', '2 Norway', '0 Receipts']);
-    });
-
-    it('marks a folder under a private one as private by inheritance', () => {
-        expect(isInheritedPrivate(byName('Statements'))).toBe(true);
-        expect(isInheritedPrivate(byName('Taxes'))).toBe(false);
-        expect(isInheritedPrivate(byName('Norway'))).toBe(false);
+    it('finds a folder by its whole path, at any depth', () => {
+        expect(findFolderByPath(tree, byName('Norway').path)?.name).toBe('Norway');
+        expect(findFolderByPath(tree, '/Norway/nowhere')).toBeNull();
     });
 });
 

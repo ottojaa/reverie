@@ -1,5 +1,6 @@
 import type { FolderWithChildren } from '@reverie/shared';
-import { flattenTree, hasOtherLockBelow, toTotalCount } from './tree.js';
+import { hasOtherLockBelow } from './privacy.js';
+import { flattenTree, toTotalCount } from './tree.js';
 
 function toCountText(count: number, noun: string): string {
     return `${count} ${noun}${count === 1 ? '' : 's'}`;

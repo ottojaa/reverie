@@ -1,4 +1,4 @@
-import { UploadResponseSchema, type UploadResponse } from '@reverie/shared';
+import { NotFoundError, UploadResponseSchema, ValidationError, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { assertDocumentsOpen } from '../../services/document-access';
 import { loadFolderLocks } from '../../services/folder-locks';
@@ -26,7 +26,7 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
             const files: UploadedFile[] = [];
 
@@ -54,14 +54,10 @@ export default async function (fastify: FastifyInstance) {
                     }
                 }
 
-                if (files.length === 0) {
-                    return reply.badRequest('No files provided');
-                }
+                if (files.length === 0) throw new ValidationError('No files provided');
 
                 // No folder_id means the top level.
-                if (folderId && !(await findLiveFolder(userId, folderId))) {
-                    return reply.badRequest('Folder not found');
-                }
+                if (folderId && !(await findLiveFolder(userId, folderId))) throw new NotFoundError('Folder', folderId);
 
                 // Uploading into a locked folder would reveal its filenames (duplicate handling); copying
                 // metadata reads another document. Both need the folder's lock open.

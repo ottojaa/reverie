@@ -32,11 +32,6 @@ export function searchTree(tree: FolderWithChildren[], query: string, depth = 0)
     });
 }
 
-/** The tree without private folders, which also leaves out everything inside them. */
-export function toPublicTree(tree: FolderWithChildren[]): FolderWithChildren[] {
-    return tree.filter((folder) => folder.lock_id === null).map((folder) => ({ ...folder, children: toPublicTree(folder.children) }));
-}
-
 /** The folder with every folder above it, top level first. Empty when the tree does not hold it. */
 export function findFolderChain(tree: FolderWithChildren[], id: string): FolderWithChildren[] {
     for (const folder of tree) {
@@ -56,6 +51,11 @@ export function findFolder(tree: FolderWithChildren[], id: string | null | undef
     return findFolderChain(tree, id).at(-1) ?? null;
 }
 
+/** The folder with this path. Live folders never share one. */
+export function findFolderByPath(tree: FolderWithChildren[], path: string): FolderWithChildren | null {
+    return flattenTree(tree).find((row) => row.folder.path === path)?.folder ?? null;
+}
+
 /** Documents in the folder and beneath it, behind the same lock as the folder. Zero while it is locked. */
 export function toTotalCount(folder: FolderWithChildren): number {
     const { image, video, file } = folder.kind_counts;
@@ -68,14 +68,4 @@ export function toOwnCount(folder: FolderWithChildren): number {
     const sameLock = folder.children.filter((child) => child.lock_id === folder.lock_id);
 
     return sameLock.reduce((count, child) => count - toTotalCount(child), toTotalCount(folder));
-}
-
-/** True when the folder is private only because a folder above it is. */
-export function isInheritedPrivate(folder: Pick<FolderWithChildren, 'is_private' | 'lock_id'>): boolean {
-    return folder.lock_id !== null && !folder.is_private;
-}
-
-/** True when some folder beneath this one sits behind a different lock, so this folder's counts leave it out. */
-export function hasOtherLockBelow(folder: FolderWithChildren): boolean {
-    return flattenTree(folder.children).some((row) => row.folder.lock_id !== folder.lock_id);
 }

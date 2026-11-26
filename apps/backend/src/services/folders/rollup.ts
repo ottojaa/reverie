@@ -9,8 +9,8 @@ import type { FolderTree } from './snapshot.js';
 
 /**
  * What each folder holds, counting everything beneath it that is behind the same lock as the folder itself:
- * nothing under a private folder ever counts toward, or shows on, a folder above it. Three queries whatever
- * the number of folders, each over single folders, added up here along the tree.
+ * nothing under a private folder ever counts toward, or shows on, a folder above it. Three queries at most,
+ * whatever the number of folders, each over single folders, added up here along the tree.
  */
 
 const COVER_TILES = 4;
@@ -24,7 +24,7 @@ export interface FolderRollup {
     document_count: number;
     /**
      * Null for a private folder, open or not: private documents (ids, filenames) stay out of every listing and
-     * are only reachable by asking for their folder.
+     * are only reachable by asking for their folder. Also null when only counts were asked for.
      */
     cover: FolderCover | null;
 }
@@ -99,13 +99,13 @@ function toEmptyHoldings(): Holdings {
     return { totals: Object.fromEntries(TOTAL_COLUMNS.map((column) => [column, 0])), types: new Map(), tiles: [] };
 }
 
-/** Each queried folder's own documents. Tiles are only asked for public folders. */
-async function fetchOwnHoldings(userId: string, folderIds: string[], publicIds: string[]): Promise<Map<string, Holdings>> {
+/** Each queried folder's own documents. File types and tiles are only read for the folders that get a cover. */
+async function fetchOwnHoldings(userId: string, folderIds: string[], coverIds: string[], publicIds: string[]): Promise<Map<string, Holdings>> {
     // The folders asked for were chosen with their locks in mind, so the private filter is off here.
     const filters: Filters = { userId, privateFolderIds: [] };
     const [totals, types, tiles] = await Promise.all([
         folderIds.length === 0 ? [] : fetchTotals(filters, folderIds),
-        folderIds.length === 0 ? [] : fetchTypes(filters, folderIds),
+        coverIds.length === 0 ? [] : fetchTypes(filters, coverIds),
         publicIds.length === 0 ? [] : fetchTiles(filters, publicIds),
     ]);
     const own = new Map(folderIds.map((id) => [id, toEmptyHoldings()]));
@@ -149,25 +149,33 @@ function toCover(holdings: Holdings): FolderCover {
     return { tiles: holdings.tiles.map(toTile), summary: toSummary(holdings.totals, topTypes) };
 }
 
-function toRollup(own: Holdings, all: Holdings, isPrivate: boolean): FolderRollup {
+function toRollup(own: Holdings, all: Holdings, hasCover: boolean): FolderRollup {
     return {
         kind_counts: { image: all.totals['image_count']!, video: all.totals['video_count']!, file: all.totals['file_count']! },
         document_count: KINDS.reduce((sum, kind) => sum + own.totals[kind + '_count']!, 0),
-        cover: isPrivate ? null : toCover(all),
+        cover: hasCover ? toCover(all) : null,
     };
 }
 
 /**
  * The rollups of the given live folders and of every folder beneath them. A folder behind a closed lock has no
- * entry (see EMPTY_ROLLUP) and nothing of its documents is read.
+ * entry (see EMPTY_ROLLUP) and nothing of its documents is read. `covers: false` asks for the counts alone.
  */
-export async function loadFolderRollups(userId: string, tree: FolderTree<Folder>, folderIds: string[], locks: FolderLocks): Promise<Map<string, FolderRollup>> {
+export async function loadFolderRollups(
+    userId: string,
+    tree: FolderTree<Folder>,
+    folderIds: string[],
+    locks: FolderLocks,
+    { covers = true }: { covers?: boolean } = {},
+): Promise<Map<string, FolderRollup>> {
     const scope = new Map(folderIds.flatMap((id) => tree.subtree(id)).map((folder) => [folder.id, folder]));
     const open = Array.from(scope.keys()).filter((id) => !locks.isLocked(id));
+    const coverIds = covers ? open : [];
     const own = await fetchOwnHoldings(
         userId,
         open,
-        open.filter((id) => !locks.isPrivate(id)),
+        coverIds,
+        coverIds.filter((id) => !locks.isPrivate(id)),
     );
     const sums = new Map<string, Holdings>();
 
@@ -184,5 +192,5 @@ export async function loadFolderRollups(userId: string, tree: FolderTree<Folder>
         return sum;
     }
 
-    return new Map(open.map((id) => [id, toRollup(own.get(id)!, sumOf(id), locks.isPrivate(id))]));
+    return new Map(open.map((id) => [id, toRollup(own.get(id)!, sumOf(id), covers && !locks.isPrivate(id))]));
 }

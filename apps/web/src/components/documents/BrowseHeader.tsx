@@ -13,6 +13,8 @@ interface BrowseHeaderProps {
     section: FolderWithChildren | null;
     /** Replaces the folder's name as the title (a kind view is titled by its kind). */
     title?: string;
+    /** The folder was refused as locked. One inside a locked folder has no `section` to name it. */
+    isLocked?: boolean;
     subtitle: string | null;
     /** Leads the title (the kind view's back arrow). */
     back?: ReactNode;
@@ -21,7 +23,7 @@ interface BrowseHeaderProps {
 }
 
 /** Title and subtitle on the left, whatever the view offers on the right. */
-export function BrowseHeader({ section, title, subtitle, back, children }: BrowseHeaderProps) {
+export function BrowseHeader({ section, title, isLocked, subtitle, back, children }: BrowseHeaderProps) {
     return (
         <div className="mb-1 flex flex-wrap items-end justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
@@ -29,7 +31,7 @@ export function BrowseHeader({ section, title, subtitle, back, children }: Brows
                 <div className="min-w-0">
                     <h1 className="flex items-center gap-2 text-[28px] font-semibold leading-[34px] tracking-tight">
                         {!title && section?.emoji && <SectionIcon value={section.emoji} className="size-7" />}
-                        {title ?? (section ? section.name : 'My Files')}
+                        {title ?? section?.name ?? (isLocked ? 'Locked folder' : 'My Files')}
                     </h1>
                     {!title && section?.description && <p className="mt-1 text-sm text-muted-foreground">{section.description}</p>}
                     <p className="mt-0.5 min-h-5 text-sm text-primary">{subtitle}</p>

@@ -1,6 +1,6 @@
+import { FolderPadlock } from '@/components/folders/FolderPadlock';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
-import { toFolderLockState } from '@/lib/folder-lock';
 import type { FolderDrop } from '@/lib/folders/move.js';
 import { toIndent, toTotalCount, type FolderRow } from '@/lib/folders/tree.js';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
@@ -12,7 +12,6 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { DropZone } from './DropZone';
-import { FolderLockBadge } from './FolderLockBadge';
 import { FolderActionsDropdown, FolderActionsHoverButton, FolderContextMenu, type FolderRowActions } from './FolderRowMenu';
 
 /** What is being dragged, as far as this row's drop zones care. */
@@ -22,7 +21,7 @@ export interface FolderTreeRowProps extends FolderRow {
     isCurrent: boolean;
     isOpen: boolean;
     /** Left out while the tree is filtered: everything stays open. */
-    onToggle: ((folderId: string) => void) | undefined;
+    onToggle: ((folder: FolderWithChildren) => void) | undefined;
     dragKind: RowDragKind;
     /** True for the dragged folder and everything inside it, which cannot be dropped on. */
     isDragSource: boolean;
@@ -46,7 +45,7 @@ function FolderChevron({ folder, isOpen, onToggle }: Pick<FolderTreeRowProps, 'f
             aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${folder.name}`}
             aria-expanded={isOpen}
             disabled={!onToggle}
-            onClick={() => onToggle?.(folder.id)}
+            onClick={() => onToggle?.(folder)}
         >
             <ChevronRight className={cn('size-3.5 transition-transform duration-200', isOpen && 'rotate-90')} />
         </Button>
@@ -147,7 +146,7 @@ function RowShell({ row, ref: menuRef, style, ...divProps }: ComponentProps<'div
             <FolderRowDropZones {...row} />
             <FolderChevron {...row} />
             <FolderLink {...row} onUnlock={() => void unlockAndOpen()} />
-            <FolderLockBadge state={toFolderLockState(folder)} onUnlock={() => void unlockAndOpen()} />
+            <FolderPadlock folder={folder} onUnlock={() => void unlockAndOpen()} />
             {count > 0 && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>}
             {isMobile ? <FolderActionsDropdown folder={folder} actions={actions} /> : <FolderActionsHoverButton />}
         </div>
