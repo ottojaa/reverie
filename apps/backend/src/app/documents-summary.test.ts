@@ -19,6 +19,7 @@ interface Summary {
     image: { count: number; bytes: number };
     video: { count: number; bytes: number };
     file: { count: number; bytes: number; top_types: Array<{ ext: string; count: number }> };
+    media_dates?: { first: string; last: string } | null;
 }
 
 describeDb('GET /documents/summary', () => {
@@ -132,7 +133,47 @@ describeDb('GET /documents/summary', () => {
         const empty = await seedFolder(world().db, carol, 'Empty');
         const result = await summary('?folder_id=' + empty.id);
 
-        expect(result.body).toEqual({ image: { count: 0, bytes: 0 }, video: { count: 0, bytes: 0 }, file: { count: 0, bytes: 0, top_types: [] } });
+        expect(result.body).toEqual({
+            image: { count: 0, bytes: 0 },
+            video: { count: 0, bytes: 0 },
+            file: { count: 0, bytes: 0, top_types: [] },
+            media_dates: null,
+        });
+    });
+
+    it('gives the first and last day its photos and videos were taken, else uploaded', async () => {
+        const { db } = world();
+        // Their own user, so the library-wide counts of the other tests stay put.
+        const dana = await seedUser(db, 'dana');
+        const dated = (await seedFolder(db, dana, 'Dated')).id;
+        const add = (name: string, mime: string, createdAt: string, takenAt?: string) =>
+            seedDocument(db, {
+                userId: dana,
+                name,
+                mime,
+                folderId: dated,
+                createdAt: new Date(createdAt),
+                photo: takenAt ? { takenAt: new Date(takenAt) } : undefined,
+            });
+
+        await add('old.jpg', 'image/jpeg', '2026-11-01T10:00:00Z', '2025-08-21T09:00:00Z');
+        await add('clip.mp4', 'video/mp4', '2025-08-25T18:00:00Z');
+        // A file outside the range does not widen it.
+        await add('later.pdf', 'application/pdf', '2026-11-20T10:00:00Z');
+
+        const { body } = await summary('?folder_id=' + dated, dana);
+
+        expect(body.media_dates).toEqual({ first: '2025-08-21T09:00:00.000Z', last: '2025-08-25T18:00:00.000Z' });
+    });
+
+    it('dates a folder only: the whole library and its top level are asked for counts alone', async () => {
+        const whole = await summary();
+        const top = await summary('?top_level=true');
+        const folder = await summary('?folder_id=' + trips);
+
+        expect(whole.body.media_dates).toBeNull();
+        expect(top.body.media_dates).toBeNull();
+        expect(folder.body.media_dates).not.toBeNull();
     });
 
     it('leaves private-folder, trashed and other users documents out', async () => {

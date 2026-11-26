@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
@@ -79,7 +80,7 @@ class MediaStoreBackupTransport @Inject constructor(
     override suspend fun hash(media: BackupMedia): String? = hasher.hash(media.toUri(), mimeType = media.mimeType)
 
     override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> = try {
-        documentsApi.checkContentInBatches(folderId = null, files = files)
+        documentsApi.checkContentInBatches(DocumentScope.All, files)
     } catch (e: IOException) {
         // The HTTP client reports a lost connection, an unknown host or a timeout as a plain IOException.
         throw ReverieApiException.Network(e)

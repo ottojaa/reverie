@@ -23,8 +23,9 @@ data/
   image/         # Coil authed thumbnails · connectivity/
 domain/model/    # domain models (also domain/search/) — no usecase/
 ui/
-  screens/       # Screen composables + ViewModels (auth, browse, collections,
-                 #   document, search, settings, upload, viewer)
+  screens/       # Screen composables + ViewModels (account, auth, browse, destination,
+                 #   document, favourites, library, manage, privatefolders, search,
+                 #   settings, trash, upload, viewer)
   components/     navigation/     theme/
 util/
 di/              # Hilt modules

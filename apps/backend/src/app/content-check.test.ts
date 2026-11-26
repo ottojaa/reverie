@@ -11,7 +11,7 @@ vi.mock('../queues/ocr.queue', () => ({ addOcrJob: vi.fn() }));
 vi.mock('../queues/trim.queue', () => ({ addTrimJob: vi.fn() }));
 
 import { createAuthService } from '../services/auth.service.js';
-import { seedDocument } from '../testing/seed.js';
+import { seedDocument, seedFolder } from '../testing/seed.js';
 import { describeDb, useWorld, type World } from '../testing/tool-world.js';
 import authPlugin from './plugins/auth.js';
 import errorHandler from './plugins/error-handler.js';
@@ -103,6 +103,27 @@ describeDb('POST /documents/check-content', () => {
         ]);
     });
 
+    it('names every folder from the top down, however deep', async () => {
+        const { db, alice, folders } = world();
+        const year = await seedFolder(db, alice, '2026', { parent: folders.invoices });
+        const month = await seedFolder(db, alice, 'May', { parent: year });
+        await seedDocument(db, { userId: alice, name: 'deep.jpg', folderId: month.id, hash: sha('deep') });
+
+        const { results } = await check([{ name: 'x.jpg', sha256: sha('deep') }]);
+
+        expect(results[0]?.content).toEqual({ where: 'folder', folder_path: ['Work', 'Invoices', '2026', 'May'], filename: 'deep.jpg' });
+    });
+
+    it('checks names at the top level only when asked to', async () => {
+        const { db, alice } = world();
+        await seedDocument(db, { userId: alice, name: 'unfiled.pdf', hash: sha('unfiled-v1') });
+        const files = [{ name: 'unfiled.pdf', sha256: sha('unfiled-v2') }];
+
+        expect((await post('/documents/check-content', { files })).body.results[0].name_conflict).toBe(false);
+        expect((await post('/documents/check-content', { top_level: true, files })).body.results[0].name_conflict).toBe(true);
+        expect((await post('/documents/check-content', { top_level: true, folder_id: world().folders.work.id, files })).status).toBe(400);
+    });
+
     it('builds the path from current names, not the stored folders.path', async () => {
         const { db, alice, folders } = world();
         await db.updateTable('folders').set({ name: 'Renamed Work' }).where('id', '=', folders.work.id).execute();
@@ -145,35 +166,39 @@ describeDb('POST /documents/check-content', () => {
 
             return [
                 folders.vault.id,
+                folders.vaultMiddle.id,
                 folders.vaultInner.id,
                 folders.lockedFolder.id,
                 folders.secretParent.id,
+                folders.secretMiddle.id,
                 'Vault',
+                'Middle',
                 'Inner',
                 'Hidden',
                 'Archive',
+                'Years',
                 privateFilename,
             ];
         };
 
-        it('answers "private" with no id, name or path for a document in a private collection', async () => {
+        it('answers "private" with no id, name or path for a document deep beneath a private folder', async () => {
             const { db, alice } = world();
             const { folders } = world();
             const id = await seedDocument(db, {
                 userId: alice,
                 name: 'tax-return-secret.pdf',
                 folderId: folders.vaultInner.id,
-                hash: sha('private-collection'),
+                hash: sha('deep-private'),
             });
 
-            const { status, raw, results } = await check([{ name: 'scan.pdf', sha256: sha('private-collection') }]);
+            const { status, raw, results } = await check([{ name: 'scan.pdf', sha256: sha('deep-private') }]);
 
             expect(status).toBe(200);
             expect(results[0]?.content).toEqual({ where: 'private' });
             for (const marker of [...markers('tax-return-secret.pdf'), id]) expect(raw).not.toContain(marker);
         });
 
-        it('answers "private" for a private folder inside a public collection', async () => {
+        it('answers "private" for a private folder deep beneath public ones', async () => {
             const { db, alice, folders } = world();
             await seedDocument(db, { userId: alice, name: 'diary-secret.pdf', folderId: folders.lockedFolder.id, hash: sha('private-folder') });
 

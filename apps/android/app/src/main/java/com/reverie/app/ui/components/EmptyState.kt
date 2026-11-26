@@ -26,7 +26,7 @@ import com.reverie.app.ui.theme.ReverieTheme
 
 /**
  * Centered empty state: an icon inside a tonal disc, a title, supporting text, and an
- * optional call-to-action. Used across Browse/Search/Collections empty screens.
+ * optional call-to-action. Used by the list screens when there is nothing to show.
  */
 @Composable
 fun EmptyState(
@@ -94,8 +94,8 @@ private fun EmptyStatePreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             EmptyState(
                 icon = Icons.Outlined.FolderOpen,
-                title = "No documents yet",
-                description = "Tap + to upload or scan a document.",
+                title = "No photos or videos yet",
+                description = "Upload photos and files, or scan one with the camera.",
                 actionLabel = "Upload",
                 onAction = {},
             )

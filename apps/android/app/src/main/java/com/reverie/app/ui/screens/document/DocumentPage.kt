@@ -350,7 +350,7 @@ private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier, onUnlock: (
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "This document is in a private folder.",
+            "This file is in a private folder.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

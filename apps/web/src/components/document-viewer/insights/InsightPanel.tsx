@@ -65,7 +65,7 @@ export function InsightPanel({ document, isOpen, onClose }: InsightPanelProps) {
     // Jump to search filtered by the clicked chip. Topics have no `topic:` filter, so they map to tags.
     const searchBy = (key: 'category' | 'entity' | 'tag', value: string) => {
         onClose();
-        navigate({ to: '/search', search: { q: addFilter('', key, value), sort_by: 'relevance', sort_order: 'desc', view: undefined } });
+        navigate({ to: '/search', search: { q: addFilter('', key, value), sort_by: 'relevance', sort_order: 'desc', view: undefined, folder_id: undefined } });
     };
 
     const entities = metadata?.entities.map((entity) => entity.canonical_name) ?? [];

@@ -1,7 +1,7 @@
 package com.reverie.app.data.local
 
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.kind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,11 +40,11 @@ class PrivateDocumentStore @Inject constructor() {
 
     /**
      * Drop the documents of [folderId] that are not in [keepIds] (the server no longer lists them).
-     * With a [kind], only documents of that kind: a listing of one kind says nothing about the others.
+     * Only documents [filter] holds: a listing of some kinds says nothing about the others.
      */
-    fun removeInFolderNotIn(folderId: String, keepIds: Set<String>, kind: DocumentKind? = null) {
+    fun removeInFolderNotIn(folderId: String, keepIds: Set<String>, filter: DocumentFilter = DocumentFilter.ALL) {
         val stale = state.value.values.filter {
-            it.folder_id == folderId && it.id !in keepIds && (kind == null || it.kind == kind)
+            it.folder_id == folderId && it.id !in keepIds && filter.holds(it.kind)
         }
         remove(stale.map { it.id })
     }

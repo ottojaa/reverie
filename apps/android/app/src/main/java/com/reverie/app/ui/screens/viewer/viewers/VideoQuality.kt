@@ -1,9 +1,9 @@
 package com.reverie.app.ui.screens.viewer.viewers
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -109,7 +109,7 @@ internal fun QualityMenuButton(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(50),
+        shape = CircleShape,
         color = Color.Black.copy(alpha = 0.55f),
         contentColor = Color.White,
     ) {

@@ -92,11 +92,9 @@ async function processTrimJob(job: Job<TrimJobData>): Promise<TrimJobResult> {
         };
 
         if (saveAsCopy) {
-            if (!document.folder_id) {
-                throw new NonRetryableJobError('Document must be in a folder to save as copy');
-            }
-
-            const result = await uploadService.uploadFiles([trimmed], userId, document.folder_id, sessionId, 'keep_both', documentId);
+            // The copy goes beside the original: into its folder, or to the top level.
+            const folderId = document.folder_id ?? undefined;
+            const result = await uploadService.uploadFiles([trimmed], userId, folderId, sessionId, 'keep_both', documentId);
 
             const newDoc = result.documents[0];
 

@@ -86,15 +86,9 @@ export function useImageSave(
             const file = await buildSaveFile(fileUrl, percentCrop, editorState, document, mimeType);
 
             if (editorState.saveAsCopy) {
-                if (!document.folder_id) {
-                    toast.error('Document must be in a folder to save as copy');
-                    setIsSaving(false);
-
-                    return;
-                }
-
+                // The copy goes beside the original: into its folder, or to the top level.
                 const uploadRes = await uploadFile(file, {
-                    folderId: document.folder_id,
+                    ...(document.folder_id && { folderId: document.folder_id }),
                     sessionId: crypto.randomUUID(),
                     conflictStrategy: 'keep_both',
                     copyMetadataFromDocumentId: document.id,

@@ -23,8 +23,11 @@ interface UploadDao {
     @Query("SELECT * FROM upload_items WHERE sessionId = :sessionId")
     suspend fun getItems(sessionId: String): List<UploadItemEntity>
 
-    @Query("SELECT * FROM upload_items WHERE sessionId = :sessionId ORDER BY displayName ASC")
-    fun observeItems(sessionId: String): Flow<List<UploadItemEntity>>
+    @Query("SELECT * FROM upload_items ORDER BY displayName ASC")
+    fun observeAllItems(): Flow<List<UploadItemEntity>>
+
+    @Query("SELECT sessionId FROM upload_tasks WHERE status = 'uploading'")
+    fun observeRunningSessions(): Flow<List<String>>
 
     @Query("SELECT * FROM upload_items WHERE status IN ('queued', 'uploading', 'processing')")
     fun observeActive(): Flow<List<UploadItemEntity>>
@@ -38,8 +41,9 @@ interface UploadDao {
     @Query("UPDATE upload_tasks SET status = :status WHERE sessionId = :sessionId")
     suspend fun updateTaskStatus(sessionId: String, status: String)
 
-    @Query("DELETE FROM upload_items WHERE status = 'complete'")
-    suspend fun clearCompletedItems()
+    /** Drops the files of every batch that is done with; one still running may yet retry its failures. */
+    @Query("DELETE FROM upload_items WHERE sessionId NOT IN (SELECT sessionId FROM upload_tasks WHERE status = 'uploading')")
+    suspend fun clearFinishedItems()
 
     @Query("DELETE FROM upload_tasks WHERE sessionId = :sessionId")
     suspend fun deleteTask(sessionId: String)

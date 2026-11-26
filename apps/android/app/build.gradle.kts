@@ -18,8 +18,8 @@ android {
         applicationId = "com.reverie.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "1.0.27"
+        versionCode = 29
+        versionName = "1.0.28"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -82,12 +82,19 @@ android {
         jvmTarget = "17"
     }
 
+    // Responses the backend's tests produce from its real routes; the DTO tests parse them.
+    sourceSets.getByName("test").resources.srcDir("../../../libs/shared/src/fixtures")
+
     testOptions {
         // Media3 calls android.text.TextUtils from its pure-Kotlin/Java helpers (e.g. MimeTypes);
         // let the JVM unit-test stubs return defaults instead of throwing "not mocked".
         unitTests.isReturnDefaultValues = true
         // The navigation test hosts Compose under Robolectric, which needs the merged resources and manifest.
         unitTests.isIncludeAndroidResources = true
+        // Paparazzi attaches an agent to the running test JVM. Attaching to a JVM that has not started its
+        // listener takes a signal handshake that can go unanswered after some Robolectric database tests have
+        // run, which then fails every screenshot test in that JVM. Starting the listener up front avoids it.
+        unitTests.all { it.jvmArgs("-XX:+StartAttachListener") }
     }
 
     buildFeatures {

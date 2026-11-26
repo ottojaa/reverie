@@ -1,44 +1,37 @@
 import type { Kysely } from 'kysely';
 import { db } from '../db/kysely.js';
 import type { Database } from '../db/schema.js';
+import { loadFolderTree } from './folders/load.js';
+import type { FolderNode, FolderTree } from './folders/snapshot.js';
 
 /**
  * Which folders are private, worked out at query time (nothing is denormalized).
  *
  * A document has no privacy of its own: it is private exactly when its folder is. A folder is
- * private when it is flagged itself or sits in a private collection. The hierarchy is two levels
- * (collection -> folder), so one extra lookup covers the whole cascade.
+ * private when it, or any folder above it, is flagged private.
  *
- * Each private folder belongs to one lock: the private collection when there is one, otherwise the
- * folder itself. Opening a lock (see folder-locks.ts) opens every folder that maps to it.
+ * Each private folder belongs to one lock: the outermost private folder among it and the folders
+ * above it. Opening a lock (see folder-locks.ts) opens every folder that maps to it.
  */
 
 /** Folder id -> id of the lock that covers it, for every private folder of a user. Trash is ignored on purpose: a trashed private folder stays private. */
 export type LockMap = ReadonlyMap<string, string>;
 
-export async function loadLockMap(userId: string, conn: Kysely<Database> = db): Promise<LockMap> {
-    const roots = await conn.selectFrom('folders').select('id').where('user_id', '=', userId).where('is_private', '=', true).execute();
+export function toLockMap(tree: FolderTree<FolderNode>): LockMap {
+    const locks = tree.all().flatMap((folder): [string, string][] => {
+        const lockId = tree.lockOf(folder.id);
 
-    if (roots.length === 0) return new Map();
+        return lockId === null ? [] : [[folder.id, lockId]];
+    });
 
-    const ownLocks = roots.map((root): [string, string] => [root.id, root.id]);
-    const children = await conn
-        .selectFrom('folders')
-        .select(['id', 'parent_id'])
-        .where('user_id', '=', userId)
-        .where(
-            'parent_id',
-            'in',
-            roots.map((root) => root.id),
-        )
-        .execute();
-    // A folder in a private collection is covered by the collection's lock, even if it is flagged too.
-    const inheritedLocks = children.map((child): [string, string] => [child.id, child.parent_id!]);
-
-    return new Map([...ownLocks, ...inheritedLocks]);
+    return new Map(locks);
 }
 
-/** Ids of every private folder (collections included) of a user. */
+export async function loadLockMap(userId: string, conn: Kysely<Database> = db): Promise<LockMap> {
+    return toLockMap(await loadFolderTree(userId, conn));
+}
+
+/** Ids of every private folder of a user, at any depth. */
 export async function getPrivateFolderIds(userId: string): Promise<string[]> {
     return Array.from((await loadLockMap(userId)).keys());
 }

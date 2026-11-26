@@ -1,5 +1,5 @@
 import { formatDateRange, formatFilterChip, type FilterKey, type SearchFacets, type SuggestionType } from '@reverie/shared';
-import { Building2, FileText, Folder, Hash, Image, MapPin, Tag } from 'lucide-react';
+import { Building2, FileText, Hash, Image, MapPin, Tag } from 'lucide-react';
 
 export interface FilterDimension {
     key: FilterKey;
@@ -21,12 +21,12 @@ export interface FilterDimension {
  * Declarative config for the facet-list filter dimensions — the one place that
  * knows which dimensions exist and how each one selects. Dates are handled by
  * the dedicated Date pill (`DateFilterPill`, keys `uploaded`/`date`); `has`/`size`
- * belong to the More panel.
+ * belong to the More panel. The folder filter picks from the folder tree instead
+ * (`FolderFilterPanel`) and is not a `q` token.
  */
 export const FILTER_DIMENSIONS: FilterDimension[] = [
     { key: 'type', label: 'Type', icon: Image, facetKey: 'types', select: 'multi-or', primary: true },
     { key: 'category', label: 'Category', icon: Hash, facetKey: 'categories', select: 'multi-or', primary: true },
-    { key: 'folder', label: 'Folder', icon: Folder, facetKey: 'folders', select: 'multi-or', suggestionType: 'folder', primary: true },
     {
         key: 'tag',
         label: 'Tags',
@@ -47,10 +47,8 @@ export function getDimension(key: FilterKey): FilterDimension | undefined {
     return FILTER_DIMENSIONS.find((dimension) => dimension.key === key);
 }
 
-/** Human label for a single filter value (folders show their last path segment). */
+/** Human label for a single filter value. */
 export function formatFilterValue(key: FilterKey, value: string): string {
-    if (key === 'folder') return value.split('/').filter(Boolean).at(-1) ?? value;
-
     if (key === 'uploaded' || key === 'date') return formatDateRange(value);
 
     return formatFilterChip(key, value);

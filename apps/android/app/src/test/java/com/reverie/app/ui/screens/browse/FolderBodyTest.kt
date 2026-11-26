@@ -19,12 +19,15 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
-import com.reverie.app.data.settings.FolderViewMode
+import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.KindCountsDto
+import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.ui.screens.destination.node
+import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -35,7 +38,7 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** What the folder page's tiles and rows do when touched, and what its body shows with nothing to list. */
+/** What a folder page lists, what its rows do when touched, and what it shows with nothing to list. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
 class FolderBodyTest {
@@ -44,35 +47,101 @@ class FolderBodyTest {
 
     private val files: List<DocumentDto> = (1..40).map { doc("f$it", "application/pdf", name = "file-$it.pdf") }
     private var documents by mutableStateOf(files)
+    private var photos by mutableStateOf(emptyList<DocumentDto>())
+    private var folders by mutableStateOf(emptyList<FolderWithChildren>())
     private var hasMore by mutableStateOf(false)
     private var pagesAsked = 0
-    private var viewMode by mutableStateOf(FolderViewMode.GRID)
-    private var chip by mutableStateOf<DocumentKind?>(null)
     private var selected by mutableStateOf(emptySet<String>())
     private var focusedId by mutableStateOf<String?>(null)
     private val calls = mutableListOf<String>()
 
     private fun show() = compose.setContent {
+        val trips = node("trips")
+        val shown = node("Portugal", parent = "trips", children = folders)
         ReverieTheme {
             FolderBody(
                 state = FolderState(
-                    selected = chip,
-                    feed = FeedState(FeedDocuments(documents, total = documents.size, hasMore = hasMore, fetched = true), selected),
+                    node = shown,
+                    path = listOf(trips, shown),
+                    media = FeedDocuments(photos, total = photos.size, fetched = true),
+                    files = FeedDocuments(documents, total = documents.size, hasMore = hasMore, fetched = true),
+                    selectedIds = selected,
                 ),
-                viewMode = viewMode,
+                name = "Portugal",
+                description = "The August trip",
+                links = FolderLinks(
+                    emptyMap(),
+                    starredIds = emptySet(),
+                    onOpen = { calls += "folder:$it" },
+                    onOpenCrumb = { calls += "crumb:$it" },
+                    selection = RowSelection(selected) { calls += "select folder:$it" },
+                ),
+                layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = RowActions(
                     selected = { it.id in selected },
                     onClick = { calls += "open:${it.id}" },
                     onLongClick = { calls += "hold:${it.id}" },
                 ),
-                today = LocalDate.of(2026, 11, 25), zone = ZoneOffset.UTC,
                 focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = { pagesAsked++ }, error = null,
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
             )
         }
     }
 
-    private fun assertTouchesReachTheDocument() {
+    @Test fun `the page leads with where it is, its name and the folders inside it`() {
+        folders = listOf(node("Lisbon", parent = "Portugal").copy(kind_counts = KindCountsDto(image = 12)))
+        show()
+
+        compose.onNodeWithText("Portugal").assertIsDisplayed()
+        compose.onNodeWithText("1 folder").assertIsDisplayed()
+        compose.onNodeWithText("The August trip").assertIsDisplayed()
+        compose.onNodeWithText("12 photos").assertIsDisplayed()
+        compose.onNodeWithText("Lisbon").performClick()
+
+        assertEquals(listOf("folder:Lisbon"), calls)
+    }
+
+    @Test fun `a long press selects a folder row`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        show()
+
+        compose.onNodeWithText("Lisbon").performTouchInput { longClick() }
+
+        assertEquals(listOf("select folder:Lisbon"), calls)
+    }
+
+    @Test fun `while something is selected a tap on a folder selects it instead of opening it`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        selected = setOf("f2")
+        show()
+
+        compose.onNodeWithText("Lisbon").performClick()
+
+        assertEquals(listOf("select folder:Lisbon"), calls)
+    }
+
+    @Test fun `every breadcrumb step leads somewhere, the Library included, even from a folder one level down`() {
+        show()
+
+        compose.onNodeWithText("trips").performClick()
+        compose.onNodeWithText("Library").performClick()
+
+        assertEquals(listOf("crumb:trips", "crumb:null"), calls)
+    }
+
+    @Config(qualifiers = "w400dp-h900dp")
+    @Test fun `photos stand in a grid without names, above the files`() {
+        photos = listOf(doc("p1", name = "beach.jpg").copy(thumbnail_blurhash = "L6PZfSi_.AyE_3t7t7R**0o#DgR4"))
+        documents = files.take(1)
+        show()
+
+        compose.onNodeWithText("Photos and videos").assertIsDisplayed()
+        compose.onNodeWithText("Files").assertIsDisplayed()
+        compose.onNodeWithText("beach.jpg").assertDoesNotExist()
+        compose.onNodeWithText("file-1.pdf").assertIsDisplayed()
+    }
+
+    @Test fun `a file row opens on tap, selects on long press and shows its check`() {
         show()
 
         compose.onNodeWithText("file-2.pdf").performClick()
@@ -84,17 +153,8 @@ class FolderBodyTest {
         compose.onAllNodesWithContentDescription("Selected").assertCountEquals(2)
     }
 
-    @Test fun `a grid tile opens on tap, selects on long press and shows its check`() {
-        assertTouchesReachTheDocument()
-    }
-
-    @Test fun `a list row opens on tap, selects on long press and shows its check`() {
-        viewMode = FolderViewMode.LIST
-        assertTouchesReachTheDocument()
-    }
-
     @OptIn(ExperimentalTestApi::class)
-    @Test fun `enter opens the focused tile`() {
+    @Test fun `enter opens the focused row`() {
         show()
 
         compose.onNodeWithText("file-2.pdf").performSemanticsAction(SemanticsActions.RequestFocus)
@@ -103,21 +163,8 @@ class FolderBodyTest {
         assertEquals(listOf("open:f2"), calls)
     }
 
-    @Test fun `each chip keeps its place, and so does a change of view`() {
-        show()
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(30)
-
-        chip = DocumentKind.FILE
-        compose.onNodeWithText("file-1.pdf").assertIsDisplayed()
-        chip = null
-        compose.onNodeWithText("file-31.pdf").assertIsDisplayed()
-        viewMode = FolderViewMode.LIST
-
-        compose.onNodeWithText("file-31.pdf").assertIsDisplayed()
-        compose.onNodeWithText("file-1.pdf").assertDoesNotExist()
-    }
-
-    @Test fun `coming back from the viewer scrolls to its document`() {
+    @Test fun `coming back from the viewer scrolls to its document, past the folder rows`() {
+        folders = (1..6).map { node("sub-$it", parent = "Portugal") }
         show()
         compose.waitForIdle()
 
@@ -128,20 +175,9 @@ class FolderBodyTest {
         assertEquals(null, focusedId)
     }
 
-    @Test fun `an upload arriving above the first document is on screen`() {
-        show()
-        compose.waitForIdle()
-
-        documents = listOf(doc("new", "application/pdf", name = "just-uploaded.pdf")) + files
-        compose.waitForIdle()
-
-        compose.onNodeWithText("just-uploaded.pdf").assertIsDisplayed()
-    }
-
     private fun pdfs(count: Int) = (1..count).map { doc("f$it", "application/pdf", name = "file-$it.pdf") }
 
-    /** Of 90 documents, the next page is not asked for at the top or halfway, only at [nearEnd], and once. */
-    private fun assertAsksForTheNextPageOnlyNear(nearEnd: Int) {
+    @Test fun `the next page is asked for only when the last rows come into view, and once`() {
         documents = pdfs(90)
         hasMore = true
         show()
@@ -152,22 +188,14 @@ class FolderBodyTest {
         compose.waitForIdle()
         assertEquals(0, pagesAsked)
 
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(nearEnd)
+        // The head and the day's heading come before the files.
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(85)
         compose.waitForIdle()
         assertEquals(1, pagesAsked)
 
         documents = pdfs(120)
         compose.waitForIdle()
         assertEquals(1, pagesAsked)
-    }
-
-    @Test fun `a grid asks for the next page when its last rows come into view`() {
-        assertAsksForTheNextPageOnlyNear(75)
-    }
-
-    @Test fun `a list asks for the next page when its last rows come into view`() {
-        viewMode = FolderViewMode.LIST
-        assertAsksForTheNextPageOnlyNear(82)
     }
 
     @Test fun `pages too short to fill the screen keep being asked for`() {
@@ -190,5 +218,14 @@ class FolderBodyTest {
         compose.onNodeWithText("Upload").performClick()
 
         assertEquals(listOf("upload"), calls)
+    }
+
+    @Test fun `a folder holding only folders does not claim to be empty`() {
+        documents = emptyList()
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        show()
+
+        compose.onNodeWithText("Lisbon").assertIsDisplayed()
+        compose.onNodeWithText("This folder is empty").assertDoesNotExist()
     }
 }

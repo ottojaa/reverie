@@ -9,9 +9,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,14 +20,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.reverie.app.ui.theme.ReverieTheme
 
 @Composable
 fun StarIcon(
     filled: Boolean,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
-    tint: Color = ReverieTheme.extendedColors.star,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Icon(
         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarOutline,
@@ -41,7 +40,7 @@ fun StarIcon(
 @Composable
 fun StarredBadge(modifier: Modifier = Modifier) {
     Box(modifier.size(22.dp).background(ON_PICTURE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
-        StarIcon(filled = true, contentDescription = "Favourite", tint = ReverieTheme.extendedColors.starOnScrim, modifier = Modifier.size(13.dp))
+        StarIcon(filled = true, contentDescription = "Favourite", tint = Color.White, modifier = Modifier.size(13.dp))
     }
 }
 
@@ -52,19 +51,10 @@ fun NameWithStar(
     isStarred: Boolean,
     modifier: Modifier = Modifier,
     style: TextStyle = TextStyle.Default,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(name, style = LocalTextStyle.current.merge(style), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(name, style = LocalTextStyle.current.merge(style), maxLines = 1, overflow = overflow, modifier = Modifier.weight(1f, fill = false))
         if (isStarred) StarIcon(filled = true, contentDescription = "Favourite", modifier = Modifier.size(14.dp))
     }
-}
-
-/** The menu item that stars an item, or unstars a starred one. */
-@Composable
-fun FavouriteMenuItem(isStarred: Boolean, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(if (isStarred) "Remove from favourites" else "Add to favourites") },
-        leadingIcon = { StarIcon(filled = isStarred) },
-        onClick = onClick,
-    )
 }

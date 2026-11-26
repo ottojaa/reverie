@@ -127,6 +127,7 @@ fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> 
         title = { Text("Rename") },
         text = {
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
@@ -145,7 +146,7 @@ fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> 
 
 private fun fileTypeLabel(mime: String): String = when {
     mime == "application/pdf" -> "PDF document"
-    mime.startsWith("image/") -> "Image"
+    mime.startsWith("image/") -> "Photo"
     mime.startsWith("video/") -> "Video"
     mime.startsWith("text/") || mime == "application/json" -> "Text file"
     else -> "File"

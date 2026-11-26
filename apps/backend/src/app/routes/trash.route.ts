@@ -11,6 +11,8 @@ import type { FastifyInstance } from 'fastify';
 import { db } from '../../db/kysely';
 import type { Document, Folder } from '../../db/schema';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
+import { toFolderType } from '../../services/folders/paths';
+import type { TrashUnitCounts } from '../../services/folders/trash';
 import { getStorageService } from '../../services/storage.service';
 import { getTrashService } from '../../services/trash.service';
 import { resolveThumbnailUrls } from '../../utils/thumbnail-urls';
@@ -32,15 +34,17 @@ async function toTrashDocument(doc: Document, locks: FolderLocks, purgeAt: Date)
     };
 }
 
-/** A trashed folder whose lock is closed is a bare row (no name or emoji): the user unlocks it to see and restore it. */
-function toTrashFolder(folder: Folder, locks: FolderLocks, purgeAt: Date): TrashFolder {
+/** A trashed folder whose lock is closed is a bare row (no name, emoji or counts): the user unlocks it to see and restore it. */
+function toTrashFolder(folder: Folder & TrashUnitCounts, locks: FolderLocks, purgeAt: Date): TrashFolder {
     const locked = locks.isLocked(folder.id);
 
     return {
         id: folder.id,
         name: locked ? '' : folder.name,
-        type: folder.type,
+        type: toFolderType(folder.parent_id),
         emoji: locked ? null : folder.emoji,
+        folder_count: locked ? 0 : folder.folder_count,
+        document_count: locked ? 0 : folder.document_count,
         is_private: folder.is_private,
         locked,
         deleted_at: folder.deleted_at!.toISOString(),

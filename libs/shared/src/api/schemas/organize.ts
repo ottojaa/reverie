@@ -15,7 +15,7 @@ export const OrganizeTargetFolderSchema = z.object({
     id: UuidSchema.optional(),
     name: z.string(),
     parent_id: UuidSchema.optional(),
-    /** When set, a new top-level collection with this name is created first, then the folder is nested under it */
+    /** When set, the new folder goes inside the top-level folder of this name, which is created if there is none */
     new_parent_name: z.string().optional(),
     is_new: z.boolean(),
 });

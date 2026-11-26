@@ -17,7 +17,9 @@ import {
     TrimVideoResponseSchema,
     UpdateDocumentRequestSchema,
     UuidSchema,
+    ValidationError,
     type CheckContentRequest,
+    type CheckDuplicatesRequest,
     type Document,
     type DocumentListQuery,
     type DocumentSummaryQuery,
@@ -31,13 +33,19 @@ import { isVisionSwitchedOn } from '../../llm/provider-config';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
-import { getFolderService } from '../../services/folder.service';
+import { findLiveFolder } from '../../services/folders/load';
 import { checkContent } from '../../services/content-check';
 import { loadOpenDocument } from '../../services/document-access';
 import { loadFolderLocks } from '../../services/folder-locks';
 import { serializeDocument } from '../../services/document-serializer';
-import { applyDocumentListFilters, TAKEN_AT_SQL, TAKEN_OR_CREATED_SQL, type DocumentListFilters } from '../../services/document-list-filters';
-import { summariseDocuments } from '../../services/document-summary';
+import {
+    applyDocumentListFilters,
+    IS_SCREEN_CAPTURE_SQL,
+    TAKEN_AT_SQL,
+    TAKEN_OR_CREATED_SQL,
+    type DocumentListFilters,
+} from '../../services/document-list-filters';
+import { loadMediaDates, summariseDocuments } from '../../services/document-summary';
 import { excludeTrashed } from '../../services/privacy';
 import { getTrashService } from '../../services/trash.service';
 import { getStorageService } from '../../services/storage.service';
@@ -50,7 +58,6 @@ import { getDeduplicatedFilename } from '../../utils/filename';
 
 const uploadService = getUploadService();
 const storageService = getStorageService();
-const folderService = getFolderService();
 
 // OCR Result schema for API responses
 const OcrResultSchema = z.object({
@@ -92,9 +99,13 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request) {
+        async function (request, reply) {
             const userId = request.user.id;
-            const { limit, offset, folder_id, category, date_from, date_to, processing, kind } = request.query;
+            const { limit, offset, folder_id, top_level, preview, category, date_from, date_to, processing, kind, media } = request.query;
+
+            if (folder_id && top_level) return reply.badRequest('Give folder_id or top_level, not both');
+
+            if (kind && media) throw new ValidationError('Give kind or media, not both');
 
             // A private folder's documents are listed only by asking for that folder, once it is open.
             // Every other listing (no folder filter) leaves private folders out, locked or not.
@@ -104,16 +115,20 @@ export default async function (fastify: FastifyInstance) {
             const filters: DocumentListFilters = {
                 userId,
                 folderId: folder_id,
+                topLevel: top_level,
                 privateFolderIds: locks.privateFolderIds,
                 category,
                 dateFrom: date_from,
                 dateTo: date_to,
                 processing,
                 kind,
+                media,
             };
-            const byDateTaken = kind === 'image' || kind === 'video';
+            const byDateTaken = media || kind === 'image' || kind === 'video';
             const page = applyDocumentListFilters(db.selectFrom('documents').selectAll().select(TAKEN_AT_SQL.as('taken_at')), filters);
-            const orderedPage = byDateTaken ? page.orderBy(TAKEN_OR_CREATED_SQL, 'desc').orderBy('id', 'desc') : page.orderBy('created_at', 'desc');
+            // A preview is a few cards standing for a kind: screenshots and screen recordings come after the rest.
+            const ranked = preview && kind ? page.orderBy(IS_SCREEN_CAPTURE_SQL) : page;
+            const orderedPage = byDateTaken ? ranked.orderBy(TAKEN_OR_CREATED_SQL, 'desc').orderBy('id', 'desc') : ranked.orderBy('created_at', 'desc');
             const count = applyDocumentListFilters(db.selectFrom('documents').select(db.fn.countAll().as('count')), filters);
 
             const [documents, countResult] = await Promise.all([orderedPage.limit(limit).offset(offset).execute(), count.executeTakeFirst()]);
@@ -145,26 +160,33 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request) {
+        async function (request, reply) {
             const userId = request.user.id;
-            const { folder_id } = request.query;
+            const { folder_id, top_level } = request.query;
+
+            if (folder_id && top_level) return reply.badRequest('Give folder_id or top_level, not both');
+
             const locks = await loadFolderLocks(fastify, request, userId);
             locks.assertOpen(folder_id ?? null);
 
-            return summariseDocuments({ userId, folderId: folder_id, privateFolderIds: locks.privateFolderIds });
+            const scope = { userId, folderId: folder_id, topLevel: top_level, privateFolderIds: locks.privateFolderIds };
+            // Only a folder's page says when its photos and videos were taken; a wider scope is asked for counts alone.
+            const [summary, mediaDates] = await Promise.all([summariseDocuments(scope), folder_id ? loadMediaDates(scope) : null]);
+
+            return { ...summary, media_dates: mediaDates };
         },
     );
 
     // Check for duplicate filenames in a folder (requires authentication)
     fastify.post<{
-        Body: { folder_id: string; filenames: string[] };
+        Body: CheckDuplicatesRequest;
         Reply: { duplicates: string[] };
     }>(
         '/documents/check-duplicates',
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Check which filenames already exist in the given folder',
+                description: 'Check which filenames already exist in the given folder, or at the top level',
                 body: CheckDuplicatesRequestSchema,
                 response: {
                     200: CheckDuplicatesResponseSchema,
@@ -173,19 +195,20 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const { folder_id, filenames } = request.body;
+            const { filenames } = request.body;
+            const folderId = request.body.folder_id ?? null;
 
             if (filenames.length === 0) {
                 return { duplicates: [] };
             }
 
-            (await loadFolderLocks(fastify, request, userId)).assertOpen(folder_id);
+            (await loadFolderLocks(fastify, request, userId)).assertOpen(folderId);
 
             const existing = await excludeTrashed(
                 db
                     .selectFrom('documents')
                     .select('original_filename')
-                    .where('folder_id', '=', folder_id)
+                    .where('folder_id', folderId === null ? 'is' : '=', folderId)
                     .where('user_id', '=', userId)
                     .where('original_filename', 'in', filenames),
                 '',
@@ -222,7 +245,7 @@ export default async function (fastify: FastifyInstance) {
         },
     );
 
-    // Move documents to a section (requires authentication)
+    // Move documents into a folder or to the top level (requires authentication)
     fastify.patch<{
         Body: MoveDocumentsRequest;
     }>(
@@ -230,7 +253,7 @@ export default async function (fastify: FastifyInstance) {
         {
             preHandler: [fastify.authenticate],
             schema: {
-                description: 'Move documents to a folder/section',
+                description: 'Move documents into a folder, or to the top level',
                 body: MoveDocumentsRequestSchema,
                 response: {
                     204: z.null(),
@@ -241,14 +264,8 @@ export default async function (fastify: FastifyInstance) {
             const userId = request.user.id;
             const { document_ids, folder_id, conflict_strategy } = request.body;
 
-            const folder = await folderService.getFolder(folder_id, userId);
-
-            if (!folder) {
+            if (folder_id !== null && !(await findLiveFolder(userId, folder_id))) {
                 return reply.notFound('Folder not found');
-            }
-
-            if (folder.type !== 'folder') {
-                return reply.badRequest('Documents can only be moved to folders, not collections');
             }
 
             if (document_ids.length === 0) {
@@ -266,13 +283,10 @@ export default async function (fastify: FastifyInstance) {
                 return reply.status(204).send();
             }
 
-            // Moving out of a locked folder would turn its documents public, so the source locks must be open.
-            // Moving into a private folder hides documents and needs nothing, unless a conflict strategy
-            // is set: that reads and changes the destination's filenames.
+            // Moving out of a locked folder would turn its documents public, so the source locks must be open,
+            // and writing into a locked folder needs it open too.
             const locks = await loadFolderLocks(fastify, request, userId);
-            locks.assertAllOpen(docsToMove.map((doc) => doc.folder_id));
-
-            if (conflict_strategy) locks.assertOpen(folder_id);
+            locks.assertAllOpen([folder_id, ...docsToMove.map((doc) => doc.folder_id)]);
 
             if (conflict_strategy === 'replace') {
                 const filenames = docsToMove.map((d) => d.original_filename);
@@ -399,21 +413,19 @@ export default async function (fastify: FastifyInstance) {
 
             const { original_filename } = request.body;
 
-            if (document.folder_id) {
-                const existing = await excludeTrashed(
-                    db
-                        .selectFrom('documents')
-                        .select('id')
-                        .where('folder_id', '=', document.folder_id)
-                        .where('user_id', '=', userId)
-                        .where('original_filename', '=', original_filename)
-                        .where('id', '!=', request.params.id),
-                    '',
-                ).executeTakeFirst();
+            const existing = await excludeTrashed(
+                db
+                    .selectFrom('documents')
+                    .select('id')
+                    .where('folder_id', document.folder_id === null ? 'is' : '=', document.folder_id)
+                    .where('user_id', '=', userId)
+                    .where('original_filename', '=', original_filename)
+                    .where('id', '!=', request.params.id),
+                '',
+            ).executeTakeFirst();
 
-                if (existing) {
-                    return reply.conflict('A document with this filename already exists in this folder');
-                }
+            if (existing) {
+                return reply.conflict('A document with this filename already exists in this folder');
             }
 
             await db

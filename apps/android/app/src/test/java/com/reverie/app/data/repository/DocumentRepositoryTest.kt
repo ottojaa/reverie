@@ -4,7 +4,8 @@ import com.reverie.app.data.api.ApiJson
 import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.PrivateDocumentStore
-import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.local.entity.DocumentEntity
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -36,18 +37,19 @@ class DocumentRepositoryTest {
         }
         override suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>) {}
         override suspend fun forgetMoved(ids: Collection<String>) { purged += ids }
+        override suspend fun forgetInFolders(folderIds: Collection<String>) {}
         override suspend fun clearSession() {}
     }
 
     private fun docJson(
         id: String,
-        folder: String,
+        folder: String?,
         name: String,
         isPrivate: Boolean = false,
         mime: String = "image/jpeg",
         takenAt: String? = null,
     ) = """
-        {"id":"$id","folder_id":"$folder","file_path":"p","file_hash":"h","original_filename":"$name",
+        {"id":"$id","folder_id":${folder?.let { "\"$it\"" }},"file_path":"p","file_hash":"h","original_filename":"$name",
          "mime_type":"$mime","taken_at":${takenAt?.let { "\"$it\"" }},"size_bytes":1,"width":null,"height":null,"thumbnail_blurhash":null,
          "thumbnail_paths":null,"document_category":"photo","extracted_date":null,"ocr_status":"complete",
          "thumbnail_status":"complete","llm_status":"complete","llm_summary":null,"llm_metadata":null,
@@ -85,11 +87,11 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg")},${docJson("d2", "f1", "b.jpg")}],"total":2,"limit":30,"offset":0}"""
         val repository = repo(dao) { page }
 
-        val result = repository.refresh(folderId = "f1", limit = 30, offset = 0)
+        val result = repository.refresh(inF1, limit = 30, offset = 0)
 
         assertEquals(2, result.total)
         assertEquals(2, result.loaded)
-        assertEquals(2, repository.observeDocuments("f1").first().size)
+        assertEquals(2, repository.observeDocuments(inF1).first().size)
     }
 
     @Test fun `fetching processing documents asks the server for processing ones and caches them`() = runTest {
@@ -102,7 +104,7 @@ class DocumentRepositoryTest {
 
         assertEquals(7, result.total)
         assertTrue("processing=true is sent: $requested", requested.single().contains("processing=true"))
-        assertEquals(listOf("d1"), repository.observeDocuments(null).first().map { it.id })
+        assertEquals(listOf("d1"), repository.observeDocuments(DocumentScope.All).first().map { it.id })
     }
 
     @Test fun `a full-folder refresh reconciles away stale rows`() = runTest {
@@ -117,9 +119,9 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":1,"limit":30,"offset":0}"""
         val repository = repo(dao) { page }
 
-        repository.refresh(folderId = "f1", limit = 30, offset = 0)
+        repository.refresh(inF1, limit = 30, offset = 0)
 
-        val remaining = repository.observeDocuments("f1").first().map { it.id }
+        val remaining = repository.observeDocuments(inF1).first().map { it.id }
         assertEquals(listOf("d1"), remaining)
     }
 
@@ -128,8 +130,8 @@ class DocumentRepositoryTest {
         val page = """{"items":[],"total":0,"limit":30,"offset":0}"""
         val repository = repo(FakeDocumentDao(), requested = requested) { page }
 
-        repository.refresh(folderId = null, limit = 30, offset = 0, kind = DocumentKind.VIDEO)
-        repository.refresh(folderId = null, limit = 30, offset = 0)
+        repository.refresh(DocumentScope.All, limit = 30, offset = 0, filter = DocumentFilter.VIDEOS)
+        repository.refresh(DocumentScope.All, limit = 30, offset = 0)
 
         assertTrue("kind=video is sent: ${requested[0]}", requested[0].contains("kind=video"))
         assertTrue("no kind is sent when none is asked for: ${requested[1]}", !requested[1].contains("kind="))
@@ -149,7 +151,7 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":1,"limit":30,"offset":0}"""
         val repository = repo(dao) { page }
 
-        repository.refresh(folderId = "f1", limit = 30, offset = 0, kind = DocumentKind.IMAGE)
+        repository.refresh(inF1, limit = 30, offset = 0, filter = DocumentFilter.IMAGES)
 
         // d2 is a stale image and goes; the video, the file and the other folder's image stay.
         assertEquals(setOf("d1", "d3", "d4", "d5"), dao.rows.value.map { it.id }.toSet())
@@ -168,7 +170,7 @@ class DocumentRepositoryTest {
         )
         val repository = repo(dao) { "{}" }
 
-        repository.dropStaleInLibrary(DocumentKind.IMAGE, keep = setOf("d1"))
+        repository.dropStale(DocumentScope.All, DocumentFilter.IMAGES, keep = setOf("d1"))
 
         // d2 and d3 are images the server no longer returns; the video and the file are not this read's to judge.
         assertEquals(setOf("d1", "d4", "d5"), dao.rows.value.map { it.id }.toSet())
@@ -179,9 +181,43 @@ class DocumentRepositoryTest {
         dao.upsertAll((1..1200).map { stubEntity("d$it", null, mime = if (it % 2 == 0) "image/jpeg" else "application/pdf") })
         val repository = repo(dao) { "{}" }
 
-        repository.dropStaleInLibrary(null, keep = setOf("d1", "d2"))
+        repository.dropStale(DocumentScope.All, DocumentFilter.ALL, keep = setOf("d1", "d2"))
 
         assertEquals(setOf("d1", "d2"), dao.rows.value.map { it.id }.toSet())
+    }
+
+    @Test fun `a refresh of the top level asks for it and drops only its stale rows`() = runTest {
+        val dao = FakeDocumentDao()
+        dao.upsertAll(listOf(stubEntity("d1", null), stubEntity("d2", null), stubEntity("d3", "f1")))
+        val requested = mutableListOf<String>()
+        val page = """{"items":[${docJson("d1", null, "a.jpg")}],"total":1,"limit":30,"offset":0}"""
+        val repository = repo(dao, requested = requested) { page }
+
+        repository.refresh(DocumentScope.TopLevel, limit = 30, offset = 0)
+
+        assertTrue("top_level is sent: $requested", requested.single().contains("top_level=true"))
+        assertEquals(setOf("d1", "d3"), dao.rows.value.map { it.id }.toSet())
+        assertEquals(listOf("d1"), repository.observeDocuments(DocumentScope.TopLevel).first().map { it.id })
+    }
+
+    @Test fun `a refresh of photos and videos asks for media and leaves the cached files alone`() = runTest {
+        val dao = FakeDocumentDao()
+        dao.upsertAll(
+            listOf(
+                stubEntity("d1", "f1"),
+                stubEntity("d2", "f1", mime = "video/mp4"),
+                stubEntity("d3", "f1", mime = "application/pdf"),
+            ),
+        )
+        val requested = mutableListOf<String>()
+        val page = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":1,"limit":30,"offset":0}"""
+        val repository = repo(dao, requested = requested) { page }
+
+        repository.refresh(inF1, limit = 30, offset = 0, filter = DocumentFilter.MEDIA)
+
+        assertTrue("media=true is sent: $requested", requested.single().contains("media=true"))
+        assertTrue("no kind goes with media: $requested", !requested.single().contains("kind="))
+        assertEquals(setOf("d1", "d3"), dao.rows.value.map { it.id }.toSet())
     }
 
     @Test fun `a refresh page reports the ids it returned`() = runTest {
@@ -189,7 +225,7 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg")},${docJson("d2", "f1", "b.jpg")}],"total":9,"limit":2,"offset":0}"""
         val repository = repo(dao) { page }
 
-        val result = repository.refresh(folderId = null, limit = 2, offset = 0)
+        val result = repository.refresh(DocumentScope.All, limit = 2, offset = 0)
 
         assertEquals(listOf("d1", "d2"), result.ids)
     }
@@ -200,7 +236,7 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":2,"limit":1,"offset":0}"""
         val repository = repo(dao) { page }
 
-        repository.refresh(folderId = "f1", limit = 1, offset = 0, kind = DocumentKind.IMAGE)
+        repository.refresh(inF1, limit = 1, offset = 0, filter = DocumentFilter.IMAGES)
 
         assertEquals(setOf("d1", "d2"), dao.rows.value.map { it.id }.toSet())
     }
@@ -209,10 +245,10 @@ class DocumentRepositoryTest {
         val store = PrivateDocumentStore()
         val dao = FakeDocumentDao()
         val seedPage = """{"items":[${docJson("d1", "f1", "a.jpg", isPrivate = true)},${docJson("d2", "f1", "b.mp4", isPrivate = true, mime = "video/mp4")}],"total":2,"limit":30,"offset":0}"""
-        repo(dao, store) { seedPage }.refresh(folderId = "f1", limit = 30, offset = 0)
+        repo(dao, store) { seedPage }.refresh(inF1, limit = 30, offset = 0)
         val emptyImages = """{"items":[],"total":0,"limit":30,"offset":0}"""
 
-        repo(dao, store) { emptyImages }.refresh(folderId = "f1", limit = 30, offset = 0, kind = DocumentKind.IMAGE)
+        repo(dao, store) { emptyImages }.refresh(inF1, limit = 30, offset = 0, filter = DocumentFilter.IMAGES)
 
         assertEquals(setOf("d2"), store.documents.value.keys)
     }
@@ -222,10 +258,10 @@ class DocumentRepositoryTest {
         val withDate = """{"items":[${docJson("d1", "f1", "a.jpg", takenAt = "2026-11-02T09:00:00.000Z")}],"total":1,"limit":30,"offset":0}"""
         val without = """{"items":[${docJson("d1", "f1", "a.jpg")}],"total":1,"limit":30,"offset":0}"""
 
-        repo(dao) { withDate }.refresh(folderId = "f1", limit = 30, offset = 0)
+        repo(dao) { withDate }.refresh(inF1, limit = 30, offset = 0)
         assertEquals("2026-11-02T09:00:00.000Z", dao.rows.value.single().takenAt)
 
-        repo(dao) { without }.refresh(folderId = "f1", limit = 30, offset = 0)
+        repo(dao) { without }.refresh(inF1, limit = 30, offset = 0)
         assertEquals("2026-11-02T09:00:00.000Z", dao.rows.value.single().takenAt)
     }
 
@@ -235,12 +271,12 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg", isPrivate = true)},${docJson("d2", "f1", "b.jpg")}],"total":2,"limit":30,"offset":0}"""
         val repository = repo(dao, store) { page }
 
-        repository.refresh(folderId = "f1", limit = 30, offset = 0)
+        repository.refresh(inF1, limit = 30, offset = 0)
 
         assertEquals(listOf("d2"), dao.rows.value.map { it.id })
         assertEquals(setOf("d1"), store.documents.value.keys)
         // The folder view shows both; a private doc is flagged read-only from its folder.
-        val shown = repository.observeDocuments("f1").first()
+        val shown = repository.observeDocuments(inF1).first()
         assertEquals(setOf("d1", "d2"), shown.map { it.id }.toSet())
         assertTrue(shown.first { it.id == "d1" }.is_private)
     }
@@ -252,7 +288,7 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg", isPrivate = true)}],"total":1,"limit":30,"offset":0}"""
         val repository = repo(dao, purger = purger) { page }
 
-        repository.refresh(folderId = "f1", limit = 30, offset = 0)
+        repository.refresh(inF1, limit = 30, offset = 0)
 
         assertEquals(listOf("d1"), purger.purged)
         assertTrue(dao.rows.value.isEmpty())
@@ -265,14 +301,14 @@ class DocumentRepositoryTest {
         val requested = mutableListOf<String>()
         val repository = repo(FakeDocumentDao(), requested = requested) { summaryJson }
 
-        assertEquals(null, repository.summary("f1").first())
-        val fetched = repository.fetchSummary("f1")
+        assertEquals(null, repository.summary(inF1).first())
+        val fetched = repository.fetchSummary(inF1)
 
         assertEquals(38, fetched.image.count)
         assertEquals(listOf("apk", "zip"), fetched.file.top_types.map { it.ext })
         assertTrue("folder_id is sent: $requested", requested.single().contains("documents/summary") && requested.single().contains("folder_id=f1"))
-        assertEquals(fetched, repository.summary("f1").first())
-        assertEquals("another scope has no summary yet", null, repository.summary(null).first())
+        assertEquals(fetched, repository.summary(inF1).first())
+        assertEquals("another scope has no summary yet", null, repository.summary(DocumentScope.All).first())
     }
 
     @Test fun `a failed summary read keeps the last summary and counts no cached rows`() = runTest {
@@ -280,13 +316,13 @@ class DocumentRepositoryTest {
         var body = summaryJson
         var ok = true
         val repository = repo(dao) { if (!ok) error("offline") else body }
-        repository.fetchSummary(null)
+        repository.fetchSummary(DocumentScope.All)
         ok = false
 
-        val failed = runCatching { repository.fetchSummary(null) }
+        val failed = runCatching { repository.fetchSummary(DocumentScope.All) }
 
         assertTrue(failed.isFailure)
-        assertEquals(191, repository.summary(null).first()?.file?.count)
+        assertEquals(191, repository.summary(DocumentScope.All).first()?.file?.count)
     }
 
     @Test fun `a delete tells the browse screens that content changed`() = runTest {
@@ -305,10 +341,12 @@ class DocumentRepositoryTest {
         val page = """{"items":[${docJson("d1", "f1", "a.jpg", isPrivate = true)},${docJson("d2", "f2", "b.jpg")}],"total":2,"limit":30,"offset":0}"""
         val repository = repo(dao) { page }
 
-        repository.refresh(folderId = null, limit = 30, offset = 0)
+        repository.refresh(DocumentScope.All, limit = 30, offset = 0)
 
-        assertEquals(listOf("d2"), repository.observeDocuments(null).first().map { it.id })
+        assertEquals(listOf("d2"), repository.observeDocuments(DocumentScope.All).first().map { it.id })
     }
+
+    private val inF1 = DocumentScope.Folder("f1")
 
     private fun stubEntity(id: String, folder: String?, mime: String = "image/jpeg", takenAt: String? = null) = DocumentEntity(
         id = id, folderId = folder, originalFilename = "$id.jpg", mimeType = mime, sizeBytes = 1,

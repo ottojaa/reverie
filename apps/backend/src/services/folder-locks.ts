@@ -1,20 +1,25 @@
 import { FolderLockedError } from '@reverie/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Kysely } from 'kysely';
 import type { JwtPayload } from '../app/plugins/auth.js';
 import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
-import { loadLockMap, type LockMap } from './privacy.js';
+import type { Database } from '../db/schema.js';
+import type { FolderNode, FolderTree } from './folders/snapshot.js';
+import { loadLockMap, toLockMap, type LockMap } from './privacy.js';
 
 /**
  * Folder locks: which private folders the current app session has opened.
  *
- * Every private folder (or private collection, which covers its folders) is one lock. Unlocking
+ * The outermost private folder of a branch is one lock, covering everything beneath it. Unlocking
  * asks for the account password and adds that lock's id to a JWT (scope 'vault') kept in an
  * httpOnly session cookie. The cookie has no maxAge, so it ends with the app/browser session, and
  * logout clears it. Nothing is stored on the server: the cookie is the whole state.
  *
- * Only ids that are still a current lock count, so moving a folder under a private collection
- * (which changes the lock that covers it) closes it again.
+ * Only ids that are still a current lock count, so moving a private folder under another private
+ * folder (which changes the lock that covers it) closes it again. A cookie can still name a folder
+ * that stopped being a lock and becomes one again, so a change to a folder is checked with
+ * `assertNoneOpenedBy`.
  */
 
 export const VAULT_COOKIE = 'vault_session';
@@ -76,9 +81,9 @@ export class FolderLocks {
     }
 
     /**
-     * Whether a folder's row must not be shown at all: it is locked and the lock belongs to its
-     * collection, so the folder is only reachable through the collection (a locked collection hides
-     * its folders; a locked folder in a public collection keeps its own row).
+     * Whether a folder's row must not be shown at all: it is locked and the lock belongs to a folder
+     * above it, so it is only reachable through that folder (a locked folder hides everything beneath
+     * it and keeps its own row).
      */
     isHidden(folderId: string): boolean {
         return this.isLocked(folderId) && this.lockIdOf(folderId) !== folderId;
@@ -92,6 +97,14 @@ export class FolderLocks {
     /** assertOpen for several folders (a document batch can span folders). */
     assertAllOpen(folderIds: Iterable<string | null>): void {
         for (const folderId of folderIds) this.assertOpen(folderId);
+    }
+
+    /**
+     * Guards a change that puts folders behind the lock `lockId` (null: none). When this session has that lock
+     * open, the change would open each of them that is locked now, so none may be.
+     */
+    assertNoneOpenedBy(lockId: string | null, folderIds: Iterable<string>): void {
+        if (lockId !== null && this.openLocks.has(lockId)) this.assertAllOpen(folderIds);
     }
 }
 
@@ -111,15 +124,25 @@ function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId
     }
 }
 
-export async function fetchHasPassword(userId: string): Promise<boolean> {
-    const user = await db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
+export async function fetchHasPassword(userId: string, conn: Kysely<Database> = db): Promise<boolean> {
+    const user = await conn.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
 
     return !!user?.password_hash;
 }
 
-/** The lock state of the request's user: their private folders and which locks this session opened. */
-export async function loadFolderLocks(fastify: FastifyInstance, request: FastifyRequest, userId: string): Promise<FolderLocks> {
-    const [lockOf, enforced] = await Promise.all([loadLockMap(userId), fetchHasPassword(userId)]);
+/**
+ * The lock state of the request's user: their private folders and which locks this session opened. A caller that
+ * already read the folder tree passes it, so the locks describe the same moment and the table is read once. One
+ * inside a transaction passes that too, so no second connection is needed while it holds locks.
+ */
+export async function loadFolderLocks(
+    fastify: FastifyInstance,
+    request: FastifyRequest,
+    userId: string,
+    tree?: FolderTree<FolderNode>,
+    conn: Kysely<Database> = db,
+): Promise<FolderLocks> {
+    const [lockOf, enforced] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId, conn), fetchHasPassword(userId, conn)]);
 
     return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId)), enforced);
 }

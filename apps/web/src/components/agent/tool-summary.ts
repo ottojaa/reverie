@@ -53,7 +53,7 @@ function describeWrite(name: string, out: Fields): string | null {
         case 'rename_folder':
             return `Renamed "${toText(out.from)}" to "${toText(out.to)}"`;
         case 'create_folder':
-            return `Created ${toText(out.type) || 'folder'} ${toText(out.path)}`;
+            return `Created folder ${toText(out.path)}`;
         case 'save_text_document':
             return `Saved "${toText(toFields(out.document).name)}" to ${toText(toFields(toFields(out.document).folder).path)}`;
         case 'add_tags':

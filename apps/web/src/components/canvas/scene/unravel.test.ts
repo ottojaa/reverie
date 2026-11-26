@@ -19,8 +19,8 @@ const island: IslandLayout = {
     documentCount: 24,
     position: { x: 10, z: -4 },
     radius: 3,
-    collectionId: null,
-    collectionName: null,
+    clusterId: 'f1',
+    clusterName: 'Folder',
 };
 
 // Grid pitches from unravel.ts: CELL_W + GAP_X and CELL_H + GAP_Y.

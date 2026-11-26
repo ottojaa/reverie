@@ -65,7 +65,7 @@ private fun InsightSubtitle(phase: InsightPhase, idleLabel: String) {
             Icon(
                 Icons.Outlined.AutoAwesome,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(12.dp),
             )
             Text(

@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.viewer.insight
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material3.MaterialTheme
@@ -68,9 +68,9 @@ fun InsightLabelsSection(labels: List<String>) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
-                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)), RoundedCornerShape(8.dp))
+                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), CircleShape)
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
@@ -100,7 +100,7 @@ private fun CompactChip(text: String, emphasized: Boolean) {
         modifier = Modifier
             .background(
                 color = if (emphasized) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(8.dp),
+                shape = CircleShape,
             )
             .padding(horizontal = 10.dp, vertical = 5.dp),
     )

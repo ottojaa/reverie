@@ -28,12 +28,19 @@ class FavouritesScreenUnlockTest {
     private val world = FavouriteWorld().apply {
         items = listOf(FavouriteFixtures.private("d-secret", locked = true))
     }
-    private val destinations = mutableListOf<FavouriteDestination>()
+    private val opened = mutableListOf<Pair<String, Float?>>()
 
     private fun openPrompt() {
         val viewModel = FavouritesViewModel(world.deps)
         compose.setContent {
-            ReverieTheme { FavouritesScreen(onBack = {}, onGo = { destinations += it }, viewModel = viewModel) }
+            ReverieTheme {
+                FavouritesScreen(
+                    onBack = {},
+                    onOpenFolder = { opened += it to null },
+                    onDocumentClick = { id, aspect -> opened += id to aspect },
+                    viewModel = viewModel,
+                )
+            }
         }
         waitForText("Private")
         compose.onNodeWithText("Private").performClick()
@@ -46,17 +53,17 @@ class FavouritesScreenUnlockTest {
 
     @Test fun `the keyboard's done key unlocks and opens the private document`() {
         openPrompt()
-        assertEquals(emptyList<FavouriteDestination>(), destinations)
+        assertEquals(emptyList<Pair<String, Float?>>(), opened)
 
         compose.onNode(hasSetTextAction()).performTextInput("hunter2")
         compose.onNode(hasSetTextAction()).performImeAction()
         // The answer arrives off the main thread; waiting for idle lets the main looper deliver it.
         compose.waitUntil(5_000) {
             compose.waitForIdle()
-            destinations.isNotEmpty()
+            opened.isNotEmpty()
         }
 
-        assertEquals(listOf(FavouriteDestination.Document("d-secret", null)), destinations.toList())
+        assertEquals(listOf("d-secret" to null), opened.toList())
         assertEquals(1, world.requests.count { it.startsWith("POST vault/unlock") })
     }
 
@@ -69,7 +76,7 @@ class FavouritesScreenUnlockTest {
             runCatching { compose.onNodeWithText("Unlock private folder").assertDoesNotExist() }.isSuccess
         }
 
-        assertEquals(emptyList<FavouriteDestination>(), destinations)
+        assertEquals(emptyList<Pair<String, Float?>>(), opened)
         assertEquals(0, world.requests.count { it.startsWith("POST vault/unlock") })
     }
 }

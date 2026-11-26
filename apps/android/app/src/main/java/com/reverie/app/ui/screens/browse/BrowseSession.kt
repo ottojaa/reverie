@@ -20,6 +20,7 @@ import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDeps
+import com.reverie.app.ui.screens.manage.ManageController
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import com.reverie.app.ui.screens.viewer.ViewerFocus
@@ -72,20 +73,18 @@ class BrowseDeps @Inject constructor(
 private data class SessionControl(val error: String? = null, val lockedFolderId: String? = null)
 
 /**
- * What the dashboard, a folder page and a kind screen do the same way, held once: the lock prompt and
- * load errors, the viewer hand-off, delete and download of the selection, the document warm-up, the
- * processing watchers, the grid settings, and the signals that documents changed (a delete anywhere,
- * uploads finishing).
+ * What the Library, a folder page and a list screen do the same way, held once: the lock prompt and
+ * load errors, the viewer hand-off, changing what is selected, downloading it, the document warm-up, the
+ * processing watchers, the grid settings, and the signals that the library changed (a delete or a move
+ * anywhere, uploads finishing).
  *
- * The owner (a view model) passes [selection] and [clearSelection] for its own feeds, [refresh] to re-read
- * after a password unlock, and [onContentChanged] for what it re-reads when the library changes.
+ * The owner (a view model) passes [refresh] to re-read after a password unlock, and [onContentChanged] for
+ * what it re-reads when the library changes.
  */
 class BrowseSession(
     private val scope: CoroutineScope,
     val folderId: String?,
     private val deps: BrowseDeps,
-    private val selection: () -> Set<String>,
-    private val clearSelection: () -> Unit,
     refresh: () -> Unit,
     private val onContentChanged: () -> Unit,
 ) {
@@ -110,10 +109,13 @@ class BrowseSession(
     /** Starring and opening favourites from this screen. */
     val favourites = FavouriteController(deps.favouriteDeps, scope)
 
-    /** How the Files grid arranges photos (user setting). */
+    /** What the selection bar does to documents and folders. */
+    val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, scope)
+
+    /** How a photo grid arranges its tiles (user setting). */
     val gridLayoutMode: StateFlow<GridLayoutMode> = deps.settings.settings
         .map { it.gridLayoutMode }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), GridLayoutMode.MOSAIC)
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), GridLayoutMode.UNIFORM)
 
     /** How often the mosaic grid promotes a photo to a larger tile (user setting). */
     val mosaicFeatureEvery: StateFlow<Int> = deps.settings.settings
@@ -125,7 +127,7 @@ class BrowseSession(
 
     init {
         deps.processing.refresh()
-        if (folderId != null) scope.launch { runCatching { deps.folders.refresh() } }
+        refreshFolders()
         watchContentChanges()
         // Badges and menu wording need the list, whichever screen is the first to want it.
         if (!favourites.state.value.isLoaded) favourites.load()
@@ -148,7 +150,7 @@ class BrowseSession(
         scope.launch {
             val raw = deps.documents.fileUrl(document.id) ?: return@launch
             if (DocumentKind.of(document.mime_type) == DocumentKind.IMAGE) {
-                deps.imageLoader.enqueue(ImageRequest.Builder(deps.appContext).data(absolute(raw)).build())
+                deps.imageLoader.enqueue(ImageRequest.Builder(deps.appContext).data(deps.serverUrl.toAbsolute(raw)).build())
             }
         }
     }
@@ -157,6 +159,12 @@ class BrowseSession(
     fun beginRefresh() {
         deps.processing.refresh()
         control.update { SessionControl() }
+    }
+
+    /** Re-reads the folder tree for a folder page, whose rows and counts come from it. Offline, the cached one stays. */
+    fun refreshFolders() {
+        if (folderId == null) return
+        scope.launch { runCatching { deps.folders.refresh() } }
     }
 
     /** The first page (or a refresh) of a list failed. A closed lock asks for the password; offline is not an error. */
@@ -184,37 +192,24 @@ class BrowseSession(
         }
     }
 
-    fun deleteSelected() {
-        val ids = selection().toList()
-        if (ids.isEmpty()) return
-        scope.launch {
-            // The repository announces the delete, which every open Browse screen answers (this one included).
-            runCatching { deps.documents.delete(ids) }
-            clearSelection()
-        }
-    }
-
     /**
-     * Resolve fresh signed URLs for the selected documents (the cached copies strip file_url) and
+     * Resolve fresh signed URLs for the documents [ids] (the cached copies strip file_url) and
      * hand them to [onTargets] to enqueue; the caller owns the platform DownloadManager.
      */
-    fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) {
-        val ids = selection().toList()
-        if (ids.isEmpty()) return
+    fun download(ids: List<String>, onTargets: (List<DownloadTarget>) -> Unit) {
         scope.launch {
             val targets = ids.mapNotNull { id ->
                 runCatching {
                     val doc = deps.documents.fetchDocument(id)
-                    doc.file_url?.let { DownloadTarget(absolute(it), doc.original_filename) }
+                    doc.file_url?.let { DownloadTarget(deps.serverUrl.toAbsolute(it), doc.original_filename) }
                 }.getOrNull()
             }
-            clearSelection()
             onTargets(targets)
         }
     }
 
     /**
-     * A screen stays alive while another is on top of it, so a delete on any of them, or uploads finishing
+     * A screen stays alive while another is on top of it, so a change made on any of them, or uploads finishing
      * (once, when the last one is done, not per file), must reach them all.
      */
     private fun watchContentChanges() {
@@ -230,12 +225,10 @@ class BrowseSession(
 
     private fun changed() {
         beginRefresh()
+        refreshFolders()
         onContentChanged()
     }
 
-    private fun absolute(url: String): String =
-        if (url.startsWith("http")) url else deps.serverUrl.current().removeSuffix("/") + url
-
     private fun messageFor(throwable: Throwable): String =
-        (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load documents."
+        (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load your files."
 }

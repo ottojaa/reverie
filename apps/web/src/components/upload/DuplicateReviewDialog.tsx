@@ -116,7 +116,7 @@ export function DuplicateReviewDialog({ items, cleanCount, folderName, onConfirm
                     <DialogDescription>
                         {contentItems.length > 0
                             ? 'Skipped files are removed from this upload. You can still upload any of them.'
-                            : 'Choose what happens to files whose name is already in this folder.'}
+                            : 'Choose what happens to files whose name is already taken there.'}
                     </DialogDescription>
                 </DialogHeader>
 

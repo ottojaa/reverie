@@ -1,3 +1,4 @@
+import { UuidSchema } from '@reverie/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { SearchPage } from '../pages/Search';
 
@@ -12,8 +13,9 @@ function toSortBy(value: unknown): SearchSortBy {
 }
 
 export const Route = createFileRoute('/search')({
-    validateSearch: (search?: { q?: string; sort_by?: string; sort_order?: string; view?: string } | undefined) => ({
+    validateSearch: (search?: { q?: string; folder_id?: string; sort_by?: string; sort_order?: string; view?: string } | undefined) => ({
         q: typeof search?.q === 'string' ? search.q : '',
+        folder_id: UuidSchema.safeParse(search?.folder_id).data,
         sort_by: toSortBy(search?.sort_by),
         sort_order: search?.sort_order === 'asc' ? ('asc' as const) : ('desc' as const),
         // Absent = automatic (grid when a photo-ish filter is active, list otherwise)

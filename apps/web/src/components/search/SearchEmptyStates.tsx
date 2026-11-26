@@ -84,15 +84,22 @@ export function NoQueryState({ onSearch }: NoQueryStateProps) {
 interface EmptySearchStateProps {
     freeText: string;
     tokens: QueryToken[];
+    /** Set while search is narrowed to a folder. */
+    folderName: string | undefined;
+    onRemoveFolder: () => void;
     onRemoveToken: (token: QueryToken) => void;
     onClearFilters: () => void;
     onSearch: (query: string) => void;
 }
 
 /** Zero results: name the culprit filters with one-click removal instead of a shrug. */
-export function EmptySearchState({ freeText, tokens, onRemoveToken, onClearFilters, onSearch }: EmptySearchStateProps) {
+export function EmptySearchState({ freeText, tokens, folderName, onRemoveFolder, onRemoveToken, onClearFilters, onSearch }: EmptySearchStateProps) {
     const filterTokens = tokens.filter(isKnownFilter);
-    const hasFilters = filterTokens.length > 0;
+    const filters = [
+        ...(folderName ? [{ key: 'folder_id', label: `Folder: ${folderName}`, onRemove: onRemoveFolder }] : []),
+        ...filterTokens.map((token) => ({ key: token.raw + token.value, label: tokenLabel(token), onRemove: () => onRemoveToken(token) })),
+    ];
+    const hasFilters = filters.length > 0;
 
     return (
         <motion.div
@@ -108,19 +115,19 @@ export function EmptySearchState({ freeText, tokens, onRemoveToken, onClearFilte
                 <>
                     <p className="mb-5 mt-1.5 text-sm text-muted-foreground">Loosen the search by removing a filter:</p>
                     <div className="flex flex-wrap justify-center gap-1.5">
-                        {filterTokens.map((token) => (
+                        {filters.map((filter) => (
                             <Button
-                                key={token.raw + token.value}
+                                key={filter.key}
                                 type="button"
                                 variant="outline"
-                                onClick={() => onRemoveToken(token)}
+                                onClick={filter.onRemove}
                                 className="h-8 gap-1.5 rounded-full px-3 text-xs transition-colors hover:border-primary/50 hover:bg-secondary hover:text-primary"
                             >
                                 <X className="size-3 text-muted-foreground" />
-                                {tokenLabel(token)}
+                                {filter.label}
                             </Button>
                         ))}
-                        {filterTokens.length > 1 && (
+                        {filters.length > 1 && (
                             <Button
                                 type="button"
                                 variant="ghost"

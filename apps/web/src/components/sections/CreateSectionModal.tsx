@@ -6,37 +6,31 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateFolder } from '@/lib/sections';
 import { useEffect, useState } from 'react';
-import type { FolderMode } from './folder-mode.js';
 
 const DEFAULT_SECTION_ICON: SectionIconName = 'folder';
 
 export interface CreateSectionModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** The folder to create it in; null or left out creates a top-level one. */
     parentId?: string | null;
-    mode?: FolderMode;
     onSuccess?: () => void;
 }
 
-export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'folder', onSuccess }: CreateSectionModalProps) {
+export function CreateSectionModal({ open, onOpenChange, parentId, onSuccess }: CreateSectionModalProps) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [icon, setIcon] = useState<SectionIconName | null>(mode === 'collection' ? null : DEFAULT_SECTION_ICON);
+    const [icon, setIcon] = useState<SectionIconName | null>(DEFAULT_SECTION_ICON);
     const createFolder = useCreateFolder();
 
-    // Reset form when modal opens or mode changes
+    // Reset form when the modal opens
     useEffect(() => {
         if (open) {
             setName('');
             setDescription('');
-            setIcon(mode === 'collection' ? null : DEFAULT_SECTION_ICON);
+            setIcon(DEFAULT_SECTION_ICON);
         }
-    }, [open, mode]);
-
-    const isCollection = mode === 'collection';
-    const isFolder = mode === 'folder';
-    const title = isCollection ? 'New collection' : parentId ? 'New folder' : 'New folder';
-    const namePlaceholder = isCollection ? 'Collection name' : 'Folder name';
+    }, [open]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,7 +40,6 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'folde
         createFolder.mutate(
             {
                 name: name.trim(),
-                ...(isCollection ? { type: 'collection' as const } : { type: 'folder' as const }),
                 ...(parentId && { parent_id: parentId }),
                 ...(description.trim() && { description: description.trim() }),
                 ...(icon && { emoji: icon }),
@@ -55,7 +48,7 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'folde
                 onSuccess: () => {
                     setName('');
                     setDescription('');
-                    setIcon(isCollection ? null : DEFAULT_SECTION_ICON);
+                    setIcon(DEFAULT_SECTION_ICON);
                     onOpenChange(false);
                     onSuccess?.();
                 },
@@ -67,37 +60,35 @@ export function CreateSectionModal({ open, onOpenChange, parentId, mode = 'folde
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
+                    <DialogTitle>New folder</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-row gap-2">
-                        {isFolder && <IconSelector value={icon} onValueChange={setIcon} />}
+                        <IconSelector value={icon} onValueChange={setIcon} />
                         <Input
                             id="create-section-name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder={namePlaceholder}
+                            placeholder="Folder name"
                             required
                             maxLength={255}
                             autoFocus
                         />
                     </div>
 
-                    {isFolder && (
-                        <div>
-                            <label htmlFor="create-section-desc" className="mb-1.5 block text-sm font-medium">
-                                Description (optional)
-                            </label>
-                            <Textarea
-                                id="create-section-desc"
-                                className="min-h-[80px]"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Brief description"
-                                rows={3}
-                            />
-                        </div>
-                    )}
+                    <div>
+                        <label htmlFor="create-section-desc" className="mb-1.5 block text-sm font-medium">
+                            Description (optional)
+                        </label>
+                        <Textarea
+                            id="create-section-desc"
+                            className="min-h-[80px]"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Brief description"
+                            rows={3}
+                        />
+                    </div>
 
                     <DialogFooter showCloseButton>
                         <Button type="submit" disabled={!name.trim() || createFolder.isPending}>

@@ -1,13 +1,13 @@
 import type { FolderWithChildren } from '@reverie/shared';
+import { toOwnCount } from '../../../lib/folders/tree.js';
 import type { IslandLayout, PlanePosition } from '../types.js';
 
 /**
- * Deterministic auto-layout: collections become clusters placed on an
- * expanding spiral (greedy, collision-checked), and every folder inside a
- * collection becomes a uniform island in a centered, row-major grid — same
- * size, aligned left to right, reading order. Top-level folders without a
- * collection share a synthetic cluster. Same tree in → same layout out,
- * across sessions and machines.
+ * Deterministic auto-layout: each top-level folder becomes a cluster placed on
+ * an expanding spiral (greedy, collision-checked), and that folder and every
+ * folder beneath it becomes a uniform island in a centered, row-major grid —
+ * same size, aligned left to right, each folder before its subfolders. Same
+ * tree in → same layout out, across sessions and machines.
  */
 
 const GOLDEN_ANGLE = 2.399963229728653;
@@ -28,39 +28,11 @@ export function hash01(seed: string): number {
     return ((h >>> 0) % 100000) / 100000;
 }
 
-interface Cluster {
-    collectionId: string | null;
-    collectionName: string | null;
-    folders: FolderWithChildren[];
-}
+/** The folders in reading order: siblings by position then name, each folder before its subfolders. */
+function toReadingOrder(folders: FolderWithChildren[]): FolderWithChildren[] {
+    const siblings = [...folders].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 
-function flattenFolders(nodes: FolderWithChildren[], out: FolderWithChildren[] = []): FolderWithChildren[] {
-    for (const node of nodes) {
-        out.push(node);
-        flattenFolders(node.children ?? [], out);
-    }
-
-    return out;
-}
-
-function toClusters(tree: FolderWithChildren[]): Cluster[] {
-    const sorted = [...tree].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    const clusters: Cluster[] = [];
-    const loose: FolderWithChildren[] = [];
-
-    for (const node of sorted) {
-        if (node.type === 'collection') {
-            clusters.push({ collectionId: node.id, collectionName: node.name, folders: flattenFolders(node.children ?? []) });
-        } else {
-            loose.push(node, ...flattenFolders(node.children ?? []));
-        }
-    }
-
-    if (loose.length > 0) {
-        clusters.push({ collectionId: null, collectionName: null, folders: loose });
-    }
-
-    return clusters.filter((c) => c.folders.length > 0);
+    return siblings.flatMap((folder) => [folder, ...toReadingOrder(folder.children)]);
 }
 
 const PITCH_X = ISLAND_RADIUS * ISLAND_SPACING * 1.15;
@@ -122,18 +94,13 @@ function placeClusters(radii: number[]): PlanePosition[] {
 }
 
 export function computeIslandLayout(tree: FolderWithChildren[]): IslandLayout[] {
-    const clusters = toClusters(tree);
+    const roots = [...tree].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    const clusters = roots.map((root) => ({ root, folders: toReadingOrder([root]) }));
+    const centers = placeClusters(clusters.map((cluster) => clusterRadiusFor(cluster.folders.length)));
 
-    const perCluster = clusters.map((cluster) => {
-        const folders = [...cluster.folders].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-
-        return { cluster, folders, offsets: islandOffsets(folders.length), clusterRadius: clusterRadiusFor(folders.length) };
-    });
-
-    const centers = placeClusters(perCluster.map((c) => c.clusterRadius));
-
-    return perCluster.flatMap(({ cluster, folders, offsets }, k) => {
+    return clusters.flatMap(({ root, folders }, k) => {
         const center = centers[k] ?? { x: 0, z: 0 };
+        const offsets = islandOffsets(folders.length);
 
         return folders.map((folder, j) => {
             const offset = offsets[j] ?? { x: 0, z: 0 };
@@ -142,11 +109,11 @@ export function computeIslandLayout(tree: FolderWithChildren[]): IslandLayout[] 
                 id: folder.id,
                 name: folder.name,
                 emoji: folder.emoji ?? null,
-                documentCount: folder.document_count,
+                documentCount: toOwnCount(folder),
                 position: { x: center.x + offset.x, z: center.z + offset.z },
                 radius: ISLAND_RADIUS,
-                collectionId: cluster.collectionId,
-                collectionName: cluster.collectionName,
+                clusterId: root.id,
+                clusterName: root.name,
             };
         });
     });

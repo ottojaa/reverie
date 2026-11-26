@@ -18,7 +18,7 @@ class FolderUnlockerTest {
 
     @Test fun `an account without a password points at the web app`() {
         val message = UnlockOutcome.NoPassword.toPromptError()
-        assertEquals("Your account has no password yet. Set one in Settings on the web app.", message)
+        assertEquals("Your account has no password yet.", message)
     }
 
     @Test fun `a failure shows its own message`() {

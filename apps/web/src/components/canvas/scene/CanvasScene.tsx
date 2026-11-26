@@ -4,7 +4,7 @@ import { canvasQuality } from '../canvasQuality.js';
 import { releaseReturnShield } from '../dive/returnShield.js';
 import type { CameraState, CanvasSceneHandle, CanvasSceneProps } from '../types.js';
 import { CameraRig } from './CameraRig.js';
-import { CollectionLabels } from './CollectionLabels.js';
+import { ClusterLabels } from './ClusterLabels.js';
 import { ContextLossGuard } from './ContextLossGuard.js';
 import { requestFrame } from './dampers.js';
 import { DiveController } from './DiveController.js';
@@ -182,7 +182,7 @@ export default function CanvasScene(props: CanvasSceneComponentProps) {
             <UnravelController islands={islands} onUnravelChange={onUnravelChange} onApproachFolder={onApproachFolder} />
             {tuningProp.debugUnravel && <UnravelDebug islands={islands} />}
             <DiveController theme={theme} onDiveHandoff={onDiveHandoff} />
-            <CollectionLabels islands={islands} theme={theme} />
+            <ClusterLabels islands={islands} theme={theme} />
             {islands.map((island) => (
                 <FolderIsland key={island.id} island={island} theme={theme} onMoved={props.onIslandMoved} />
             ))}

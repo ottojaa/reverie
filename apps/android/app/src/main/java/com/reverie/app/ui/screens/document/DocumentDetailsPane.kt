@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.document
 
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -78,7 +78,7 @@ fun DocumentDetailsPane(
 
         Surface(
             modifier = Modifier.fillMaxWidth().heightIn(min = contentMinHeight),
-            shape = RoundedCornerShape(topStart = DETAILS_CORNER_RADIUS, topEnd = DETAILS_CORNER_RADIUS),
+            shape = MaterialTheme.shapes.extraLarge.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             Column(Modifier.navigationBarsPadding()) {

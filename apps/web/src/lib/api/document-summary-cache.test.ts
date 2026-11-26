@@ -67,6 +67,14 @@ describe('the summary next to the lists', () => {
         expect(client.getQueryData<DocumentsResponse>(preview)?.items.map((d) => d.folder_id)).toEqual(['f2', 'f1']);
     });
 
+    it('shows a document moved to the top level as in no folder', () => {
+        const { client, preview } = browseCache();
+
+        client.setQueriesData({ queryKey: ['documents'] }, (old) => (old ? withDocumentsMoved(old, ['a'], null) : old));
+
+        expect(client.getQueryData<DocumentsResponse>(preview)?.items.map((d) => d.folder_id)).toEqual([null, 'f1']);
+    });
+
     it('is refetched when the documents are invalidated after a delete or a move', async () => {
         const { client } = browseCache();
         let served = 2;

@@ -1,0 +1,102 @@
+{
+    "total": 2,
+    "results": [
+        {
+            "result_type": "document",
+            "document_id": "20000000-0000-4000-8000-000000000004",
+            "display_name": "Screenshot 2026-06-01.png",
+            "filename": "Screenshot 2026-06-01.png",
+            "folder_path": "/Photos/Trips/Norway",
+            "folder_id": "10000000-0000-4000-8000-000000000003",
+            "uploaded_at": "2026-06-04T10:00:00.000Z",
+            "extracted_date": null,
+            "category": null,
+            "mime_type": "image/png",
+            "format": "png",
+            "snippet": "<mark>holiday</mark> booking",
+            "has_text": true,
+            "thumbnail_urls": null,
+            "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+            "size_bytes": 100,
+            "duration_seconds": null,
+            "tags": [],
+            "taught_tags": [],
+            "relevance": 0.06079271
+        },
+        {
+            "result_type": "document",
+            "document_id": "20000000-0000-4000-8000-000000000002",
+            "display_name": "fjord.jpg",
+            "filename": "fjord.jpg",
+            "folder_path": "/Photos/Trips/Norway",
+            "folder_id": "10000000-0000-4000-8000-000000000003",
+            "uploaded_at": "2026-06-02T10:00:00.000Z",
+            "extracted_date": null,
+            "category": null,
+            "mime_type": "image/jpeg",
+            "format": "jpg",
+            "snippet": "<mark>holiday</mark> by the fjord",
+            "has_text": true,
+            "thumbnail_urls": null,
+            "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+            "size_bytes": 100,
+            "duration_seconds": null,
+            "tags": [],
+            "taught_tags": [],
+            "relevance": 0.06079271
+        }
+    ],
+    "facets": {
+        "types": [],
+        "formats": [
+            {
+                "name": "jpg",
+                "count": 1,
+                "selected": false
+            },
+            {
+                "name": "png",
+                "count": 1,
+                "selected": false
+            }
+        ],
+        "folders": [
+            {
+                "name": "/Photos",
+                "count": 2,
+                "selected": false
+            },
+            {
+                "name": "/Photos/Trips",
+                "count": 2,
+                "selected": false
+            },
+            {
+                "name": "/Photos/Trips/Norway",
+                "count": 2,
+                "selected": false
+            }
+        ],
+        "uploadPeriod": [
+            {
+                "name": "This month",
+                "count": 2,
+                "selected": false
+            }
+        ],
+        "tags": [],
+        "hasText": [
+            {
+                "name": "With text",
+                "count": 2,
+                "selected": false
+            }
+        ],
+        "categories": []
+    },
+    "query": {
+        "fullText": "holiday",
+        "scopeFolderId": "10000000-0000-4000-8000-000000000001"
+    },
+    "timing_ms": 0
+}

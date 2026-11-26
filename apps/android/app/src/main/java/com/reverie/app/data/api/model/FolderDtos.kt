@@ -11,16 +11,20 @@ data class FolderDto(
     val description: String? = null,
     val emoji: String? = null,
     val sort_order: Int,
-    val type: FolderType,
+    // Deprecated by the server (it only says whether the folder is at the top level) and read nowhere here.
+    val type: FolderType? = null,
     val is_private: Boolean,
+    // The outermost private folder among this one and those above it: what unlocking opens to reach it.
+    // Null for a public folder.
+    val lock_id: String? = null,
     // True when effectively private AND closed AND the account has a password (otherwise a private
-    // folder opens freely). A locked collection arrives without children.
+    // folder opens freely). A locked folder arrives without children.
     val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
 )
 
-/** Recursive tree node from GET /folders/tree. */
+/** Recursive tree node from GET /folders/tree; folders nest to any depth. */
 @Serializable
 data class FolderWithChildren(
     val id: String,
@@ -30,18 +34,25 @@ data class FolderWithChildren(
     val description: String? = null,
     val emoji: String? = null,
     val sort_order: Int,
-    val type: FolderType,
+    val type: FolderType? = null,
     val is_private: Boolean,
-    // True when effectively private AND closed AND the account has a password (otherwise a private
-    // folder opens freely). A locked collection arrives without children.
+    val lock_id: String? = null,
     val locked: Boolean = false,
     val created_at: String,
     val updated_at: String,
     val children: List<FolderWithChildren> = emptyList(),
-    val document_count: Int = 0,
-    // Null for collections, locked nodes, every private folder (open or not), and servers from before covers existed.
+    // Documents in this folder and everything beneath it, leaving out what sits behind a further lock; all zero
+    // while locked.
+    val kind_counts: KindCountsDto = KindCountsDto(),
+    // Null for locked nodes and every private folder (open or not).
     val cover: FolderCoverDto? = null,
 )
+
+/** How many documents of each kind a folder holds. */
+@Serializable
+data class KindCountsDto(val image: Int = 0, val video: Int = 0, val file: Int = 0) {
+    val total: Int get() = image + video + file
+}
 
 /** One document shown in a folder's cover mosaic. */
 @Serializable
@@ -64,18 +75,18 @@ data class FolderCoverDto(
 @Serializable
 data class CreateFolderRequest(
     val name: String,
+    /** Null creates the folder at the top level. */
     val parent_id: String? = null,
     val description: String? = null,
     val emoji: String? = null,
-    val type: FolderType? = null,
 )
 
+/** Changes a folder's own fields. Moving it is [com.reverie.app.data.api.FoldersApi.move]. */
 @Serializable
 data class UpdateFolderRequest(
     val name: String? = null,
     val description: String? = null,
     val emoji: String? = null,
-    val parent_id: String? = null,
     val is_private: Boolean? = null,
 )
 

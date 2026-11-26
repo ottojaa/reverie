@@ -144,9 +144,9 @@ class RecentRowsTest {
         val today = LocalDate.of(2026, 11, 23)
         val videos = listOf(video("a", 0), video("b", 1))
         val mixed = listOf(photo("a", 0), video("b", 1))
-        assertEquals("Videos · Nov 23", foldLabel(videos, today, zone))
-        assertEquals("Photos and videos · Nov 23", foldLabel(mixed, today, zone))
-        assertEquals("Photos · Nov 23", foldLabel(listOf(photo("a", 0), photo("b", 1)), today, zone))
+        assertEquals("Videos · 23 Nov", foldLabel(videos, today, zone))
+        assertEquals("Photos and videos · 23 Nov", foldLabel(mixed, today, zone))
+        assertEquals("Photos · 23 Nov", foldLabel(listOf(photo("a", 0), photo("b", 1)), today, zone))
     }
 
     @Test
@@ -157,9 +157,9 @@ class RecentRowsTest {
         val sameMonth = listOf(copy("b", "2026-08-25T10:00:00Z"), copy("a", "2026-08-19T10:00:00Z"))
         val acrossMonths = listOf(copy("b", "2026-09-02T10:00:00Z"), copy("a", "2026-08-19T10:00:00Z"))
         val oneDay = listOf(copy("b", "2026-08-19T12:00:00Z"), copy("a", "2026-08-19T10:00:00Z"))
-        assertEquals("Versions · Aug 19 – 25", stackLabel(sameMonth, today, zone))
-        assertEquals("Versions · Aug 19 – Sep 2", stackLabel(acrossMonths, today, zone))
-        assertEquals("Versions · Aug 19", stackLabel(oneDay, today, zone))
+        assertEquals("Versions · 19–25 Aug", stackLabel(sameMonth, today, zone))
+        assertEquals("Versions · 19 Aug – 2 Sep", stackLabel(acrossMonths, today, zone))
+        assertEquals("Versions · 19 Aug", stackLabel(oneDay, today, zone))
     }
 
     @Test
@@ -170,17 +170,6 @@ class RecentRowsTest {
         assertEquals("09:05", whenOf("2026-11-23T09:05:00Z"))
         assertEquals("Yesterday", whenOf("2026-11-22T09:05:00Z"))
         assertEquals("Thu", whenOf("2026-11-19T09:05:00Z"))
-        assertEquals("Nov 6", whenOf("2026-11-06T09:05:00Z"))
-    }
-
-    @Test
-    fun `returning from the viewer scrolls to the drawn entry of a document, the member of an opened group`() {
-        val rows = recentRows(listOf(photo("a", 0), photo("b", 1), file("c", 90)))
-        val closed = recentEntries(rows, emptySet())
-        val open = recentEntries(rows, setOf(rows[0].key))
-        assertEquals(0, entryIndexOf(closed, "b"))
-        assertEquals(2, entryIndexOf(open, "b"))
-        assertEquals(3, entryIndexOf(open, "c"))
-        assertEquals(-1, entryIndexOf(open, "zzz"))
+        assertEquals("6 Nov", whenOf("2026-11-06T09:05:00Z"))
     }
 }

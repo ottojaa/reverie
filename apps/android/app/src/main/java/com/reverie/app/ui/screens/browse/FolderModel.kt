@@ -1,9 +1,14 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.repository.PageResult
+import com.reverie.app.ui.screens.manage.Selection
+import com.reverie.app.domain.FolderTree
+import com.reverie.app.domain.isInPrivateTree
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -14,146 +19,144 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.ZoneId
 
-/** One chip of the folder page: a kind the folder holds, or every kind when [kind] is null (All). */
-data class FolderChip(val kind: DocumentKind?, val count: Int?)
-
-/** What the folder page draws: the chips, the selected chip's list and the subtitle's figures. */
+/** What a folder page draws: the folder, where it sits, and its two lists. */
 data class FolderState(
-    /** Empty when the folder holds fewer than two kinds: there is nothing to choose between. */
-    val chips: List<FolderChip> = emptyList(),
-    /** The selected chip's kind; null is All. */
-    val selected: DocumentKind? = null,
-    val feed: FeedState = FeedState(),
-    /** Documents in the folder by the server's count; null until it has answered. */
-    val total: Int? = null,
+    /** The folder in the cached tree; null until the tree holds it. */
+    val node: FolderWithChildren? = null,
+    /** The folders from the top level down to the one shown, which comes last. */
+    val path: List<FolderWithChildren> = emptyList(),
+    /** The folder's own photos and videos. */
+    val media: FeedDocuments = FeedDocuments(),
+    /** Its other documents; null until the photos and videos have been read. */
+    val files: FeedDocuments? = null,
+    /** The server's figures for the folder's own documents; null until it has answered. */
+    val summary: DocumentSummaryDto? = null,
+    val selectedIds: Set<String> = emptySet(),
+    val isRefreshing: Boolean = false,
 ) {
-    /** The server's count of what a kind chip lists; null under All, or until it has answered. */
-    val matching: Int?
-        get() {
-            if (selected == null) return null
-            return chips.firstOrNull { it.kind == selected }?.count ?: feed.documents.total.takeIf { feed.documents.fetched }
-        }
+    val isEmptyOfDocuments: Boolean get() = media.documents.isEmpty() && files?.documents.isNullOrEmpty()
+
+    val hasMore: Boolean get() = media.hasMore || files?.hasMore == true
+
+    /** Search never returns private documents, so there is nothing to search for inside a private folder. */
+    val isSearchable: Boolean get() = node?.isInPrivateTree == false
 }
 
 /** What the page may show: nothing about what a locked folder holds, whatever was read of it before it locked. */
-fun FolderState.unlessLocked(isLocked: Boolean): FolderState = if (isLocked) FolderState() else this
+fun FolderState.unlessLocked(isLocked: Boolean): FolderState =
+    if (isLocked) FolderState(node = node, path = path) else this
 
 /**
- * The chip row for a folder: All and one chip per kind it holds, by the server's summary. Until the server
- * has answered, the kinds are those of the cached rows and the chips carry no counts.
- */
-fun folderChips(summary: DocumentSummaryDto?, cachedKinds: Set<DocumentKind>): List<FolderChip> {
-    val held = DocumentKind.entries.filter { if (summary == null) it in cachedKinds else summary.countOf(it) > 0 }
-    if (held.size < 2) return emptyList()
-    val kinds = held.map { FolderChip(it, summary?.countOf(it)) }
-    return listOf(FolderChip(null, summary?.let { kinds.sumOf { chip -> chip.count ?: 0 } })) + kinds
-}
-
-/**
- * A folder page's data: the server's summary and one feed per chip over one cache observer. A chip's feed
- * is made (and asks for its first page) the first time the chip is selected, and is then kept, so switching
- * back finds its pages. Selection, paging and the viewer's swipe order all act on the shown feed. Plain
- * Kotlin so it can be tested on the JVM.
+ * A folder page's data: its place in the tree, the server's figures, and one feed per section over one cache
+ * observer. The photos and videos come first on the page, so the other files are asked for only once those
+ * have been read to the end (or could not be read at all). One selection spans both sections. Plain Kotlin
+ * so it can be tested on the JVM.
  *
- * @param fetchPage one page of [kind] (null is every kind) from [offset] into the cache the [cache] flow reads.
+ * @param fetchPage one page of [filter] from [offset] into the cache the [cache] flow reads.
  * @param summary the folder's last summary read in this process, from the repository's memory.
  * @param fetchSummary reads a fresh summary (the repository keeps it for [summary]).
+ * @param reconcile told what a section's whole list holds once it has been read from the server.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class FolderModel(
     private val scope: CoroutineScope,
+    folderId: String,
+    tree: Flow<List<FolderWithChildren>>,
     private val cache: Flow<List<DocumentDto>>,
     summary: Flow<DocumentSummaryDto?>,
-    private val fetchPage: suspend (kind: DocumentKind?, offset: Int) -> PageResult,
+    private val fetchPage: suspend (filter: DocumentFilter, offset: Int) -> PageResult,
     private val fetchSummary: suspend () -> DocumentSummaryDto,
+    private val reconcile: suspend (filter: DocumentFilter, readIds: Set<String>) -> Unit = { _, _ -> },
     private val onFirstPageFailed: (Throwable) -> Unit = {},
+    private val isLockRefusal: (Throwable) -> Boolean = { false },
     private val computation: CoroutineDispatcher = Dispatchers.Default,
-    private val sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
+    sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
 ) {
-    private val selected = MutableStateFlow<DocumentKind?>(null)
-    private val feeds = mutableMapOf<DocumentKind?, BrowseFeedModel>()
-    private val all = feed(null)
-    private val shown: BrowseFeedModel get() = feed(selected.value)
+    val selection = Selection()
+    private val others = MutableStateFlow<BrowseFeedModel?>(null)
 
-    private val chips: Flow<Pair<List<FolderChip>, Int?>> =
-        combine(summary, cache.map(::kindsOf).distinctUntilChanged()) { fresh, cached ->
-            folderChips(fresh, cached) to fresh?.let { s -> DocumentKind.entries.sumOf { s.countOf(it) } }
-        }.onEach { (chips, _) -> dropUnshownSelection(chips) }
+    private val media: BrowseFeedModel = feed(DocumentFilter.MEDIA) { error ->
+        onFirstPageFailed(error)
+        // Offline, say: what is cached of the other files is still worth showing. A closed lock hides everything.
+        if (!isLockRefusal(error)) startFiles()
+    }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<FolderState> = selected
-        .flatMapLatest { kind ->
-            combine(feed(kind).state, chips) { shownFeed, (chips, total) ->
-                val read = all.state.value.documents
-                FolderState(chips, kind, shownFeed, total ?: read.total.takeIf { read.fetched })
-            }
-        }
-        .stateIn(scope, sharing, FolderState())
+    private val path: Flow<List<FolderWithChildren>> = tree.map { FolderTree(it).pathTo(folderId) }
 
-    val selectedIds: Set<String> get() = shown.selectedIds
+    private val sections: Flow<Pair<FeedState, FeedState?>> =
+        combine(media.state, others.flatMapLatest { it?.state ?: flowOf(null) }, ::Pair)
+
+    val state: StateFlow<FolderState> = combine(path, sections, summary, selection.ids) { folders, (photos, files), figures, ids ->
+        FolderState(
+            node = folders.lastOrNull(),
+            path = folders,
+            media = photos.documents,
+            files = files?.documents,
+            summary = figures,
+            selectedIds = ids,
+            isRefreshing = photos.isRefreshing || files?.isRefreshing == true,
+        )
+    }.stateIn(scope, sharing, FolderState())
 
     init {
         refreshSummary()
+        scope.launch {
+            media.state.first { it.documents.fetched && !it.documents.hasMore }
+            startFiles()
+        }
     }
 
-    /** Shows [kind]'s list. A selection does not follow: delete must never act on rows that are off screen. */
-    fun select(kind: DocumentKind?) {
-        if (kind == selected.value) return
-        shown.clearSelection()
-        selected.value = kind
-    }
-
-    /**
-     * Pull-to-refresh re-reads the figures and the shown list, and has the other lists read so far start
-     * over. [initial] only retries a failed first load: the figures and the shown list.
-     */
+    /** Re-reads the figures and the first page of each section. [initial] retries a failed first load, without the spinner. */
     fun refresh(initial: Boolean = false) {
         refreshSummary()
-        val front = shown
-        front.refresh(initial)
-        if (initial) return
-        feeds.values.filter { it !== front }.forEach { it.contentChanged() }
+        media.refresh(initial)
+        others.value?.refresh(initial)
     }
 
-    /** Documents were deleted or added somewhere: the counts and every list read so far follow the server. */
+    /** Documents were deleted or added somewhere: the figures and both sections follow the server. */
     fun contentChanged() {
         refreshSummary()
-        feeds.values.forEach { it.contentChanged() }
+        media.contentChanged()
+        others.value?.contentChanged()
     }
 
-    fun loadMore() = shown.loadMore()
-
-    fun enterSelection(ids: Collection<String>) = shown.enterSelection(ids)
-
-    fun toggleSelect(ids: Collection<String>) = shown.toggleSelect(ids)
-
-    fun clearSelection() = shown.clearSelection()
-
-    /** The viewer's swipe order: the shown list as it stands, following it as pages arrive. */
-    fun prepareSequence(): DocumentSequence = shown.prepareSequence()
-
-    private fun feed(kind: DocumentKind?): BrowseFeedModel = feeds.getOrPut(kind) {
-        BrowseFeedModel(
-            scope = scope,
-            kind = kind,
-            cache = cache,
-            fetchPage = { offset -> fetchPage(kind, offset) },
-            onFirstPageFailed = onFirstPageFailed,
-            computation = computation,
-            sharing = sharing,
-        )
+    /** The next page of whichever section the end of the page belongs to. */
+    fun loadMore() {
+        if (media.state.value.documents.hasMore) return media.loadMore()
+        others.value?.loadMore()
     }
 
-    /** The last document of the selected kind is gone, and its chip with it: back to All. */
-    private fun dropUnshownSelection(chips: List<FolderChip>) {
-        val kind = selected.value ?: return
-        if (chips.none { it.kind == kind }) select(null)
+    /** The viewer's swipe order: the section [opened] is listed in, day by day as the page shows it. */
+    fun prepareSequence(opened: DocumentDto, zone: ZoneId = ZoneId.systemDefault()): DocumentSequence {
+        val isMedia = DocumentFilter.MEDIA.holds(opened.kind)
+        val section = if (isMedia) media else others.value ?: media
+        return section.prepareSequence { dayOrderedIds(section.filter, it, zone) }
     }
+
+    private fun startFiles() {
+        if (others.value != null) return
+        others.value = feed(DocumentFilter.FILES, onFirstPageFailed)
+    }
+
+    // A section's state is read all the time the page is alive: it decides when the files are asked for.
+    private fun feed(filter: DocumentFilter, onFailed: (Throwable) -> Unit) = BrowseFeedModel(
+        scope = scope,
+        filter = filter,
+        cache = cache,
+        fetchPage = { offset -> fetchPage(filter, offset) },
+        onFirstPageFailed = onFailed,
+        reconcile = { keep -> reconcile(filter, keep) },
+        computation = computation,
+        sharing = SharingStarted.Eagerly,
+    )
 
     private fun refreshSummary() = scope.readQuietly { fetchSummary() }
 }

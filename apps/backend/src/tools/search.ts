@@ -25,8 +25,8 @@ const searchSchema = z.object({
     date: z.string().max(40).optional().describe('Document date: 2024, 2022-2024, 2024-01..2024-06, 2024-07-15 or last-month'),
     uploaded: z.string().max(40).optional().describe('Upload date, same forms as date'),
     location: z.string().max(100).optional().describe('City or country of a photo'),
-    folder: z.string().max(300).optional().describe('Folder path (starts with /) or part of a path'),
-    folder_id: z.string().uuid().optional().describe('Only documents directly in this folder'),
+    folder: z.string().max(300).optional().describe('A folder by its whole path (starts with /) or its name, ignoring case. Includes everything beneath it.'),
+    folder_id: z.string().uuid().optional().describe('Only documents in this folder and the folders beneath it'),
     similar_to: z
         .string()
         .uuid()
@@ -78,7 +78,7 @@ function toParsedQuery(input: SearchInput): ParsedQuery {
     if (isEmptyRange(parsed.extractedDateRange) || isEmptyRange(parsed.uploadedRange))
         throw new ToolError('Invalid date filter: use 2024, 2022-2024, 2024-01..2024-06, 2024-07-15 or last-month');
 
-    return input.folder_id ? { ...parsed, folderIds: [input.folder_id] } : parsed;
+    return input.folder_id ? { ...parsed, scopeFolderId: input.folder_id } : parsed;
 }
 
 async function loadRows(ids: string[]): Promise<DocumentRow[]> {

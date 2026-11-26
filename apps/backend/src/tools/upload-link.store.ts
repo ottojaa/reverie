@@ -1,16 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 /**
- * One-time upload links: a secret that lets one HTTP request add files to one folder, for an MCP
- * client, whose tool calls cannot carry file bytes. Redis holds only the secret's hash, for a short
- * time, and claiming a link removes it in the same command.
+ * One-time upload links: a secret that lets one HTTP request add files to one folder (or the top level),
+ * for an MCP client, whose tool calls cannot carry file bytes. Redis holds only the secret's hash, for a
+ * short time, and claiming a link removes it in the same command.
  */
 
 export const UPLOAD_LINK_TTL_SECONDS = 15 * 60;
 
 export interface UploadLink {
     userId: string;
-    folderId: string;
+    /** null: the top level. */
+    folderId: string | null;
 }
 
 /** The two Redis operations the store needs, so tests can swap in a fake with a clock. */
@@ -22,7 +23,7 @@ export interface UploadLinkPort {
 
 interface StoredLink {
     user_id: string;
-    folder_id: string;
+    folder_id: string | null;
 }
 
 function toKey(secret: string): string {

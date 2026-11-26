@@ -27,6 +27,8 @@ import com.reverie.app.data.api.model.JobEventType
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.api.model.isStillProcessing
+import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.processing.MissedThumbnails
@@ -35,12 +37,12 @@ import com.reverie.app.data.realtime.DocumentJobEvents
 import com.reverie.app.data.repository.DocumentRepository
 import com.reverie.app.data.repository.FakeDocumentDao
 import com.reverie.app.ui.screens.browse.BrowseFeedModel
-import com.reverie.app.ui.screens.browse.RecentActions
+import com.reverie.app.ui.screens.browse.RowActions
 import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.doc
-import com.reverie.app.ui.screens.collections.CoverMosaic
+import com.reverie.app.ui.components.CoverMosaic
 import com.reverie.app.ui.theme.ReverieTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -107,13 +109,13 @@ class ThumbnailArrivalTest {
     @Test fun `a new upload's row loads its thumbnail once it is ready, with no refresh`() {
         val feed = BrowseFeedModel(
             scope = scope,
-            kind = null,
-            cache = repository.observeDocuments(null),
-            fetchPage = { offset -> repository.refresh(folderId = null, limit = 30, offset = offset) },
+            filter = DocumentFilter.ALL,
+            cache = repository.observeDocuments(DocumentScope.All),
+            fetchPage = { offset -> repository.refresh(DocumentScope.All, limit = 30, offset = offset) },
             computation = Dispatchers.Unconfined,
             sharing = SharingStarted.Eagerly,
         )
-        val actions = RecentActions(emptySet(), {}, {}, {}, {})
+        val actions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
 
         assertThumbnailArrives {
             val state by feed.state.collectAsState()
@@ -294,6 +296,7 @@ class ThumbnailArrivalTest {
         override suspend fun purgeCachedCopies(ids: Collection<String>) {}
         override suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>) {}
         override suspend fun forgetMoved(ids: Collection<String>) {}
+        override suspend fun forgetInFolders(folderIds: Collection<String>) {}
         override suspend fun clearSession() {}
     }
 

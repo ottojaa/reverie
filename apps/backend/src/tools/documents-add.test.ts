@@ -37,6 +37,8 @@ describeDb('adding documents with tools', () => {
 
     const loadDoc = (id: string) => db().selectFrom('documents').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
     const loadDocsIn = (folderId: string) => db().selectFrom('documents').selectAll().where('folder_id', '=', folderId).orderBy('original_filename').execute();
+    const loadDocsNamed = (name: string) => db().selectFrom('documents').selectAll().where('original_filename', '=', name).execute();
+    const TOP = { id: null, path: '/' };
     const save = (folderId: string, name: string, content = '# Note', extra: Record<string, unknown> = {}) =>
         run(alice(), 'save_text_document', { folder_id: folderId, name, content, ...extra });
 
@@ -111,18 +113,57 @@ describeDb('adding documents with tools', () => {
         expect(await loadDocsIn(folder.id)).toEqual([]);
     });
 
-    it('refuses locked, trashed, foreign and collection targets in both tools', async () => {
-        const { folders } = ctx.world();
-        const collection = await newFolder();
-        const targets = [folders.lockedFolder, folders.vaultInner, folders.bin, folders.bobs, collection];
+    it('adds to a folder at any depth, a top-level one included', async () => {
+        const top = await newFolder();
+        const middle = await newFolder('Middle', top);
+        const deep = await newFolder('Deep', await newFolder('Lower', middle));
 
-        for (const folder of targets) {
+        for (const folder of [top, middle, deep]) {
+            const saved = await save(folder.id, 'anywhere');
+
+            expect(saved.document.folder, folder.path).toEqual(folder);
+            expect((await loadDocsIn(folder.id)).map((doc) => doc.original_filename)).toEqual(['anywhere.md']);
+        }
+    });
+
+    it('adds to the top level when no folder is given, never overwriting, and undo trashes it', async () => {
+        const first = await run(alice(), 'save_text_document', { name: 'top-note', content: 'one' });
+        const second = await run(alice(), 'save_text_document', { name: 'top-note', content: 'two' });
+
+        expect(first.document).toMatchObject({ name: 'top-note.md', folder: TOP });
+        expect(second).toMatchObject({ document: { name: 'top-note (1).md', folder: TOP }, renamed_from: 'top-note.md' });
+        expect((await loadDoc(first.document.id)).folder_id).toBeNull();
+        expect(await run(alice(), 'upload_local_files', { paths: ['/a.pdf'], dry_run: true })).toMatchObject({ folder: TOP, files: 1 });
+        expect(await run(alice(), 'undo_write', { audit_id: first.audit_id })).toMatchObject({ applied: true, documents_trashed: 1 });
+        expect((await loadDoc(first.document.id)).deleted_at).toBeInstanceOf(Date);
+    });
+
+    it('can be undone after a move there and back is undone, the document back at the top level', async () => {
+        const folder = await newSubfolder();
+        const saved = await run(alice(), 'save_text_document', { name: 'wanderer', content: 'x' });
+        const moved = await run(alice(), 'move_documents', { document_ids: [saved.document.id], folder_id: folder.id });
+
+        expect(await refusal(alice(), 'undo_write', { audit_id: saved.audit_id })).toMatch(/moved or renamed/);
+        await run(alice(), 'undo_write', { audit_id: moved.audit_id });
+        expect((await loadDoc(saved.document.id)).folder_id).toBeNull();
+        expect(await run(alice(), 'undo_write', { audit_id: saved.audit_id })).toMatchObject({ applied: true, documents_trashed: 1 });
+    });
+
+    it('refuses locked, trashed and foreign targets in both tools, whatever their depth, all in the same words', async () => {
+        const { folders } = ctx.world();
+        // Vault is private from the top with two folders beneath it; Hidden starts a lock under two public folders.
+        const targets = [folders.vault, folders.vaultMiddle, folders.vaultInner, folders.lockedFolder, folders.bin, folders.bobs];
+        const underLock = await newFolder('BeneathHidden', folders.lockedFolder);
+
+        for (const folder of [...targets, underLock]) {
             const text = await refusal(alice(), 'save_text_document', { folder_id: folder.id, name: 'n', content: 'x' });
             const upload = await refusal(alice(), 'upload_local_files', { folder_id: folder.id, paths: ['/a.pdf'], dry_run: true });
 
-            expect(text, folder.path).toMatch(folder === collection ? /not a collection/ : /Folder not found/);
+            expect(text, folder.path).toBe('Folder not found: ' + folder.id);
             expect(upload, folder.path).toBe(text);
         }
+
+        expect(await loadDocsNamed('n.md')).toEqual([]);
     });
 
     it('only checks on a dry run: no document, no link, no audit row', async () => {

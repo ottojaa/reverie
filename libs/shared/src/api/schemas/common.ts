@@ -32,3 +32,6 @@ export const UuidSchema = z.string().uuid();
 // Date helpers
 export const DateStringSchema = z.string().datetime();
 export const DateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)');
+
+// Not z.coerce.boolean(): that turns the query-string "false" into true.
+export const QueryFlagSchema = z.union([z.boolean(), z.string().transform((v) => v === 'true' || v === '1')]);

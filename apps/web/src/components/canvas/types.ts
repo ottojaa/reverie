@@ -15,8 +15,9 @@ export interface IslandLayout {
     position: PlanePosition;
     /** Approximate footprint radius in world units; drives plate size and camera fit. */
     radius: number;
-    collectionId: string | null;
-    collectionName: string | null;
+    /** The top-level folder this island's cluster is built around (its own id for that folder). */
+    clusterId: string;
+    clusterName: string;
 }
 
 /** Serializable camera state; zoom ∈ [0, 1] where 0 is the far overview. */

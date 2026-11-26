@@ -24,9 +24,7 @@ export function isDocumentsList(data: unknown): data is DocumentsCache {
     return isPage(data) || isInfinite(data);
 }
 
-function itemsOf(cache: unknown): Document[] {
-    if (!isDocumentsList(cache)) return [];
-
+function itemsOf(cache: DocumentsCache): Document[] {
     return isInfinite(cache) ? cache.pages.flatMap((page) => page.items) : cache.items;
 }
 
@@ -54,8 +52,8 @@ export function withoutDocuments<T>(cache: T, ids: string[]): T {
     return { ...cache, items: cache.items.filter((doc) => !gone.has(doc.id)), total: Math.max(0, cache.total - removed) } as T;
 }
 
-/** The cached list with the documents in `ids` now in `folderId`. An entry that is not a list (the summary) is returned as it is. */
-export function withDocumentsMoved<T>(cache: T, ids: string[], folderId: string): T {
+/** The cached list with the documents in `ids` now in `folderId` (null: the top level). An entry that is not a list (the summary) is returned as it is. */
+export function withDocumentsMoved<T>(cache: T, ids: string[], folderId: string | null): T {
     if (!isDocumentsList(cache)) return cache;
 
     const moved = new Set(ids);
@@ -75,25 +73,4 @@ export function withDocumentsMoved<T>(cache: T, ids: string[], folderId: string)
 
         move(draft.items);
     }) as T;
-}
-
-/**
- * How many of `ids` each folder loses. A document sits in several cached lists (All and its kind's, library-wide and
- * its folder's), so each id is counted once however many hold it.
- */
-export function folderCountDecrements(caches: unknown[], ids: string[]): Map<string, number> {
-    const wanted = new Set(ids);
-    const counted = new Set<string>();
-    const decrements = new Map<string, number>();
-
-    for (const cache of caches) {
-        for (const doc of itemsOf(cache)) {
-            if (!wanted.has(doc.id) || counted.has(doc.id) || !doc.folder_id) continue;
-
-            counted.add(doc.id);
-            decrements.set(doc.folder_id, (decrements.get(doc.folder_id) ?? 0) + 1);
-        }
-    }
-
-    return decrements;
 }

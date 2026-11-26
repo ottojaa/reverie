@@ -93,11 +93,12 @@ describeDb('similar images', () => {
         expect(result?.entries).toHaveLength(4);
 
         const folder = await seedFolder(db, userId, 'trip');
-        const inFolder = await seedDocument(db, { userId, name: 'trip.jpg', mime: 'image/jpeg', folderId: folder.id });
+        const deeper = await seedFolder(db, userId, 'day one', { parent: await seedFolder(db, userId, 'rome', { parent: folder }) });
+        const inFolder = await seedDocument(db, { userId, name: 'trip.jpg', mime: 'image/jpeg', folderId: deeper.id });
 
         await embed(inFolder, 0.6);
 
-        const filtered = await findSimilarImages(userId, [vaultId], source, { limit: 10, offset: 0, filters: { ...parseQuery(''), folderIds: [folder.id] } });
+        const filtered = await findSimilarImages(userId, [vaultId], source, { limit: 10, offset: 0, filters: { ...parseQuery(''), scopeFolderId: folder.id } });
 
         expect(filtered?.entries.map((entry) => entry.id)).toEqual([inFolder]);
     });

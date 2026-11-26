@@ -19,7 +19,7 @@ import javax.inject.Singleton
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "reverie_settings")
 
-/** How the Files grid lays photos out. */
+/** How a photo grid lays photos out. */
 enum class GridLayoutMode {
     /** Google-Photos-style: mostly 1×1 with occasional larger feature tiles. */
     MOSAIC,
@@ -39,30 +39,20 @@ enum class VideoBackground {
     THEME,
 }
 
-/** How a folder page lays out its documents. */
-enum class FolderViewMode {
-    /** Square tiles, three across. */
-    GRID,
-    /** One document per row. */
-    LIST,
-}
-
 /** User-facing app settings persisted across launches. */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = false,
     /** Slide the bottom navigation bar away while scrolling a list. */
     val hideNavOnScroll: Boolean = true,
-    /** Number of columns in the Files grid (1–4). */
+    /** Number of columns in a photo grid (1–4). */
     val gridColumns: Int = 3,
-    /** How the Files grid arranges photos. */
-    val gridLayoutMode: GridLayoutMode = GridLayoutMode.MOSAIC,
+    /** How a photo grid arranges photos. */
+    val gridLayoutMode: GridLayoutMode = GridLayoutMode.UNIFORM,
     /** What fills the area around a letterboxed video in the viewer. */
     val videoBackground: VideoBackground = VideoBackground.BLACK,
-    /** Mosaic Files grid: a larger feature tile appears roughly every N photos (min 2). */
+    /** Mosaic photo grid: a larger feature tile appears roughly every N photos (min 2). */
     val mosaicFeatureEvery: Int = 3,
-    /** Cards or list on folder pages: one choice for every folder. */
-    val folderViewMode: FolderViewMode = FolderViewMode.GRID,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
     val serverUrlOverride: String? = null,
     /** Original-file cache cap in bytes. */
@@ -98,7 +88,6 @@ class SettingsRepository @Inject constructor(
     private val gridLayoutModeKey = stringPreferencesKey("grid_layout_mode")
     private val videoBackgroundKey = stringPreferencesKey("video_background")
     private val mosaicFeatureEveryKey = intPreferencesKey("mosaic_feature_every")
-    private val folderViewModeKey = stringPreferencesKey("folder_view_mode")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
     // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
@@ -121,7 +110,6 @@ class SettingsRepository @Inject constructor(
             gridLayoutMode = prefs[gridLayoutModeKey]?.let { runCatching { GridLayoutMode.valueOf(it) }.getOrNull() } ?: defaults.gridLayoutMode,
             videoBackground = prefs[videoBackgroundKey]?.let { runCatching { VideoBackground.valueOf(it) }.getOrNull() } ?: defaults.videoBackground,
             mosaicFeatureEvery = (prefs[mosaicFeatureEveryKey] ?: defaults.mosaicFeatureEvery).coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX),
-            folderViewMode = prefs[folderViewModeKey]?.let { runCatching { FolderViewMode.valueOf(it) }.getOrNull() } ?: defaults.folderViewMode,
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
             motionNavMs = prefs[motionNavMsKey] ?: defaults.motionNavMs,
@@ -161,10 +149,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setMosaicFeatureEvery(every: Int) {
         context.settingsDataStore.edit { it[mosaicFeatureEveryKey] = every.coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX) }
-    }
-
-    suspend fun setFolderViewMode(mode: FolderViewMode) {
-        context.settingsDataStore.edit { it[folderViewModeKey] = mode.name }
     }
 
     suspend fun setServerUrlOverride(url: String?) {

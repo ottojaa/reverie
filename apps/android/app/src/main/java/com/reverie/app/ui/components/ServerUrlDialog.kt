@@ -39,6 +39,7 @@ fun ServerUrlDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
+                    shape = MaterialTheme.shapes.medium,
                     value = text,
                     onValueChange = { text = it },
                     singleLine = true,

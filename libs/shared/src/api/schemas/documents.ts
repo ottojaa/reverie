@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, UuidSchema } from './common.js';
+import { DateOnlySchema, PaginatedResponseSchema, PaginationQuerySchema, QueryFlagSchema, UuidSchema } from './common.js';
 import { JobStatusEnum } from './jobs.js';
 
 /** Where a document's tag came from. `taught` tags come from a taught label and carry its id. */
@@ -165,7 +165,7 @@ export const DocumentSchema = z.object({
     llm_metadata: z.record(z.unknown()).nullable(),
     llm_processed_at: z.string().datetime().nullable(),
     llm_token_count: z.number().nullable(),
-    // Read-only: true when the document's folder or collection is private. Documents have no
+    // Read-only: true when the document is anywhere beneath a private folder. Documents have no
     // privacy setting of their own; they are private exactly when their folder is. A document
     // is only ever returned while its folder's lock is open.
     is_private: z.boolean(),
@@ -198,6 +198,13 @@ export type DocumentListResponse = z.infer<typeof DocumentListResponseSchema>;
 
 export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     folder_id: UuidSchema.optional(),
+    /** true: only the documents in no folder. Cannot be combined with `folder_id`. */
+    top_level: QueryFlagSchema.optional(),
+    /**
+     * true, with `kind`: the order for a few sample cards, screenshots and screen recordings after everything
+     * else, then the kind's usual order.
+     */
+    preview: QueryFlagSchema.optional(),
     category: DocumentCategoryEnum.optional(),
     date_from: DateOnlySchema.optional(),
     date_to: DateOnlySchema.optional(),
@@ -206,19 +213,22 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
      * `video` come back by date taken (upload date when there is none), the others by upload date.
      */
     kind: DocumentKindSchema.optional(),
+    /** true: only photos and videos (both kinds together), by date taken like `kind=image`. Not with `kind`. */
+    media: QueryFlagSchema.optional(),
     /**
      * true: only documents whose text recognition, thumbnail or AI summary is still pending or running
      * (transcoding runs on its own clock and is left out). `total` is then the processing total.
-     * Not z.coerce.boolean(): that turns the query-string "false" into true.
      */
-    processing: z.union([z.boolean(), z.string().transform((v) => v === 'true' || v === '1')]).optional(),
+    processing: QueryFlagSchema.optional(),
 });
 
 export type DocumentListQuery = z.infer<typeof DocumentListQuerySchema>;
 
 export const DocumentSummaryQuerySchema = z.object({
-    /** Omitted: the whole library, with the same private-folder and trash rules as the list. */
+    /** Omitted (and no `top_level`): the whole library, with the same private-folder and trash rules as the list. */
     folder_id: UuidSchema.optional(),
+    /** true: only the documents in no folder. Cannot be combined with `folder_id`. */
+    top_level: QueryFlagSchema.optional(),
 });
 
 export type DocumentSummaryQuery = z.infer<typeof DocumentSummaryQuerySchema>;
@@ -242,6 +252,11 @@ export const DocumentSummaryResponseSchema = z.object({
         /** The most common file types, most common first; at most four. */
         top_types: z.array(DocumentTopTypeSchema).max(4),
     }),
+    /**
+     * The first and last day a folder's photos and videos were taken (upload time where there is no date taken), on
+     * `GET /documents/summary?folder_id=` only; null when it holds none, and for any wider scope.
+     */
+    media_dates: z.object({ first: z.string().datetime(), last: z.string().datetime() }).nullable().optional(),
 });
 
 export type DocumentSummaryResponse = z.infer<typeof DocumentSummaryResponseSchema>;
@@ -272,10 +287,14 @@ export type BatchDeleteDocuments = z.infer<typeof BatchDeleteDocumentsSchema>;
 export const ConflictStrategyEnum = z.enum(['replace', 'keep_both']);
 export type ConflictStrategy = z.infer<typeof ConflictStrategyEnum>;
 
-export const CheckDuplicatesRequestSchema = z.object({
-    folder_id: UuidSchema,
-    filenames: z.array(z.string().min(1)).min(1),
-});
+/** Exactly one of `folder_id` and `top_level` says where the files are about to go. */
+export const CheckDuplicatesRequestSchema = z
+    .object({
+        folder_id: UuidSchema.optional(),
+        top_level: z.boolean().optional(),
+        filenames: z.array(z.string().min(1)).min(1),
+    })
+    .refine((value) => (value.folder_id !== undefined) !== (value.top_level === true), { message: 'Give either folder_id or top_level' });
 export type CheckDuplicatesRequest = z.infer<typeof CheckDuplicatesRequestSchema>;
 
 export const CheckDuplicatesResponseSchema = z.object({
@@ -292,30 +311,34 @@ export const Sha256HexSchema = z
     .regex(/^[0-9a-fA-F]{64}$/)
     .transform((hash) => hash.toLowerCase());
 
-export const CheckContentRequestSchema = z.object({
-    /** Folder the files are about to go into. Without it only the content is checked. */
-    folder_id: UuidSchema.optional(),
-    files: z
-        .array(
-            z.object({
-                name: z.string().min(1),
-                /** Left out when the client could not read the file: it then gets the name check only. */
-                sha256: Sha256HexSchema.optional(),
-            }),
-        )
-        .min(1)
-        .max(CHECK_CONTENT_MAX_FILES),
-});
+export const CheckContentRequestSchema = z
+    .object({
+        /** Folder the files are about to go into. Without it or `top_level` only the content is checked. */
+        folder_id: UuidSchema.optional(),
+        /** true: the files are about to go to the top level (in no folder). */
+        top_level: z.boolean().optional(),
+        files: z
+            .array(
+                z.object({
+                    name: z.string().min(1),
+                    /** Left out when the client could not read the file: it then gets the name check only. */
+                    sha256: Sha256HexSchema.optional(),
+                }),
+            )
+            .min(1)
+            .max(CHECK_CONTENT_MAX_FILES),
+    })
+    .refine((value) => value.folder_id === undefined || value.top_level !== true, { message: 'Give folder_id or top_level, not both' });
 export type CheckContentRequest = z.input<typeof CheckContentRequestSchema>;
 
 /**
- * Where the same content already is. A match inside a private folder or collection (unlocked or not)
+ * Where the same content already is. A match anywhere beneath a private folder (unlocked or not)
  * is only ever `private`, with no id, name or path; a match that is only in the trash is `trash`.
  */
 export const ContentLocationSchema = z.discriminatedUnion('where', [
     z.object({
         where: z.literal('folder'),
-        /** Names from the collection down (`['Work', 'Invoices']`), current names; null for a document at the root. A list, not a joined string, because a folder name may contain `/`. */
+        /** Folder names from the top level down (`['Work', '2024', 'Invoices']`), current names; null for a document in no folder. */
         folder_path: z.array(z.string()).nullable(),
         filename: z.string(),
     }),
@@ -342,7 +365,8 @@ export type CheckContentResponse = z.infer<typeof CheckContentResponseSchema>;
 
 export const MoveDocumentsRequestSchema = z.object({
     document_ids: z.array(UuidSchema).min(1).max(100),
-    folder_id: UuidSchema,
+    /** null: to the top level (in no folder). Required, so a request that lost its destination moves nothing. */
+    folder_id: UuidSchema.nullable(),
     conflict_strategy: ConflictStrategyEnum.optional(),
 });
 export type MoveDocumentsRequest = z.infer<typeof MoveDocumentsRequestSchema>;

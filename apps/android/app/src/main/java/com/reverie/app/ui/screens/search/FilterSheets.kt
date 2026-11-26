@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -103,50 +104,10 @@ fun DateFilterSheet(
                 DATE_PRESETS.forEach { preset ->
                     FilterChip(
                         selected = current == preset.value,
+                        shape = CircleShape,
                         onClick = { onSet(field, preset.value) },
                         label = { Text(preset.label) },
                     )
-                }
-            }
-        }
-    }
-}
-
-private data class SizePreset(val label: String, val value: String?)
-
-private val SIZE_PRESETS = listOf(
-    SizePreset("Any", null),
-    SizePreset("Under 1 MB", "<1MB"),
-    SizePreset("Over 10 MB", ">10MB"),
-    SizePreset("Over 100 MB", ">100MB"),
-)
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-fun MoreFiltersSheet(
-    hasTextMode: HasTextMode,
-    sizeValue: String?,
-    onSetHasText: (HasTextMode) -> Unit,
-    onSetSize: (String?) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("More filters", style = MaterialTheme.typography.titleMedium)
-
-            Text("Text", style = MaterialTheme.typography.titleSmall)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                val options = listOf(HasTextMode.ANY to "Any", HasTextMode.HAS to "Has text", HasTextMode.NONE to "No text")
-                options.forEachIndexed { index, (mode, label) ->
-                    SegmentedButton(selected = hasTextMode == mode, onClick = { onSetHasText(mode) }, shape = SegmentedButtonDefaults.itemShape(index, options.size)) { Text(label) }
-                }
-            }
-
-            Text("Size", style = MaterialTheme.typography.titleSmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SIZE_PRESETS.forEach { preset ->
-                    FilterChip(selected = sizeValue == preset.value, onClick = { onSetSize(preset.value) }, label = { Text(preset.label) })
                 }
             }
         }

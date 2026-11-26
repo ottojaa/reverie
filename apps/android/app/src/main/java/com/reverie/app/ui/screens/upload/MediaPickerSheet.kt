@@ -17,7 +17,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.reverie.app.data.upload.MediaAsset
+import com.reverie.app.ui.components.VideoBadge
 
 /** In-app photos/videos grid — reads originals (EXIF-preserving) rather than the redacting Photo Picker. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,14 +115,7 @@ private fun MediaTile(asset: MediaAsset, selected: Boolean, onToggle: () -> Unit
             modifier = Modifier.fillMaxSize(),
         )
         if (asset.isVideo) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(28.dp),
-            )
+            VideoBadge(seconds = null, modifier = Modifier.align(Alignment.BottomStart).padding(6.dp))
         }
         if (selected) {
             Box(

@@ -62,6 +62,7 @@ fun VaultUnlockSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },

@@ -13,9 +13,7 @@ import { z } from 'zod';
 import { loadOpenDocument } from '../../services/document-access';
 import { addFavourite, fetchLockFolderId, listFavourites, removeFavourite } from '../../services/favourites';
 import { loadFolderLocks } from '../../services/folder-locks';
-import { getFolderService } from '../../services/folder.service';
-
-const folderService = getFolderService();
+import { findLiveFolder } from '../../services/folders/load';
 
 export default async function (fastify: FastifyInstance) {
     // GET /favourites - every starred document and folder (requires authentication)
@@ -69,7 +67,7 @@ export default async function (fastify: FastifyInstance) {
         if (type === 'document') {
             await loadOpenDocument(fastify, request, id);
         } else {
-            if (!(await folderService.getFolder(id, userId))) throw new NotFoundError('Folder', id);
+            if (!(await findLiveFolder(userId, id))) throw new NotFoundError('Folder', id);
 
             (await loadFolderLocks(fastify, request, userId)).assertOpen(id);
         }

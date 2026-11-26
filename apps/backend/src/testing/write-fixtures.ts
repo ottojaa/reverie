@@ -13,9 +13,9 @@ export function useWriteFixtures() {
         return seedFolder(db(), alice(), name, parent ? { parent } : {});
     }
 
-    /** A real folder (documents can only be moved into folders, not collections), inside a fresh collection. */
+    /** A folder two levels down: inside a fresh folder, inside a fresh top-level one. */
     async function newSubfolder() {
-        return newFolder(unique('Sub'), await newFolder());
+        return newFolder(unique('Sub'), await newFolder(unique('Mid'), await newFolder()));
     }
 
     async function newDoc(opts: { folderId?: string | null; name?: string; tags?: string[] } = {}) {

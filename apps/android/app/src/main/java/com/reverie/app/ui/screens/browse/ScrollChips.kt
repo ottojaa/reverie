@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,13 +31,12 @@ val CHIP_GAP = 8.dp
 
 private val FADE_HEIGHT = 64.dp
 private const val FADE_PEAK = 0.5f
-private const val CHIP_SURFACE_ALPHA = 0.78f
 
 /**
  * What stays on screen once the header has slid away: a light fade behind the status bar, the month or
  * day of the list's top edge in a rounded chip at the left, and the Processing pill as a matching chip
  * at the right. No solid band. [visibility] is read at draw time (0 = header fully shown, 1 = fully
- * hidden), so scrolling doesn't recompose it. The dashboard passes no [heading]: it shows only the pill.
+ * hidden), so scrolling doesn't recompose it. The Library passes no [heading]: it shows only the pill.
  */
 @Composable
 fun ScrollChips(
@@ -80,7 +79,7 @@ private fun BoxScope.DateChip(title: String) {
     }
 }
 
-/** A 30dp pill on a 78% surface with a soft shadow, below the status bar. */
+/** A 30dp pill with a soft shadow, below the status bar. Opaque, so a heading scrolling under it never shows through. */
 @Composable
 private fun Chip(modifier: Modifier, content: @Composable () -> Unit) {
     Box(
@@ -88,8 +87,8 @@ private fun Chip(modifier: Modifier, content: @Composable () -> Unit) {
             .statusBarsPadding()
             .padding(top = CHIP_GAP)
             .height(CHIP_HEIGHT)
-            .shadow(6.dp, RoundedCornerShape(50), clip = false)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = CHIP_SURFACE_ALPHA), RoundedCornerShape(50)),
+            .shadow(6.dp, CircleShape, clip = false)
+            .background(MaterialTheme.colorScheme.surface, CircleShape),
         contentAlignment = Alignment.Center,
     ) { content() }
 }

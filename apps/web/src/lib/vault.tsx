@@ -13,7 +13,7 @@ interface VaultContextValue {
     /** Whether the account has a password to lock folders with; null until the status has loaded. */
     hasPassword: boolean | null;
     /**
-     * Ask for the account password to open one private folder (or collection). Resolves true once
+     * Ask for the account password to open one private folder. Resolves true once
      * that lock is open and the dependent queries are refetching, false if the user cancels.
      * Opening one lock never opens another.
      */
@@ -23,7 +23,7 @@ interface VaultContextValue {
 const VaultContext = createContext<VaultContextValue | null>(null);
 
 /** Queries whose results depend on which locks are open (folder tree, listings, detail views, trash). */
-const LOCK_DEPENDENT_QUERY_KEYS = [['vault'], ['sections'], ['folders'], ['documents'], ['document'], ['search'], ['trash']] as const;
+const LOCK_DEPENDENT_QUERY_KEYS = [['vault'], ['sections'], ['documents'], ['document'], ['search'], ['trash']] as const;
 
 export function VaultProvider({ children }: { children: ReactNode }) {
     const { isAuthenticated } = useAuth();

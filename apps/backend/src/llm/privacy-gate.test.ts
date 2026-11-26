@@ -25,7 +25,7 @@ const h = vi.hoisted(() => {
     const worker: { processor: JobProcessor | null } = { processor: null };
 
     // A tiny in-memory stand-in for Kysely: selects filter the seeded tables on `=` and
-    // `in`, so the real privacy cascade (folders -> collection) runs against it. Updates are
+    // `in`, so the real privacy cascade down the folder tree runs against it. Updates are
     // recorded; every other write is a no-op.
     function selectBuilder(table: string) {
         reads.push(table);
@@ -131,14 +131,23 @@ const USER = 'user-1';
 // A real 1x1 PNG: the image call decodes and re-encodes the file with sharp before it sends it.
 const TINY_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-function seed(kind: 'folder' | 'collection' | 'public', mimeType: string) {
+/** Which of the three nested folders is flagged private; 'public' flags none and leaves the document at the top level. */
+type Seed = 'folder' | 'grandparent' | 'public';
+
+function toFolderRow(id: string, parentId: string | null, isPrivate: boolean): Row {
+    return { id, user_id: USER, parent_id: parentId, name: id, sort_order: 0, is_private: isPrivate, deleted_at: null };
+}
+
+function seed(kind: Seed, mimeType: string) {
     const isVisionImage = mimeType.startsWith('image/');
-    const folderId = kind === 'folder' || kind === 'collection' ? 'folder-1' : null;
+    const folderId = kind === 'public' ? null : 'leaf-folder';
 
     h.tables.folders = [
-        { id: 'collection-1', user_id: USER, parent_id: null, is_private: kind === 'collection' },
-        { id: 'folder-1', user_id: USER, parent_id: 'collection-1', is_private: kind === 'folder' },
-        { id: 'other-folder', user_id: USER, parent_id: 'collection-1', is_private: false },
+        toFolderRow('top-folder', null, kind === 'grandparent'),
+        toFolderRow('middle-folder', 'top-folder', false),
+        toFolderRow('leaf-folder', 'middle-folder', kind === 'folder'),
+        // A public folder beside a private one, under the same public parents.
+        toFolderRow('sibling-folder', 'middle-folder', false),
     ];
 
     const document = {
@@ -196,7 +205,10 @@ beforeEach(() => {
     mockAnthropicSuccess();
 });
 
-const PRIVATE_KINDS = ['folder', 'collection'] as const;
+const PRIVATE_KINDS = [
+    { kind: 'folder', through: 'its folder' },
+    { kind: 'grandparent', through: 'a folder two levels up' },
+] as const;
 const FORCED_TYPES = [
     { forceType: undefined, mimeType: 'application/pdf', label: 'no forced type' },
     { forceType: 'text_summary', mimeType: 'application/pdf', label: 'forced text_summary' },
@@ -206,9 +218,9 @@ const FORCED_TYPES = [
 ] as const;
 
 describe('processDocument privacy gate', () => {
-    for (const kind of PRIVATE_KINDS) {
+    for (const { kind, through } of PRIVATE_KINDS) {
         for (const { forceType, mimeType, label } of FORCED_TYPES) {
-            it(`never calls Anthropic for a document private through its ${kind} (${label})`, async () => {
+            it(`never calls Anthropic for a document private through ${through} (${label})`, async () => {
                 seed(kind, mimeType);
 
                 const result = await processDocument('doc-1', { forceType });
@@ -239,9 +251,9 @@ describe('processDocument privacy gate', () => {
         expect(h.reads).not.toContain('video_metadata');
     });
 
-    it('calls the text model for a public document inside a public folder of a public collection', async () => {
-        seed('public', 'application/pdf');
-        h.tables.documents = [{ ...h.tables.documents![0], folder_id: 'other-folder' }];
+    it('calls the text model for a public document three folders deep, beside a private folder', async () => {
+        seed('folder', 'application/pdf');
+        h.tables.documents = [{ ...h.tables.documents![0], folder_id: 'sibling-folder' }];
 
         await processDocument('doc-1', { forceType: 'text_summary' });
 
@@ -271,9 +283,9 @@ describe('LLM worker privacy gate', () => {
         return h.worker.processor!(job);
     }
 
-    for (const kind of PRIVATE_KINDS) {
+    for (const { kind, through } of PRIVATE_KINDS) {
         for (const { forceType, mimeType, label } of FORCED_TYPES) {
-            it(`skips a document private through its ${kind} without a failure or retry (${label})`, async () => {
+            it(`skips a document private through ${through} without a failure or retry (${label})`, async () => {
                 seed(kind, mimeType);
 
                 const result = await runJob(forceType);

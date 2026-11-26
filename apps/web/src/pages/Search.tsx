@@ -1,5 +1,6 @@
 import { HeaderActions } from '@/components/layout/Header';
 import { FilterBar } from '@/components/search/filter-bar/FilterBar';
+import { useFolderFilterName } from '@/components/search/filter-bar/useFolderFilterName';
 import { SearchResultsList } from '@/components/search/results/SearchResultsList';
 import { EmptySearchState, NoQueryState } from '@/components/search/SearchEmptyStates';
 import { Button } from '@/components/ui/button';
@@ -27,18 +28,19 @@ const PHOTO_CATEGORIES = new Set(['photo', 'screenshot', 'graphic']);
 export function SearchPage() {
     const search = useSearchQuery();
     const navigate = useNavigate();
-    const { q, freeText, sortBy, sortOrder } = search;
+    const { q, freeText, folderId, sortBy, sortOrder } = search;
+    const folderFilter = useFolderFilterName(folderId);
     const [localQuery, setLocalQuery] = useState(freeText);
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const inputFocusedRef = useRef(false);
 
-    const hasQuery = q.trim().length > 0;
+    const hasQuery = q.trim().length > 0 || folderId !== undefined;
 
     // Facets for the filter pills come from useSearchFacets (full-corpus, inside
     // FilterBar) — the result query itself skips them entirely
     const { data, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteSearch(
-        { q, sort_by: sortBy, sort_order: sortOrder, include_facets: false },
+        { q, ...(folderId && { folder_id: folderId }), sort_by: sortBy, sort_order: sortOrder, include_facets: false },
         hasQuery,
     );
 
@@ -240,6 +242,8 @@ export function SearchPage() {
                     <EmptySearchState
                         freeText={freeText}
                         tokens={search.tokens}
+                        folderName={folderFilter?.name}
+                        onRemoveFolder={() => search.setFolderId(undefined)}
                         onRemoveToken={search.removeToken}
                         onClearFilters={search.clearAllFilters}
                         onSearch={search.setQuery}

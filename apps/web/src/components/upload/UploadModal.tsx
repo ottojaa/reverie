@@ -1,21 +1,22 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useFileHashes } from '@/lib/hash/useFileHashes';
-import { flattenSectionTree, useSections } from '@/lib/sections';
+import { useIsFolderGone } from '@/lib/folders/gone';
+import { findFolder } from '@/lib/folders/tree.js';
+import { useSections } from '@/lib/sections';
 import { isFileTooLarge, useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { AlertCircle, ChevronDown, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { AlertCircle, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useCountdown } from '@/lib/hooks/useCountdown';
-import { SectionIcon } from '../ui/SectionIcon';
 import { DuplicateReviewDialog } from './DuplicateReviewDialog';
+import { UploadDestinationMenu } from './UploadDestinationMenu';
 import { UploadFileItem } from './UploadFileItem';
 import { useUploadCheck } from './useUploadCheck';
 
@@ -110,21 +111,15 @@ export function UploadModal() {
     const params = useParams({ strict: false });
     const currentSectionId = (params as { sectionId?: string }).sectionId;
     const { data: sectionsTree = [] } = useSections();
-    const flatSections = useMemo(() => flattenSectionTree(sectionsTree).filter((s) => s.type === 'folder'), [sectionsTree]);
-    const defaultFolderId = currentSectionId ?? flatSections[0]?.id;
-
-    const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(defaultFolderId);
-    const selectedFolder = useMemo(() => flatSections.find((s) => s.id === selectedFolderId), [flatSections, selectedFolderId]);
+    // Undefined follows the page: the folder in the URL, else the top level (null).
+    const [picked, setPicked] = useState<string | null>();
+    // A picked folder trashed since is no destination: the choice goes back to following the page.
+    const isPickGone = useIsFolderGone(picked);
+    const targetFolderId = picked === undefined || isPickGone ? (currentSectionId ?? null) : picked;
 
     useEffect(() => {
-        setSelectedFolderId(currentSectionId);
+        setPicked(undefined);
     }, [currentSectionId]);
-
-    useEffect(() => {
-        if (!selectedFolderId) return;
-
-        setSelectedFolderId(defaultFolderId);
-    }, [defaultFolderId]);
 
     const {
         files,
@@ -145,7 +140,6 @@ export function UploadModal() {
     const prevAllComplete = useRef(false);
     const [successPhase, setSuccessPhase] = useState(false);
     const hashes = useFileHashes(files);
-    const targetFolderId = selectedFolderId ?? defaultFolderId;
     const uploadCheck = useUploadCheck({ files, hashes, folderId: targetFolderId, startUpload, removeFile });
 
     const { percent, completedCount, total, phase, phaseLabel } = useOverallProgress();
@@ -215,26 +209,7 @@ export function UploadModal() {
                         <DialogTitle>
                             {isUploading ? 'Uploading' : 'Upload'} {files.length} {files.length === 1 ? 'file' : 'files'}
                         </DialogTitle>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">To folder:</span>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="gap-1.5">
-                                        <SectionIcon value={selectedFolder?.emoji} />
-                                        <span className="truncate">{selectedFolder?.name ?? 'Select folder'}</span>
-                                        <ChevronDown className="size-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="max-h-[min(50vh,20rem)] overflow-y-auto">
-                                    {flatSections.map((section) => (
-                                        <DropdownMenuItem key={section.id} onSelect={() => setSelectedFolderId(section.id)}>
-                                            <SectionIcon value={section.emoji} />
-                                            {section.name}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
+                        <UploadDestinationMenu folderId={targetFolderId} onPick={setPicked} />
                     </DialogHeader>
 
                     {/* Linear progress bar (Motion) – only after upload has started */}
@@ -322,7 +297,7 @@ export function UploadModal() {
                                             size="sm"
                                             onClick={() => {
                                                 retryFailed();
-                                                setTimeout(() => startUpload(selectedFolderId), 0);
+                                                setTimeout(() => startUpload(targetFolderId ?? undefined), 0);
                                             }}
                                         >
                                             <RefreshCw className="mr-2 size-4" />
@@ -365,7 +340,7 @@ export function UploadModal() {
                 <DuplicateReviewDialog
                     items={uploadCheck.review.items}
                     cleanCount={uploadCheck.review.cleanCount}
-                    folderName={selectedFolder?.name}
+                    folderName={targetFolderId ? findFolder(sectionsTree, targetFolderId)?.name : 'the top level'}
                     onConfirm={uploadCheck.confirm}
                     onCancel={uploadCheck.cancel}
                 />

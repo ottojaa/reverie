@@ -8,8 +8,9 @@ import { useState } from 'react';
 import { DateFilterPanel } from './DateFilterPanel';
 import { DimensionDisclosureList, DisclosureRow } from './DimensionDisclosureList';
 import { FILTER_DIMENSIONS } from './filter-defs';
-import { pillBaseClass, pillStateClass } from './FilterPill';
+import { FolderDisclosureRow } from './FolderDisclosureRow';
 import { PropertySections } from './MoreFiltersPanel';
+import { pillBaseClass, pillStateClass } from './pill-style';
 
 interface MobileFilterDrawerProps {
     search: SearchQueryState;
@@ -20,7 +21,7 @@ interface MobileFilterDrawerProps {
 /** Mobile counterpart of the filter bar: one "Filters (n)" pill opening a bottom drawer. */
 export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawerProps) {
     const [open, setOpen] = useState(false);
-    const activeTokenCount = search.tokens.filter(isKnownFilter).length;
+    const activeTokenCount = search.tokens.filter(isKnownFilter).length + (search.folderId ? 1 : 0);
     const dateCount = (search.filterValues.get('uploaded')?.length ?? 0) + (search.filterValues.get('date')?.length ?? 0);
 
     return (
@@ -50,20 +51,28 @@ export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawer
                         onToggleValue={search.toggleFilterValue}
                     >
                         {(expandedKey, setExpandedKey) => (
-                            <DisclosureRow
-                                icon={Calendar}
-                                label="Date"
-                                badgeCount={dateCount}
-                                expanded={expandedKey === '__date'}
-                                onToggle={() => setExpandedKey(expandedKey === '__date' ? null : '__date')}
-                            >
-                                <DateFilterPanel
-                                    uploadedValue={search.filterValues.get('uploaded')?.[0] ?? null}
-                                    dateValue={search.filterValues.get('date')?.[0] ?? null}
-                                    onSetValue={search.setFilterValue}
-                                    onClear={search.removeDimension}
+                            <>
+                                <FolderDisclosureRow
+                                    folderId={search.folderId}
+                                    onChange={search.setFolderId}
+                                    expanded={expandedKey === '__folder'}
+                                    onToggle={() => setExpandedKey(expandedKey === '__folder' ? null : '__folder')}
                                 />
-                            </DisclosureRow>
+                                <DisclosureRow
+                                    icon={Calendar}
+                                    label="Date"
+                                    badgeCount={dateCount}
+                                    expanded={expandedKey === '__date'}
+                                    onToggle={() => setExpandedKey(expandedKey === '__date' ? null : '__date')}
+                                >
+                                    <DateFilterPanel
+                                        uploadedValue={search.filterValues.get('uploaded')?.[0] ?? null}
+                                        dateValue={search.filterValues.get('date')?.[0] ?? null}
+                                        onSetValue={search.setFilterValue}
+                                        onClear={search.removeDimension}
+                                    />
+                                </DisclosureRow>
+                            </>
                         )}
                     </DimensionDisclosureList>
 

@@ -4,7 +4,7 @@ import { db } from '../db/kysely.js';
 import { assertStorageRoom, storeDocuments, type AddedDocument } from '../tools/store-documents.js';
 import { ToolError } from '../tools/types.js';
 import { claimUploadLink, type UploadLink } from '../tools/upload-link.store.js';
-import { assertDocumentFolder, loadVisibility } from '../tools/visibility.js';
+import { assertTargetFolder, loadVisibility, type TargetFolder } from '../tools/visibility.js';
 import { discardUploadedFiles, fileTooLargeError, receiveUploadedFile, type UploadedFile } from '../utils/upload-files.js';
 
 /**
@@ -14,7 +14,7 @@ import { discardUploadedFiles, fileTooLargeError, receiveUploadedFile, type Uplo
 
 export interface LinkUploadResult {
     uploaded: number;
-    folder: { id: string; path: string };
+    folder: TargetFolder;
     documents: AddedDocument[];
     audit_id: string;
     undo: string;
@@ -45,11 +45,9 @@ async function claimLink(request: FastifyRequest): Promise<UploadLink> {
 }
 
 /** The link's folder as it is now: it may have been locked or trashed since the link was made. */
-async function fetchLinkFolder({ userId, folderId }: UploadLink): Promise<{ id: string; path: string }> {
+async function fetchLinkFolder({ userId, folderId }: UploadLink): Promise<TargetFolder> {
     try {
-        const folder = await assertDocumentFolder(db, await loadVisibility(userId), folderId);
-
-        return { id: folder.id, path: folder.path };
+        return await assertTargetFolder(db, await loadVisibility(userId), folderId);
     } catch (error) {
         if (error instanceof ToolError) throw toInvalidLinkError();
 

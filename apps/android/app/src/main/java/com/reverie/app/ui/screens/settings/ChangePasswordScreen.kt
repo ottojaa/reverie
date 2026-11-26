@@ -67,6 +67,7 @@ fun ChangePasswordScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = current,
                 onValueChange = { current = it; error = null },
                 label = { Text("Current password") },
@@ -75,6 +76,7 @@ fun ChangePasswordScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = newPassword,
                 onValueChange = { newPassword = it; error = null },
                 label = { Text("New password") },
@@ -84,6 +86,7 @@ fun ChangePasswordScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = confirm,
                 onValueChange = { confirm = it; error = null },
                 label = { Text("Confirm new password") },

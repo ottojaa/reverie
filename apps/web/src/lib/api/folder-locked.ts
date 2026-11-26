@@ -3,7 +3,7 @@ import axios from 'axios';
 /**
  * The folder id from a 403 `FOLDER_LOCKED` API error, or null for any other error.
  * The body is `{ error: 'FOLDER_LOCKED', details: { folder_id } }`, where `folder_id` is the
- * private folder (or collection) whose lock is closed.
+ * private folder whose lock is closed.
  */
 export function getLockedFolderId(error: unknown): string | null {
     if (!axios.isAxiosError(error) || error.response?.status !== 403) return null;

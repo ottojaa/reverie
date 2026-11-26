@@ -1,14 +1,17 @@
+import { FolderFileCount } from '@/components/search/FolderFileCount';
 import { QuickFilterChips } from '@/components/search/QuickFilterChips';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
+import { findFolderByPath } from '@/lib/folders/tree.js';
 import { useSearchState } from '@/lib/hooks/useSearchState';
+import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import { addFilter, type SearchHit, type SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { ArrowRight, Clock, FileText, Folder, FolderOpen, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, X } from 'lucide-react';
+import { ArrowRight, Clock, FileText, Folder, Hash, Image, Loader2, MapPin, Search, Sparkles, Tag, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -44,6 +47,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const { query, debouncedQuery, setQuery, clearQuery, recentSearches, addRecentSearch, removeRecentSearch } = useSearchState(250);
     const inputRef = useRef<HTMLInputElement>(null);
     const [activeSuggestionType, setActiveSuggestionType] = useState<SuggestionType>('filename');
+    const { data: tree = [] } = useSections();
 
     const hasQuery = query.trim().length > 0;
     const hasDebounced = debouncedQuery.trim().length > 0;
@@ -51,6 +55,9 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const { data: suggestions, isLoading: suggestionsLoading } = useSearchSuggestions(activeSuggestionType, debouncedQuery, 5);
 
     const { data: previewResults, isLoading: searchLoading } = useSearch({ q: debouncedQuery, limit: 5, include_facets: false }, hasDebounced);
+
+    // A folder suggestion is a path. Only one the tree knows can be searched, by its id.
+    const shownSuggestions = (suggestions ?? []).filter((value) => activeSuggestionType !== 'folder' || findFolderByPath(tree, value));
 
     const allSuggestionTypes = useMemo(() => {
         if (!hasDebounced) return [];
@@ -69,11 +76,11 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     }, [open]);
 
     const navigateToSearch = useCallback(
-        (searchQuery: string) => {
-            if (!searchQuery.trim()) return;
+        (searchQuery: string, folderId?: string) => {
+            if (!searchQuery.trim() && !folderId) return;
 
             onOpenChange(false);
-            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined } });
+            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined, folder_id: folderId } });
         },
         [navigate, onOpenChange],
     );
@@ -102,12 +109,21 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
     const handleSuggestionClick = useCallback(
         (suggestion: string, type: SuggestionType) => {
-            // Token-level append handles quoting for multi-word values (folder:"New York")
+            // The folder itself, not a `folder:` token, which would match every folder of that name. What was
+            // typed only served to find it.
+            if (type === 'folder') {
+                clearQuery();
+                navigateToSearch('', findFolderByPath(tree, suggestion)?.id);
+
+                return;
+            }
+
+            // Token-level append handles quoting for multi-word values (location:"New York")
             const newQuery = type === 'filename' ? suggestion : addFilter(query.trim(), type, suggestion);
             setQuery(newQuery);
             navigateToSearch(newQuery);
         },
-        [query, setQuery, navigateToSearch],
+        [query, tree, setQuery, clearQuery, navigateToSearch],
     );
 
     const handleResultClick = useCallback(
@@ -196,7 +212,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                     <SearchResults
                                         key="results"
                                         query={debouncedQuery}
-                                        suggestions={suggestions ?? []}
+                                        suggestions={shownSuggestions}
                                         suggestionTypes={allSuggestionTypes}
                                         activeSuggestionType={activeSuggestionType}
                                         onSuggestionTypeChange={setActiveSuggestionType}
@@ -305,7 +321,7 @@ function EmptyState({ recentSearches, onRecentSearch, onRemoveRecent, onQuickFil
                     <p>Search your documents by content, filename, or metadata</p>
                     <p className="mt-1 text-xs">
                         Try <code className="rounded bg-muted px-1 py-0.5">type:photo</code> or{' '}
-                        <code className="rounded bg-muted px-1 py-0.5">folder:receipts</code>
+                        <code className="rounded bg-muted px-1 py-0.5">tag:receipt</code>
                     </p>
                 </div>
             )}
@@ -459,8 +475,6 @@ const resultCategoryIcons: Record<string, typeof FileText> = {
 
 function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: () => void }) {
     if (result.result_type === 'collection') {
-        const FolderIcon = result.folder_type === 'collection' ? FolderOpen : Folder;
-
         return (
             <Command.Item
                 value={`collection-${result.id}`}
@@ -469,13 +483,12 @@ function PreviewResultItem({ result, onSelect }: { result: SearchHit; onSelect: 
             >
                 <div className="flex size-7 shrink-0 items-center justify-center rounded bg-primary/10 text-sm">
                     {/* emoji can hold a lucide icon slug — SectionIcon resolves it (never render it as text) */}
-                    {result.emoji ? <SectionIcon value={result.emoji} className="size-3.5 text-primary" /> : <FolderIcon className="size-3.5 text-primary" />}
+                    {result.emoji ? <SectionIcon value={result.emoji} className="size-3.5 text-primary" /> : <Folder className="size-3.5 text-primary" />}
                 </div>
                 <div className="min-w-0 flex-1">
                     <span className="block truncate">{result.name}</span>
                     <p className="truncate text-xs text-muted-foreground">
-                        {result.folder_type === 'collection' ? 'Collection' : 'Folder'} · {result.document_count}{' '}
-                        {result.document_count === 1 ? 'document' : 'documents'}
+                        Folder · <FolderFileCount result={result} />
                     </p>
                 </div>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground opacity-0 [[aria-selected=true]>&]:opacity-100 [[data-selected=true]>&]:opacity-100" />

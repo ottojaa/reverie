@@ -196,6 +196,34 @@ describeDb('GET /documents?kind', () => {
         expect(files.total).toBe(1);
     });
 
+    it('lists photos and videos together with media=true, by date taken else upload date', async () => {
+        const { names, total } = await list('?media=true&limit=100');
+
+        expect(total).toBe(10);
+        expect(names.slice(0, 7)).toEqual([
+            'clip-processing.mp4',
+            'clip-no-exif.mov',
+            'clip-taken-nov.mp4',
+            'img-taken-nov.jpg',
+            'img-no-exif-uploaded-oct31.jpg',
+            'img-taken-oct.jpg',
+            'IMG-UPPER.JPG',
+        ]);
+    });
+
+    it('scopes media=true to a folder', async () => {
+        const { names, total } = await list('?media=true&folder_id=' + trips);
+
+        expect(names).toEqual(['img-taken-oct.jpg']);
+        expect(total).toBe(1);
+    });
+
+    it('refuses media together with a kind', async () => {
+        const { status } = await list('?media=true&kind=image');
+
+        expect(status).toBe(400);
+    });
+
     it('composes with processing', async () => {
         const videos = await list('?kind=video&processing=true');
         const images = await list('?kind=image&processing=true');

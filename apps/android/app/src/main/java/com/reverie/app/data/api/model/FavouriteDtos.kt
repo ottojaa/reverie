@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** What a star is on. Collections count as folders. */
+/** What a star is on. */
 @Serializable
 enum class FavouriteType(val wire: String) {
     @SerialName("folder") FOLDER("folder"),
@@ -30,7 +30,7 @@ data class FavouriteDto(
     @SerialName("private") val isPrivate: Boolean,
     val locked: Boolean = false,
     @SerialName("lock_id") val lockId: String? = null,
-    /** The chain of parents, collection first. */
+    /** The folders holding it, from the top level down. */
     val location: List<FavouriteLocationDto>? = null,
     val folder: FolderWithChildren? = null,
     val document: DocumentDto? = null,

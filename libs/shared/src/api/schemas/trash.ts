@@ -13,7 +13,7 @@ export const TrashDocumentSchema = z.object({
     original_filename: z.string(),
     mime_type: z.string(),
     size_bytes: z.number(),
-    // The folder it came back to if restored; null when it was at the root.
+    // The folder it was in; null when it was at the top level.
     folder_id: UuidSchema.nullable(),
     // Read-only: true when the document's folder is private. Only listed while its lock is open.
     is_private: z.boolean(),
@@ -29,12 +29,17 @@ export const TrashFolderSchema = z.object({
     id: UuidSchema,
     // Empty while `locked`: a private folder in the trash shows no name until it is unlocked.
     name: z.string(),
+    /** @deprecated 'collection' for a folder that was at the top level, else 'folder'. */
     type: FolderTypeSchema,
     emoji: z.string().nullable(),
     is_private: z.boolean(),
-    // True for a private folder or collection whose lock is closed. It lists only as a bare row
-    // (no name, emoji or contents) that the user can unlock to see and restore it.
+    // True for a private folder whose lock is closed. It lists only as a bare row (no name, emoji or
+    // contents) that the user can unlock to see and restore it.
     locked: z.boolean(),
+    // What went to the trash with this folder and comes back with it: folders beneath it, and documents in
+    // it or in those folders. Contents behind a further lock are not counted; both are 0 while locked.
+    folder_count: z.number().int().nonnegative(),
+    document_count: z.number().int().nonnegative(),
     deleted_at: z.string(),
     purge_at: z.string(),
 });

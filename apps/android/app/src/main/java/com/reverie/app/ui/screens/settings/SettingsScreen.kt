@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.settings
 
+import androidx.compose.foundation.shape.CircleShape
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,18 +17,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -49,18 +49,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.BuildConfig
-import com.reverie.app.data.api.model.UserDto
 import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MAX
 import com.reverie.app.data.settings.MOSAIC_FEATURE_EVERY_MIN
 import com.reverie.app.data.settings.VideoBackground
-import com.reverie.app.domain.model.AuthState
-import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.ServerUrlDialog
-import com.reverie.app.ui.components.StorageMeter
 import com.reverie.app.ui.navigation.EasingPreset
-import com.reverie.app.ui.navigation.bottomBarInset
+import com.reverie.app.ui.navigation.navigationBarInset
 import com.reverie.app.ui.navigation.toEasingPreset
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.ui.theme.ThemeMode
@@ -68,17 +64,14 @@ import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
+    onBack: () -> Unit,
+    onChangePassword: () -> Unit,
     modifier: Modifier = Modifier,
-    onChangePassword: () -> Unit = {},
-    onOpenBackup: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val user = (authState as? AuthState.Authenticated)?.user
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var showSignOut by remember { mutableStateOf(false) }
     var showServerDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -86,22 +79,17 @@ fun SettingsScreen(
             .fillMaxWidth()
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp + navigationBarInset()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-        )
-
-        if (user != null) {
-            SettingsCard(title = "Account") {
-                AccountRow(user)
-                Spacer(Modifier.height(16.dp))
-                StorageMeter(usedBytes = user.storage_used_bytes, quotaBytes = user.storage_quota_bytes)
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
         SettingsCard(title = "Appearance") {
@@ -144,7 +132,7 @@ fun SettingsScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text("Files grid layout", style = MaterialTheme.typography.titleSmall)
+            Text("Photo grid layout", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             GridLayoutModeSelector(selected = settings.gridLayoutMode, onSelect = viewModel::setGridLayoutMode)
             // The feature-frequency knob only applies to the mosaic layout.
@@ -172,23 +160,6 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(8.dp))
             VideoBackgroundSelector(selected = settings.videoBackground, onSelect = viewModel::setVideoBackground)
-        }
-
-        SettingsCard(title = "Backup") {
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenBackup),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Photo backup", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Back up new photos and videos automatically",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
 
         SettingsCard(title = "Security") {
@@ -273,19 +244,6 @@ fun SettingsScreen(
             }
         }
 
-        OutlinedButton(
-            onClick = { showSignOut = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Outlined.Logout,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.size(8.dp))
-            Text("Sign out")
-        }
-
         Text(
             text = "Reverie ${BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.bodySmall,
@@ -294,20 +252,6 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, bottom = 24.dp),
-        )
-    }
-
-    if (showSignOut) {
-        ConfirmDialog(
-            title = "Sign out?",
-            message = "You'll need to sign in again to access your documents.",
-            confirmLabel = "Sign out",
-            destructive = true,
-            onConfirm = {
-                showSignOut = false
-                viewModel.signOut()
-            },
-            onDismiss = { showSignOut = false },
         )
     }
 
@@ -329,43 +273,15 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
         )
         Surface(
             color = ReverieTheme.cardColor,
-            shape = MaterialTheme.shapes.medium,
+            shape = MaterialTheme.shapes.large,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(16.dp)) { content() }
-        }
-    }
-}
-
-@Composable
-private fun AccountRow(user: UserDto) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = CircleShape,
-            modifier = Modifier.size(44.dp),
-        ) {
-            Text(
-                text = user.display_name.take(1).uppercase(),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp),
-            )
-        }
-        Spacer(Modifier.size(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(user.display_name, style = MaterialTheme.typography.titleSmall)
-            Text(
-                user.email,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -545,6 +461,7 @@ private fun EasingChips(selected: EasingPreset, onSelect: (EasingPreset) -> Unit
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         EasingPreset.entries.forEach { preset ->
             FilterChip(
+                shape = CircleShape,
                 selected = selected == preset,
                 onClick = { onSelect(preset) },
                 label = { Text(preset.displayName(), style = MaterialTheme.typography.labelSmall) },

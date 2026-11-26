@@ -72,7 +72,7 @@ fun LocationMapCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
+            .clip(MaterialTheme.shapes.large)
             .background(ReverieTheme.cardColor)
             .clickable(onClickLabel = "Open $placeName in Google Maps", onClick = onOpen),
     ) {

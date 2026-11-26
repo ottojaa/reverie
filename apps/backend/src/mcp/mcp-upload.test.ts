@@ -60,7 +60,7 @@ describeDb('POST /mcp/upload', () => {
     }
 
     const loadDocsIn = (folderId: string) => db().selectFrom('documents').selectAll().where('folder_id', '=', folderId).orderBy('original_filename').execute();
-    const linkTo = async (folderId: string) => (await createUploadLink({ userId: alice(), folderId })).secret;
+    const linkTo = async (folderId: string | null) => (await createUploadLink({ userId: alice(), folderId })).secret;
 
     function toForm(names: string[], content = 'hello'): FormData {
         const form = new FormData();
@@ -153,6 +153,25 @@ describeDb('POST /mcp/upload', () => {
         expect((await loadDocsIn(folder.id)).every((doc) => doc.deleted_at)).toBe(true);
     });
 
+    it('puts files at the top level when the tool is given no folder', async () => {
+        const path = join(localDir, 'unfiled.txt');
+
+        await writeFile(path, 'text');
+
+        const { output } = await callMcp('upload_local_files', { paths: [path] });
+        const answer = await runCommand(output.command);
+        const docs = await db().selectFrom('documents').select(['folder_id', 'deleted_at']).where('original_filename', '=', 'unfiled.txt').execute();
+
+        expect(output.folder).toEqual({ id: null, path: '/' });
+        expect(answer).toMatchObject({ uploaded: 1, folder: { id: null, path: '/' } });
+        expect(docs).toEqual([{ folder_id: null, deleted_at: null }]);
+
+        await run(alice(), 'undo_write', { audit_id: answer.audit_id });
+        expect(
+            (await db().selectFrom('documents').select('deleted_at').where('original_filename', '=', 'unfiled.txt').executeTakeFirstOrThrow()).deleted_at,
+        ).toBeInstanceOf(Date);
+    });
+
     it('keeps both files when a name is taken, and undoes the batch all or not at all', async () => {
         const folder = await newSubfolder();
         const first = await post(await linkTo(folder.id), toForm(['a.txt']));
@@ -202,7 +221,6 @@ describeDb('POST /mcp/upload', () => {
         const changes = {
             locked: { is_private: true },
             trashed: { deleted_at: new Date() },
-            collection: { type: 'collection' as const },
         };
         const unknown = await post('wrong', toForm(['no.txt']));
 
@@ -216,7 +234,7 @@ describeDb('POST /mcp/upload', () => {
         }
 
         const parent = await newFolder();
-        const child = await newFolder('inside-locked', parent);
+        const child = await newFolder('inside-locked', await newFolder('between', parent));
         const childToken = await linkTo(child.id);
         const removed = await newSubfolder();
         const removedToken = await linkTo(removed.id);

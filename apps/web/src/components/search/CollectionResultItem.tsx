@@ -1,9 +1,10 @@
 import { cn } from '@/lib/utils';
 import type { CollectionSearchResult } from '@reverie/shared';
-import { Folder, FolderOpen } from 'lucide-react';
+import { Folder } from 'lucide-react';
 import { memo } from 'react';
 import { Button } from '../ui/button';
 import { SectionIcon } from '../ui/SectionIcon';
+import { FolderFileCount } from './FolderFileCount';
 
 interface CollectionResultItemProps {
     result: CollectionSearchResult;
@@ -12,10 +13,8 @@ interface CollectionResultItemProps {
     onClick?: () => void;
 }
 
-/** A collection/folder row in the unified search results (navigates to the browse view). */
+/** A folder row in the unified search results (navigates to the browse view). */
 export const CollectionResultItem = memo(function CollectionResultItem({ result, isActive, compact, onClick }: CollectionResultItemProps) {
-    const Icon = result.folder_type === 'collection' ? FolderOpen : Folder;
-    const typeLabel = result.folder_type === 'collection' ? 'Collection' : 'Folder';
     const size = compact ? 'size-8' : 'size-12';
 
     return (
@@ -33,7 +32,7 @@ export const CollectionResultItem = memo(function CollectionResultItem({ result,
                 {result.emoji ? (
                     <SectionIcon value={result.emoji} className={cn('text-muted-foreground', compact ? 'size-4' : 'size-5')} />
                 ) : (
-                    <Icon className={cn('text-muted-foreground', compact ? 'size-4' : 'size-5')} />
+                    <Folder className={cn('text-muted-foreground', compact ? 'size-4' : 'size-5')} />
                 )}
             </div>
 
@@ -50,12 +49,12 @@ export const CollectionResultItem = memo(function CollectionResultItem({ result,
                 )}
 
                 <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
-                    <span>{typeLabel}</span>
+                    <span>Folder</span>
                     <span aria-hidden className="text-muted-foreground/40">
                         ·
                     </span>
                     <span className="tabular-nums">
-                        {result.document_count} {result.document_count === 1 ? 'document' : 'documents'}
+                        <FolderFileCount result={result} />
                     </span>
                 </div>
             </div>

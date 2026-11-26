@@ -4,19 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useExecuteOrganize } from '@/lib/api/organize';
 import { useInfiniteSearch } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
-import type { DocumentSearchResult, FolderWithChildren, OrganizeOperation, SearchResult } from '@reverie/shared';
-import { ArrowLeft, Check, ChevronDown, FolderPlus, Search, X } from 'lucide-react';
+import type { DocumentSearchResult, SearchResult } from '@reverie/shared';
+import { Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
-import { SectionIcon } from '../ui/SectionIcon';
-
-const NEW_FOLDER_SENTINEL = '__new__';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { FolderPickerPanel, type MoveDestination } from './FolderPickerPanel';
+import { useMoveToDestination } from './useMoveToDestination';
 
 function useIsDesktop() {
     const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches);
@@ -32,214 +29,6 @@ function useIsDesktop() {
     }, []);
 
     return isDesktop;
-}
-
-function FolderPickerPanel({
-    sections,
-    selectedId,
-    selectedName,
-    onSelect,
-    onConfirm,
-    isPending,
-}: {
-    sections: FolderWithChildren[];
-    selectedId: string | null;
-    selectedName: string;
-    onSelect: (id: string, name: string, parentId?: string) => void;
-    onConfirm: () => void;
-    isPending?: boolean;
-}) {
-    const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(sections.map((s) => s.id)));
-    const [mode, setMode] = useState<'select' | 'create'>('select');
-    const [newName, setNewName] = useState('');
-    const [newParentId, setNewParentId] = useState<string | null>(sections[0]?.id ?? null);
-
-    const toggleCategory = (id: string) => {
-        setExpandedCategories((prev) => {
-            const next = new Set(prev);
-
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-
-            return next;
-        });
-    };
-
-    const handleCreate = () => {
-        if (!newName.trim() || !newParentId) return;
-
-        onSelect(NEW_FOLDER_SENTINEL, newName.trim(), newParentId);
-        onConfirm();
-    };
-
-    const handleEnterCreateMode = () => {
-        setNewName('');
-        setMode('create');
-    };
-
-    const handleBackToSelect = () => {
-        setMode('select');
-        setNewName('');
-
-        if (selectedId === NEW_FOLDER_SENTINEL) {
-            onSelect('', '', undefined);
-        }
-    };
-
-    const canConfirm = selectedId !== null && selectedId !== NEW_FOLDER_SENTINEL && selectedName.trim().length > 0;
-
-    return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <AnimatePresence mode="wait" initial={false}>
-                {mode === 'select' ? (
-                    <motion.div
-                        key="select"
-                        initial={{ opacity: 0, x: -16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -16 }}
-                        transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-                        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-                    >
-                        <div className="min-h-0 flex-1 overflow-y-auto">
-                            <div className="space-y-1">
-                                {sections.map((category) => (
-                                    <div key={category.id} className="rounded-md">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            className="group w-full justify-start gap-1.5 px-2 py-1.5 text-left hover:bg-secondary/80"
-                                            onClick={() => toggleCategory(category.id)}
-                                        >
-                                            <span className="flex shrink-0 items-center justify-center text-muted-foreground">
-                                                <motion.span
-                                                    initial={false}
-                                                    animate={{ rotate: expandedCategories.has(category.id) ? 0 : -90 }}
-                                                    transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-                                                >
-                                                    <ChevronDown className="size-3.5" />
-                                                </motion.span>
-                                            </span>
-                                            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                                {category.name}
-                                            </span>
-                                        </Button>
-                                        <AnimatePresence initial={false}>
-                                            {expandedCategories.has(category.id) && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    <div className="space-y-px pb-1">
-                                                        {category.children.map((section) => (
-                                                            <Button
-                                                                key={section.id}
-                                                                type="button"
-                                                                variant="ghost"
-                                                                className={cn(
-                                                                    'w-full justify-start gap-2 px-2 py-1.5 pl-6 text-left text-sm hover:bg-secondary/80',
-                                                                    selectedId === section.id
-                                                                        ? 'border-l-2 border-l-primary bg-primary/8 text-primary'
-                                                                        : 'border-l-2 border-l-transparent',
-                                                                )}
-                                                                onClick={() => onSelect(section.id, section.name, category.id)}
-                                                            >
-                                                                <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                                                                    <SectionIcon value={section.emoji} className="shrink-0" />
-                                                                    <span className="min-w-0 truncate font-medium">{section.name}</span>
-                                                                </div>
-                                                                {selectedId === section.id && <Check className="size-4 shrink-0 text-primary" />}
-                                                            </Button>
-                                                        ))}
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="mt-2 border-t border-border pt-2">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="w-full justify-start gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground"
-                                    onClick={handleEnterCreateMode}
-                                >
-                                    <FolderPlus className="size-4 shrink-0" />
-                                    New folder
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="shrink-0 border-t border-border px-4 py-3">
-                            <Button onClick={onConfirm} disabled={!canConfirm || isPending} className="w-full">
-                                {isPending ? 'Moving...' : canConfirm ? `Move to "${selectedName}"` : 'Select a folder'}
-                            </Button>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        key="create"
-                        initial={{ opacity: 0, x: 16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 16 }}
-                        transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-                        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-                    >
-                        <div className="shrink-0 border-b border-border px-3 py-2">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1.5 text-muted-foreground hover:text-foreground -ml-1"
-                                onClick={handleBackToSelect}
-                            >
-                                <ArrowLeft className="size-3.5" />
-                                Back
-                            </Button>
-                        </div>
-
-                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Folder name</label>
-                                <Input
-                                    autoFocus
-                                    value={newName}
-                                    onChange={(e) => setNewName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                                    placeholder="e.g. Travel receipts"
-                                />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</label>
-                                <select
-                                    value={newParentId ?? ''}
-                                    onChange={(e) => setNewParentId(e.target.value)}
-                                    className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
-                                >
-                                    {sections.map((cat) => (
-                                        <option key={cat.id} value={cat.id}>
-                                            {cat.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="shrink-0 border-t border-border px-4 py-3">
-                            <Button onClick={handleCreate} disabled={!newName.trim() || isPending} className="w-full">
-                                {isPending ? 'Creating...' : 'Create & move'}
-                            </Button>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
 }
 
 function FloatingSelectionBar({
@@ -305,22 +94,11 @@ function MoveToFolderDrawer({
     open,
     onOpenChange,
     selectedResults,
-    sections,
-    targetFolderId,
-    targetFolderName,
-    onFolderSelect,
-    onConfirm,
-    isPending,
-}: {
+    ...pickerProps
+}: ComponentProps<typeof FolderPickerPanel> & {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     selectedResults: SearchResult[];
-    sections: FolderWithChildren[];
-    targetFolderId: string | null;
-    targetFolderName: string;
-    onFolderSelect: (id: string, name: string, parentId?: string) => void;
-    onConfirm: () => void;
-    isPending?: boolean;
 }) {
     const isDesktop = useIsDesktop();
     const thumbnails = selectedResults.slice(0, 5);
@@ -354,14 +132,7 @@ function MoveToFolderDrawer({
                     </div>
                 </DrawerHeader>
                 <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
-                    <FolderPickerPanel
-                        sections={sections}
-                        selectedId={targetFolderId}
-                        selectedName={targetFolderName}
-                        onSelect={onFolderSelect}
-                        onConfirm={onConfirm}
-                        isPending={isPending}
-                    />
+                    <FolderPickerPanel {...pickerProps} />
                 </div>
             </DrawerContent>
         </Drawer>
@@ -371,17 +142,18 @@ function MoveToFolderDrawer({
 export function OrganizeManual() {
     const [query, setQuery] = useState('');
     const [activeQuery, setActiveQuery] = useState('');
+    const [folderId, setFolderId] = useState<string>();
+    const hasFilter = Boolean(activeQuery || folderId);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
-    const [targetFolderName, setTargetFolderName] = useState('');
-    const [targetParentId, setTargetParentId] = useState<string | undefined>(undefined);
-    const [isNewFolder, setIsNewFolder] = useState(false);
+    // Undefined while nothing is picked; null is the top level.
+    const [targetFolderId, setTargetFolderId] = useState<string | null>();
     const { data: sectionsData } = useSections();
     const sections = sectionsData ?? [];
 
     const { data: searchData, isLoading } = useInfiniteSearch({
         q: activeQuery,
+        ...(folderId && { folder_id: folderId }),
         include_facets: false,
         limit: 30,
         sort_by: 'uploaded',
@@ -417,44 +189,15 @@ export function OrganizeManual() {
     const selectAll = () => setSelectedIds(new Set(results.map((r) => r.document_id)));
     const clearSelection = () => setSelectedIds(new Set());
 
-    const handleFolderSelect = (id: string, name: string, parentId?: string) => {
-        setTargetFolderId(id);
-        setTargetFolderName(name);
-        setTargetParentId(parentId);
-        setIsNewFolder(id === NEW_FOLDER_SENTINEL);
-    };
+    const { moveTo, isMoving } = useMoveToDestination(sections);
 
-    const execute = useExecuteOrganize();
+    const handleConfirmMove = async (destination: MoveDestination) => {
+        const documentIds = selectedResults.map((r) => r.document_id);
 
-    const handleConfirmMove = async () => {
-        if (selectedResults.length === 0 || !targetFolderName.trim()) return;
+        if (documentIds.length === 0 || !(await moveTo(documentIds, destination))) return;
 
-        const operation: OrganizeOperation = {
-            type: isNewFolder ? 'create_and_move' : 'move',
-            document_ids: selectedResults.map((r) => r.document_id),
-            document_previews: selectedResults.map((r) => ({
-                id: r.document_id,
-                display_name: r.display_name,
-                thumbnail_urls: r.thumbnail_urls,
-                mime_type: r.mime_type,
-            })),
-            target_folder: {
-                id: isNewFolder ? undefined : (targetFolderId ?? undefined),
-                name: targetFolderName,
-                parent_id: targetParentId,
-                is_new: isNewFolder,
-            },
-        };
-
-        try {
-            await execute.mutateAsync([operation]);
-            const n = selectedResults.length;
-            toast.success(`Moved ${n} ${n === 1 ? 'document' : 'documents'} to "${targetFolderName}"`);
-            setDrawerOpen(false);
-            setSelectedIds(new Set());
-        } catch {
-            toast.error('Failed to move documents');
-        }
+        setDrawerOpen(false);
+        setSelectedIds(new Set());
     };
 
     const hasSelection = selectedIds.size > 0;
@@ -474,7 +217,7 @@ export function OrganizeManual() {
                             className="pl-8"
                         />
                     </div>
-                    <FilterMenuButton query={query} onQueryChange={setQuery} />
+                    <FilterMenuButton query={query} onQueryChange={setQuery} folderId={folderId} onFolderChange={setFolderId} />
                 </div>
             </div>
 
@@ -511,13 +254,13 @@ export function OrganizeManual() {
                             </div>
                         ))}
                     </div>
-                ) : results.length === 0 && activeQuery ? (
+                ) : results.length === 0 && hasFilter ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
                         <Search className="size-6 text-muted-foreground/40" />
                         <p className="text-sm text-muted-foreground">No documents found</p>
                         <p className="text-xs text-muted-foreground/60">Try different filters</p>
                     </div>
-                ) : !activeQuery ? (
+                ) : !hasFilter ? (
                     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
                         <Search className="size-6 text-muted-foreground/40" />
                         <p className="text-sm text-muted-foreground">Use filters to find documents to organize</p>
@@ -532,7 +275,7 @@ export function OrganizeManual() {
             </div>
 
             <AnimatePresence>
-                {hasSelection && sections.length > 0 && (
+                {hasSelection && (
                     <FloatingSelectionBar
                         selectedResults={selectedResults}
                         selectedCount={selectedIds.size}
@@ -547,11 +290,10 @@ export function OrganizeManual() {
                 onOpenChange={setDrawerOpen}
                 selectedResults={selectedResults}
                 sections={sections}
-                targetFolderId={targetFolderId}
-                targetFolderName={targetFolderName}
-                onFolderSelect={handleFolderSelect}
-                onConfirm={handleConfirmMove}
-                isPending={execute.isPending}
+                selected={targetFolderId}
+                onSelect={setTargetFolderId}
+                onConfirm={(destination) => void handleConfirmMove(destination)}
+                isPending={isMoving}
             />
         </div>
     );

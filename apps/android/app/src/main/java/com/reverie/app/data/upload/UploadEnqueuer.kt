@@ -26,7 +26,7 @@ class UploadEnqueuer @Inject constructor(
 
     suspend fun enqueue(
         sessionId: String,
-        folderId: String,
+        folderId: String?,
         conflictStrategy: String?,
         staged: List<StagedFile>,
     ) {

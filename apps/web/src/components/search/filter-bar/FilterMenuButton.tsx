@@ -7,21 +7,24 @@ import { useCallback, useMemo } from 'react';
 import { DateFilterPanel } from './DateFilterPanel';
 import { DimensionDisclosureList, DisclosureRow } from './DimensionDisclosureList';
 import { FILTER_DIMENSIONS } from './filter-defs';
+import { FolderDisclosureRow } from './FolderDisclosureRow';
 import { PropertySections, type TriState } from './MoreFiltersPanel';
 
 interface FilterMenuButtonProps {
     query: string;
     onQueryChange: (query: string) => void;
+    folderId: string | undefined;
+    onFolderChange: (folderId: string | undefined) => void;
 }
 
 /**
  * Compact single-button filter menu for embedded contexts (e.g. Organize)
  * where the full pill bar doesn't fit. Same panels, token-level mutations.
  */
-export function FilterMenuButton({ query, onQueryChange }: FilterMenuButtonProps) {
+export function FilterMenuButton({ query, onQueryChange, folderId, onFolderChange }: FilterMenuButtonProps) {
     const { data: facets } = useSearchFacets();
     const tokens = useMemo(() => tokenizeQuery(query), [query]);
-    const activeCount = tokens.filter(isKnownFilter).length;
+    const activeCount = tokens.filter(isKnownFilter).length + (folderId ? 1 : 0);
 
     const filterValues = useMemo(() => {
         const map = new Map<FilterKey, string[]>();
@@ -80,20 +83,28 @@ export function FilterMenuButton({ query, onQueryChange }: FilterMenuButtonProps
                 <div className="max-h-[min(70vh,28rem)] overflow-y-auto pb-1">
                     <DimensionDisclosureList dimensions={FILTER_DIMENSIONS} filterValues={filterValues} facets={facets} onToggleValue={toggleValue}>
                         {(expandedKey, setExpandedKey) => (
-                            <DisclosureRow
-                                icon={Calendar}
-                                label="Date"
-                                badgeCount={dateCount}
-                                expanded={expandedKey === '__date'}
-                                onToggle={() => setExpandedKey(expandedKey === '__date' ? null : '__date')}
-                            >
-                                <DateFilterPanel
-                                    uploadedValue={filterValues.get('uploaded')?.[0] ?? null}
-                                    dateValue={filterValues.get('date')?.[0] ?? null}
-                                    onSetValue={replaceValue}
-                                    onClear={clearDimension}
+                            <>
+                                <FolderDisclosureRow
+                                    folderId={folderId}
+                                    onChange={onFolderChange}
+                                    expanded={expandedKey === '__folder'}
+                                    onToggle={() => setExpandedKey(expandedKey === '__folder' ? null : '__folder')}
                                 />
-                            </DisclosureRow>
+                                <DisclosureRow
+                                    icon={Calendar}
+                                    label="Date"
+                                    badgeCount={dateCount}
+                                    expanded={expandedKey === '__date'}
+                                    onToggle={() => setExpandedKey(expandedKey === '__date' ? null : '__date')}
+                                >
+                                    <DateFilterPanel
+                                        uploadedValue={filterValues.get('uploaded')?.[0] ?? null}
+                                        dateValue={filterValues.get('date')?.[0] ?? null}
+                                        onSetValue={replaceValue}
+                                        onClear={clearDimension}
+                                    />
+                                </DisclosureRow>
+                            </>
                         )}
                     </DimensionDisclosureList>
 

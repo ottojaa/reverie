@@ -100,7 +100,7 @@ function TrashPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Trash</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         {data
-                            ? `Deleted items are kept for ${data.retention_days} day${data.retention_days === 1 ? '' : 's'}, then removed for good. Restored folders come back empty.`
+                            ? `Deleted items are kept for ${data.retention_days} day${data.retention_days === 1 ? '' : 's'}, then removed for good.`
                             : 'Deleted items are kept for a while, then removed for good.'}
                     </p>
                 </div>

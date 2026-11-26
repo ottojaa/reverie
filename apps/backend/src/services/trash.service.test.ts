@@ -20,9 +20,15 @@ import { getTrashService } from './trash.service';
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// What the "which trashed folders qualify" select returns, so the folder DELETE is reached.
-const trashedFolder = { id: 'folder-1', user_id: USER_ID };
-const isTrashedFolderSelect = (sql: string) => sql.startsWith('select') && sql.includes('from "folders"') && sql.includes('"deleted_at" is not null');
+const trashedFolder = { id: 'folder-1', user_id: USER_ID, parent_id: null, name: 'Taxes', path: '/Taxes', sort_order: 0, deleted_at: new Date('2026-01-01') };
+const isFolderTreeRead = (sql: string) => sql === 'select * from "folders" where "user_id" = $1';
+
+/** Answers as a database holding one trashed folder would. */
+function answerWithTrashedFolder(sql: string): unknown[] | undefined {
+    if (sql.startsWith('select distinct "user_id" from "folders"')) return [{ user_id: USER_ID }];
+
+    return isFolderTreeRead(sql) || sql.startsWith('select * from "folders" where "id"') ? [trashedFolder] : undefined;
+}
 
 const trashedDocs = [
     { id: 'doc-1', user_id: USER_ID },
@@ -45,9 +51,9 @@ describe('purge', () => {
         const now = new Date('2026-11-19T12:00:00Z');
 
         h.recording.respond = (sql) => {
-            if (sql.startsWith('delete from "documents"')) return trashedDocs;
+            if (sql.startsWith('delete from "documents"') && sql.includes('"deleted_at" <')) return trashedDocs;
 
-            return isTrashedFolderSelect(sql) ? [trashedFolder] : undefined;
+            return answerWithTrashedFolder(sql);
         };
 
         const result = await getTrashService().purgeExpired(now);
@@ -68,14 +74,15 @@ describe('purge', () => {
     it('"Delete forever" and "Empty trash" never touch live rows and apply no cutoff', async () => {
         const service = getTrashService();
 
-        h.recording.respond = (sql) => (isTrashedFolderSelect(sql) ? [trashedFolder] : undefined);
+        h.recording.respond = answerWithTrashedFolder;
 
         await service.purge(USER_ID, { documentIds: ['doc-1'], folderIds: ['folder-1'] });
         await service.emptyTrash(USER_ID);
 
         const deletes = h.recording.statements.filter((sql) => sql.startsWith('delete from "documents"') || sql.startsWith('delete from "folders"'));
 
-        expect(deletes).toHaveLength(4);
+        // Each of the two deletes the selected documents, then the folder's documents, then the folder.
+        expect(deletes).toHaveLength(6);
 
         for (const sql of deletes) {
             expect(sql).toContain('"deleted_at" is not null');
@@ -92,20 +99,13 @@ describe('purge', () => {
 
 describe('restore', () => {
     it('restores folders before documents, so a document returns to a folder that was trashed after it', async () => {
-        const folder = { id: 'folder-1', user_id: USER_ID, parent_id: null, name: 'Taxes', path: '/Taxes', deleted_at: new Date() };
-
-        h.recording.respond = (sql) => {
-            if (sql.startsWith('select') && sql.includes('from "folders"') && sql.includes('"deleted_at" is not null')) return [folder];
-
-            if (sql.startsWith('update "folders"')) return [folder];
-
-            return undefined;
-        };
+        h.recording.respond = answerWithTrashedFolder;
 
         const result = await getTrashService().restore(USER_ID, { folderIds: ['folder-1'], documentIds: ['doc-1'] });
+        const selected = h.recording.statements.findIndex((sql) => sql.startsWith('select * from "documents"'));
 
         expect(result).toEqual({ documents: 0, folders: 1 });
         expect(findStatement('update "folders"')).toBeGreaterThanOrEqual(0);
-        expect(findStatement('update "folders"')).toBeLessThan(findStatement('select * from "documents"'));
+        expect(findStatement('update "folders"')).toBeLessThan(selected);
     });
 });

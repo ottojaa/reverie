@@ -1,7 +1,8 @@
 import { useExpandedGroups } from '@/lib/browse/expanded-groups';
 import { groupFolderId, recentEntries, recentRows, rowDocumentIds, type RecentEntry } from '@/lib/browse/recent-rows';
 import { useVirtualTable } from '@/lib/hooks/useVirtualTable';
-import { flattenSectionTree, useSections } from '@/lib/sections';
+import { flattenTree } from '@/lib/folders/tree.js';
+import { useSections } from '@/lib/sections';
 import type { Document } from '@reverie/shared';
 import { useMemo } from 'react';
 import { DocumentRow } from './DocumentRow';
@@ -21,7 +22,7 @@ interface RecentTableProps {
 /** Recently added: the newest documents with batches of media folded into one row and same-name files stacked. */
 export function RecentTable({ documents, scope, showFolder, fetchNextPage, hasNextPage }: RecentTableProps) {
     const { data: sections } = useSections();
-    const folderNames = useMemo(() => new Map(flattenSectionTree(sections ?? []).map((folder) => [folder.id, folder.name])), [sections]);
+    const folderNames = useMemo(() => new Map(flattenTree(sections ?? []).map(({ folder }) => [folder.id, folder.name])), [sections]);
     const { open, toggle } = useExpandedGroups(scope);
     const rows = useMemo(() => recentRows(documents), [documents]);
     const entries = useMemo(() => recentEntries(rows, open), [rows, open]);

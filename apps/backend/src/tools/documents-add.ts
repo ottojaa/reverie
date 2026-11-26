@@ -8,7 +8,7 @@ import { defineTool, ToolError } from './types';
 import type { Undoer } from './undo-types';
 import { toUploadCommand } from './upload-command';
 import { createUploadLink } from './upload-link.store';
-import { assertDocumentFolder, assertVisibleDocuments, loadVisibility, type VisibleDocument } from './visibility';
+import { assertTargetFolder, assertVisibleDocuments, loadVisibility, type TargetFolder, type VisibleDocument } from './visibility';
 import { dryRunShape, PREVIEW_SAMPLE_SIZE } from './write';
 
 /** upload_local_files / save_text_document, the two ways to add documents, and the undo of both. */
@@ -26,13 +26,11 @@ function isLocalFilePath(path: string): boolean {
     return !path.endsWith('/') && !UNSUPPORTED_IN_PATH.test(path);
 }
 
-async function fetchTargetFolder(userId: string, folderId: string): Promise<{ id: string; path: string }> {
-    const folder = await assertDocumentFolder(db, await loadVisibility(userId), folderId);
-
-    return { id: folder.id, path: folder.path };
+async function fetchTargetFolder(userId: string, folderId: string | undefined): Promise<TargetFolder> {
+    return assertTargetFolder(db, await loadVisibility(userId), folderId ?? null);
 }
 
-const folderIdSchema = z.string().uuid().describe('The folder to add to (not a collection)');
+const folderIdSchema = z.string().uuid().optional().describe('The folder to add to. Leave out to add to the top level (no folder).');
 
 const uploadSchema = z.object({
     folder_id: folderIdSchema,
@@ -49,7 +47,7 @@ const uploadSchema = z.object({
 export const uploadLocalFiles = defineTool({
     name: 'upload_local_files',
     description:
-        'Add files from the computer you are working on to a folder. Returns a curl command (curl 7.81 or newer) that you must run in a shell on the machine that has the files, so this works only for a client with a shell, such as Claude Code. Without a shell, use save_text_document for text you write yourself. Nothing is added until the command runs; it works once, within 15 minutes.',
+        'Add files from the computer you are working on to a folder, or to the top level when folder_id is left out. Returns a curl command (curl 7.81 or newer) that you must run in a shell on the machine that has the files, so this works only for a client with a shell, such as Claude Code. Without a shell, use save_text_document for text you write yourself. Nothing is added until the command runs; it works once, within 15 minutes.',
     access: 'write',
     inputSchema: uploadSchema,
     handler: async (input, ctx) => {
@@ -106,7 +104,7 @@ function toQuotaRefusal(error: unknown): never {
     throw error;
 }
 
-async function storeText(userId: string, folderId: string, name: string, content: Buffer) {
+async function storeText(userId: string, folderId: string | null, name: string, content: Buffer) {
     // Loaded lazily, like the services behind storeDocuments: it reads the server environment on import.
     const { receiveUploadedFile, discardUploadedFiles } = await import('../utils/upload-files.js');
     // No type named: the upload takes it from the extension.
@@ -127,7 +125,7 @@ async function storeText(userId: string, folderId: string, name: string, content
 export const saveTextDocument = defineTool({
     name: 'save_text_document',
     description:
-        'Save text you wrote (a note, summary, table or JSON) as a new document in a folder. It is processed like an upload (.md, .txt and .csv become searchable by content), never overwrites (a taken name gets " (1)"), and undo_write moves it to the trash. For files that already exist on disk, use upload_local_files.',
+        'Save text you wrote (a note, summary, table or JSON) as a new document in a folder, or at the top level when folder_id is left out. It is processed like an upload (.md, .txt and .csv become searchable by content), never overwrites (a taken name gets " (1)"), and undo_write moves it to the trash. For files that already exist on disk, use upload_local_files.',
     access: 'write',
     inputSchema: saveTextSchema,
     handler: async (input, ctx) => {

@@ -35,7 +35,7 @@ export type DuplicateGroup = z.infer<typeof DuplicateGroupSchema>;
 
 // GET /duplicates
 export const DuplicatesQuerySchema = z.object({
-    /** A private folder or collection: lists the duplicates inside that lock (it must be open). Without it, only images outside private folders. */
+    /** Any folder behind a lock: lists the duplicates inside that lock (it must be open). Without it, only images outside private folders. */
     folder_id: UuidSchema.optional(),
 });
 export type DuplicatesQuery = z.infer<typeof DuplicatesQuerySchema>;

@@ -14,8 +14,9 @@ interface Review {
 interface UseUploadCheckOptions {
     files: UploadFile[];
     hashes: Record<string, FileHashState>;
-    folderId: string | undefined;
-    startUpload: (folderId: string, strategy?: ConflictStrategy, onlyFileIds?: ReadonlySet<string>) => Promise<void>;
+    /** Null is the top level. */
+    folderId: string | null;
+    startUpload: (folderId: string | undefined, strategy?: ConflictStrategy, onlyFileIds?: ReadonlySet<string>) => Promise<void>;
     removeFile: (fileId: string) => void;
 }
 
@@ -34,8 +35,6 @@ export function useUploadCheck({ files, hashes, folderId, startUpload, removeFil
     const isHashing = queued.some((f) => isPending(hashes[f.id]));
 
     async function check(): Promise<void> {
-        if (!folderId) return;
-
         setIsChecking(true);
 
         try {
@@ -49,7 +48,7 @@ export function useUploadCheck({ files, hashes, folderId, startUpload, removeFil
             );
             const items = toReviewItems(queued, results);
 
-            if (items.length === 0) return await startUpload(folderId).catch(reportUploadError);
+            if (items.length === 0) return await startUpload(folderId ?? undefined).catch(reportUploadError);
 
             setReview({ items, cleanCount: queued.length - items.length });
         } catch {
@@ -68,9 +67,9 @@ export function useUploadCheck({ files, hashes, folderId, startUpload, removeFil
         // still queued: name the files to send instead of relying on the removal above.
         const kept = toKeptIds(queued, skipIds);
 
-        if (!folderId || kept.size === 0) return;
+        if (kept.size === 0) return;
 
-        startUpload(folderId, strategy, kept).catch(reportUploadError);
+        startUpload(folderId ?? undefined, strategy, kept).catch(reportUploadError);
     }
 
     return { review, isChecking, isHashing, check, confirm, cancel: () => setReview(null) };

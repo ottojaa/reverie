@@ -17,13 +17,15 @@ export interface AddedDocument {
 
 /** Audit snapshot of added documents: where they were put, under which names. */
 export interface AddedDocumentsState {
-    folder_id: string;
+    /** null: the top level. */
+    folder_id: string | null;
     documents: Array<{ id: string; name: string }>;
 }
 
 interface StoreRequest {
     userId: string;
-    folderId: string;
+    /** null: the top level. */
+    folderId: string | null;
     files: UploadedFile[];
     /** The tool name and input the audit log records. */
     tool: string;
@@ -42,7 +44,7 @@ export async function assertStorageRoom(userId: string, files: Array<Pick<Upload
 export async function storeDocuments(request: StoreRequest): Promise<{ documents: AddedDocument[]; auditId: string }> {
     const { userId, folderId, files } = request;
     const { getUploadService } = await import('../services/upload.service.js');
-    const uploaded = await getUploadService().uploadFiles(files, userId, folderId, undefined, 'keep_both');
+    const uploaded = await getUploadService().uploadFiles(files, userId, folderId ?? undefined, undefined, 'keep_both');
     const documents = uploaded.documents.map((doc, index): AddedDocument => {
         const sent = files[index]!.filename;
         const added = { id: doc.id, name: doc.original_filename };

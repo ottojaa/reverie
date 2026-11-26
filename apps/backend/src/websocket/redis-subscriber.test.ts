@@ -27,7 +27,7 @@ describeDb('realtime job events', () => {
         expect(await toDeliverableEvent(event)).toEqual(event);
     });
 
-    it('strips the result and error text of documents in private folders and collections', async () => {
+    it('strips the result and error text of documents in private folders, at any depth', async () => {
         const { docs } = ctx.world();
 
         for (const id of [docs.inLockedFolder, docs.inVault, docs.inVaultInner]) {

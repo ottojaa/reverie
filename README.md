@@ -11,7 +11,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 
 ## Features
 
-- **File management**: Upload, browse, and organize any file type in a two-level hierarchy (collections → folders); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
+- **File management**: Upload, browse, and organize any file type in folders nested to any depth (files can also sit at the top level); multi-select batch move/delete/download, plus duplicate-conflict handling on upload
 - **OCR**: Extract text from images/PDFs via PaddleOCR (default) or Tesseract.js
 - **AI processing**: Claude-powered summaries, titles, tags, entities, topics, categories, and extracted dates; optional vision for images without text
 - **Library agent**: Admin-only chat in the web app that searches, moves, renames and tags documents through the same tool registry as `/mcp`; every write can be undone ([setup](#in-app-agent))
@@ -19,7 +19,7 @@ See [ROADMAP.md](ROADMAP.md) for where the project is headed.
 - **Full-text search**: Filter DSL + faceted search (date, category, type, tags, location from EXIF), autocomplete, and a command palette in web
 - **Document viewer**: PDF, images, video, and text via a viewer registry, with an AI insight panel; in-app image crop editor and video trim editor
 - **Thumbnails**: WebP thumbnails + blurhash for images, PDFs, Office docs (via LibreOffice), video frames, and text/code
-- **Private folders**: Mark a collection or folder private and it gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
+- **Private folders**: Mark a folder private and it, with everything beneath it, gets its own lock; open it with your account password for the rest of the app session. Private documents stay out of search, "All documents" and the AI tools
 - **Storage**: Local FS or S3, content-addressable dedup, per-user quotas
 - **Real-time updates**: Socket.io for job progress (OCR, thumbnail, LLM)
 - **Auth**: JWT + rotating refresh tokens, optional sign-in with any OpenID Connect provider (Google, Authentik, Keycloak, Authelia, ...); multi-user with admin user management
@@ -177,13 +177,14 @@ The tools search and read documents, and tag, move, rename and add them. A token
 library, never private folders or the trash, and there is no delete tool. Every write is logged and `undo_write`
 reverses it.
 
-Two tools add new documents. Both store and process them like a web upload, never overwrite a file (a taken name
-gets ` (1)`), and undoing them moves the new documents to the trash:
+Two tools add new documents, to a folder at any depth or, when none is named, to the top level. Both store and
+process them like a web upload, never overwrite a file (a taken name gets ` (1)`), and undoing them moves the new
+documents to the trash:
 
 - **`upload_local_files`** adds files from the computer the client runs on, so it needs a client with a shell, such
   as Claude Code. MCP calls cannot carry file contents, so the tool answers with a `curl` command (curl 7.81 or
-  newer) that sends 1–50 files to `POST /mcp/upload`. It works once, within 15 minutes, for the one folder it was
-  made for. Ask for example: _"upload ~/Downloads/receipt.pdf to Receipts"_.
+  newer) that sends 1–50 files to `POST /mcp/upload`. It works once, within 15 minutes, for the one folder (or the
+  top level) it was made for. Ask for example: _"upload ~/Downloads/receipt.pdf to Receipts"_.
 - **`save_text_document`** saves text the model wrote (`.md`, `.txt`, `.csv` or `.json`, at most 256 KiB) as a new
   document. It works in any client, Claude Desktop and the in-app agent included.
 

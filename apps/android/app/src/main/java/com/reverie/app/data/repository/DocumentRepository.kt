@@ -1,8 +1,11 @@
 package com.reverie.app.data.repository
 
 import com.reverie.app.data.api.DocumentsApi
+import com.reverie.app.data.api.model.ConflictStrategy
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.Paginated
@@ -34,8 +37,11 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The most documents one delete request may name. */
+private const val DELETE_REQUEST_LIMIT = 100
+
 /** Most ids one delete statement takes (SQLite's variable limit is 999 on older Android). */
-private const val DELETE_CHUNK = 500
+internal const val DELETE_CHUNK = 500
 
 /** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
 data class SignedUrls(val fileUrl: String, val hlsUrl: String?)
@@ -86,9 +92,9 @@ class DocumentRepository @Inject constructor(
     private val fileUrlFlights = java.util.concurrent.ConcurrentHashMap<String, Deferred<String?>>()
     private val flightScope = CoroutineScope(SupervisorJob() + io)
 
-    // The last summary read for each scope (null is the whole library). Memory only: figures that are
-    // not from the server right now are not shown after a restart, and cached rows are never counted instead.
-    private val summaries = MutableStateFlow<Map<String?, DocumentSummaryDto>>(emptyMap())
+    // The last summary read for each scope. Memory only: figures that are not from the server right
+    // now are not shown after a restart, and cached rows are never counted instead.
+    private val summaries = MutableStateFlow<Map<DocumentScope, DocumentSummaryDto>>(emptyMap())
 
     private val contentChangesFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
@@ -107,27 +113,30 @@ class DocumentRepository @Inject constructor(
     /** Documents deleted from this device in this process, for lists that were snapshotted before. */
     val deletedIds: StateFlow<Set<String>> = deletedIdsFlow.asStateFlow()
 
-    /** The last summary [fetchSummary] read for [folderId] in this process; null before the first one. */
-    fun summary(folderId: String?): Flow<DocumentSummaryDto?> = summaries.map { it[folderId] }.distinctUntilChanged()
+    /** The last summary [fetchSummary] read for [scope] in this process; null before the first one. */
+    fun summary(scope: DocumentScope): Flow<DocumentSummaryDto?> = summaries.map { it[scope] }.distinctUntilChanged()
 
-    /** Reads the summary of [folderId] (the whole library when null) and keeps it for [summary]. Throws [com.reverie.app.data.api.ReverieApiException]. */
-    suspend fun fetchSummary(folderId: String?): DocumentSummaryDto = withContext(io) {
-        documentsApi.summary(folderId).also { fresh -> summaries.update { it + (folderId to fresh) } }
+    /** Reads the summary of [scope] and keeps it for [summary]. Throws [com.reverie.app.data.api.ReverieApiException]. */
+    suspend fun fetchSummary(scope: DocumentScope): DocumentSummaryDto = withContext(io) {
+        documentsApi.summary(scope).also { fresh -> summaries.update { it + (scope to fresh) } }
     }
 
     /**
-     * Documents for the grid. `folderId == null` is the all-documents view, which by design never
-     * contains private documents; a folder view also carries that folder's in-memory private ones.
+     * The cached documents of [scope], newest upload first. The library and the top level never hold
+     * private documents; a folder also carries its in-memory private ones.
      */
-    fun observeDocuments(folderId: String?): Flow<List<DocumentDto>> {
+    fun observeDocuments(scope: DocumentScope): Flow<List<DocumentDto>> {
         // Map entities→DTOs (allocations + JSON parsing) off the main thread; without this the grid's
         // combine/stateIn on viewModelScope (Main) re-maps the whole cached list on every Room write.
-        if (folderId == null) {
-            return documentDao.observeAll().map { rows -> rows.map(DocumentEntity::toDto) }.flowOn(io)
+        val rows = when (scope) {
+            DocumentScope.All -> documentDao.observeAll()
+            DocumentScope.TopLevel -> documentDao.observeTopLevel()
+            is DocumentScope.Folder -> documentDao.observeByFolder(scope.id)
         }
-        val cached = documentDao.observeByFolder(folderId).map { rows -> rows.map(DocumentEntity::toDto) }
-        return combine(cached, privateStore.observeFolder(folderId)) { rows, private ->
-            if (private.isEmpty()) rows else (rows + private).sortedByDescending { it.created_at }
+        val cached = rows.map { it.map(DocumentEntity::toDto) }
+        if (scope !is DocumentScope.Folder) return cached.flowOn(io)
+        return combine(cached, privateStore.observeFolder(scope.id)) { public, private ->
+            if (private.isEmpty()) public else (public + private).sortedByDescending { it.created_at }
         }.flowOn(io)
     }
 
@@ -182,42 +191,41 @@ class DocumentRepository @Inject constructor(
     }
 
     /**
-     * Fetch one page of [kind] (every kind when null) from the network into the cache. Throws
-     * [com.reverie.app.data.api.ReverieApiException].
+     * Fetch one page of [scope]'s documents of [filter]'s kinds into the cache; [preview] asks for the
+     * order covers are picked in. Throws [com.reverie.app.data.api.ReverieApiException].
      */
-    suspend fun refresh(folderId: String?, limit: Int, offset: Int, kind: DocumentKind? = null): PageResult = withContext(io) {
-        val page = documentsApi.list(limit = limit, offset = offset, folderId = folderId, kind = kind)
+    suspend fun refresh(
+        scope: DocumentScope,
+        limit: Int,
+        offset: Int,
+        filter: DocumentFilter = DocumentFilter.ALL,
+        preview: Boolean = false,
+    ): PageResult = withContext(io) {
+        val page = documentsApi.list(limit = limit, offset = offset, scope = scope, filter = filter, preview = preview)
         absorb(page.items)
 
-        // If a single page covered the whole folder, drop rows the server no longer returns: only
-        // those of the fetched kind, since the page says nothing about the other kinds.
-        if (folderId != null && offset == 0 && page.items.size >= page.total) dropStale(folderId, kind, page.items.map { it.id }.toSet())
+        // If a single page covered a whole folder or the whole top level, drop rows the server no longer
+        // returns. The library is left to the caller that reads all of it.
+        val isWhole = offset == 0 && page.items.size >= page.total
+        if (isWhole && scope != DocumentScope.All) dropStale(scope, filter, page.items.map { it.id }.toSet())
         PageResult(total = page.total, loaded = offset + page.items.size, last = page.items.lastOrNull(), ids = page.items.map { it.id })
     }
 
     /**
-     * The library-wide counterpart of [dropStale]: once every page of [kind] (every kind when null) has
-     * been read, drop the cached rows of that kind that the server did not return ([keep]). Rows of the
-     * other kinds are untouched, since a listing of one kind says nothing about them. Private documents
-     * are never in the library-wide listing nor in Room, so the in-memory store has nothing to drop.
+     * Once the whole of a listing has been read, drop the cached rows in it that the server did not
+     * return ([keep]). Rows of kinds [filter] leaves out are untouched, since the listing says nothing
+     * about them.
      */
-    suspend fun dropStaleInLibrary(kind: DocumentKind?, keep: Set<String>) = withContext(io) {
-        val stale = documentDao.allMimeTypes()
-            .filter { it.id !in keep && (kind == null || DocumentKind.of(it.mimeType) == kind) }
-            .map { it.id }
+    suspend fun dropStale(scope: DocumentScope, filter: DocumentFilter, keep: Set<String>) = withContext(io) {
+        val cached = when (scope) {
+            DocumentScope.All -> documentDao.allMimeTypes()
+            DocumentScope.TopLevel -> documentDao.mimeTypesAtTopLevel()
+            is DocumentScope.Folder -> documentDao.mimeTypesInFolder(scope.id)
+        }
+        val stale = cached.filter { it.id !in keep && filter.holds(DocumentKind.of(it.mimeType)) }.map { it.id }
         // Chunked: SQLite caps the variables of one statement, and a library can hold more rows than that.
         stale.chunked(DELETE_CHUNK).forEach { documentDao.deleteByIds(it) }
-    }
-
-    private suspend fun dropStale(folderId: String, kind: DocumentKind?, keep: Set<String>) {
-        if (kind == null) {
-            documentDao.deleteInFolderNotIn(folderId, keep.toList())
-            privateStore.removeInFolderNotIn(folderId, keep)
-            return
-        }
-        val stale = documentDao.mimeTypesInFolder(folderId).filter { it.id !in keep && DocumentKind.of(it.mimeType) == kind }.map { it.id }
-        if (stale.isNotEmpty()) documentDao.deleteByIds(stale)
-        privateStore.removeInFolderNotIn(folderId, keep, kind)
+        if (scope is DocumentScope.Folder) privateStore.removeInFolderNotIn(scope.id, keep, filter)
     }
 
     /**
@@ -270,6 +278,10 @@ class DocumentRepository @Inject constructor(
     }
 
     suspend fun delete(ids: List<String>) = withContext(io) {
+        ids.chunked(DELETE_REQUEST_LIMIT).forEach { deleteBatch(it) }
+    }
+
+    private suspend fun deleteBatch(ids: List<String>) {
         documentsApi.deleteBatch(ids)
         documentDao.deleteByIds(ids)
         privateStore.remove(ids)
@@ -281,17 +293,30 @@ class DocumentRepository @Inject constructor(
         announceContentChanged()
     }
 
+    /** Documents brought back from the trash: they are no longer deleted, and every list reads again. */
+    fun announceRestored(ids: List<String>) {
+        deletedIdsFlow.update { it - ids.toSet() }
+        announceContentChanged()
+    }
+
     suspend fun rename(id: String, filename: String): DocumentDto = withContext(io) {
         val dto = documentsApi.rename(id, filename)
         absorb(listOf(dto))
         dto
     }
 
-    suspend fun move(ids: List<String>, folderId: String) = withContext(io) {
-        documentsApi.move(ids, folderId, conflict = null)
+    /** Which of [filenames] are already taken in [folderId] (null: at the top level). */
+    suspend fun takenNames(folderId: String?, filenames: List<String>): List<String> = withContext(io) {
+        documentsApi.checkDuplicates(folderId, filenames).duplicates
+    }
+
+    /** Moves documents into [folderId], or to the top level when it is null. */
+    suspend fun move(ids: List<String>, folderId: String?, conflict: ConflictStrategy? = null) = withContext(io) {
+        documentsApi.move(ids, folderId, conflict)
         // The destination may be private (or the source was): drop every local copy and let the
         // next folder refresh re-route each document to the right store.
         purger.forgetMoved(ids)
+        announceContentChanged()
     }
 
     suspend fun touchAccessed(id: String) = withContext(io) {

@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * A folder/collection icon. The `emoji` field actually stores a **Lucide icon name** — the web
+ * A folder's icon. The `emoji` field actually stores a **Lucide icon name** — the web
  * renders it via lucide's `DynamicIcon` (`SectionIcon.tsx`), e.g. "folder", "file-text",
  * "transgender". We resolve that to the bundled `lucide_ic_<snake_case>` vector drawable so the
  * glyph matches the web. Legacy values that are an actual emoji character are drawn as text, and

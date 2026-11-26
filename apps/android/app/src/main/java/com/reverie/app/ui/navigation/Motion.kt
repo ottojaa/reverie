@@ -45,11 +45,11 @@ private fun popEnterScale(): EnterTransition =
 private fun popExitScale(): ExitTransition =
     scaleOut(targetScale = MotionTuning.spec.popScale, animationSpec = tween(POP_SCALE_MS, easing = EasingPreset.EMPHASIZED_ACCELERATE.toEasing()))
 
-private fun tabIndex(route: String?): Int = Screen.bottomNavItems.indexOfFirst { it.route == route }
+private fun tabIndex(route: String?): Int = Tab.entries.indexOfFirst { it.route == route }
 
-/** Both endpoints are bottom-nav tabs — the switch has a left/right direction, not a push. */
+/** Both endpoints are the pill's roots: the switch has a left/right direction, not a push. */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.betweenTabs(): Boolean =
-    initialState.destination.route in Routes.tabRoutes && targetState.destination.route in Routes.tabRoutes
+    tabIndex(initialState.destination.route) >= 0 && tabIndex(targetState.destination.route) >= 0
 
 /** Moving to a higher-index tab slides forward (left); a lower-index tab slides back (right). */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabForward(): Boolean =

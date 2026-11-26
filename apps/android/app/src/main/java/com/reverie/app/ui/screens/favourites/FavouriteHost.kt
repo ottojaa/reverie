@@ -1,11 +1,11 @@
 package com.reverie.app.ui.screens.favourites
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
@@ -81,7 +81,7 @@ fun ReverieSnackbarHost(state: SnackbarHostState, modifier: Modifier = Modifier,
 fun FavouritePill(message: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.padding(bottom = 12.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         shadowElevation = 6.dp,
     ) {

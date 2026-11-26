@@ -1,12 +1,11 @@
 import type { Kysely } from 'kysely';
-import { db } from '../db/kysely';
 import type { Database, Folder } from '../db/schema';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { ToolError } from './types';
 
 /**
  * The one place that decides what a tool may see or touch: the user's own documents and folders
- * that are neither trashed nor private (a private folder or collection). Every read goes through
+ * that are neither trashed nor private (in, or beneath, a private folder). Every read goes through
  * these query builders, and every write re-checks its targets with the assert helpers inside its
  * transaction, so an item locked or trashed after a search cannot be reached through its id or an
  * old selection. Nothing here, or anywhere in tools/, can unlock anything.
@@ -89,20 +88,17 @@ export async function assertVisibleFolder(trx: DbOrTrx, vis: Visibility, id: str
     return folder;
 }
 
-/** A visible folder that documents can be put in, which a collection is not. Locks it inside a transaction. */
-export async function assertDocumentFolder(conn: DbOrTrx, vis: Visibility, id: string): Promise<Folder> {
-    const folder = await assertVisibleFolder(conn, vis, id);
-
-    if (folder.type !== 'folder') throw new ToolError('Documents can only be moved into a folder, not a collection: ' + id);
-
-    return folder;
+/** Where documents can be put: a folder, or the top level (a null id, path "/"). */
+export interface TargetFolder {
+    id: string | null;
+    path: string;
 }
 
-/** Non-locking variant for read tools. */
-export async function fetchVisibleFolder(vis: Visibility, id: string): Promise<Folder> {
-    const folder = await visibleFolders(db, vis).selectAll('folders').where('folders.id', '=', id).executeTakeFirst();
+/** The top level, or a visible folder at any depth, locked for the transaction it is read in; refuses anything else. */
+export async function assertTargetFolder(conn: DbOrTrx, vis: Visibility, id: string | null): Promise<TargetFolder> {
+    if (id === null) return { id: null, path: '/' };
 
-    if (!folder) throw new ToolError('Folder not found: ' + id);
+    const folder = await assertVisibleFolder(conn, vis, id);
 
-    return folder;
+    return { id: folder.id, path: folder.path };
 }

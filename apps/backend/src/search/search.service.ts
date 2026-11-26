@@ -10,9 +10,12 @@ import type {
 } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
+import { toFolderType } from '../services/folders/paths';
+import { withinFolderSql } from '../services/folders/scope';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { fetchDocumentDetails } from './document-hydration';
 import { generateFacets } from './facets';
+import { loadPublicFolderCounts } from './folder-counts';
 import { placeFolders } from './folder-placement';
 import { buildPrefixTsQuery, documentJoins } from './filter-application';
 import { generateSummarySnippet } from './highlighter';
@@ -38,8 +41,7 @@ export interface SearchServiceOptions {
 export async function search(query: SearchQuery, options: SearchServiceOptions): Promise<SearchResponse> {
     const startTime = performance.now();
 
-    // Parse the query string — all filtering is expressed inside the q DSL
-    const parsed = parseQuery(query.q);
+    const parsed = toScopedQuery(query.q, { folderId: query.folder_id, media: query.media });
 
     // Validate the parsed query
     const errors = validateQuery(parsed);
@@ -63,7 +65,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     const semantic = await getSemanticSearch().load(parsed, ctx);
     const facetsPromise = query.include_facets ? generateFacets(parsed, options.userId, privateFolderIds, semantic.ids) : Promise.resolve(undefined);
 
-    // Collections/folders only join the results for plain text relevance searches (see shouldSearchFolders).
+    // Folders only join the results for plain text relevance searches (see shouldSearchFolders).
     const { results, total } = shouldSearchFolders(parsed, query)
         ? await searchInterleaved(parsed, ctx, queryOptions, semantic)
         : await searchDocumentsPaged(parsed, ctx, queryOptions, semantic);
@@ -80,8 +82,20 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     };
 }
 
+/** What a request narrows a search to, on top of the filters in the query string. */
+interface SearchScope {
+    folderId?: string;
+    /** Photos and videos only. */
+    media?: boolean;
+}
+
+/** The query string parsed (all its filtering is in the q DSL), narrowed to the scope the request names. */
+function toScopedQuery(q: string, { folderId, media }: SearchScope): ParsedQuery {
+    return { ...parseQuery(q), ...(folderId && { scopeFolderId: folderId }), ...(media && { scopeMedia: true }) };
+}
+
 /**
- * Whether matched collections/folders should be interleaved into the results.
+ * Whether matched folders should be interleaved into the results.
  *
  * Only for plain text relevance searches: folders have no size/mime/date/category
  * to satisfy structured document filters, and folder-scoped queries search *within*
@@ -94,7 +108,7 @@ function shouldSearchFolders(parsed: ParsedQuery, query: SearchQuery): boolean {
 
     if (parsed.searchScope === 'content' || parsed.searchScope === 'summary') return false;
 
-    if (parsed.folders?.length || parsed.folderIds?.length) return false;
+    if (parsed.folders?.length || parsed.scopeFolderId || parsed.scopeMedia) return false;
 
     const hasDocumentFilters = Boolean(
         parsed.types?.length ||
@@ -152,10 +166,9 @@ interface FolderRow {
     path: string;
     description: string | null;
     emoji: string | null;
-    type: CollectionSearchResult['folder_type'];
+    parent_id: string | null;
     created_at: Date;
     relevance: number;
-    document_count: number | null;
 }
 
 function matchingFolders(userId: string, tsQuery: ReturnType<typeof buildPrefixTsQuery>, privateFolderIds: string[]) {
@@ -184,17 +197,9 @@ async function fetchMatchingFolders(
                 'f.path',
                 'f.description',
                 'f.emoji',
-                'f.type',
+                'f.parent_id',
                 'f.created_at',
                 sql<number>`COALESCE(ts_rank(f.search_vector, ${tsQuery}), 0)`.as('relevance'),
-                (eb) =>
-                    excludeTrashed(
-                        eb
-                            .selectFrom('documents as dd')
-                            .select(sql<number>`count(*)::int`.as('count'))
-                            .whereRef('dd.folder_id', '=', 'f.id'),
-                        'dd.',
-                    ).as('document_count'),
             ])
             .orderBy('relevance', 'desc')
             .limit(window)
@@ -207,7 +212,7 @@ async function fetchMatchingFolders(
     return { rows: rows as FolderRow[], total: totalRow?.count ?? 0 };
 }
 
-function toCollectionHit(folder: FolderRow, parsed: ParsedQuery): CollectionSearchResult {
+function toCollectionHit(folder: FolderRow, parsed: ParsedQuery, documentCount: number): CollectionSearchResult {
     return {
         result_type: 'collection',
         id: folder.id,
@@ -215,8 +220,8 @@ function toCollectionHit(folder: FolderRow, parsed: ParsedQuery): CollectionSear
         path: folder.path,
         description: folder.description,
         emoji: folder.emoji,
-        folder_type: folder.type,
-        document_count: Number(folder.document_count ?? 0),
+        folder_type: toFolderType(folder.parent_id),
+        document_count: documentCount,
         snippet: folder.description ? generateSummarySnippet(folder.description, parsed.fullText!) : null,
         relevance: Number(folder.relevance ?? 0),
     };
@@ -247,16 +252,20 @@ async function searchInterleaved(
     ]);
     const page = placeFolders(ranked.entries, folders.rows).slice(offset, offset + limit);
     const pageDocs = page.flatMap((item) => (item.type === 'document' ? [item.entry] : []));
-    const detailMap = await fetchDocumentDetails(
-        ctx.userId,
-        pageDocs.map((entry) => entry.id),
-        parsed,
-    );
+    const pageFolderIds = page.flatMap((item) => (item.type === 'collection' ? [item.folder.id] : []));
+    const [detailMap, folderCounts] = await Promise.all([
+        fetchDocumentDetails(
+            ctx.userId,
+            pageDocs.map((entry) => entry.id),
+            parsed,
+        ),
+        loadPublicFolderCounts(ctx.userId, pageFolderIds),
+    ]);
     const documentHits = new Map(toDocumentHits(pageDocs, detailMap).map((hit) => [hit.document_id, hit]));
     const results: SearchHit[] = [];
 
     for (const item of page) {
-        const hit = item.type === 'document' ? documentHits.get(item.entry.id) : toCollectionHit(item.folder, parsed);
+        const hit = item.type === 'document' ? documentHits.get(item.entry.id) : toCollectionHit(item.folder, parsed, folderCounts.get(item.folder.id) ?? 0);
 
         if (hit) results.push(hit);
     }
@@ -286,8 +295,8 @@ export async function countDocuments(parsed: ParsedQuery, userId: string, privat
 /**
  * Get facets only (without full search results)
  */
-export async function getFacetsOnly(query: string, userId: string): Promise<SearchFacets> {
-    const parsed = parseQuery(query);
+export async function getFacetsOnly(query: string, userId: string, scope: SearchScope = {}): Promise<SearchFacets> {
+    const parsed = toScopedQuery(query, scope);
     const privateFolderIds = await getPrivateFolderIds(userId);
     const semantic = await getSemanticSearch().load(parsed, { userId, privateFolderIds });
 
@@ -298,37 +307,46 @@ export async function getFacetsOnly(query: string, userId: string): Promise<Sear
  * Autocomplete suggestions
  */
 export async function suggest(query: SuggestQuery, userId: string): Promise<string[]> {
-    const { type, q, limit } = query;
+    const { type, q, limit, folder_id } = query;
     const privateFolderIds = await getPrivateFolderIds(userId);
+    const scope: SuggestScope = { userId, privateFolderIds, folderId: folder_id };
 
     switch (type) {
         case 'filename':
-            return suggestFilenames(q, userId, limit, privateFolderIds);
+            return suggestFilenames(q, limit, scope);
         case 'folder':
-            return suggestFolders(q, userId, limit, privateFolderIds);
+            return suggestFolders(q, limit, scope);
         case 'tag':
-            return suggestTags(q, userId, limit, privateFolderIds);
+            return suggestTags(q, limit, scope);
         case 'entity':
-            return suggestEntities(q, userId, limit, privateFolderIds);
+            return suggestEntities(q, limit, scope);
         case 'category':
-            return suggestCategories(q, userId, limit, privateFolderIds);
+            return suggestCategories(q, limit, scope);
         case 'location':
-            return suggestLocations(q, userId, limit, privateFolderIds);
+            return suggestLocations(q, limit, scope);
         default:
             return [];
     }
 }
 
+/** Whose library suggestions come from, what is hidden from them, and the folder they are narrowed to, if any. */
+interface SuggestScope {
+    userId: string;
+    privateFolderIds: string[];
+    folderId: string | undefined;
+}
+
 /**
  * Suggest filenames
  */
-async function suggestFilenames(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestFilenames(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     const query = db
         .selectFrom('documents')
         .select('original_filename')
         .distinct()
         .where('user_id', '=', userId)
         .where('original_filename', 'ilike', `${prefix}%`)
+        .where(withinFolderSql('folder_id', userId, folderId))
         .orderBy('original_filename', 'asc')
         .limit(limit);
 
@@ -340,7 +358,7 @@ async function suggestFilenames(prefix: string, userId: string, limit: number, p
 /**
  * Suggest folders
  */
-async function suggestFolders(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestFolders(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     // Folder paths start with "/" (e.g. "/Documents/Photos").
     // Use contains match so "Doc" matches "/Documents/Photos".
     const pattern = `%${prefix}%`;
@@ -351,6 +369,7 @@ async function suggestFolders(prefix: string, userId: string, limit: number, pri
         .distinct()
         .where('user_id', '=', userId)
         .where('path', 'ilike', pattern)
+        .where(withinFolderSql('id', userId, folderId))
         .orderBy('path', 'asc')
         .limit(limit);
 
@@ -362,7 +381,7 @@ async function suggestFolders(prefix: string, userId: string, limit: number, pri
 /**
  * Suggest tags
  */
-async function suggestTags(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestTags(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     const query = db
         .selectFrom('document_tags as dt')
         .innerJoin('documents as d', 'd.id', 'dt.document_id')
@@ -370,6 +389,7 @@ async function suggestTags(prefix: string, userId: string, limit: number, privat
         .distinct()
         .where('d.user_id', '=', userId)
         .where('dt.tag', 'ilike', `${prefix}%`)
+        .where(withinFolderSql('d.folder_id', userId, folderId))
         .orderBy('dt.tag', 'asc')
         .limit(limit);
 
@@ -381,7 +401,7 @@ async function suggestTags(prefix: string, userId: string, limit: number, privat
 /**
  * Suggest entities (companies from OCR)
  */
-async function suggestEntities(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestEntities(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     // This is a complex query that extracts entities from JSONB
     const query = db
         .selectFrom('ocr_results as ocr')
@@ -390,6 +410,7 @@ async function suggestEntities(prefix: string, userId: string, limit: number, pr
         .where('d.user_id', '=', userId)
         .where(sql<SqlBool>`ocr.metadata->'companies' IS NOT NULL`)
         .where(sql<SqlBool>`jsonb_array_elements_text(ocr.metadata->'companies') ILIKE ${prefix + '%'}`)
+        .where(withinFolderSql('d.folder_id', userId, folderId))
         .limit(limit);
 
     const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, 'd.'), 'd.').execute();
@@ -400,7 +421,7 @@ async function suggestEntities(prefix: string, userId: string, limit: number, pr
 /**
  * Suggest categories
  */
-async function suggestCategories(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestCategories(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     const query = db
         .selectFrom('documents')
         .select('document_category')
@@ -408,6 +429,7 @@ async function suggestCategories(prefix: string, userId: string, limit: number, 
         .where('user_id', '=', userId)
         .where('document_category', 'is not', null)
         .where('document_category', 'ilike', `${prefix}%`)
+        .where(withinFolderSql('folder_id', userId, folderId))
         .limit(limit);
 
     const results = await excludeTrashed(excludePrivateDocuments(query, privateFolderIds, ''), '').execute();
@@ -418,7 +440,7 @@ async function suggestCategories(prefix: string, userId: string, limit: number, 
 /**
  * Suggest locations (cities and countries from photo metadata)
  */
-async function suggestLocations(prefix: string, userId: string, limit: number, privateFolderIds: string[]): Promise<string[]> {
+async function suggestLocations(prefix: string, limit: number, { userId, privateFolderIds, folderId }: SuggestScope): Promise<string[]> {
     const pattern = `%${prefix}%`;
 
     const citiesQuery = db
@@ -429,6 +451,7 @@ async function suggestLocations(prefix: string, userId: string, limit: number, p
         .where('d.user_id', '=', userId)
         .where('pm.city', 'is not', null)
         .where('pm.city', 'ilike', pattern)
+        .where(withinFolderSql('d.folder_id', userId, folderId))
         .orderBy('pm.city', 'asc')
         .limit(limit);
 
@@ -440,6 +463,7 @@ async function suggestLocations(prefix: string, userId: string, limit: number, p
         .where('d.user_id', '=', userId)
         .where('pm.country', 'is not', null)
         .where('pm.country', 'ilike', pattern)
+        .where(withinFolderSql('d.folder_id', userId, folderId))
         .orderBy('pm.country', 'asc')
         .limit(limit);
 

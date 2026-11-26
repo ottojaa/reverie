@@ -10,7 +10,9 @@ vi.mock('../queues/ocr.queue', () => ({ addOcrJob: vi.fn() }));
 vi.mock('../queues/trim.queue', () => ({ addTrimJob: vi.fn() }));
 
 import { createAuthService } from '../services/auth.service.js';
-import { trashFolder } from '../services/trash-folders.js';
+import { trashFolder } from '../services/folders/trash.js';
+import { lockFolders } from '../services/folders/transaction.js';
+import { countAdvisoryLockWaiters } from '../testing/advisory-locks.js';
 import { seedDocument, seedFolder } from '../testing/seed.js';
 import { describeDb, useWorld, type World } from '../testing/tool-world.js';
 import authPlugin from './plugins/auth.js';
@@ -38,7 +40,7 @@ class Session {
         return this.cookies.get('vault_session');
     }
 
-    async request(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: object, headers: Record<string, string> = {}) {
+    async request(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object, headers: Record<string, string> = {}) {
         const cookie = Array.from(this.cookies, ([name, value]) => name + '=' + value).join('; ');
         const response = await this.app.inject({
             method,
@@ -140,7 +142,7 @@ describeDb('folder locks over HTTP', () => {
             expect((await session.get('/documents/' + docs.inVaultInner)).status).toBe(403);
         });
 
-        it('lets a private collection’s lock cover its folders', async () => {
+        it('lets a private folder’s lock cover everything beneath it, at any depth', async () => {
             const { folders, docs } = world();
             const session = newSession();
 
@@ -151,6 +153,30 @@ describeDb('folder locks over HTTP', () => {
             ]);
             expect((await session.get('/documents?folder_id=' + folders.vault.id)).status).toBe(200);
             expect((await session.get('/documents?folder_id=' + folders.lockedFolder.id)).status).toBe(403);
+        });
+
+        it('hides every folder beneath a closed one, and opens the whole branch when asked for any of them', async () => {
+            const { folders, docs } = world();
+            const session = newSession();
+
+            for (const id of [folders.vaultMiddle.id, folders.vaultInner.id]) {
+                for (const url of ['/folders/' + id, '/folders/' + id + '/children', '/documents?folder_id=' + id]) {
+                    const refused = await session.get(url);
+
+                    expect(refused.status, url).toBe(403);
+                    expect(refused.raw, url).not.toMatch(/Middle|Inner|in-vault/);
+                }
+            }
+
+            expect((await session.unlock(folders.vaultInner.id)).status).toBe(200);
+            expect((await session.get('/folders/' + folders.vaultMiddle.id)).body).toMatchObject({
+                is_private: false,
+                lock_id: folders.vault.id,
+                locked: false,
+            });
+            expect((await session.get('/documents?folder_id=' + folders.vaultInner.id)).body.items.map((d: { id: string }) => d.id)).toEqual([
+                docs.inVaultInner,
+            ]);
         });
 
         it('keeps the folder open for the whole session, and a second session stays locked', async () => {
@@ -228,7 +254,12 @@ describeDb('folder locks over HTTP', () => {
                 .where((eb) =>
                     eb.or([
                         eb('folder_id', 'is', null),
-                        eb('folder_id', 'not in', [world().folders.vault.id, world().folders.vaultInner.id, world().folders.lockedFolder.id]),
+                        eb('folder_id', 'not in', [
+                            world().folders.vault.id,
+                            world().folders.vaultMiddle.id,
+                            world().folders.vaultInner.id,
+                            world().folders.lockedFolder.id,
+                        ]),
                     ]),
                 )
                 .executeTakeFirstOrThrow();
@@ -253,16 +284,21 @@ describeDb('folder locks over HTTP', () => {
             expect(vault).toMatchObject({ name: 'Vault', locked: true, children: [], document_count: 0 });
         });
 
-        it('shows the children of an opened collection', async () => {
+        it('shows everything beneath an opened folder', async () => {
             const session = newSession();
 
             await session.unlock(world().folders.vault.id);
 
-            const tree = (await session.get('/folders/tree')).body as Array<{ id: string; locked: boolean; children: Array<{ id: string; locked: boolean }> }>;
+            const tree = (await session.get('/folders/tree')).body as Array<{
+                id: string;
+                locked: boolean;
+                children: Array<{ id: string; locked: boolean; children: Array<{ id: string }> }>;
+            }>;
             const vault = tree.find((node) => node.id === world().folders.vault.id);
 
             expect(vault?.locked).toBe(false);
-            expect(vault?.children.map((child) => child.id)).toEqual([world().folders.vaultInner.id]);
+            expect(vault?.children.map((child) => child.id)).toEqual([world().folders.vaultMiddle.id]);
+            expect(vault?.children[0]?.children.map((child) => child.id)).toEqual([world().folders.vaultInner.id]);
         });
     });
 
@@ -428,6 +464,127 @@ describeDb('folder locks over HTTP', () => {
             expect((await session.get('/documents?folder_id=' + fresh.id)).status).toBe(403);
         });
 
+        it('moves a folder only with the lock it leaves and the lock it enters both open, and never into itself', async () => {
+            const { alice, db, folders } = world();
+            const source = await seedFolder(db, alice, 'Mover', { parent: await seedFolder(db, alice, 'Mover parent', { isPrivate: true }) });
+            const inner = await seedFolder(db, alice, 'Mover inner', { parent: await seedFolder(db, alice, 'Mover mid', { parent: source }) });
+            const sourceLock = (await db.selectFrom('folders').select('parent_id').where('id', '=', source.id).executeTakeFirstOrThrow()).parent_id!;
+            const session = newSession();
+            const move = (parentId: string) => session.request('PATCH', '/folders/' + source.id, { parent_id: parentId });
+
+            await session.unlock(folders.lockedFolder.id);
+            expect((await move(folders.lockedFolder.id)).status).toBe(403);
+            await session.unlock(sourceLock);
+            expect((await move(folders.vaultInner.id)).status).toBe(403);
+            expect((await move(inner.id)).status).toBe(409);
+            expect((await move(source.id)).status).toBe(409);
+            expect((await move(folders.lockedFolder.id)).status).toBe(200);
+        });
+
+        /** A public folder with a private folder two levels down, which holds one document. */
+        async function seedHidingFolder(name: string, opts: { trashed?: boolean } = {}) {
+            const { alice, db } = world();
+            const top = await seedFolder(db, alice, name);
+            const middle = await seedFolder(db, alice, 'Middle', { parent: top });
+            const hidden = await seedFolder(db, alice, 'Inside', { parent: middle, isPrivate: true, deleted: opts.trashed ?? false });
+
+            await seedDocument(db, { userId: alice, name: name + '.pdf', folderId: hidden.id });
+
+            return { top, hidden };
+        }
+
+        it('refuses a move into an opened folder that would open a closed lock beneath the moved one', async () => {
+            const { db, folders } = world();
+            const session = newSession();
+            const move = (id: string) => session.request('PATCH', '/folders/' + id, { parent_id: folders.vault.id });
+
+            await session.unlock(folders.vault.id);
+
+            const refused = await move(folders.secretParent.id);
+
+            expect(refused.status).toBe(403);
+            expect(refused.body.error).toBe('FOLDER_LOCKED');
+            expect((await session.get('/documents?folder_id=' + folders.lockedFolder.id)).status).toBe(403);
+            expect(
+                (await db.selectFrom('folders').select('parent_id').where('id', '=', folders.secretParent.id).executeTakeFirstOrThrow()).parent_id,
+            ).toBeNull();
+            // A lock on a trashed folder would open the same way.
+            expect((await move((await seedHidingFolder('Hides trashed', { trashed: true })).top.id)).status).toBe(403);
+        });
+
+        it('moves a folder holding a closed lock anywhere public, and into an opened folder once that lock is open', async () => {
+            const { folders } = world();
+            const { top, hidden } = await seedHidingFolder('Travels');
+            const session = newSession();
+            const move = (parentId: string) => session.request('PATCH', '/folders/' + top.id, { parent_id: parentId });
+
+            expect((await move(folders.work.id)).status).toBe(200);
+            expect((await session.get('/documents?folder_id=' + hidden.id)).status).toBe(403);
+
+            await session.unlock(folders.vault.id);
+            await session.unlock(hidden.id);
+
+            expect((await move(folders.vault.id)).status).toBe(200);
+        });
+
+        it('does not let a lock opened before reopen a closed one when the folder turns private again', async () => {
+            const { top, hidden } = await seedHidingFolder('Flips');
+            const session = newSession();
+            const setPrivate = (isPrivate: boolean) => session.request('PATCH', '/folders/' + top.id, { is_private: isPrivate });
+
+            // Anyone may make a public folder private, with a closed lock beneath it or not.
+            expect((await setPrivate(true)).status).toBe(200);
+            await session.unlock(top.id);
+            expect((await setPrivate(false)).status).toBe(200);
+            expect((await session.get('/documents?folder_id=' + hidden.id)).status).toBe(403);
+
+            // The session still holds the folder's old lock, so turning it private again would cover and open the inner one.
+            expect((await setPrivate(true)).status).toBe(403);
+            expect((await session.get('/documents?folder_id=' + hidden.id)).status).toBe(403);
+            expect((await newSession().request('PATCH', '/folders/' + top.id, { is_private: true })).status).toBe(200);
+        });
+
+        it('judges two moves sent at once one after the other', async () => {
+            const { alice, db, folders } = world();
+            const { top } = await seedHidingFolder('Raced');
+            const empty = await seedFolder(db, alice, 'Waiting room');
+            const session = newSession();
+            const move = (id: string, parentId: string) => session.request('PATCH', '/folders/' + id, { parent_id: parentId });
+
+            await session.unlock(folders.vault.id);
+
+            // Either move alone is allowed; after the other one, it would open the lock beneath `top`.
+            // The folder lock is held until both wait for it, so both are under way before either writes.
+            const moves = await db.transaction().execute(async (trx) => {
+                await lockFolders(trx, alice);
+                const sent = [move(empty.id, folders.vault.id), move(top.id, empty.id)];
+                await vi.waitFor(async () => expect(await countAdvisoryLockWaiters(trx)).toBe(2));
+
+                return { sent: Promise.all(sent) };
+            });
+
+            expect((await moves.sent).map((response) => response.status).sort()).toEqual([200, 403]);
+        });
+
+        it('answers 404 for a change to a folder that does not exist, behind an opened lock too', async () => {
+            const { folders } = world();
+            const session = newSession();
+
+            await session.unlock(folders.vault.id);
+
+            expect((await session.request('PATCH', '/folders/' + crypto.randomUUID(), { parent_id: folders.vault.id })).status).toBe(404);
+        });
+
+        it('creates and reorders nothing inside a closed folder, at any depth', async () => {
+            const { folders } = world();
+            const session = newSession();
+            const create = await session.request('POST', '/folders', { name: 'Sneaked in', parent_id: folders.vaultInner.id });
+            const reorder = await session.request('PUT', '/folders/reorder', { updates: [{ id: folders.vaultInner.id, sort_order: 3 }] });
+
+            expect(create.status).toBe(403);
+            expect(reorder.status).toBe(403);
+        });
+
         it('lets an opened folder become public', async () => {
             const { alice, db, folders } = world();
             const folder = await seedFolder(db, alice, 'Goes public', { parent: folders.work, isPrivate: true });
@@ -489,10 +646,11 @@ describeDb('folder locks over HTTP', () => {
             expect(await db.selectFrom('folders').select('id').where('id', '=', folder.id).executeTakeFirst()).toBeDefined();
         });
 
-        it('purges a trashed private collection together with its folders’ documents instead of dropping them to the root', async () => {
+        it('purges a trashed private folder together with the documents deep beneath it instead of dropping them to the root', async () => {
             const { alice, db } = world();
             const collection = await seedFolder(db, alice, 'Purged vault', { isPrivate: true });
-            const inner = await seedFolder(db, alice, 'Purged vault inner', { parent: collection });
+            const middle = await seedFolder(db, alice, 'Purged vault middle', { parent: collection });
+            const inner = await seedFolder(db, alice, 'Purged vault inner', { parent: middle });
             const doc = await seedDocument(db, { userId: alice, name: 'purged-vault.pdf', folderId: inner.id });
             const session = newSession();
 
@@ -512,10 +670,11 @@ describeDb('folder locks over HTTP', () => {
             ).toEqual([]);
         });
 
-        it('leaves a trashed public collection alone when it contains a closed lock, on purge and on empty', async () => {
+        it('leaves a trashed public folder alone when a closed lock sits deep beneath it, on purge and on empty', async () => {
             const { alice, db } = world();
             const collection = await seedFolder(db, alice, 'Public shell');
-            const inner = await seedFolder(db, alice, 'Locked inside shell', { parent: collection, isPrivate: true });
+            const middle = await seedFolder(db, alice, 'Shell middle', { parent: collection });
+            const inner = await seedFolder(db, alice, 'Locked inside shell', { parent: middle, isPrivate: true });
             const doc = await seedDocument(db, { userId: alice, name: 'inside-shell.pdf', folderId: inner.id });
 
             await trashFolder(alice, collection.id);

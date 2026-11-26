@@ -21,7 +21,9 @@ export interface SearchQueryState {
     freeText: string;
     /** Positive (non-negated) filter values per known key. */
     filterValues: Map<FilterKey, string[]>;
-    /** Count of distinct filter dimensions with at least one token (negated included). */
+    /** The folder searched in, subfolders included. The one filter kept outside `q`, in `folder_id`. */
+    folderId: string | undefined;
+    /** Count of distinct filter dimensions with at least one token (negated included), the folder among them. */
     activeDimensionCount: number;
     sortBy: SearchSortBy;
     sortOrder: SearchSortOrder;
@@ -35,18 +37,19 @@ export interface SearchQueryState {
     removeToken: (token: QueryToken) => void;
     clearAllFilters: () => void;
     setQuery: (q: string) => void;
+    setFolderId: (folderId: string | undefined) => void;
     setSort: (sortBy: SearchSortBy) => void;
     setView: (view: SearchResultView) => void;
 }
 
 /**
- * Single state broker for the /search page. All filter state lives in the `q`
- * URL param as DSL tokens; every mutation goes tokens → serialize → navigate.
+ * Single state broker for the /search page. Filter state lives in the `q` URL
+ * param as DSL tokens (the picked folder in `folder_id`); every mutation goes tokens → serialize → navigate.
  * Mutators read the latest q from a ref so debounced/async callers never
  * operate on a stale query string.
  */
 export function useSearchQuery(): SearchQueryState {
-    const { q, sort_by, sort_order, view } = useSearch({ from: '/search' });
+    const { q, folder_id, sort_by, sort_order, view } = useSearch({ from: '/search' });
     const navigate = useNavigate();
 
     const qRef = useRef(q);
@@ -71,15 +74,16 @@ export function useSearchQuery(): SearchQueryState {
     const activeDimensionCount = useMemo(() => {
         const keys = new Set(getFilterTokens(tokens).map((token) => token.key));
 
-        return keys.size;
-    }, [tokens]);
+        return keys.size + (folder_id ? 1 : 0);
+    }, [tokens, folder_id]);
 
     const navigateWith = useCallback(
-        (updates: { q?: string; sort_by?: SearchSortBy; sort_order?: SearchSortOrder; view?: SearchResultView }) => {
+        (updates: { q?: string; folder_id?: string | undefined; sort_by?: SearchSortBy; sort_order?: SearchSortOrder; view?: SearchResultView }) => {
             navigate({
                 to: '/search',
                 search: {
                     q: updates.q ?? qRef.current,
+                    folder_id: 'folder_id' in updates ? updates.folder_id : folder_id,
                     sort_by: updates.sort_by ?? sort_by,
                     sort_order: updates.sort_order ?? sort_order,
                     view: 'view' in updates ? updates.view : view,
@@ -87,10 +91,12 @@ export function useSearchQuery(): SearchQueryState {
                 replace: true,
             });
         },
-        [navigate, sort_by, sort_order, view],
+        [navigate, folder_id, sort_by, sort_order, view],
     );
 
     const setQuery = useCallback((next: string) => navigateWith({ q: next }), [navigateWith]);
+
+    const setFolderId = useCallback((next: string | undefined) => navigateWith({ folder_id: next }), [navigateWith]);
 
     const commitFreeText = useCallback((text: string) => setQuery(setFreeText(qRef.current, text)), [setQuery]);
 
@@ -140,8 +146,8 @@ export function useSearchQuery(): SearchQueryState {
     const clearAllFilters = useCallback(() => {
         const remaining = tokenizeQuery(qRef.current).filter((token) => !isKnownFilter(token));
 
-        setQuery(serializeQuery(remaining));
-    }, [setQuery]);
+        navigateWith({ q: serializeQuery(remaining), folder_id: undefined });
+    }, [navigateWith]);
 
     const setSort = useCallback(
         (nextSortBy: SearchSortBy) => {
@@ -163,6 +169,7 @@ export function useSearchQuery(): SearchQueryState {
         tokens,
         freeText,
         filterValues,
+        folderId: folder_id,
         activeDimensionCount,
         sortBy: sort_by,
         sortOrder: sort_order,
@@ -175,6 +182,7 @@ export function useSearchQuery(): SearchQueryState {
         removeToken,
         clearAllFilters,
         setQuery,
+        setFolderId,
         setSort,
         setView,
     };
