@@ -70,7 +70,11 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry && authStore) {
+        // `invalid_credentials` rejects a password the request carried (the vault's unlock), not the session:
+        // renewing the token and sending it again can't change the answer.
+        const isSessionRejected = error.response?.status === 401 && error.response.data?.error !== 'invalid_credentials';
+
+        if (isSessionRejected && !originalRequest._retry && authStore) {
             originalRequest._retry = true;
 
             const refreshed = await authStore.refresh();

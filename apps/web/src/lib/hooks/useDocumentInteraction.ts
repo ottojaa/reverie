@@ -185,7 +185,8 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         // Drag props (spread onto DOM element)
         dragRef: setNodeRef,
         dragAttributes: attributes,
-        dragListeners: listeners,
-        longPressHandlers,
+        // A press is a long press (select) on touch screens and the start of a drag elsewhere. Both claim
+        // `onMouseDown` and `onTouchStart`, so an element can only be given one set.
+        gestureHandlers: isMobile ? longPressHandlers : listeners,
     };
 }

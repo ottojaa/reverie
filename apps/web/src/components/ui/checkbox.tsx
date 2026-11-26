@@ -4,16 +4,12 @@ import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
 
+const boxClassName =
+    'peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:data-[state=checked]:bg-primary data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50';
+
 function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
     return (
-        <CheckboxPrimitive.Root
-            data-slot="checkbox"
-            className={cn(
-                'peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:data-[state=checked]:bg-primary data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
-                className,
-            )}
-            {...props}
-        >
+        <CheckboxPrimitive.Root data-slot="checkbox" className={cn(boxClassName, className)} {...props}>
             <CheckboxPrimitive.Indicator data-slot="checkbox-indicator" className="grid place-content-center text-current transition-none">
                 <CheckIcon className="size-3.5" />
             </CheckboxPrimitive.Indicator>
@@ -21,4 +17,13 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
     );
 }
 
-export { Checkbox };
+/** The look of a checkbox without the control, for a row that is itself the checkbox (a button can't hold another). */
+function CheckboxMark({ checked }: { checked: boolean }) {
+    return (
+        <span aria-hidden data-slot="checkbox" data-state={checked ? 'checked' : 'unchecked'} className={cn(boxClassName, 'grid place-content-center')}>
+            {checked && <CheckIcon className="size-3.5" />}
+        </span>
+    );
+}
+
+export { Checkbox, CheckboxMark };

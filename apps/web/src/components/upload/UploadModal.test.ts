@@ -18,7 +18,7 @@ vi.mock('@/lib/sections', async (importOriginal) => ({
     useSections: () => ({ data: state.tree }),
 }));
 vi.mock('@/lib/upload', () => ({
-    isFileTooLarge: () => false,
+    isRetryable: () => false,
     useUpload: () => ({ files, isModalOpen: true, stats: { queued: 1, uploading: 0, processing: 0, complete: 0, error: 0 } }),
 }));
 vi.mock('@/lib/hash/useFileHashes', () => ({ useFileHashes: () => ({}) }));

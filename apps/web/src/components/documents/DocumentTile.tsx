@@ -24,7 +24,7 @@ interface DocumentTileProps {
 export const DocumentTile = memo(function DocumentTile({ document, orderedIds, width, height, shouldPulse, onPulseComplete }: DocumentTileProps) {
     const prefetchDocument = usePrefetchDocument(document);
     const interaction = useDocumentInteraction({ document, orderedIds });
-    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
+    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, gestureHandlers } = interaction;
 
     return (
         <DocumentActionsMenu document={document} interaction={interaction}>
@@ -34,8 +34,7 @@ export const DocumentTile = memo(function DocumentTile({ document, orderedIds, w
                 className="relative shrink-0"
                 style={{ width, height, touchAction: isMobile ? 'pan-y' : 'none' }}
                 {...dragAttributes}
-                {...dragListeners}
-                {...longPressHandlers}
+                {...gestureHandlers}
                 onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
             >
                 <Link

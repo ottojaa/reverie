@@ -5,7 +5,7 @@ import { useFileHashes } from '@/lib/hash/useFileHashes';
 import { useIsFolderGone } from '@/lib/folders/gone';
 import { findFolder } from '@/lib/folders/tree.js';
 import { useSections } from '@/lib/sections';
-import { isFileTooLarge, useUpload } from '@/lib/upload';
+import { isRetryable, useUpload } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
@@ -121,20 +121,8 @@ export function UploadModal() {
         setPicked(undefined);
     }, [currentSectionId]);
 
-    const {
-        files,
-        isModalOpen,
-        closeModal,
-        startUpload,
-        removeFile,
-        clearCompleted,
-        clearFailed,
-        retryFailed,
-        retryFile,
-        stats,
-        isUploading,
-        recordCompletedDocumentIds,
-    } = useUpload();
+    const { files, isModalOpen, closeModal, startUpload, removeFile, clearCompleted, clearFailed, retryFile, stats, isUploading, recordCompletedDocumentIds } =
+        useUpload();
 
     const queryClient = useQueryClient();
     const prevAllComplete = useRef(false);
@@ -146,8 +134,7 @@ export function UploadModal() {
 
     const hasQueued = stats.queued > 0;
     const hasFailed = stats.error > 0;
-    // Files over the size limit can't be retried
-    const hasRetryable = files.some((f) => f.status === 'error' && !isFileTooLarge(f.file));
+    const hasRetryable = files.some(isRetryable);
     const allComplete = total > 0 && stats.complete === total;
     const allCompleteRef = useRef(allComplete);
     allCompleteRef.current = allComplete;
@@ -292,14 +279,7 @@ export function UploadModal() {
                                         Clear failed
                                     </Button>
                                     {hasRetryable && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                retryFailed();
-                                                setTimeout(() => startUpload(targetFolderId ?? undefined), 0);
-                                            }}
-                                        >
+                                        <Button variant="outline" size="sm" disabled={uploadCheck.isChecking} onClick={uploadCheck.retry}>
                                             <RefreshCw className="mr-2 size-4" />
                                             Retry all
                                         </Button>

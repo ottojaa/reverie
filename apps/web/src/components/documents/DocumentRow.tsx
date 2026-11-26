@@ -39,7 +39,7 @@ export const DocumentRow = memo(function DocumentRow({
     member = false,
 }: DocumentRowProps) {
     const interaction = useDocumentInteraction({ document, orderedIds });
-    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
+    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, gestureHandlers } = interaction;
     const config = getFileTypeConfig(document.mime_type, document.original_filename);
     const label = fileTypeLabel(document.mime_type, document.original_filename);
     const showFolder = folderName !== undefined;
@@ -52,8 +52,7 @@ export const DocumentRow = memo(function DocumentRow({
                 className={cn('absolute left-0 right-0', isDragging && 'opacity-50')}
                 style={{ ...style, touchAction: isMobile ? 'pan-y' : 'none' }}
                 {...dragAttributes}
-                {...dragListeners}
-                {...longPressHandlers}
+                {...gestureHandlers}
                 onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
             >
                 <Link

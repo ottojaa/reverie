@@ -4,7 +4,7 @@ import { formatFilterChip, type SearchResult } from '@reverie/shared';
 import { FileText, Folder, Image, Receipt } from 'lucide-react';
 import { memo, useRef } from 'react';
 import { Button } from '../ui/button';
-import { Checkbox } from '../ui/checkbox';
+import { CheckboxMark } from '../ui/checkbox';
 import { Chip } from '../ui/chip';
 import { ImageLoader } from '../ui/image-loader';
 
@@ -15,7 +15,7 @@ interface SearchResultItemProps {
     onClick?: () => void;
     /** When set, the containing folder renders as a clickable breadcrumb. */
     onFolderClick?: (folderId: string) => void;
-    /** When set, shows a checkbox for multi-select and row click toggles selection instead of calling onClick */
+    /** When set, the row is a checkbox for multi-select: pressing it toggles selection instead of calling onClick */
     selected?: boolean;
     onToggle?: (id: string) => void;
 }
@@ -90,25 +90,22 @@ export const SearchResultItem = memo(function SearchResultItem({
             : undefined;
 
     const isSelectable = onToggle !== undefined;
-    const handleClick = isSelectable ? () => onToggle(result.document_id) : onClick;
+    // Selectable rows are one control: the box is only drawn, the row button carries the checkbox semantics.
+    const controlProps = isSelectable ? { role: 'checkbox', 'aria-checked': selected ?? false, onClick: () => onToggle(result.document_id) } : { onClick };
 
     if (compact) {
         return (
             <Button
                 type="button"
                 variant="ghost"
-                onClick={handleClick}
+                {...controlProps}
                 className={cn(
                     'h-auto flex w-full min-w-0 shrink justify-start gap-3 px-3 py-2 text-left',
                     isActive && 'bg-secondary',
                     isSelectable && selected && 'bg-primary/5',
                 )}
             >
-                {isSelectable && (
-                    <div role="presentation" onClick={(e) => e.stopPropagation()} className="shrink-0">
-                        <Checkbox checked={selected} onCheckedChange={() => onToggle(result.document_id)} />
-                    </div>
-                )}
+                {isSelectable && <CheckboxMark checked={selected ?? false} />}
                 {thumbnailUrl ? (
                     <img src={thumbnailUrl} alt="" className="size-8 shrink-0 rounded object-cover bg-muted" />
                 ) : (
@@ -125,7 +122,7 @@ export const SearchResultItem = memo(function SearchResultItem({
         <Button
             type="button"
             variant="ghost"
-            onClick={handleClick}
+            {...controlProps}
             className={cn(
                 'group h-auto flex w-full min-w-0 shrink items-start justify-start gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-left hover:bg-secondary/60 dark:hover:bg-secondary/60',
                 isActive && 'bg-secondary',
@@ -133,8 +130,8 @@ export const SearchResultItem = memo(function SearchResultItem({
             )}
         >
             {isSelectable && (
-                <div role="presentation" onClick={(e) => e.stopPropagation()} className="shrink-0 pt-0.5">
-                    <Checkbox checked={selected} onCheckedChange={() => onToggle(result.document_id)} />
+                <div className="shrink-0 pt-0.5">
+                    <CheckboxMark checked={selected ?? false} />
                 </div>
             )}
 
