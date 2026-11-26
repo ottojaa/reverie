@@ -35,10 +35,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Below this screen width the two buttons close up, so the pill and the search button still fit side by side. */
 private const val NARROW_SCREEN_DP = 360
+
+/** Below this width per unit of font scale (large text on a narrow screen) they close up further. */
+private const val TIGHT_SCREEN_DP = 300
 
 /**
  * The pill floating over the browsing screens: Library and Photos, with a round search button beside it
@@ -62,9 +67,11 @@ internal fun BottomPill(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PillSurface {
+        // Weighted so that the search button is measured first and keeps its size.
+        PillSurface(Modifier.weight(1f, fill = false)) {
             Row(Modifier.padding(6.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Tab.entries.forEach { tab -> PillButton(tab, tab == selected, onClick = { onSelect(tab) }) }
+                val spacing = pillSpacing()
+                Tab.entries.forEach { tab -> PillButton(tab, tab == selected, spacing, onClick = { onSelect(tab) }) }
             }
         }
         AnimatedVisibility(
@@ -95,22 +102,38 @@ private fun PillSurface(modifier: Modifier = Modifier, content: @Composable () -
     )
 }
 
+/** The room inside a pill button: at its sides, and between its icon and its label. */
+private data class PillSpacing(val side: Dp, val gap: Dp)
+
 @Composable
-private fun PillButton(tab: Tab, isSelected: Boolean, onClick: () -> Unit) {
+private fun pillSpacing(): PillSpacing {
+    val screen = LocalConfiguration.current
+    if (screen.screenWidthDp / screen.fontScale < TIGHT_SCREEN_DP) return PillSpacing(side = 8.dp, gap = 6.dp)
+    if (screen.screenWidthDp < NARROW_SCREEN_DP) return PillSpacing(side = 14.dp, gap = 10.dp)
+    return PillSpacing(side = 22.dp, gap = 10.dp)
+}
+
+@Composable
+private fun PillButton(tab: Tab, isSelected: Boolean, spacing: PillSpacing, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val horizontal = if (LocalConfiguration.current.screenWidthDp < NARROW_SCREEN_DP) 14.dp else 22.dp
     Surface(
         color = if (isSelected) colors.primaryContainer else Color.Transparent,
         contentColor = if (isSelected) colors.onPrimaryContainer else colors.onSurfaceVariant,
         shape = CircleShape,
     ) {
         Row(
-            Modifier.selectable(isSelected, role = Role.Tab, onClick = onClick).height(52.dp).padding(horizontal = horizontal),
+            Modifier.selectable(isSelected, role = Role.Tab, onClick = onClick).height(52.dp).padding(horizontal = spacing.side),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(tab.icon, contentDescription = null, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(tab.title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, maxLines = 1)
+            Spacer(Modifier.width(spacing.gap))
+            Text(
+                tab.title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

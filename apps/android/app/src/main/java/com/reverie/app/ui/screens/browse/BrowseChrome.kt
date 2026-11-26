@@ -45,7 +45,6 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.favourites.FavouriteController
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteHost
 import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
 import com.reverie.app.ui.screens.manage.ManageController
@@ -112,7 +111,6 @@ fun BrowseChrome(
     favourites: FavouriteController,
     manage: ManageController,
     modifier: Modifier = Modifier,
-    onFavourite: (FavouriteDestination) -> Unit = {},
     headerActions: @Composable (openUpload: () -> Unit) -> Unit = {},
     onNewFolder: (() -> Unit)? = null,
     notices: Flow<String> = emptyFlow(),
@@ -261,7 +259,7 @@ fun BrowseChrome(
 
     ManageHost(manage, snackbarHostState)
     UnlockSheetHost(unlocker)
-    FavouriteHost(favourites, snackbarHostState, onFavourite)
+    FavouriteHost(favourites, snackbarHostState)
 }
 
 /** The body, or in its place the lock prompt or the load error. */

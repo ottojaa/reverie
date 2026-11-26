@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.search.SearchScope
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -30,7 +29,6 @@ fun FeedScreen(
     onBack: (() -> Unit)?,
     onSearch: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
-    onFavourite: (FavouriteDestination) -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -79,7 +77,6 @@ fun FeedScreen(
         favourites = viewModel.favourites,
         manage = viewModel.manage,
         modifier = modifier,
-        onFavourite = onFavourite,
         headerActions = { SearchAction(source.searchScope) { onSearch(source.searchScope) } },
     ) { slot ->
         FeedBody(

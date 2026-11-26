@@ -137,15 +137,15 @@ class FavouriteController(
     }
 
     /**
-     * The viewer swipes through the document favourites as they are now, so unstarring one there
-     * does not pull its page away; a deleted one still leaves. Private documents stay out of that
-     * run, and a private one opens on its own.
+     * The viewer swipes through the favourites of the tapped one's section, as they are now, so
+     * unstarring one there does not pull its page away; a deleted one still leaves. Private documents
+     * stay out of that run, and a private one opens on its own.
      */
     private fun publishSequence(item: FavouriteDto) {
         val ids = if (item.isPrivate) {
             listOf(item.id)
         } else {
-            state.value.visible.filter { it.type == FavouriteType.DOCUMENT && !it.isPrivate }.map { it.id }
+            FavouriteSections(state.value.visible.filterNot { it.isPrivate }).sectionOf(item).map { it.id }
         }
         val deletedBefore = deps.documents.deletedIds.value
         val live = deps.documents.deletedIds.map { deleted -> ids - (deleted - deletedBefore) }

@@ -120,13 +120,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private fun Graph() {
         NavHost(nav, startDestination = Routes.LIBRARY) {
             reverieComposable(Routes.LIBRARY) { Library(it) }
-            reverieComposable(Routes.FAVOURITES) {
-                FavouritesScreen(
-                    onBack = { nav.popBackStack() },
-                    onGo = { nav.openFavourite(it) },
-                    viewModel = viewModel { FavouritesViewModel(world.deps) },
-                )
-            }
+            reverieComposable(Routes.FAVOURITES) { Favourites(it) }
             reverieComposable(Routes.SEARCH, Routes.searchArguments) { Search(it) }
             reverieComposable(Routes.FOLDER, Routes.folderArguments) { Folder(it) }
             reverieComposable(Routes.PHOTOS, Routes.photosArguments) { Feed(it) }
@@ -152,7 +146,6 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
             ),
             onDocumentClick = { id, aspect, section -> nav.openDocument(entry, id, aspect, section) },
             onOpenAccount = {},
-            onFavourite = { nav.openFavourite(it) },
             viewModel = viewModel { LibraryViewModel(deps, searchRepository(), backup) },
             uploadViewModel = uploads(),
         )
@@ -161,13 +154,22 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private fun searchRepository() = SearchRepository(SearchApi(client), database.searchHistoryDao(), Dispatchers.Unconfined)
 
     @Composable
+    private fun Favourites(entry: NavBackStackEntry) {
+        FavouritesScreen(
+            onBack = { nav.popBackStack() },
+            onOpenFolder = { nav.openFolder(it) },
+            onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
+            viewModel = viewModel { FavouritesViewModel(world.deps) },
+        )
+    }
+
+    @Composable
     private fun Folder(entry: NavBackStackEntry) {
         FolderScreen(
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             onBack = { nav.popBackStack() },
             onOpenFolder = { nav.openFolder(it) },
             onSearch = { nav.navigate(Routes.search(it)) },
-            onFavourite = { nav.openFavourite(it) },
             viewModel = viewModel { FolderViewModel(createSavedStateHandle(), deps) },
             uploadViewModel = uploads(),
         )
@@ -179,7 +181,6 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             onBack = { nav.popBackStack() },
             onSearch = { nav.navigate(Routes.search(it)) },
-            onFavourite = { nav.openFavourite(it) },
             viewModel = viewModel { FeedViewModel(createSavedStateHandle(), deps) },
             uploadViewModel = uploads(),
         )

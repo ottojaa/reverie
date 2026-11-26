@@ -23,7 +23,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.components.ComingSoonSheet
 import com.reverie.app.ui.components.CreateEditFolderSheet
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -36,7 +35,6 @@ fun FolderScreen(
     onOpenFolder: (folderId: String?) -> Unit,
     onSearch: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
-    onFavourite: (FavouriteDestination) -> Unit = {},
     viewModel: FolderViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -79,7 +77,6 @@ fun FolderScreen(
         favourites = viewModel.favourites,
         manage = viewModel.manage,
         modifier = modifier,
-        onFavourite = onFavourite,
         headerActions = { openUpload ->
             FolderActions(
                 name = name,

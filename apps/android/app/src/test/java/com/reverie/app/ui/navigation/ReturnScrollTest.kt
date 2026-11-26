@@ -6,14 +6,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.doc
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteFixtures
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import com.reverie.app.ui.screens.search.ViewMode
@@ -49,10 +47,8 @@ class ReturnScrollTest {
     private val world = FavouriteWorld().apply {
         listed = library
         served = library
-        // Two documents far down every list.
-        items = listOf(FAR, FARTHER).map { id ->
-            FavouriteFixtures.file(library.first { it.id == id }.copy(original_filename = "starred $id"))
-        }
+        // Enough favourites that the last of them is off the Favourites screen.
+        items = library.drop(UNSTARRED).map { FavouriteFixtures.file(it.copy(original_filename = starred(it.id))) }
     }
 
     private lateinit var app: ReturnScrollApp
@@ -107,6 +103,8 @@ class ReturnScrollTest {
 
     private fun back() = act { app.nav.popBackStack() }
 
+    private fun starred(id: String) = "starred $id"
+
     private fun currentRoute() = compose.runOnUiThread { app.nav.currentBackStackEntry?.destination?.route }
 
     /** With the viewer open, swipes to [swipeTo] when given, and goes back to the screen below. */
@@ -117,52 +115,35 @@ class ReturnScrollTest {
         back()
     }
 
-    private fun tapStarredTile() {
-        await(hasText("starred $FAR"))
-        compose.onNodeWithText("starred $FAR").performClick()
-        compose.waitForIdle()
-    }
-
-    private fun openStarredDirectly() = act { app.nav.openFavourite(FavouriteDestination.Document(FAR, null)) }
-
     private fun tapFirstRow() {
         compose.onAllNodes(named("d00.pdf"))[0].performClick()
         compose.waitForIdle()
     }
 
-    private fun starredFromFavourites(swipeTo: String?) {
+    /** Opens the first favourite on the Favourites screen, over the Library. */
+    private fun openFirstStarred() {
         act { app.nav.navigate(Routes.FAVOURITES) }
-        tapStarredTile()
-        viewAndReturn(swipeTo)
+        val first = hasText(starred(library[UNSTARRED].id))
+        await(first)
+        compose.onNode(first).performClick()
+        compose.waitForIdle()
+    }
+
+    @Test fun `a document from Favourites scrolls that screen to the document last shown and nothing else`() {
+        openFirstStarred()
+        viewAndReturn(swipeTo = library.last().id)
         assertEquals(Routes.FAVOURITES, currentRoute())
+        compose.onNodeWithText(starred(library.last().id)).assertIsDisplayed()
         back()
         assertAtTop("the Library")
     }
 
-    @Test fun `a starred document from the Favourites screen scrolls no list`() = starredFromFavourites(swipeTo = null)
-
-    @Test fun `swiping on from a starred document from the Favourites screen scrolls no list`() =
-        starredFromFavourites(swipeTo = FARTHER)
-
-    /** A folder page and a kind screen have no tiles of their own: the viewer opens as a favourite's does. */
-    private fun starredOver(route: String, swipeTo: String?) {
-        show(route)
-        openStarredDirectly()
-        viewAndReturn(swipeTo)
-        assertAtTop(route)
-        back()
-        assertAtTop("the Library")
+    @Test fun `closing the viewer on the document it opened leaves Favourites where it was`() {
+        openFirstStarred()
+        viewAndReturn(swipeTo = null)
+        compose.onNodeWithText(starred(library[UNSTARRED].id)).assertIsDisplayed()
+        compose.onNodeWithText(starred(library.last().id)).assertDoesNotExist()
     }
-
-    @Test fun `a starred document over a folder page scrolls no list`() = starredOver(FOLDER_ROUTE, swipeTo = null)
-
-    @Test fun `swiping on from a starred document over a folder page scrolls no list`() =
-        starredOver(FOLDER_ROUTE, swipeTo = FARTHER)
-
-    @Test fun `a starred document over a file-type page scrolls no list`() = starredOver(FILES_ROUTE, swipeTo = null)
-
-    @Test fun `swiping on from a starred document over a file-type page scrolls no list`() =
-        starredOver(FILES_ROUTE, swipeTo = FARTHER)
 
     @Test fun `a document from Recently added scrolls it to the document last shown`() {
         tapFirstRow()
@@ -212,7 +193,7 @@ class ReturnScrollTest {
 
     private companion object {
         const val FOLDER = "f1"
-        const val FAR = "d25"
+        const val UNSTARRED = 8
         const val FARTHER = "d26"
         val FOLDER_ROUTE = Routes.folder(FOLDER)
         val FILES_ROUTE = Routes.feed(FeedSource.FILES)

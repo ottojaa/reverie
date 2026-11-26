@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -20,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,7 +34,7 @@ private val TILE_GAP = 1.dp
 /**
  * A folder's cover: its newest documents as a 2×2 mosaic. One tile fills it, two split it in
  * columns, three give the left column to the first, four make the grid. A tile with a thumbnail
- * shows it; one without shows its kind-tinted block. No tiles shows the folder icon.
+ * shows it; one without shows its file type. No tiles shows the folder icon.
  */
 @Composable
 fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier, size: Dp = COVER_SIZE, shape: Shape = COVER_SHAPE) {
@@ -115,13 +113,3 @@ fun CoverIconBlock(
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
-
-/** The locked card's and a locked folder's cover: a padlock on the collection's accent. */
-@Composable
-fun LockedCover(accent: Color, modifier: Modifier = Modifier) = CoverIconBlock(
-    icon = Icons.Outlined.Lock,
-    tint = accent,
-    background = accent.copy(alpha = 0.18f).compositeOver(MaterialTheme.colorScheme.surfaceContainerHighest),
-    modifier = modifier,
-    iconSize = 22.dp,
-)

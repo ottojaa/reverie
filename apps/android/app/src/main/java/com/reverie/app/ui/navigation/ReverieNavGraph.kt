@@ -13,7 +13,6 @@ import androidx.navigation.compose.composable
 import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.FeedScreen
 import com.reverie.app.ui.screens.document.DocumentScreen
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.library.LibraryLinks
 import com.reverie.app.ui.screens.library.LibraryScreen
@@ -52,7 +51,6 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
             links = navController.libraryLinks(),
             onDocumentClick = { id, aspect, section -> navController.openDocument(entry, id, aspect, section) },
             onOpenAccount = { navController.navigate(Routes.SETTINGS) },
-            onFavourite = { navController.openFavourite(it) },
         )
     }
 
@@ -61,7 +59,6 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = null,
             onSearch = { navController.navigate(Routes.search(it)) },
-            onFavourite = { navController.openFavourite(it) },
         )
     }
 }
@@ -82,7 +79,6 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onBack = { navController.popBackStack() },
             onOpenFolder = { navController.openFolder(it) },
             onSearch = { navController.navigate(Routes.search(it)) },
-            onFavourite = { navController.openFavourite(it) },
         )
     }
 
@@ -92,14 +88,14 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = { navController.popBackStack() },
             onSearch = { navController.navigate(Routes.search(it)) },
-            onFavourite = { navController.openFavourite(it) },
         )
     }
 
-    reverieComposable(Routes.FAVOURITES) {
+    reverieComposable(Routes.FAVOURITES) { entry ->
         FavouritesScreen(
             onBack = { navController.popBackStack() },
-            onGo = { navController.openFavourite(it) },
+            onOpenFolder = { navController.navigate(Routes.folder(it)) },
+            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
         )
     }
 
@@ -138,12 +134,6 @@ private fun NavGraphBuilder.settings(navController: NavHostController) {
 }
 
 /**
- * A viewer origin that is no screen's: nothing matches it, so the viewer opens and closes with a plain fade
- * and no list scrolls on return.
- */
-private const val NO_DIVE_ORIGIN = "none"
-
-/**
  * Opens the viewer from [origin]'s screen, so the tile there dives into it: the tile in [section], on a
  * screen whose lists have origins of their own.
  */
@@ -168,18 +158,6 @@ internal fun NavHostController.openFolder(folderId: String?) {
     }
     val route = Routes.folder(folderId)
     if (!popBackStack(route, inclusive = false)) navigate(route)
-}
-
-/**
- * A starred document opens with [NO_DIVE_ORIGIN]: what was tapped is a favourites tile, and a list on the
- * same screen may hold the document too, whose row would otherwise fly into the viewer and be scrolled to.
- */
-internal fun NavHostController.openFavourite(destination: FavouriteDestination) {
-    when (destination) {
-        is FavouriteDestination.Folder -> navigate(Routes.folder(destination.id))
-        is FavouriteDestination.Document ->
-            navigate(Routes.document(destination.id, NO_DIVE_ORIGIN, destination.aspect))
-    }
 }
 
 /**

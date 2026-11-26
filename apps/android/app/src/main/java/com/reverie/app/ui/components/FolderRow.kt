@@ -62,13 +62,7 @@ fun FolderRow(
         }
         Column(Modifier.weight(1f)) {
             FolderName(folder.name, starred)
-            Text(
-                meta,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (meta.isNotEmpty()) FolderMetaLine(meta)
         }
         Icon(
             Icons.AutoMirrored.Outlined.KeyboardArrowRight,
@@ -77,6 +71,17 @@ fun FolderRow(
             modifier = Modifier.size(18.dp),
         )
     }
+}
+
+@Composable
+private fun FolderMetaLine(meta: String) {
+    Text(
+        meta,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

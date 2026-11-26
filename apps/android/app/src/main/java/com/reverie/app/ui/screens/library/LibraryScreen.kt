@@ -24,7 +24,6 @@ import com.reverie.app.ui.screens.browse.ChromeSelection
 import com.reverie.app.ui.screens.browse.documentRowActions
 import com.reverie.app.ui.screens.browse.rememberOpenDocument
 import com.reverie.app.ui.screens.browse.rememberToday
-import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
@@ -40,7 +39,6 @@ fun LibraryScreen(
     onDocumentClick: (documentId: String, aspect: Float?, section: String?) -> Unit,
     onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
-    onFavourite: (FavouriteDestination) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -84,7 +82,6 @@ fun LibraryScreen(
         favourites = viewModel.favourites,
         manage = viewModel.manage,
         modifier = modifier,
-        onFavourite = onFavourite,
         headerActions = { openUpload ->
             IconButton(onClick = openUpload) { Icon(Icons.Outlined.Add, contentDescription = "Upload or new folder") }
             AccountButton(backup, onOpenAccount)

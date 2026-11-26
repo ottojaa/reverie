@@ -1,6 +1,14 @@
 package com.reverie.app.ui.screens.favourites
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import com.reverie.app.data.api.model.FavouriteType
+import com.reverie.app.data.api.model.KindCountsDto
+import com.reverie.app.ui.BLURHASHES
+import com.reverie.app.ui.photoCover
+import com.reverie.app.ui.snapshotThemes
+import com.reverie.app.ui.navigation.BottomPill
+import com.reverie.app.ui.navigation.Tab
+import com.reverie.app.ui.screens.destination.node
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,40 +21,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
-import com.android.resources.ScreenOrientation
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.data.settings.GridLayoutMode
-import com.reverie.app.ui.theme.ThemeMode
 import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.ui.screens.browse.FeedLayout
 import com.reverie.app.ui.screens.browse.FileMenuItems
 import com.reverie.app.ui.screens.browse.FeedList
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.RowActions
-import com.reverie.app.ui.screens.collections.CollectionSection
-import com.reverie.app.ui.screens.collections.CollectionsActions
-import com.reverie.app.ui.screens.collections.CollectionsContent
-import com.reverie.app.ui.screens.collections.CollectionsFixtures
-import com.reverie.app.ui.screens.collections.RowMenuItems
 import com.reverie.app.ui.screens.document.ViewerToolbar
-import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Rule
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * The stars and the places favourites are listed, as the Fav boards draw them. Every state renders
- * dark and light. Blurhashes stand in for thumbnails: a screenshot test has no network.
+ * The Favourites screen and the stars that lead to it, dark and light. Blurhashes stand in for thumbnails:
+ * a screenshot test has no network.
  */
 class FavouritesScreenshotTest {
     @get:Rule
@@ -60,20 +57,9 @@ class FavouritesScreenshotTest {
     private val boardState = FavouritesState(items = fixtures.all)
 
     private fun both(state: String, device: DeviceConfig = DeviceConfig.PIXEL_5, content: @Composable () -> Unit) {
-        CollectionsFixtures.warmBlurhashes()
         paparazzi.unsafeUpdateConfig(deviceConfig = device)
-        listOf(ThemeMode.DARK to "dark", ThemeMode.LIGHT to "light").forEach { (mode, name) ->
-            paparazzi.snapshot("${state}_$name") {
-                // Inspection mode makes Coil draw the placeholder (the blurhash) instead of nothing.
-                CompositionLocalProvider(LocalInspectionMode provides true) {
-                    ReverieTheme(themeMode = mode) { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { content() } }
-                }
-            }
-        }
+        paparazzi.snapshotThemes(state, content)
     }
-
-    private fun wide(width: Int, height: Int) =
-        DeviceConfig.PIXEL_5.copy(screenWidth = width, screenHeight = height, orientation = ScreenOrientation.LANDSCAPE)
 
     @Composable
     private fun Label(text: String) =
@@ -112,15 +98,9 @@ class FavouritesScreenshotTest {
     }
 
     // A popup is a window of its own that a screenshot test does not draw, so the items are drawn in place.
-    @Test fun menus() = both("menus", DeviceConfig.PIXEL_5.copy(screenHeight = 2800)) {
+    @Test fun menus() = both("menus") {
         val file = fixtures.invoice.document!!
         Column {
-            listOf(false, true).forEach { starred ->
-                Menu(if (starred) "Folder menu, a favourite" else "Collection menu") {
-                    val onNewFolder: (() -> Unit)? = if (starred) null else ({})
-                    RowMenuItems(isStarred = starred, onToggleStar = {}, isPrivate = false, onNewFolder = onNewFolder, onEdit = {}, onTogglePrivate = {}, onDelete = {})
-                }
-            }
             listOf(false, true).forEach { starred ->
                 Menu(if (starred) "File menu, a favourite" else "File menu") {
                     FileMenuItems(file, RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { starred }))
@@ -163,52 +143,83 @@ class FavouritesScreenshotTest {
         file("d-notes", "notes.md", "text/markdown"),
     )
 
-    @Test fun badgesRows() = both("badgesRows", DeviceConfig.PIXEL_5.copy(screenHeight = 2900)) {
+    @Test fun badgesRows() = both("badgesRows") {
         Column {
             Label("File rows: the first two are favourites")
             Feed(FeedSource.FILES, files, setOf("d-invoice", "d-long"), Modifier.height(270.dp))
-            Label("Collections: Travel, Lisbon and Japan are favourites")
-            CollectionSection(CollectionsFixtures.travel, CollectionsFixtures.covers, expanded = true, actions = CollectionsActions(), modifier = Modifier.padding(horizontal = 16.dp), starredIds = setOf("c-travel", "f-lisbon", "f-japan"))
         }
     }
 
-    private fun collections(vararg items: FavouriteDto) = CollectionsFixtures.state(CollectionsFixtures.travel, CollectionsFixtures.code)
-        .copy(favourites = fixtures.state(*items))
+    private fun tree(id: String, name: String, counts: KindCountsDto, folders: Int = 0) =
+        node(id, children = (1..folders).map { node("$id-$it", parent = id) }).copy(name = name, kind_counts = counts)
 
-    @Test fun shelf() = both("shelf") { CollectionsContent(collections(*fixtures.all.toTypedArray()), CollectionsActions()) }
+    private val coding = tree("f-coding", "Coding", KindCountsDto(file = 14), folders = 1)
+    private val photos = tree("f-photos", "Photos", KindCountsDto(image = 27), folders = 5)
+    private val portugal = tree("f-portugal", "Portugal - 2025", KindCountsDto(image = 25))
 
-    // Wide enough to see every card of the shelf at once, an open private one included.
-    @Test fun shelfCards() = both("shelfCards", wide(width = 3300, height = 700)) {
-        FavouritesShelf(listOf(fixtures.portugal, fixtures.code, fixtures.invoice, fixtures.sunset, fixtures.builds, fixtures.secret, unlocked, fixtures.notes), onOpen = {}, onSeeAll = {})
+    private val folders = FavouriteFolders(
+        byId = listOf(coding, photos, portugal).associateBy { it.id },
+        covers = listOf(coding, photos, portugal).associate { it.id to photoCover(it.id) },
+    )
+
+    private val folderItems = listOf(
+        fixtures.folder(coding.id, coding.name),
+        fixtures.folder(photos.id, photos.name),
+        fixtures.folder(portugal.id, portugal.name, "Photos"),
+    )
+
+    private val recording = fixtures.file(
+        fixtures.document("d-record", "Record_2026-11-24-00-14-04.mp4", "video/mp4", 4_100_000, FavouriteFixtures.HASH)
+            .copy(duration_seconds = 12.0),
+    )
+    private val archive = fixtures.file(
+        fixtures.document("d-zip", "lunamux-install.zip", "application/zip", 18_000_000), "Coding", "Code",
+    )
+
+    private val shots = BLURHASHES.mapIndexed { index, hash ->
+        fixtures.file(fixtures.document("d-shot$index", "IMG_$index.jpg", "image/jpeg", 2_000_000, hash))
     }
 
-    private fun screen(name: String, state: FavouritesState, filter: FavouriteFilter, device: DeviceConfig = DeviceConfig.PIXEL_5) =
-        both(name, device) { FavouritesContent(state, filter, FavouritesActions()) }
+    private fun screen(name: String, state: FavouritesState, device: DeviceConfig = DeviceConfig.PIXEL_5) =
+        both(name, device) { Page(state) }
 
-    @Test fun screenAll() = screen("screenAll", boardState, FavouriteFilter.ALL, DeviceConfig.PIXEL_5.copy(screenHeight = 2700))
+    /** The screen over the pill it shows in the app. */
+    @Composable
+    private fun Page(state: FavouritesState) {
+        Box(Modifier.fillMaxSize()) {
+            FavouritesContent(state, folders, FavouritesActions({}, {}, {}, {}, {}))
+            BottomPill(Tab.LIBRARY, onSelect = {}, showSearch = true, onSearch = {}, Modifier.align(Alignment.BottomCenter))
+        }
+    }
 
-    @Test fun screenFolders() = screen("screenFolders", boardState, FavouriteFilter.FOLDERS)
+    @Test fun screenBoard() = screen("screenBoard", FavouritesState(items = folderItems + recording + archive))
 
-    @Test fun screenFiles() = screen("screenFiles", boardState, FavouriteFilter.FILES, DeviceConfig.PIXEL_5.copy(screenHeight = 2700))
+    @Test fun screenAll() = screen(
+        "screenAll",
+        FavouritesState(items = folderItems + shots + recording + archive + fixtures.invoice + fixtures.secret + unlocked),
+        DeviceConfig.PIXEL_5.copy(screenHeight = 2900),
+    )
 
-    @Test fun screenEmpty() = screen("screenEmpty", fixtures.state(), FavouriteFilter.ALL)
+    @Test fun screenFolders() = screen("screenFolders", FavouritesState(items = folderItems))
 
-    @Test fun screenNotLoaded() = screen("screenNotLoaded", FavouritesState(), FavouriteFilter.ALL)
+    @Test fun screenFiles() = screen("screenFiles", fixtures.state(archive, fixtures.invoice, fixtures.notes))
 
-    // A narrow phone at a large font size, with long names and more than a screenful.
+    @Test fun screenEmpty() = screen("screenEmpty", fixtures.state())
+
+    @Test fun screenNotLoaded() = screen("screenNotLoaded", FavouritesState())
+
+    // A narrow phone at a large font size, with long names, folders the tree does not hold and a private folder.
     @Test fun screenNarrow() {
         val long = fixtures.file(
             fixtures.document("d-long", "Lease agreement – Kalevankatu 12, signed copy.pdf", "application/pdf", 18_400_000),
             "Household paperwork", "Apartment contracts and receipts",
         )
-        val many = listOf(long, unlocked) + fixtures.all
-        screen("screenNarrow", FavouritesState(items = many), FavouriteFilter.ALL, DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 1750, fontScale = 1.3f))
-    }
-
-    @Test fun shelfNarrow() = both("shelfNarrow", DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 1750, fontScale = 1.3f)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val long = fixtures.folder("f-long", "Household paperwork and receipts 2025", "f-iceland", "Apartment contracts")
-            FavouritesShelf(listOf(long) + fixtures.all, onOpen = {}, onSeeAll = {})
-        }
+        val uncached = fixtures.folder("f-long", "Household paperwork and receipts 2025", "Apartment contracts")
+        val vault = fixtures.private("f-vault", locked = true, type = FavouriteType.FOLDER)
+        val items = listOf(folderItems[1], uncached, vault, recording, long, unlocked)
+        screen(
+            "screenNarrow", FavouritesState(items = items),
+            DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 2600, fontScale = 1.3f),
+        )
     }
 }
