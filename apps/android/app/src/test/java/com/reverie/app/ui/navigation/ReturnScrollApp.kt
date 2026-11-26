@@ -59,6 +59,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
 import io.ktor.http.headersOf
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
@@ -67,6 +68,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.serialization.builtins.ListSerializer
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The app's list screens, view models and viewer model over [world]'s server, in a graph that opens the
@@ -76,6 +78,9 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val database = Room.inMemoryDatabaseBuilder(context, ReverieDatabase::class.java).allowMainThreadQueries().build()
     private val deps = browseDeps(context, database, scope, world)
+
+    /** Every request the search screen and the Library's chips have sent. */
+    val asked = CopyOnWriteArrayList<Url>()
 
     /** What a search answers with. */
     var hits: List<DocumentSearchResult> = emptyList()
@@ -88,6 +93,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     lateinit var search: SearchViewModel
 
     private val client = HttpClient(MockEngine { request ->
+        asked += request.url
         val body = when (request.url.encodedPath) {
             "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(hits.size, hits, timing_ms = 1.0))
             "/search/quick-filters" -> ApiJson.encodeToString(ListSerializer(QuickFilter.serializer()), quickFilters)

@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.search
 
 import com.reverie.app.data.api.model.CollectionSearchResult
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.QuickFilter
@@ -14,8 +15,10 @@ import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.domain.search.getFilterTokens
 import com.reverie.app.domain.search.getFreeText
 import com.reverie.app.domain.search.tokenizeQuery
+import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.manage.Picked
 import com.reverie.app.ui.screens.manage.PickedDocument
+import java.util.Locale
 
 enum class ViewMode { LIST, GRID }
 
@@ -80,7 +83,7 @@ data class SearchUiState(
     val placeholder: String
         get() = when (scope) {
             SearchScope.Library -> "Search your library"
-            SearchScope.Media -> "Search photos and videos"
+            is SearchScope.Kind -> "Search ${FeedSource.of(scope.kind).title.lowercase(Locale.ROOT)}"
             is SearchScope.Folder -> "Search ${scopeFolderName ?: "this folder"}"
         }
 
@@ -88,7 +91,7 @@ data class SearchUiState(
     val scopeLabel: String?
         get() = when (scope) {
             SearchScope.Library -> null
-            SearchScope.Media -> "Photos and videos"
+            is SearchScope.Kind -> "In ${FeedSource.of(scope.kind).title}"
             is SearchScope.Folder -> "In ${scopeFolderName ?: "this folder"}"
         }
 
@@ -143,7 +146,7 @@ internal fun defaultViewMode(ask: SearchAsk, folders: CachedFolders): ViewMode {
     val tokens = tokenizeQuery(ask.query)
     val filtered = getFilterTokens(tokens, FilterKey.TYPE) + getFilterTokens(tokens, FilterKey.CATEGORY)
     if (filtered.any { it.value.lowercase() in PHOTO_VALUES }) return ViewMode.GRID
-    if (ask.scope.isMediaOnly) return ViewMode.GRID
+    ask.scope.kind?.let { return if (it == DocumentKind.FILE) ViewMode.LIST else ViewMode.GRID }
     val held = ask.scope.folderId?.let { folders.byId[it]?.kind_counts } ?: return ViewMode.LIST
     return if (held.file == 0 && held.total > 0) ViewMode.GRID else ViewMode.LIST
 }

@@ -42,9 +42,10 @@ class BrowseRowsTest {
         assertEquals(listOf("f1", "f2"), files.filterIsInstance<FeedRow.File>().map { it.doc.id })
     }
 
-    @Test fun `photos and videos share the grid`() {
-        val bands = rows(FeedSource.MEDIA, mixed).filterIsInstance<FeedRow.Band>()
-        assertEquals(listOf("p1", "p2", "v1", "p3"), bands.flatMap { it.docIds })
+    @Test fun `the photos grid holds no videos, and the videos grid holds them`() {
+        fun grid(source: FeedSource) = rows(source, mixed).filterIsInstance<FeedRow.Band>().flatMap { it.docIds }
+        assertEquals(listOf("p1", "p2", "p3"), grid(FeedSource.PHOTOS))
+        assertEquals(listOf("v1"), grid(FeedSource.VIDEOS))
     }
 
     @Test fun `the files outside any folder are one row each, with no headings`() {
@@ -103,7 +104,6 @@ class BrowseRowsTest {
         assertEquals("19 videos", FeedSource.VIDEOS.subtitle(19))
         assertEquals("191 files", FeedSource.FILES.subtitle(191))
         assertEquals("1 file", FeedSource.UNFILED.subtitle(1))
-        assertNull(FeedSource.MEDIA.subtitle(126))
         assertNull(FeedSource.RECENT.subtitle(126))
     }
 }

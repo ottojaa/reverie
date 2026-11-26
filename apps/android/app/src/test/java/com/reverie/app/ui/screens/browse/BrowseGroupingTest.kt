@@ -92,7 +92,7 @@ class BrowseGroupingTest {
             doc("photo", taken = "2026-11-25T23:30:00.000Z"),
             doc("screenshot", "image/png", created = "2026-11-25T22:30:00Z"),
         )
-        assertEquals(listOf("screenshot", "photo"), shownIds(FeedSource.MEDIA, docs, emptySet(), helsinki))
+        assertEquals(listOf("screenshot", "photo"), shownIds(FeedSource.PHOTOS, docs, emptySet(), helsinki))
     }
 
     @Test fun `documents with no readable date come last`() {

@@ -92,8 +92,8 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request) {
             const userId = request.user.id;
-            const { q, folder_id, media } = request.query;
-            const facets = await getFacetsOnly(q, userId, { folderId: folder_id, media });
+            const { q, folder_id, media, kind } = request.query;
+            const facets = await getFacetsOnly(q, userId, { folderId: folder_id, media, kind });
 
             return { facets };
         },
