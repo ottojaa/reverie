@@ -3,6 +3,9 @@ package com.reverie.app.ui.screens.library
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -30,11 +33,14 @@ class ReorderDragTest {
     private val labels = listOf("Favourites", "Screenshots", "Receipts", "Trash")
     private val moves = mutableListOf<List<String>>()
 
+    /** The order the sheet is given its chips in. */
+    private var given by mutableStateOf(labels)
+
     private fun show() = compose.setContent {
         ReverieTheme {
             Surface {
                 ReorderShortcuts(
-                    shortcuts = labels.map { Shortcut(it, Icons.Outlined.Search, it, count = null, onOpen = {}) },
+                    shortcuts = given.map { Shortcut(it, Icons.Outlined.Search, it, count = null, onOpen = {}) },
                     onReorder = { moves += it },
                     onDone = {},
                 )
@@ -97,5 +103,26 @@ class ReorderDragTest {
         drag("Trash", rows = -1f)
 
         assertEquals(listOf("Favourites", "Trash", "Screenshots", "Receipts"), sheetOrder())
+    }
+
+    /** Saving takes a moment, so an order can come back to the sheet when the next drag is already under way. */
+    @Test fun `the saved order coming back during the next drag leaves that drag going`() {
+        show()
+        drag("Trash", rows = -1f)
+
+        handle("Favourites").performTouchInput {
+            down(center)
+            repeat(5) { moveBy(Offset(0f, 0.3f * 56.dp.toPx() / 5)) }
+        }
+        compose.runOnUiThread { given = moves.last() }
+        compose.waitForIdle()
+        handle("Favourites").performTouchInput {
+            repeat(5) { moveBy(Offset(0f, 0.4f * 56.dp.toPx() / 5)) }
+            up()
+        }
+        compose.waitForIdle()
+
+        // More than half a row between the two parts of the one drag.
+        assertEquals(listOf("Screenshots", "Favourites", "Trash", "Receipts"), sheetOrder())
     }
 }

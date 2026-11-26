@@ -45,6 +45,9 @@ internal fun BackupLine(status: BackupStatus, total: Int?) {
     }
 }
 
+/** A chip's height, and the width of the round button after them. */
+private val CHIP_SIZE = 40.dp
+
 /** The shortcut chips as one row that scrolls sideways, ending in the button that reorders them. */
 @Composable
 internal fun LibraryChips(shortcuts: List<Shortcut>, onReorder: () -> Unit) {
@@ -52,9 +55,12 @@ internal fun LibraryChips(shortcuts: List<Shortcut>, onReorder: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(start = 20.dp, top = 18.dp, end = 20.dp),
+            .padding(start = 20.dp, top = 18.dp, end = 20.dp)
+            .height(CHIP_SIZE),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // No chips yet: the row keeps its place, so nothing below it moves when they arrive.
+        if (shortcuts.isEmpty()) return@Row
         shortcuts.forEach { key(it.id) { LibraryChip(it) } }
         ReorderButton(onReorder)
     }
@@ -64,7 +70,7 @@ internal fun LibraryChips(shortcuts: List<Shortcut>, onReorder: () -> Unit) {
 private fun ReorderButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(CHIP_SIZE)
             .clip(CircleShape)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
             .clickable(role = Role.Button, onClick = onClick),
@@ -84,7 +90,7 @@ private fun LibraryChip(shortcut: Shortcut) {
     val quiet = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
-            .height(40.dp)
+            .height(CHIP_SIZE)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = shortcut.onOpen)

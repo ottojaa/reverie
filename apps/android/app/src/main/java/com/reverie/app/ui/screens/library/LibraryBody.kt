@@ -67,8 +67,11 @@ data class LibraryMarks(
     /** Null until the favourites have been read. */
     val favouriteCount: Int? = null,
     val backup: BackupStatus = BackupStatus.Unknown,
-    /** The order the shortcut chips were last put in (see [orderedShortcuts]); empty until they have been. */
-    val shortcutOrder: List<String> = emptyList(),
+    /**
+     * The order the shortcut chips were last put in (see [orderedShortcuts]), empty if they never were.
+     * Null while it is being read.
+     */
+    val shortcutOrder: List<String>? = emptyList(),
 )
 
 /** What touching the Library's documents and buttons does. */

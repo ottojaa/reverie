@@ -42,12 +42,16 @@ internal data class Shortcut(
     val onOpen: () -> Unit,
 )
 
-/** The chips there are to show: Favourites, the ready-made searches that find something, and the trash. */
+/**
+ * The chips there are to show: Favourites, the ready-made searches that find something, and the trash. None
+ * until their saved order is known, so that they are never seen to change places.
+ */
 internal fun libraryShortcuts(
     smartViews: List<QuickFilter>,
     marks: LibraryMarks,
     links: LibraryLinks,
 ): List<Shortcut> {
+    val order = marks.shortcutOrder ?: return emptyList()
     val favourites = Shortcut(
         FAVOURITES_SHORTCUT, Icons.Outlined.StarBorder, "Favourites", marks.favouriteCount, links.onOpenFavourites,
     )
@@ -56,7 +60,7 @@ internal fun libraryShortcuts(
     }
     val trash = Shortcut(TRASH_SHORTCUT, Icons.Outlined.Delete, "Trash", count = null, links.onOpenTrash)
     val byId = (searches + favourites + trash).associateBy { it.id }
-    return orderedShortcuts(marks.shortcutOrder).mapNotNull(byId::get)
+    return orderedShortcuts(order).mapNotNull(byId::get)
 }
 
 private fun smartViewIcon(id: String): ImageVector = when (id) {

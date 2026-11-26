@@ -41,7 +41,7 @@ class ReorderShortcutsTest {
             QuickFilter("receipts", "Receipts", "q", count = 3),
         ),
     )
-    private var order by mutableStateOf(emptyList<String>())
+    private var order: List<String>? by mutableStateOf(emptyList())
     private val moves = mutableListOf<List<String>>()
 
     private fun show() = compose.setContent {
@@ -56,7 +56,7 @@ class ReorderShortcutsTest {
                     // What the view model does with a move, without the disk.
                     onReorderShortcuts = {
                         moves += it
-                        order = reorderedShortcuts(orderedShortcuts(order), it)
+                        order = reorderedShortcuts(orderedShortcuts(order.orEmpty()), it)
                     },
                 ),
                 day = LibraryDay(LocalDate.of(2026, 11, 26), ZoneOffset.UTC),
@@ -97,6 +97,20 @@ class ReorderShortcutsTest {
         show()
 
         assertEquals(listOf("Trash", "Receipts", "Favourites", "Screenshots"), stripOrder())
+    }
+
+    @Test fun `no chip is drawn until the saved order is known, and the page below does not move when it is`() {
+        order = null
+        show()
+        compose.onNodeWithText("Favourites").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Reorder shortcuts").assertDoesNotExist()
+        val before = compose.onNodeWithText("My files").getUnclippedBoundsInRoot().top
+
+        order = listOf("trash", "favourites")
+        compose.waitForIdle()
+
+        assertEquals(listOf("Trash", "Favourites", "Screenshots", "Receipts"), stripOrder())
+        assertEquals(before, compose.onNodeWithText("My files").getUnclippedBoundsInRoot().top)
     }
 
     @Test fun `a button ends the strip and opens a sheet listing the chips on show`() {

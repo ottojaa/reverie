@@ -83,11 +83,11 @@ class LibraryViewModel @Inject constructor(
     val backup: StateFlow<BackupStatus> = backupSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BackupStatus.Unknown)
 
-    /** The order the shortcut chips were last put in, as saved on this device. */
-    val shortcutOrder: StateFlow<List<String>> = deps.settings.settings
+    /** The order the shortcut chips were last put in, as saved on this device; null until it has been read. */
+    val shortcutOrder: StateFlow<List<String>?> = deps.settings.settings
         .map { it.shortcutOrder }
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Recently added and the file rows of "My files" share one selection; each swipes through its own list. */
     val recentList: DocumentListHandler = handlerOf(LibrarySection.RECENT)

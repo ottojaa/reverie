@@ -129,7 +129,8 @@ internal fun ReorderShortcuts(
     shortcuts: List<Shortcut>,
     onReorder: (List<String>) -> Unit,
     onDone: () -> Unit,
-    state: ReorderState = remember(shortcuts.map { it.id }) { ReorderState(shortcuts.map { it.id }) },
+    // Made anew only for other chips: their order coming back from the settings must not end a drag.
+    state: ReorderState = remember(shortcuts.map { it.id }.toSet()) { ReorderState(shortcuts.map { it.id }) },
 ) {
     val byId = shortcuts.associateBy { it.id }
     Column(
