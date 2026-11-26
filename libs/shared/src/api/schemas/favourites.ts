@@ -9,7 +9,6 @@ export const FavouriteTypeSchema = z.enum(['folder', 'document']);
 export type FavouriteType = z.infer<typeof FavouriteTypeSchema>;
 
 export const FavouriteFolderSchema = FolderSchema.extend({
-    document_count: z.number(),
     /** As in the folder tree. */
     cover: FolderCoverSchema.nullable(),
 });

@@ -1,17 +1,12 @@
 import type { Kysely } from 'kysely';
-import type { Database, Folder, FolderType } from '../../db/schema.js';
+import type { Database, Folder } from '../../db/schema.js';
 import { excludeTrashed } from '../privacy.js';
 import { loadFolderTree } from './load.js';
 import type { FolderTree } from './snapshot.js';
 
-/** A folder's stored `path` and `type`, which both follow from where it sits, and the names beside it. */
+/** A folder's stored `path`, which follows from where it sits, and the names beside it. */
 
 export const MAX_FOLDER_NAME_LENGTH = 255;
-
-/** 'collection' at the top level, else 'folder'. Kept for installed clients, which still read it. */
-export function toFolderType(parentId: string | null): FolderType {
-    return parentId === null ? 'collection' : 'folder';
-}
 
 /** The names from the top level down to the folder. */
 export function toNamePath(tree: FolderTree<Folder>, folder: Folder): string[] {
@@ -40,16 +35,15 @@ export async function isNameTaken(trx: Kysely<Database>, userId: string, parentI
     return (await excludeTrashed(query, '').executeTakeFirst()) !== undefined;
 }
 
-/** After a folder was renamed or moved: brings `path` and `type` up to date for it and everything beneath it. */
+/** After a folder was renamed or moved: brings `path` up to date for it and everything beneath it. */
 export async function rewritePaths(trx: Kysely<Database>, userId: string, rootId: string): Promise<void> {
     const tree = await loadFolderTree(userId, trx);
 
     for (const folder of tree.subtree(rootId, { trashed: true })) {
         const path = toPath(toNamePath(tree, folder));
-        const type = toFolderType(folder.parent_id);
 
-        if (folder.path === path && folder.type === type) continue;
+        if (folder.path === path) continue;
 
-        await trx.updateTable('folders').set({ path, type }).where('id', '=', folder.id).execute();
+        await trx.updateTable('folders').set({ path }).where('id', '=', folder.id).execute();
     }
 }

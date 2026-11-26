@@ -11,8 +11,6 @@ data class FolderDto(
     val description: String? = null,
     val emoji: String? = null,
     val sort_order: Int,
-    // Deprecated by the server (it only says whether the folder is at the top level) and read nowhere here.
-    val type: FolderType? = null,
     val is_private: Boolean,
     // The outermost private folder among this one and those above it: what unlocking opens to reach it.
     // Null for a public folder.
@@ -34,7 +32,6 @@ data class FolderWithChildren(
     val description: String? = null,
     val emoji: String? = null,
     val sort_order: Int,
-    val type: FolderType? = null,
     val is_private: Boolean,
     val lock_id: String? = null,
     val locked: Boolean = false,

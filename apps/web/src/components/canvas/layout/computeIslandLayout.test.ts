@@ -14,7 +14,6 @@ function folder(overrides: Partial<FolderWithChildren> & { id: string; files?: n
         description: null,
         emoji: null,
         sort_order: 0,
-        type: 'folder',
         is_private: false,
         lock_id: null,
         locked: false,
@@ -22,7 +21,6 @@ function folder(overrides: Partial<FolderWithChildren> & { id: string; files?: n
         updated_at: '2026-01-01T00:00:00.000Z',
         children,
         kind_counts: { image: 0, video: 0, file: total },
-        document_count: files,
         cover: null,
         ...fields,
     };

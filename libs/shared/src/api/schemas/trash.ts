@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema } from './common.js';
 import { ThumbnailUrlsSchema } from './documents.js';
-import { FolderTypeSchema } from './folders.js';
 
 /**
  * Trash: deleted documents and folders stay recoverable until `purge_at`, then a background job
@@ -29,8 +28,6 @@ export const TrashFolderSchema = z.object({
     id: UuidSchema,
     // Empty while `locked`: a private folder in the trash shows no name until it is unlocked.
     name: z.string(),
-    /** @deprecated 'collection' for a folder that was at the top level, else 'folder'. */
-    type: FolderTypeSchema,
     emoji: z.string().nullable(),
     is_private: z.boolean(),
     // True for a private folder whose lock is closed. It lists only as a bare row (no name, emoji or

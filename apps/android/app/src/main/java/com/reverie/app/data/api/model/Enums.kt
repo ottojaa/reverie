@@ -101,12 +101,6 @@ enum class TargetType {
 }
 
 @Serializable
-enum class FolderType {
-    @SerialName("collection") COLLECTION,
-    @SerialName("folder") FOLDER,
-}
-
-@Serializable
 enum class UserRole {
     @SerialName("admin") ADMIN,
     @SerialName("user") USER,

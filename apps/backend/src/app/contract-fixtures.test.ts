@@ -127,6 +127,13 @@ describeDb('contract fixtures', () => {
         expectFixture('folder-search.json', found);
     });
 
+    it('search that finds a folder by its name', async () => {
+        const found = await fetchFixture('/search?q=norway');
+
+        expect(SearchResponseSchema.parse(found).results.map((hit) => hit.result_type)).toContain('collection');
+        expectFixture('folder-hit-search.json', found);
+    });
+
     it('documents in no folder', async () => {
         const page = await fetchFixture('/documents?top_level=true&limit=20');
 

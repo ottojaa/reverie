@@ -7,6 +7,7 @@ import { describeDb } from '../testing/tool-world';
 
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
 const BEFORE = '026_favourites';
+const AFTER = '027_nested_folders';
 
 const provider: MigrationProvider = {
     async getMigrations() {
@@ -123,7 +124,7 @@ describeDb('migration 027 (nested folders)', () => {
         placementBefore = await fetchPlacement();
 
         const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void logged.push(line));
-        const { error } = await migrator.migrateToLatest();
+        const { error } = await migrator.migrateTo(AFTER);
 
         log.mockRestore();
 
@@ -192,7 +193,7 @@ describeDb('migration 027 (nested folders)', () => {
         expect(down['idx_folders_user_path']).toMatch(/^CREATE UNIQUE INDEX/);
         expect(down['idx_folders_sibling_name']).toBeUndefined();
 
-        expect((await migrator.migrateToLatest()).error).toBeUndefined();
+        expect((await migrator.migrateTo(AFTER)).error).toBeUndefined();
 
         const up = await fetchPathIndexes();
 
@@ -211,6 +212,6 @@ describeDb('migration 027 (nested folders)', () => {
         expect(error).toBeUndefined();
         expect((await fetchPathIndexes())['idx_folders_user_path']).toMatch(/^CREATE INDEX/);
         expect(logged).toContain('027 down: live folder paths repeat, so idx_folders_user_path is not unique');
-        expect((await migrator.migrateToLatest()).error).toBeUndefined();
+        expect((await migrator.migrateTo(AFTER)).error).toBeUndefined();
     });
 });

@@ -9,7 +9,6 @@ export * from './schemas/duplicates.js';
 export * from './schemas/favourites.js';
 export * from './schemas/folders.js';
 export * from './schemas/jobs.js';
-export * from './schemas/organize.js';
 export * from './schemas/search.js';
 export * from './schemas/settings.js';
 export * from './schemas/taught-labels.js';

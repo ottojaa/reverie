@@ -223,10 +223,9 @@ describeDb('favourites', () => {
         expect(byId.get(ids.photo!)?.location).toEqual([trips, italy, rome]);
         expect(byId.get(ids.loose!)?.location).toEqual([]);
         expect(byId.get(ids.rome!)).toMatchObject({ type: 'folder', private: false, locked: false, lock_id: null, document: null });
-        expect(byId.get(ids.rome!)?.folder).toMatchObject({ name: 'Rome', document_count: 1, locked: false });
+        expect(byId.get(ids.rome!)?.folder).toMatchObject({ name: 'Rome', locked: false });
         expect(byId.get(ids.rome!)?.folder?.cover?.tiles.map((tile) => tile.document_id)).toEqual([ids.photo]);
-        // A folder holding only folders counts and shows what is beneath it.
-        expect(byId.get(ids.trips!)?.folder?.document_count).toBe(0);
+        // A folder holding only folders shows what is beneath it.
         expect(byId.get(ids.trips!)?.folder?.cover?.tiles.map((tile) => tile.document_id)).toEqual([ids.photo]);
         expect(byId.get(ids.photo!)).toMatchObject({ type: 'document', private: false, folder: null });
         expect(byId.get(ids.photo!)?.document).toMatchObject({

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema, DateOnlySchema, PaginationQuerySchema, QueryFlagSchema } from './common.js';
 import { DocumentCategoryEnum, ThumbnailUrlsSchema } from './documents.js';
-import { FolderTypeSchema } from './folders.js';
 
 // ============================================================================
 // Parsed Query Types (internal representation of search query)
@@ -160,8 +159,6 @@ export const CollectionSearchResultSchema = z.object({
     path: z.string(),
     description: z.string().nullable(),
     emoji: z.string().nullable(),
-    /** @deprecated 'collection' for a folder at the top level, else 'folder'. */
-    folder_type: FolderTypeSchema,
     /** Documents in the folder and its subfolders, except those behind a private folder (the folder tree's `kind_counts`, added up). */
     document_count: z.number(),
 
