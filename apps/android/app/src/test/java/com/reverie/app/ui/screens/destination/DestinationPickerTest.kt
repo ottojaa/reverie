@@ -132,6 +132,9 @@ class DestinationPickerTest {
         compose.onNodeWithContentDescription("Search folders").performClick()
         compose.onNode(hasSetTextAction()).performTextInput("portu")
         awaitText("Library › Photos")
+        // No folder is being looked at among the results, so there is none to select.
+        compose.onNodeWithText("Select Library").assertDoesNotExist()
+        compose.onNodeWithText("Open a folder to select it.").assertIsDisplayed()
 
         compose.onNode(hasSetTextAction()).performImeAction()
 

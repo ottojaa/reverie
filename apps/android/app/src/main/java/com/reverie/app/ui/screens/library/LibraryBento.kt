@@ -95,7 +95,8 @@ private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKi
         // Drawn in this order, so the second sheet lies over the first.
         files.getOrNull(0)?.let { Sheet(it, Modifier.offset(x = 24.dp, y = 14.dp).rotate(8f)) }
         files.getOrNull(1)?.let { Sheet(it, Modifier.offset(x = (-14).dp, y = 18.dp).rotate(-6f)) }
-        Scrim(from = 0.3f, to = ReverieTheme.cardColor)
+        // Solid by the label's height, so the name never competes with the sheets under it.
+        Scrim(from = 0.15f, to = ReverieTheme.cardColor, reachedAt = 0.65f)
         CardLabel(DocumentKind.FILE, count, isLarge = false, MaterialTheme.colorScheme.onSurface)
     }
 }
@@ -117,10 +118,10 @@ private fun BoxScope.Sheet(document: DocumentDto, placement: Modifier) {
     )
 }
 
-/** Darkens the card from [from] of its height down to [to] at its foot. */
+/** Fades the card into [to], from [from] of its height; [to] is reached at [reachedAt] and held to the foot. */
 @Composable
-private fun BoxScope.Scrim(from: Float, to: Color) {
-    val brush = Brush.verticalGradient(from to to.copy(alpha = 0f), 1f to to)
+private fun BoxScope.Scrim(from: Float, to: Color, reachedAt: Float = 1f) {
+    val brush = Brush.verticalGradient(from to to.copy(alpha = 0f), reachedAt to to)
     Box(Modifier.matchParentSize().background(brush))
 }
 

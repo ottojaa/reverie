@@ -36,6 +36,7 @@ import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.browse.BrowseHeader
 import com.reverie.app.ui.screens.browse.BrowseTitle
+import com.reverie.app.ui.screens.browse.PageTitle
 
 private const val NOTHING_STARRED = "Nothing starred yet. Star a file or folder to find it here."
 private const val NOT_LOADED = "Couldn't load favourites. Pull down to try again."
@@ -69,12 +70,8 @@ fun FavouritesContent(
     val sections = remember(state) { FavouriteSections(state.visible) }
     ReverieRefreshBox(isRefreshing = isPulling, onRefresh = actions.onRefresh, modifier = modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            BrowseHeader(
-                title = BrowseTitle("Favourites", sections.countLine()),
-                processingCount = 0,
-                onProcessingClick = {},
-                onBack = actions.onBack,
-            )
+            BrowseHeader(title = null, processingCount = 0, onProcessingClick = {}, onBack = actions.onBack)
+            PageTitle(BrowseTitle("Favourites", sections.countLine()))
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val width = maxWidth.value
                 val rows = remember(sections, width) { favouriteRows(sections, width) }

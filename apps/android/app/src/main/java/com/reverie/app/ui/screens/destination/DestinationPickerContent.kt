@@ -91,7 +91,7 @@ private fun DestinationRows(state: DestinationState, onOpen: (String) -> Unit) {
 private fun DestinationActions(state: DestinationState, onCancel: () -> Unit, onSelect: () -> Unit) {
     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
-        if (!state.canSelect) {
+        if (state.isSearching || !state.canSelect) {
             Text(
                 "Open a folder to select it.",
                 style = MaterialTheme.typography.bodySmall,
@@ -105,6 +105,8 @@ private fun DestinationActions(state: DestinationState, onCancel: () -> Unit, on
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) { Text("Cancel") }
+            // Search results are folders to open; there is no folder being looked at to select.
+            if (state.isSearching) return@Row
             Button(onClick = onSelect, enabled = state.canSelect, modifier = Modifier.weight(1f, fill = false).height(48.dp)) {
                 Text("Select ${state.destination.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

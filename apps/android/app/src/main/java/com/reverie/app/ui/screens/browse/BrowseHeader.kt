@@ -59,6 +59,12 @@ fun BrowseHeader(
     }
 }
 
+/** A title on a line of its own, under a header that holds only buttons. */
+@Composable
+fun PageTitle(title: BrowseTitle) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 4.dp)) { TitleBlock(title) }
+}
+
 @Composable
 private fun TitleBlock(title: BrowseTitle) {
     Text(
