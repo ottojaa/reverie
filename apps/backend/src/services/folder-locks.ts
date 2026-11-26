@@ -6,15 +6,18 @@ import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
 import type { Database } from '../db/schema.js';
 import type { FolderNode, FolderTree } from './folders/snapshot.js';
+import { fetchLockSecretState } from './lock-secret.js';
 import { loadLockMap, toLockMap, type LockMap } from './privacy.js';
 
 /**
  * Folder locks: which private folders the current app session has opened.
  *
  * The outermost private folder of a branch is one lock, covering everything beneath it. Unlocking
- * asks for the account password and adds that lock's id to a JWT (scope 'vault') kept in an
- * httpOnly session cookie. The cookie has no maxAge, so it ends with the app/browser session, and
- * logout clears it. Nothing is stored on the server: the cookie is the whole state.
+ * takes the lock secret (or the account password, see lock-secret.ts) and adds that lock's id to a
+ * JWT (scope 'vault') kept in an httpOnly session cookie. The cookie has no maxAge, so it ends with
+ * the app/browser session, and logout clears it. Which locks are open is kept nowhere else. The JWT
+ * also names the lock secret's generation, so saving a secret closes the locks of every cookie
+ * signed before it.
  *
  * Only ids that are still a current lock count, so moving a private folder under another private
  * folder (which changes the lock that covers it) closes it again. A cookie can still name a folder
@@ -32,6 +35,8 @@ interface VaultTokenPayload {
     sub: string;
     scope: 'vault';
     locks?: string[];
+    /** The lock secret's generation these locks were opened under; a token without one counts as 0. */
+    gen?: number;
 }
 
 export class FolderLocks {
@@ -108,7 +113,7 @@ export class FolderLocks {
     }
 }
 
-function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId: string): string[] {
+function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId: string, generation: number): string[] {
     const token = request.cookies?.[VAULT_COOKIE];
 
     if (!token) return [];
@@ -116,18 +121,12 @@ function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId
     try {
         const decoded = fastify.jwt.verify<VaultTokenPayload>(token);
 
-        if (decoded.scope !== 'vault' || decoded.sub !== userId) return [];
+        if (decoded.scope !== 'vault' || decoded.sub !== userId || (decoded.gen ?? 0) !== generation) return [];
 
         return decoded.locks ?? [];
     } catch {
         return [];
     }
-}
-
-export async function fetchHasPassword(userId: string, conn: Kysely<Database> = db): Promise<boolean> {
-    const user = await conn.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
-
-    return !!user?.password_hash;
 }
 
 /**
@@ -142,16 +141,17 @@ export async function loadFolderLocks(
     tree?: FolderTree<FolderNode>,
     conn: Kysely<Database> = db,
 ): Promise<FolderLocks> {
-    const [lockOf, enforced] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId, conn), fetchHasPassword(userId, conn)]);
+    const [lockOf, secret] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId, conn), fetchLockSecretState(userId, conn)]);
 
-    return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId)), enforced);
+    return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId, secret.generation)), secret.enforced);
 }
 
-/** Set the session cookie carrying exactly these open locks. */
-export function setVaultCookie(fastify: FastifyInstance, reply: FastifyReply, userId: string, lockIds: string[]): void {
+/** Set the session cookie carrying exactly these open locks, opened under this generation of the lock secret. */
+export function setVaultCookie(fastify: FastifyInstance, reply: FastifyReply, userId: string, lockIds: string[], generation: number): void {
     // The signing payload type is fixed by the @fastify/jwt augmentation (JwtPayload);
     // the vault token carries a distinct shape, so cast at the boundary.
-    const token = fastify.jwt.sign({ sub: userId, scope: 'vault', locks: lockIds } as unknown as JwtPayload, { expiresIn: VAULT_TTL_SECONDS });
+    const payload: VaultTokenPayload = { sub: userId, scope: 'vault', locks: lockIds, gen: generation };
+    const token = fastify.jwt.sign(payload as unknown as JwtPayload, { expiresIn: VAULT_TTL_SECONDS });
 
     reply.setCookie(VAULT_COOKIE, token, { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
 }

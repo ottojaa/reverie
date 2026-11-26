@@ -1,11 +1,14 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { ApiTokensCard } from '../components/settings/ApiTokensCard';
+import { LockSecretCard } from '../components/settings/LockSecretCard';
 import { TaughtLabelsCard } from '../components/settings/TaughtLabelsCard';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { authApi } from '../lib/api/auth-api';
+import { vaultStatusQuery } from '../lib/api/vault';
 import { formatFileSize } from '../lib/commonhelpers';
 import { useAuth } from '../lib/auth';
 
@@ -15,6 +18,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsPage() {
     const { user, logout } = useAuth();
+    const { data: vault } = useQuery(vaultStatusQuery);
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -107,7 +111,12 @@ function SettingsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Change Password</CardTitle>
-                        <CardDescription>Update your account password. It is also the password that unlocks your private folders.</CardDescription>
+                        <CardDescription>
+                            Update your account password.{' '}
+                            {vault?.secret_kind
+                                ? 'It is also needed to change or remove the lock on your private folders.'
+                                : 'It is also the password that unlocks your private folders.'}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -163,6 +172,8 @@ function SettingsPage() {
                         </form>
                     </CardContent>
                 </Card>
+
+                <LockSecretCard />
 
                 <TaughtLabelsCard />
 

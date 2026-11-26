@@ -57,7 +57,7 @@ export function useFolderActions(currentId: string | undefined, onNewFolder: (pa
     async function onTogglePrivate(folder: FolderWithChildren) {
         const makePrivate = !folder.is_private;
 
-        // Making a folder public needs its lock open, so a locked one asks for the password first.
+        // Making a folder public needs its lock open, so a locked one asks to be unlocked first.
         if (folder.locked && !(await requestUnlock(folder.id))) return;
 
         // Making a folder private hides everything inside it too, so confirm when it holds subfolders.

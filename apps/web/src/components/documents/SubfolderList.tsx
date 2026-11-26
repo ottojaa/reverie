@@ -4,7 +4,7 @@ import { toTotalCount } from '@/lib/folders/tree.js';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
 
-/** The folders directly inside the open one, each a link to its own page. A locked one asks for the password there. */
+/** The folders directly inside the open one, each a link to its own page. A locked one asks to be unlocked there. */
 export function SubfolderList({ folders }: { folders: FolderWithChildren[] }) {
     if (folders.length === 0) return null;
 

@@ -83,7 +83,21 @@ function toWebSchemas() {
         locations: facet.optional(),
     });
 
+    const ask = z.enum(['pin', 'password', 'account_password']);
+
     return {
+        vaultStatus: z.object({
+            unlocked: z.boolean(),
+            has_password: z.boolean(),
+            secret_kind: z.enum(['pin', 'password']).nullable(),
+            ask: ask.nullable(),
+        }),
+        vaultRefusal: z.object({
+            statusCode: z.literal(403),
+            error: z.literal('invalid_credentials'),
+            message: z.string(),
+            details: z.object({ ask, tries_left: z.number().int().positive().nullable() }),
+        }),
         tree: z.array(node),
         search: z.object({
             total: z.number(),
@@ -172,6 +186,9 @@ function toAndroidSchemas() {
     });
 
     return {
+        vaultStatus: z.object({ unlocked: z.boolean(), has_password: z.boolean() }),
+        // It takes a refusal by its status code and shows the message.
+        vaultRefusal: z.object({ statusCode: int.nullish(), error: maybe, message: maybe, details: z.record(z.unknown()).nullish() }),
         tree: z.array(node),
         search: z.object({
             total: int,
@@ -206,5 +223,16 @@ describe.each([
         const found = schemas.search.parse(fixture(file));
 
         expect(found.results?.map((hit) => hit.result_type)).toContain(type);
+    });
+
+    it('the folder-lock status with a lock secret set', () => {
+        expect(schemas.vaultStatus.parse(fixture('vault-status.json'))).toMatchObject({ unlocked: true, has_password: true });
+    });
+
+    it.each([
+        ['with tries left', 'vault-refusal-tries-left.json', 'Incorrect PIN. Tries left: 7'],
+        ['once stopped', 'vault-refusal-stopped.json', 'Too many wrong tries. Enter your account password.'],
+    ])('a refused unlock %s', (_when, file, message) => {
+        expect(schemas.vaultRefusal.parse(fixture(file))).toMatchObject({ statusCode: 403, message });
     });
 });

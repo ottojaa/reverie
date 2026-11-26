@@ -19,6 +19,7 @@ vi.mock('../services/storage.service', async (importOriginal) => ({
     }),
 }));
 
+import { hashPassword } from '../services/auth.service.js';
 import { seedContractLibrary, type ContractLibrary } from '../testing/contract-library.js';
 import { describeDb, useWorld } from '../testing/tool-world.js';
 import authPlugin from './plugins/auth.js';
@@ -26,6 +27,7 @@ import errorHandler from './plugins/error-handler.js';
 import documentsRoute from './routes/documents.route.js';
 import foldersRoute from './routes/folders.route.js';
 import searchRoute from './routes/search.route.js';
+import vaultRoute from './routes/vault.route.js';
 
 /**
  * Writes down what the real routes answer, as the fixtures client code parses in its own tests. This test fails
@@ -79,7 +81,7 @@ describeDb('contract fixtures', () => {
         await app.register(sensible);
         await app.register(authPlugin);
         await app.register(errorHandler);
-        for (const route of [documentsRoute, foldersRoute, searchRoute]) await app.register(route);
+        for (const route of [documentsRoute, foldersRoute, searchRoute, vaultRoute]) await app.register(route);
         await app.ready();
         library = await seedContractLibrary(ctx.world().db);
         // Search names its upload periods by how long ago the seeded dates are.
@@ -91,17 +93,25 @@ describeDb('contract fixtures', () => {
     });
 
     /** The answer as a person sees it with the "Taxes" lock open and the other one closed. */
-    async function fetchFixture(url: string): Promise<unknown> {
+    async function fetchFixture(url: string, generation = 0): Promise<unknown> {
         const { userId, folderIds } = library;
-        const vault = app.jwt.sign({ sub: userId, scope: 'vault', locks: [folderIds.taxes] } as never);
-        const response = await app.inject({
-            url,
-            headers: { authorization: 'Bearer ' + app.jwt.sign({ sub: userId, email: 'f@example.test' } as never), cookie: 'vault_session=' + vault },
-        });
+        const vault = app.jwt.sign({ sub: userId, scope: 'vault', locks: [folderIds.taxes], gen: generation } as never);
+        const response = await app.inject({ url, headers: { ...toLoginHeader(), cookie: 'vault_session=' + vault } });
 
         expect(response.statusCode, url + ' ' + response.body).toBe(200);
 
         return toFixture(response.body, library);
+    }
+
+    const toLoginHeader = () => ({ authorization: 'Bearer ' + app.jwt.sign({ sub: library.userId, email: 'f@example.test' } as never) });
+
+    /** Sends the unlock request installed apps send, as committed, for the seeded "Taxes" folder. */
+    async function sendUnlockFixture(password: string) {
+        const request = JSON.parse(readFileSync(join(FIXTURES, 'vault-unlock-request.json'), 'utf8')) as { folder_id: string };
+        const [seededTaxes] = toFixedIds(library).find(([, fixed]) => fixed === request.folder_id)!;
+        const payload = { ...request, password, folder_id: seededTaxes };
+
+        return app.inject({ method: 'POST', url: '/vault/unlock', headers: toLoginHeader(), payload });
     }
 
     function expectFixture(name: string, actual: unknown) {
@@ -132,6 +142,37 @@ describeDb('contract fixtures', () => {
 
         expect(SearchResponseSchema.parse(found).results.map((hit) => hit.result_type)).toContain('collection');
         expectFixture('folder-hit-search.json', found);
+    });
+
+    it('folder locks with a PIN set: the unlock installed apps send, the status, and both refusals', async () => {
+        const accountPassword = 'correct horse battery staple';
+
+        await ctx
+            .world()
+            .db.updateTable('users')
+            .set({ password_hash: await hashPassword(accountPassword) })
+            .where('id', '=', library.userId)
+            .execute();
+        await app.inject({
+            method: 'PUT',
+            url: '/vault/secret',
+            headers: toLoginHeader(),
+            payload: { account_password: accountPassword, secret: { kind: 'pin', value: '4821' } },
+        });
+        await ctx.world().db.updateTable('folder_lock_secrets').set({ wrong_tries: 2 }).execute();
+
+        const opened = await sendUnlockFixture('4821');
+        const refused = await sendUnlockFixture('0000');
+
+        await ctx.world().db.updateTable('folder_lock_secrets').set({ wrong_tries: 10 }).execute();
+
+        const stopped = await sendUnlockFixture('4821');
+
+        expect([opened.statusCode, refused.statusCode, stopped.statusCode]).toEqual([200, 403, 403]);
+        await ctx.world().db.updateTable('folder_lock_secrets').set({ wrong_tries: 0 }).execute();
+        expectFixture('vault-status.json', await fetchFixture('/vault/status', 1));
+        expectFixture('vault-refusal-tries-left.json', toFixture(refused.body, library));
+        expectFixture('vault-refusal-stopped.json', toFixture(stopped.body, library));
     });
 
     it('documents in no folder', async () => {

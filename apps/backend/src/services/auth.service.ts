@@ -22,6 +22,15 @@ export interface AuthenticatedUser {
     tokens: TokenPair;
 }
 
+/** bcrypt, for the account password and for the folder lock's own secret. */
+export function hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, SALT_ROUNDS);
+}
+
+export function verifyPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+}
+
 export class AuthService {
     constructor(private readonly fastify: FastifyInstance) {}
 
@@ -29,14 +38,14 @@ export class AuthService {
      * Hash a password using bcrypt
      */
     async hashPassword(password: string): Promise<string> {
-        return bcrypt.hash(password, SALT_ROUNDS);
+        return hashPassword(password);
     }
 
     /**
      * Verify a password against a hash
      */
     async verifyPassword(password: string, hash: string): Promise<boolean> {
-        return bcrypt.compare(password, hash);
+        return verifyPassword(password, hash);
     }
 
     /**
