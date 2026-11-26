@@ -91,6 +91,10 @@ android {
         unitTests.isReturnDefaultValues = true
         // The navigation test hosts Compose under Robolectric, which needs the merged resources and manifest.
         unitTests.isIncludeAndroidResources = true
+        // Paparazzi attaches an agent to the running test JVM. Attaching to a JVM that has not started its
+        // listener takes a signal handshake that can go unanswered after Robolectric's native SQLite has been
+        // used, which then fails every screenshot test in that JVM. Starting the listener up front avoids it.
+        unitTests.all { it.jvmArgs("-XX:+StartAttachListener") }
     }
 
     buildFeatures {
