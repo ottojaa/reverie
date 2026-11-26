@@ -102,12 +102,4 @@ describe('trashed rows are excluded from every read path', () => {
 
         expect(missing).toEqual([]);
     });
-
-    it('the folder-hit document count ignores trashed documents', async () => {
-        await search({ q: 'beach', limit: 10, offset: 0, sort_by: 'relevance', sort_order: 'desc', include_facets: false }, { userId: USER_ID });
-
-        const folderHit = h.recorder.statements.find((sql) => sql.includes('"dd"'));
-
-        expect(folderHit).toContain('"dd"."deleted_at" is null');
-    });
 });

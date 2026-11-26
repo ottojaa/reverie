@@ -2,6 +2,7 @@ import {
     CreateFolderRequestSchema,
     FolderSchema,
     FolderWithChildrenSchema,
+    NotFoundError,
     ReorderFoldersRequestSchema,
     UpdateFolderRequestSchema,
     UuidSchema,
@@ -150,9 +151,8 @@ export default async function (fastify: FastifyInstance) {
             const { tree, locks } = await loadTreeAndLocks(request);
             const folder = tree.folder(request.params.id);
 
-            if (!folder || folder.deleted_at !== null) {
-                return reply.notFound('Folder not found');
-            }
+            // Thrown, not replied: the error handler turns a sensible reply into a 500.
+            if (!folder || folder.deleted_at !== null) throw new NotFoundError('Folder', request.params.id);
 
             // A locked folder's own row stays readable (title only, `locked: true`); one hidden by a
             // locked folder above it is refused like its contents.

@@ -123,21 +123,21 @@ function FolderRows({ rows }: { rows: FolderTreeRowProps[] }) {
 export function FolderTree({ tree, currentId, dragHandlersRef, onNewFolder, onClose }: FolderTreeProps) {
     const [query, setQuery] = useState('');
     const isFiltering = query.trim().length > 0;
-    const { openIds, open, toggle } = useOpenFolders(tree, currentId);
+    const { isOpen, open, toggle } = useOpenFolders(tree, currentId);
     const drag = useTreeDrag(tree, dragHandlersRef, (folderId) => open([folderId]));
-    const actions = useFolderActions((parentId) => {
+    const actions = useFolderActions(currentId, (parentId) => {
         open([parentId]);
         onNewFolder(parentId);
     });
     const dragged = findFolder(tree, drag.active?.type === 'folder' ? drag.active.folderId : null);
     const draggedIds = new Set(flattenTree(dragged ? [dragged] : []).map((row) => row.folder.id));
-    const visible = isFiltering ? searchTree(tree, query) : flattenTree(tree, (folder) => openIds.has(folder.id));
+    const visible = isFiltering ? searchTree(tree, query) : flattenTree(tree, isOpen);
     const rows = visible.map(({ folder, depth }) => ({
         folder,
         depth,
         isCurrent: folder.id === currentId,
         // A filtered tree is all open and stays that way.
-        isOpen: isFiltering || openIds.has(folder.id),
+        isOpen: isFiltering || isOpen(folder),
         onToggle: isFiltering ? undefined : toggle,
         dragKind: drag.active?.type ?? null,
         isDragSource: draggedIds.has(folder.id),

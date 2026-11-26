@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
+import { findFolderByPath } from '@/lib/folders/tree.js';
 import { useSearchState } from '@/lib/hooks/useSearchState';
+import { useSections } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import { addFilter, type SearchHit, type SuggestionType } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
@@ -45,6 +47,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const { query, debouncedQuery, setQuery, clearQuery, recentSearches, addRecentSearch, removeRecentSearch } = useSearchState(250);
     const inputRef = useRef<HTMLInputElement>(null);
     const [activeSuggestionType, setActiveSuggestionType] = useState<SuggestionType>('filename');
+    const { data: tree = [] } = useSections();
 
     const hasQuery = query.trim().length > 0;
     const hasDebounced = debouncedQuery.trim().length > 0;
@@ -52,6 +55,9 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const { data: suggestions, isLoading: suggestionsLoading } = useSearchSuggestions(activeSuggestionType, debouncedQuery, 5);
 
     const { data: previewResults, isLoading: searchLoading } = useSearch({ q: debouncedQuery, limit: 5, include_facets: false }, hasDebounced);
+
+    // A folder suggestion is a path. Only one the tree knows can be searched, by its id.
+    const shownSuggestions = (suggestions ?? []).filter((value) => activeSuggestionType !== 'folder' || findFolderByPath(tree, value));
 
     const allSuggestionTypes = useMemo(() => {
         if (!hasDebounced) return [];
@@ -70,11 +76,11 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     }, [open]);
 
     const navigateToSearch = useCallback(
-        (searchQuery: string) => {
-            if (!searchQuery.trim()) return;
+        (searchQuery: string, folderId?: string) => {
+            if (!searchQuery.trim() && !folderId) return;
 
             onOpenChange(false);
-            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined, folder_id: undefined } });
+            navigate({ to: '/search', search: { q: searchQuery, sort_by: 'relevance', sort_order: 'desc', view: undefined, folder_id: folderId } });
         },
         [navigate, onOpenChange],
     );
@@ -103,12 +109,21 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
 
     const handleSuggestionClick = useCallback(
         (suggestion: string, type: SuggestionType) => {
-            // Token-level append handles quoting for multi-word values (folder:"New York")
+            // The folder itself, not a `folder:` token, which would match every folder of that name. What was
+            // typed only served to find it.
+            if (type === 'folder') {
+                clearQuery();
+                navigateToSearch('', findFolderByPath(tree, suggestion)?.id);
+
+                return;
+            }
+
+            // Token-level append handles quoting for multi-word values (location:"New York")
             const newQuery = type === 'filename' ? suggestion : addFilter(query.trim(), type, suggestion);
             setQuery(newQuery);
             navigateToSearch(newQuery);
         },
-        [query, setQuery, navigateToSearch],
+        [query, tree, setQuery, clearQuery, navigateToSearch],
     );
 
     const handleResultClick = useCallback(
@@ -197,7 +212,7 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
                                     <SearchResults
                                         key="results"
                                         query={debouncedQuery}
-                                        suggestions={suggestions ?? []}
+                                        suggestions={shownSuggestions}
                                         suggestionTypes={allSuggestionTypes}
                                         activeSuggestionType={activeSuggestionType}
                                         onSuggestionTypeChange={setActiveSuggestionType}
@@ -306,7 +321,7 @@ function EmptyState({ recentSearches, onRecentSearch, onRemoveRecent, onQuickFil
                     <p>Search your documents by content, filename, or metadata</p>
                     <p className="mt-1 text-xs">
                         Try <code className="rounded bg-muted px-1 py-0.5">type:photo</code> or{' '}
-                        <code className="rounded bg-muted px-1 py-0.5">folder:receipts</code>
+                        <code className="rounded bg-muted px-1 py-0.5">tag:receipt</code>
                     </p>
                 </div>
             )}

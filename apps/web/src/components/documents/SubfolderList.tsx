@@ -1,4 +1,4 @@
-import { FolderLockMark } from '@/components/folders/FolderLockMark';
+import { FolderPadlock } from '@/components/folders/FolderPadlock';
 import { SectionIcon } from '@/components/ui/SectionIcon';
 import { toTotalCount } from '@/lib/folders/tree.js';
 import type { FolderWithChildren } from '@reverie/shared';
@@ -40,7 +40,7 @@ function SubfolderRow({ folder }: { folder: FolderWithChildren }) {
                     {count} {count === 1 ? 'file' : 'files'}
                 </span>
             )}
-            <FolderLockMark folder={folder} />
+            <FolderPadlock folder={folder} />
         </Link>
     );
 }

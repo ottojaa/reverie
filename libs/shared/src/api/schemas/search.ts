@@ -162,6 +162,7 @@ export const CollectionSearchResultSchema = z.object({
     emoji: z.string().nullable(),
     /** @deprecated 'collection' for a folder at the top level, else 'folder'. */
     folder_type: FolderTypeSchema,
+    /** Documents in the folder and its subfolders, except those behind a private folder (the folder tree's `kind_counts`, added up). */
     document_count: z.number(),
 
     // Highlighted excerpt of the matched name/description

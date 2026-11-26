@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatFileSize } from '@/lib/commonhelpers';
 import { useFileHashes } from '@/lib/hash/useFileHashes';
+import { useIsFolderGone } from '@/lib/folders/gone';
 import { findFolder } from '@/lib/folders/tree.js';
 import { useSections } from '@/lib/sections';
 import { isFileTooLarge, useUpload } from '@/lib/upload';
@@ -112,7 +113,9 @@ export function UploadModal() {
     const { data: sectionsTree = [] } = useSections();
     // Undefined follows the page: the folder in the URL, else the top level (null).
     const [picked, setPicked] = useState<string | null>();
-    const targetFolderId = picked === undefined ? (currentSectionId ?? null) : picked;
+    // A picked folder trashed since is no destination: the choice goes back to following the page.
+    const isPickGone = useIsFolderGone(picked);
+    const targetFolderId = picked === undefined || isPickGone ? (currentSectionId ?? null) : picked;
 
     useEffect(() => {
         setPicked(undefined);

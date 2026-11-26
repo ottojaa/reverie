@@ -114,8 +114,15 @@ export function useUpdateFolder() {
 
             toast.error(getApiErrorMessage(error, 'Failed to update section'));
         },
-        onSettled: () => {
+        onSettled: (_, __, { data }) => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
+
+            // A move or a privacy change alters what document lists and search return; a rename, what search hits say.
+            const isRelisting = data.parent_id !== undefined || data.is_private !== undefined;
+
+            if (isRelisting) queryClient.invalidateQueries({ queryKey: ['documents'] });
+
+            if (isRelisting || data.name !== undefined) queryClient.invalidateQueries({ queryKey: ['search'] });
         },
     });
 }
@@ -129,6 +136,7 @@ export function useDeleteFolder() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
             queryClient.invalidateQueries({ queryKey: ['documents'] });
+            queryClient.invalidateQueries({ queryKey: ['search'] });
             queryClient.invalidateQueries({ queryKey: ['trash'] });
         },
         onError: () => toast.error('Failed to delete section'),

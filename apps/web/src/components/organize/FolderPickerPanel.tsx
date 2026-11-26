@@ -1,18 +1,15 @@
 import { FolderPickList } from '@/components/folders/FolderPickList';
+import { FolderPickPopover } from '@/components/folders/FolderPickPopover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { findFolder, flattenTree, toIndent } from '@/lib/folders/tree.js';
+import { findFolder, flattenTree } from '@/lib/folders/tree.js';
 import type { FolderWithChildren } from '@reverie/shared';
-import { ArrowLeft, FolderPlus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FolderPlus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
 
 /** Where the picked documents go: a folder (null: the top level), or a folder to create first. */
 export type MoveDestination = { type: 'existing'; folderId: string | null } | { type: 'new'; name: string; parentId: string | null };
-
-/** The select's value for the top level: Radix does not allow an empty one. */
-const TOP_LEVEL_VALUE = 'top';
 
 interface FolderPickerPanelProps {
     sections: FolderWithChildren[];
@@ -80,21 +77,15 @@ function PickView({ sections, selected, onSelect, onConfirm, isPending, onCreate
     );
 }
 
-function ParentSelect({ sections, value, onChange }: { sections: FolderWithChildren[]; value: string | null; onChange: (value: string | null) => void }) {
+/** The folder a new one goes inside, shown like a form field. */
+function ParentPicker({ sections, value, onChange }: { sections: FolderWithChildren[]; value: string | null; onChange: (value: string | null) => void }) {
     return (
-        <Select value={value ?? TOP_LEVEL_VALUE} onValueChange={(next) => onChange(next === TOP_LEVEL_VALUE ? null : next)}>
-            <SelectTrigger id="organize-folder-parent" className="[&>span]:truncate">
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value={TOP_LEVEL_VALUE}>No folder (top level)</SelectItem>
-                {flattenTree(sections).map(({ folder, depth }) => (
-                    <SelectItem key={folder.id} value={folder.id} style={{ paddingLeft: toIndent(depth) }}>
-                        {folder.name}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
+        <FolderPickPopover tree={sections} selected={value} onPick={onChange}>
+            <Button id="organize-folder-parent" type="button" variant="outline" className="w-full justify-between px-3 font-normal">
+                <span className="truncate">{findFolder(sections, value)?.name ?? 'No folder (top level)'}</span>
+                <ChevronDown className="size-4 opacity-50" />
+            </Button>
+        </FolderPickPopover>
     );
 }
 
@@ -137,7 +128,7 @@ function CreateView({ sections, selected, onConfirm, isPending, onBack }: Folder
                     <label htmlFor="organize-folder-parent" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Inside
                     </label>
-                    <ParentSelect sections={sections} value={parentId} onChange={setParentId} />
+                    <ParentPicker sections={sections} value={parentId} onChange={setParentId} />
                 </div>
             </div>
 

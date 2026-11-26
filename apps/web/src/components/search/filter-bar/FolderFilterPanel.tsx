@@ -1,6 +1,7 @@
 import { FolderPickList } from '@/components/folders/FolderPickList';
 import { Input } from '@/components/ui/input';
-import { flattenTree, searchTree, toPublicTree } from '@/lib/folders/tree.js';
+import { toPublicTree } from '@/lib/folders/privacy.js';
+import { flattenTree, searchTree } from '@/lib/folders/tree.js';
 import { useSections } from '@/lib/sections';
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';

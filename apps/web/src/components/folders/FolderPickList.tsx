@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils';
 import { useVault } from '@/lib/vault';
 import type { FolderWithChildren } from '@reverie/shared';
 import { Check, FolderX } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { FolderLockMark } from './FolderLockMark';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { FolderPadlock } from './FolderPadlock';
 
 interface PickRowProps {
     depth: number;
@@ -41,6 +41,22 @@ function PickRow({ depth, name, icon, isSelected, onPick, children }: PickRowPro
     );
 }
 
+const ARROW_STEPS: Record<string, number> = { ArrowDown: 1, ArrowUp: -1 };
+
+/** Up and Down walk the rows, as in a menu. */
+function moveRowFocus(event: KeyboardEvent<HTMLDivElement>) {
+    const step = ARROW_STEPS[event.key];
+
+    if (!step) return;
+
+    event.preventDefault();
+
+    const buttons = Array.from(event.currentTarget.querySelectorAll('button'));
+    const next = buttons.indexOf(document.activeElement as HTMLButtonElement) + step;
+
+    buttons[Math.min(Math.max(next, 0), buttons.length - 1)]?.focus();
+}
+
 interface FolderPickListProps {
     rows: FolderRow[];
     /** The picked folder's id, null for the top level, undefined while nothing is picked. */
@@ -64,7 +80,7 @@ export function FolderPickList({ rows, selected, onPick, hasTopLevel = false, ha
     }
 
     return (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5" onKeyDown={moveRowFocus}>
             {hasTopLevel && (
                 <PickRow
                     depth={0}
@@ -83,7 +99,7 @@ export function FolderPickList({ rows, selected, onPick, hasTopLevel = false, ha
                     isSelected={selected === folder.id}
                     onPick={() => void pickFolder(folder)}
                 >
-                    <FolderLockMark folder={folder} />
+                    <FolderPadlock folder={folder} />
                     {hasCounts && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{toTotalCount(folder)}</span>}
                 </PickRow>
             ))}

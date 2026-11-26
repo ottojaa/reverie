@@ -15,6 +15,7 @@ import { withinFolderSql } from '../services/folders/scope';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { fetchDocumentDetails } from './document-hydration';
 import { generateFacets } from './facets';
+import { loadPublicFolderCounts } from './folder-counts';
 import { placeFolders } from './folder-placement';
 import { buildPrefixTsQuery, documentJoins } from './filter-application';
 import { generateSummarySnippet } from './highlighter';
@@ -168,7 +169,6 @@ interface FolderRow {
     parent_id: string | null;
     created_at: Date;
     relevance: number;
-    document_count: number | null;
 }
 
 function matchingFolders(userId: string, tsQuery: ReturnType<typeof buildPrefixTsQuery>, privateFolderIds: string[]) {
@@ -200,14 +200,6 @@ async function fetchMatchingFolders(
                 'f.parent_id',
                 'f.created_at',
                 sql<number>`COALESCE(ts_rank(f.search_vector, ${tsQuery}), 0)`.as('relevance'),
-                (eb) =>
-                    excludeTrashed(
-                        eb
-                            .selectFrom('documents as dd')
-                            .select(sql<number>`count(*)::int`.as('count'))
-                            .whereRef('dd.folder_id', '=', 'f.id'),
-                        'dd.',
-                    ).as('document_count'),
             ])
             .orderBy('relevance', 'desc')
             .limit(window)
@@ -220,7 +212,7 @@ async function fetchMatchingFolders(
     return { rows: rows as FolderRow[], total: totalRow?.count ?? 0 };
 }
 
-function toCollectionHit(folder: FolderRow, parsed: ParsedQuery): CollectionSearchResult {
+function toCollectionHit(folder: FolderRow, parsed: ParsedQuery, documentCount: number): CollectionSearchResult {
     return {
         result_type: 'collection',
         id: folder.id,
@@ -229,7 +221,7 @@ function toCollectionHit(folder: FolderRow, parsed: ParsedQuery): CollectionSear
         description: folder.description,
         emoji: folder.emoji,
         folder_type: toFolderType(folder.parent_id),
-        document_count: Number(folder.document_count ?? 0),
+        document_count: documentCount,
         snippet: folder.description ? generateSummarySnippet(folder.description, parsed.fullText!) : null,
         relevance: Number(folder.relevance ?? 0),
     };
@@ -260,16 +252,20 @@ async function searchInterleaved(
     ]);
     const page = placeFolders(ranked.entries, folders.rows).slice(offset, offset + limit);
     const pageDocs = page.flatMap((item) => (item.type === 'document' ? [item.entry] : []));
-    const detailMap = await fetchDocumentDetails(
-        ctx.userId,
-        pageDocs.map((entry) => entry.id),
-        parsed,
-    );
+    const pageFolderIds = page.flatMap((item) => (item.type === 'collection' ? [item.folder.id] : []));
+    const [detailMap, folderCounts] = await Promise.all([
+        fetchDocumentDetails(
+            ctx.userId,
+            pageDocs.map((entry) => entry.id),
+            parsed,
+        ),
+        loadPublicFolderCounts(ctx.userId, pageFolderIds),
+    ]);
     const documentHits = new Map(toDocumentHits(pageDocs, detailMap).map((hit) => [hit.document_id, hit]));
     const results: SearchHit[] = [];
 
     for (const item of page) {
-        const hit = item.type === 'document' ? documentHits.get(item.entry.id) : toCollectionHit(item.folder, parsed);
+        const hit = item.type === 'document' ? documentHits.get(item.entry.id) : toCollectionHit(item.folder, parsed, folderCounts.get(item.folder.id) ?? 0);
 
         if (hit) results.push(hit);
     }

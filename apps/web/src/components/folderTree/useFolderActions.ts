@@ -1,5 +1,6 @@
 import { useConfirm } from '@/lib/confirm';
 import { toDeleteFolderMessage, toMakePrivateMessage } from '@/lib/folders/confirm-text.js';
+import { fetchIsFolderGone } from '@/lib/folders/gone';
 import { useSectionEdit } from '@/lib/SectionEditContext';
 import { useDeleteFolder, useUpdateFolder } from '@/lib/sections';
 import { useVault } from '@/lib/vault';
@@ -8,14 +9,31 @@ import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import type { FolderRowActions } from './FolderRowMenu';
 
-/** What the tree's row menu does. */
-export function useFolderActions(onNewFolder: (parentId: string) => void): FolderRowActions {
+/**
+ * After a delete: the open page may be the trashed folder or one inside it, so it moves to the folder above the
+ * trashed one. The server says whether it is gone, since the tree lists nothing under a closed lock.
+ */
+function useLeaveTrashed(currentId: string | undefined) {
+    const navigate = useNavigate();
+
+    return async (trashed: FolderWithChildren) => {
+        if (!currentId || !(await fetchIsFolderGone(currentId))) return;
+
+        if (!trashed.parent_id) return navigate({ to: '/browse', replace: true });
+
+        return navigate({ to: '/browse/$sectionId', params: { sectionId: trashed.parent_id }, replace: true });
+    };
+}
+
+/** What the tree's row menu does. `currentId` is the folder the page shows. */
+export function useFolderActions(currentId: string | undefined, onNewFolder: (parentId: string) => void): FolderRowActions {
     const confirm = useConfirm();
     const navigate = useNavigate();
     const { hasPassword, requestUnlock } = useVault();
     const { openEdit } = useSectionEdit();
     const deleteFolder = useDeleteFolder();
     const updateFolder = useUpdateFolder();
+    const leaveTrashed = useLeaveTrashed(currentId);
 
     async function onDelete(folder: FolderWithChildren) {
         const ok = await confirm({
@@ -25,7 +43,15 @@ export function useFolderActions(onNewFolder: (parentId: string) => void): Folde
             variant: 'destructive',
         });
 
-        if (ok) deleteFolder.mutate(folder.id);
+        if (!ok) return;
+
+        // Awaited rather than a callback on `mutate`, which is dropped if the tree has unmounted by then.
+        const isDeleted = await deleteFolder.mutateAsync(folder.id).then(
+            () => true,
+            () => false,
+        );
+
+        if (isDeleted) await leaveTrashed(folder);
     }
 
     async function onTogglePrivate(folder: FolderWithChildren) {
