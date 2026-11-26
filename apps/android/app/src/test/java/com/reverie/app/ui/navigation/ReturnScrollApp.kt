@@ -145,7 +145,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
                 onOpenTrash = {},
             ),
             onDocumentClick = { id, aspect, section -> nav.openDocument(entry, id, aspect, section) },
-            onOpenAccount = {},
+            account = {},
             viewModel = viewModel { LibraryViewModel(deps, searchRepository(), backup) },
             uploadViewModel = uploads(),
         )

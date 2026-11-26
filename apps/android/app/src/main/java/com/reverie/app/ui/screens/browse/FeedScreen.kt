@@ -22,6 +22,7 @@ import java.time.ZoneId
  * viewer.
  *
  * @param onBack null on a screen that is a root, which has no back arrow.
+ * @param account the header's avatar button, which only a root has.
  */
 @Composable
 fun FeedScreen(
@@ -29,6 +30,7 @@ fun FeedScreen(
     onBack: (() -> Unit)?,
     onSearch: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
+    account: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
 ) {
@@ -77,7 +79,10 @@ fun FeedScreen(
         favourites = viewModel.favourites,
         manage = viewModel.manage,
         modifier = modifier,
-        headerActions = { SearchAction(source.searchScope) { onSearch(source.searchScope) } },
+        headerActions = {
+            SearchAction(source.searchScope) { onSearch(source.searchScope) }
+            account()
+        },
     ) { slot ->
         FeedBody(
             source = source,

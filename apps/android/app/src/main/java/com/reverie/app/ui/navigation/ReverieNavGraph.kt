@@ -10,8 +10,10 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.reverie.app.ui.screens.browse.FolderScreen
+import com.reverie.app.ui.screens.account.AccountEntry
+import com.reverie.app.ui.screens.account.AccountLinks
 import com.reverie.app.ui.screens.browse.FeedScreen
+import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.library.LibraryLinks
@@ -50,7 +52,7 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
         LibraryScreen(
             links = navController.libraryLinks(),
             onDocumentClick = { id, aspect, section -> navController.openDocument(entry, id, aspect, section) },
-            onOpenAccount = { navController.navigate(Routes.SETTINGS) },
+            account = { AccountEntry(navController.accountLinks()) },
         )
     }
 
@@ -59,6 +61,7 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = null,
             onSearch = { navController.navigate(Routes.search(it)) },
+            account = { AccountEntry(navController.accountLinks()) },
         )
     }
 }
@@ -69,6 +72,12 @@ private fun NavHostController.libraryLinks() = LibraryLinks(
     onOpenFavourites = { navigate(Routes.FAVOURITES) },
     onSearch = { navigate(Routes.search(query = it)) },
     onOpenTrash = {},
+)
+
+private fun NavHostController.accountLinks() = AccountLinks(
+    onOpenBackup = { navigate(Routes.SETTINGS_BACKUP) },
+    onOpenPrivateFolders = {},
+    onOpenSettings = { navigate(Routes.SETTINGS) },
 )
 
 /** The screens pushed over a tab that list folders and documents. */
@@ -122,8 +131,8 @@ private fun NavGraphBuilder.viewer(navController: NavHostController) {
 private fun NavGraphBuilder.settings(navController: NavHostController) {
     composable(Routes.SETTINGS) {
         SettingsScreen(
+            onBack = { navController.popBackStack() },
             onChangePassword = { navController.navigate(Routes.SETTINGS_PASSWORD) },
-            onOpenBackup = { navController.navigate(Routes.SETTINGS_BACKUP) },
         )
     }
     composable(Routes.SETTINGS_BACKUP) {

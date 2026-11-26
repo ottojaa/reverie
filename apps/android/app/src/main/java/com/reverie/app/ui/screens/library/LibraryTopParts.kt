@@ -13,12 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
-import androidx.compose.material.icons.outlined.CloudDone
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.CloudQueue
-import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Smartphone
@@ -37,34 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.backup.BackupStatus
-import com.reverie.app.domain.counted
+import com.reverie.app.ui.components.backupIcon
+import com.reverie.app.ui.components.backupLine
 
 private val CHIP_SHAPE = RoundedCornerShape(20.dp)
-
-/** "Backup complete · 252 files": where backup stands and how much the library holds. Null: nothing to say yet. */
-internal fun backupLine(status: BackupStatus, total: Int?): String? {
-    val files = total?.let { counted(it, "file") }
-
-    fun after(state: String) = files?.let { "$it · ${state.replaceFirstChar(Char::lowercase)}" } ?: state
-
-    return when (status) {
-        BackupStatus.Unknown -> files
-        BackupStatus.Off -> after("Backup off")
-        BackupStatus.NotSetUp -> after("Backup not set up")
-        BackupStatus.Running -> "Backing up…"
-        is BackupStatus.Waiting -> counted(status.count, "file") + " waiting to back up"
-        BackupStatus.NeedsAttention -> "Backup needs attention"
-        BackupStatus.Complete -> listOfNotNull("Backup complete", files).joinToString(" · ")
-    }
-}
-
-private fun backupIcon(status: BackupStatus): ImageVector = when (status) {
-    BackupStatus.Complete -> Icons.Outlined.CloudDone
-    BackupStatus.Running, is BackupStatus.Waiting -> Icons.Outlined.CloudUpload
-    BackupStatus.Off, BackupStatus.NotSetUp -> Icons.Outlined.CloudOff
-    BackupStatus.NeedsAttention -> Icons.Outlined.ErrorOutline
-    BackupStatus.Unknown -> Icons.Outlined.CloudQueue
-}
 
 @Composable
 internal fun BackupLine(status: BackupStatus, total: Int?) {

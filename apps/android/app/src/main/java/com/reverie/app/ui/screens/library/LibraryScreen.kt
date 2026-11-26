@@ -15,7 +15,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.ui.components.AccountButton
 import com.reverie.app.ui.components.CreateEditFolderSheet
 import com.reverie.app.ui.components.LIBRARY_NAME
 import com.reverie.app.ui.screens.browse.BrowseChrome
@@ -32,12 +31,13 @@ import java.time.ZoneId
  * The Library, the app's first screen. Uploads and new folders made here land at the top level.
  *
  * @param onDocumentClick [section] names the list the document was opened from, where it is not Recently added.
+ * @param account the header's avatar button.
  */
 @Composable
 fun LibraryScreen(
     links: LibraryLinks,
     onDocumentClick: (documentId: String, aspect: Float?, section: String?) -> Unit,
-    onOpenAccount: () -> Unit,
+    account: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
     uploadViewModel: UploadViewModel = hiltViewModel(),
@@ -84,7 +84,7 @@ fun LibraryScreen(
         modifier = modifier,
         headerActions = { openUpload ->
             IconButton(onClick = openUpload) { Icon(Icons.Outlined.Add, contentDescription = "Upload or new folder") }
-            AccountButton(backup, onOpenAccount)
+            account()
         },
         onNewFolder = { isNamingFolder = true },
         notices = viewModel.notices,
