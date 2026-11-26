@@ -1,7 +1,21 @@
-import { AppError } from '@reverie/shared';
-import type { FastifyInstance } from 'fastify';
+import { AppError, ValidationError } from '@reverie/shared';
+import type { FastifyError, FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
+import { STATUS_CODES } from 'node:http';
 import { ZodError } from 'zod';
+
+/** A status' name the way the envelope writes it, such as `TOO_MANY_REQUESTS`. */
+function toErrorCode(status: number): string {
+    return (STATUS_CODES[status] ?? 'Bad Request').toUpperCase().replace(/[^A-Z]+/g, '_');
+}
+
+/** The answer to an error that carries a 4xx status of its own. */
+function toClientErrorAnswer(error: FastifyError, statusCode: number) {
+    // The body parser's message quotes the body, which may hold a password, so none of it goes further.
+    if (error instanceof SyntaxError) return new ValidationError('Request body is not valid JSON').toJSON();
+
+    return { statusCode, error: toErrorCode(statusCode), message: error.message };
+}
 
 export default fp(async function (fastify: FastifyInstance) {
     fastify.setErrorHandler((error, _request, reply) => {
@@ -28,6 +42,13 @@ export default fp(async function (fastify: FastifyInstance) {
                 message: error.message,
                 details: error.validation,
             });
+        }
+
+        const { statusCode } = error;
+
+        // The request's fault, not the server's: the request log has the status, and nothing else is logged.
+        if (statusCode && statusCode >= 400 && statusCode < 500) {
+            return reply.status(statusCode).send(toClientErrorAnswer(error, statusCode));
         }
 
         // Log unexpected errors

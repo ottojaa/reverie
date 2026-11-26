@@ -2,6 +2,7 @@ import {
     CreateUserRequestSchema,
     CreateUserResponseSchema,
     ListUsersResponseSchema,
+    RouteErrorSchema,
     UpdateUserRequestSchema,
     UpdateUserResponseSchema,
     UuidSchema,
@@ -70,7 +71,7 @@ export default async function (fastify: FastifyInstance) {
                 tags: ['Admin'],
                 params: z.object({ id: UuidSchema }),
                 body: UpdateUserRequestSchema,
-                response: { 200: UpdateUserResponseSchema, 400: { type: 'object', properties: { error: { type: 'string' }, message: { type: 'string' } } } },
+                response: { 200: UpdateUserResponseSchema, 400: RouteErrorSchema },
             },
         },
         async (request, reply) => {
@@ -106,7 +107,7 @@ export default async function (fastify: FastifyInstance) {
                 params: z.object({ id: UuidSchema }),
                 response: {
                     204: z.null(),
-                    400: { type: 'object', properties: { error: { type: 'string' }, message: { type: 'string' } } },
+                    400: RouteErrorSchema,
                 },
             },
         },
@@ -137,7 +138,7 @@ export default async function (fastify: FastifyInstance) {
                 body: CreateUserRequestSchema,
                 response: {
                     201: CreateUserResponseSchema,
-                    400: { type: 'object', properties: { error: { type: 'string' }, message: { type: 'string' } } },
+                    400: RouteErrorSchema,
                 },
             },
         },

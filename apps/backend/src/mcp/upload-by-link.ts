@@ -55,7 +55,7 @@ async function fetchLinkFolder({ userId, folderId }: UploadLink): Promise<Target
     }
 }
 
-/** The multipart plugin's own limit errors, which the error handler would otherwise answer with a 500. */
+/** Words the multipart plugin's own limit errors so that they say what the limit is. */
 function toLimitError(error: unknown): unknown {
     const { code } = error as { code?: string };
 

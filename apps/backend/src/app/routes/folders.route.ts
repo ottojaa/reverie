@@ -151,7 +151,6 @@ export default async function (fastify: FastifyInstance) {
             const { tree, locks } = await loadTreeAndLocks(request);
             const folder = tree.folder(request.params.id);
 
-            // Thrown, not replied: the error handler turns a sensible reply into a 500.
             if (!folder || folder.deleted_at !== null) throw new NotFoundError('Folder', request.params.id);
 
             // A locked folder's own row stays readable (title only, `locked: true`); one hidden by a

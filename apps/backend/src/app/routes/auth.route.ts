@@ -6,6 +6,7 @@ import {
     LoginResponseSchema,
     RefreshTokenRequestSchema,
     RefreshTokenResponseSchema,
+    RouteErrorSchema,
 } from '@reverie/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -185,7 +186,7 @@ export default async function (fastify: FastifyInstance) {
                 tags: ['Auth'],
                 response: {
                     200: CurrentUserResponseSchema,
-                    401: AuthErrorSchema,
+                    401: RouteErrorSchema,
                 },
             },
         },
@@ -216,7 +217,7 @@ export default async function (fastify: FastifyInstance) {
                 body: ChangePasswordRequestSchema,
                 response: {
                     200: SuccessResponseSchema,
-                    400: AuthErrorSchema,
+                    400: RouteErrorSchema,
                 },
             },
         },
@@ -249,7 +250,7 @@ export default async function (fastify: FastifyInstance) {
                 body: z.object({ code: z.string().min(1) }),
                 response: {
                     200: RefreshTokenResponseSchema,
-                    400: AuthErrorSchema,
+                    400: RouteErrorSchema,
                 },
             },
         },

@@ -2,6 +2,9 @@ import { VaultStatusSchema, type VaultSecretRequest, type VaultStatus } from '@r
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 
+/** The page anchor of the lock secret's settings card, for a link that leads to it. */
+export const LOCK_SETTINGS_ANCHOR = 'private-folders-lock';
+
 export const vaultApi = {
     async status(): Promise<VaultStatus> {
         const { data } = await apiClient.get('/vault/status');
