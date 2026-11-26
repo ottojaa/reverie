@@ -72,6 +72,7 @@ class FolderBodyTest {
                     emptyMap(),
                     starredIds = emptySet(),
                     onOpen = { calls += "folder:$it" },
+                    onOpenCrumb = { calls += "crumb:$it" },
                     onHold = { calls += "hold folder:${it.id}" },
                 ),
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
@@ -114,7 +115,7 @@ class FolderBodyTest {
         compose.onNodeWithText("trips").performClick()
         compose.onNodeWithText("Library").performClick()
 
-        assertEquals(listOf("folder:trips", "folder:null"), calls)
+        assertEquals(listOf("crumb:trips", "crumb:null"), calls)
     }
 
     @Config(qualifiers = "w400dp-h900dp")

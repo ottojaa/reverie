@@ -34,7 +34,7 @@ fun SearchScreen(
         actions = SearchActions(
             onBack = onBack,
             onType = viewModel::setFreeText,
-            onSubmit = viewModel::rememberSearch,
+            onSubmit = viewModel::rememberSubmitted,
             onRemoveScope = viewModel::removeScope,
             onOpenSheet = { sheet ->
                 openSheet = sheet
@@ -46,8 +46,8 @@ fun SearchScreen(
             onApplyQuery = viewModel::setQuery,
             onRemoveRecent = viewModel::removeRecent,
             // Publish the result order so the viewer can swipe between hits, then open the tapped one.
-            onOpenDocument = { id -> viewModel.rememberSearch(); viewModel.prepareSequence(); onDocumentClick(id) },
-            onOpenFolder = { id -> viewModel.rememberSearch(); onOpenFolder(id) },
+            onOpenDocument = { id -> viewModel.rememberOpened(); viewModel.prepareSequence(); onDocumentClick(id) },
+            onOpenFolder = { id -> viewModel.rememberOpened(); onOpenFolder(id) },
             onLoadMore = viewModel::loadMore,
         ),
     )

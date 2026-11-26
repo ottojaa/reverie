@@ -26,23 +26,24 @@ function isStillProcessing(eb: ExpressionBuilder<Database, 'documents'>) {
     return eb.or([eb('ocr_status', 'in', RUNNING_STATUSES), eb('thumbnail_status', 'in', RUNNING_STATUSES), eb('llm_status', 'in', RUNNING_STATUSES)]);
 }
 
-/** documentKindOf in SQL: a case-insensitive MIME prefix; everything else is a file. mime_type is NOT NULL. */
-export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
-    const isImage = eb(sql<string>`lower(mime_type)`, 'like', 'image/%');
-    const isVideo = eb(sql<string>`lower(mime_type)`, 'like', 'video/%');
+/** The MIME type column, as a query names the documents table. */
+type MimeTypeColumn = 'mime_type' | 'd.mime_type';
 
-    if (kind === 'image') return isImage;
-
-    if (kind === 'video') return isVideo;
-
-    return eb.not(eb.or([isImage, isVideo]));
+/** What makes a document an image or a video, as in documentKindOf: a case-insensitive MIME prefix. mime_type is NOT NULL. */
+function hasKindPrefix(column: MimeTypeColumn, kind: 'image' | 'video') {
+    return sql<boolean>`lower(${sql.ref(column)}) like ${sql.lit(kind + '/%')}`;
 }
 
-/** A photo or a video (the image and video kinds together), for a query that names the documents table as it likes. */
-export function isMediaSql(mimeType: 'mime_type' | 'd.mime_type') {
-    const column = sql.ref(mimeType);
+/** A photo or a video (the image and video kinds together). */
+export function isMediaSql(column: MimeTypeColumn) {
+    return sql<boolean>`(${hasKindPrefix(column, 'image')} or ${hasKindPrefix(column, 'video')})`;
+}
 
-    return sql<boolean>`(lower(${column}) like 'image/%' or lower(${column}) like 'video/%')`;
+/** documentKindOf in SQL; everything that is neither a photo nor a video is a file. */
+export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
+    if (kind === 'file') return eb.not(isMediaSql('mime_type'));
+
+    return hasKindPrefix('mime_type', kind);
 }
 
 /**

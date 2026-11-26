@@ -138,7 +138,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private fun Library(entry: NavBackStackEntry) {
         LibraryScreen(
             links = LibraryLinks(
-                onOpenFolder = { nav.openFolder(it) },
+                onOpenFolder = { nav.showFolder(it) },
                 onOpenList = { nav.navigate(Routes.feed(it)) },
                 onOpenFavourites = { nav.navigate(Routes.FAVOURITES) },
                 onSearch = {},
@@ -157,7 +157,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     private fun Favourites(entry: NavBackStackEntry) {
         FavouritesScreen(
             onBack = { nav.popBackStack() },
-            onOpenFolder = { nav.openFolder(it) },
+            onOpenFolder = { nav.showFolder(it) },
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             viewModel = viewModel { FavouritesViewModel(world.deps) },
         )
@@ -168,7 +168,8 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
         FolderScreen(
             onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
             onBack = { nav.popBackStack() },
-            onOpenFolder = { nav.openFolder(it) },
+            onOpenFolder = { nav.showFolder(it) },
+            onOpenCrumb = { nav.openCrumb(it) },
             onSearch = { nav.navigate(Routes.search(it)) },
             viewModel = viewModel { FolderViewModel(createSavedStateHandle(), deps) },
             uploadViewModel = uploads(),
@@ -194,7 +195,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
         SearchScreen(
             onBack = { nav.popBackStack() },
             onDocumentClick = { nav.openDocument(entry, it) },
-            onOpenFolder = { nav.openFolder(it) },
+            onOpenFolder = { nav.showFolder(it) },
             viewModel = search,
         )
     }

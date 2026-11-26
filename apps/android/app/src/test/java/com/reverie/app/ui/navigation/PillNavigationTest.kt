@@ -147,6 +147,42 @@ class PillNavigationTest {
         assertEquals("folder a", here())
     }
 
+    @Test fun `a folder found by a search opens over its results, even one already below`() {
+        go(Routes.folder("a"))
+        go(Routes.folder("b"))
+        go(Routes.search())
+
+        compose.runOnUiThread { nav.showFolder("a") }
+        compose.waitForIdle()
+
+        assertEquals(listOf("folder a", Routes.SEARCH, "folder b", "folder a", Routes.LIBRARY), unwind())
+    }
+
+    @Test fun `a breadcrumb step goes back to a folder on the way here, and opens any other on top`() {
+        go(Routes.folder("a"))
+        go(Routes.folder("b"))
+
+        compose.runOnUiThread { nav.openCrumb("a") }
+        compose.waitForIdle()
+        assertEquals("folder a", here())
+        compose.runOnUiThread { nav.openCrumb("top") }
+        compose.waitForIdle()
+
+        assertEquals(listOf("folder top", "folder a", Routes.LIBRARY), unwind())
+    }
+
+    @Test fun `the breadcrumb's Library root keeps what Photos had`() {
+        tap("Photos")
+        go(Routes.folder("a"))
+
+        compose.runOnUiThread { nav.openCrumb(null) }
+        compose.waitForIdle()
+        assertEquals(Routes.LIBRARY, here())
+        tap("Photos")
+
+        assertEquals(listOf("folder a", Routes.PHOTOS, Routes.LIBRARY), unwind())
+    }
+
     @Test fun `Photos tapped while on Photos goes back to its root`() {
         tap("Photos")
         go(Routes.folder("a"))

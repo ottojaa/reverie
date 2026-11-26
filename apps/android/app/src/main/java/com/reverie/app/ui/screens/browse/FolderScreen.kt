@@ -32,7 +32,8 @@ import java.time.ZoneId
 fun FolderScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
     onBack: () -> Unit,
-    onOpenFolder: (folderId: String?) -> Unit,
+    onOpenFolder: (folderId: String) -> Unit,
+    onOpenCrumb: (folderId: String?) -> Unit,
     onSearch: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FolderViewModel = hiltViewModel(),
@@ -92,7 +93,7 @@ fun FolderScreen(
             state = shown,
             name = name,
             description = ui.folder?.description,
-            links = FolderLinks(covers, favourites.starredFolderIds, onOpenFolder, onHold = viewModel.manage::openMenu),
+            links = FolderLinks(covers, favourites.starredFolderIds, onOpenFolder, onOpenCrumb, onHold = viewModel.manage::openMenu),
             layout = layout,
             actions = actions,
             focusedId = focusedId,

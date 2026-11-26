@@ -74,7 +74,7 @@ class FolderViewModelTest {
                 state = state,
                 name = "Receipts",
                 description = null,
-                links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}),
+                links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}, onOpenCrumb = {}),
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = documentRowActions(viewModel, state.selectedIds, starredIds = emptySet(), openDocument = {}),
                 focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,

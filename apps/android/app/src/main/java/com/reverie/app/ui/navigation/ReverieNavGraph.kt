@@ -69,7 +69,7 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
 }
 
 private fun NavHostController.libraryLinks() = LibraryLinks(
-    onOpenFolder = { navigate(Routes.folder(it)) },
+    onOpenFolder = { showFolder(it) },
     onOpenList = { navigate(Routes.feed(it)) },
     onOpenFavourites = { navigate(Routes.FAVOURITES) },
     onSearch = { navigate(Routes.search(query = it)) },
@@ -88,7 +88,8 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
         FolderScreen(
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
             onBack = { navController.popBackStack() },
-            onOpenFolder = { navController.openFolder(it) },
+            onOpenFolder = { navController.showFolder(it) },
+            onOpenCrumb = { navController.openCrumb(it) },
             onSearch = { navController.navigate(Routes.search(it)) },
         )
     }
@@ -105,7 +106,7 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
     reverieComposable(Routes.FAVOURITES) { entry ->
         FavouritesScreen(
             onBack = { navController.popBackStack() },
-            onOpenFolder = { navController.navigate(Routes.folder(it)) },
+            onOpenFolder = { navController.showFolder(it) },
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
         )
     }
@@ -113,7 +114,7 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
     composable(Routes.PRIVATE_FOLDERS) {
         PrivateFoldersScreen(
             onBack = { navController.popBackStack() },
-            onOpenFolder = { navController.openFolder(it) },
+            onOpenFolder = { navController.showFolder(it) },
         )
     }
 
@@ -125,7 +126,7 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
         SearchScreen(
             onBack = { navController.popBackStack() },
             onDocumentClick = { navController.openDocument(entry, it) },
-            onOpenFolder = { navController.openFolder(it) },
+            onOpenFolder = { navController.showFolder(it) },
         )
     }
 }
@@ -170,17 +171,19 @@ internal fun NavHostController.openDocument(
     navigate(Routes.document(documentId, from, aspect))
 }
 
+/** Opens a folder on top of this screen, whether or not it is open further down: back returns here. */
+internal fun NavHostController.showFolder(folderId: String) = navigate(Routes.folder(folderId))
+
 /**
- * Goes to a folder from inside one (null: the Library root). A folder already on the way here (a breadcrumb
- * step) is gone back to; any other is opened on top.
+ * Goes to a breadcrumb step (null: the Library root, as the pill's button does). A folder already on the way
+ * here is gone back to; any other is opened on top.
  */
-internal fun NavHostController.openFolder(folderId: String?) {
+internal fun NavHostController.openCrumb(folderId: String?) {
     if (folderId == null) {
-        popBackStack(Routes.LIBRARY, inclusive = false)
+        openTab(Tab.LIBRARY)
         return
     }
-    val route = Routes.folder(folderId)
-    if (!popBackStack(route, inclusive = false)) navigate(route)
+    if (!popBackStack(Routes.folder(folderId), inclusive = false)) showFolder(folderId)
 }
 
 /**

@@ -35,8 +35,10 @@ import com.reverie.app.ui.components.FolderRow
 class FolderLinks(
     val covers: Map<String, FolderCoverDto>,
     val starredIds: Set<String>,
-    /** Null opens the Library itself. */
-    val onOpen: (folderId: String?) -> Unit,
+    /** A folder's row was tapped. */
+    val onOpen: (folderId: String) -> Unit,
+    /** A breadcrumb step was tapped; null is the Library itself. */
+    val onOpenCrumb: (folderId: String?) -> Unit,
     /** A long press on a folder's row. */
     val onHold: ((FolderWithChildren) -> Unit)? = null,
 )
@@ -74,7 +76,7 @@ fun FolderBody(
         )
         LazyColumn(state = listState, contentPadding = slot.contentPadding, modifier = Modifier.fillMaxSize()) {
             item(key = "head", contentType = "head") {
-                FolderHead(state.path.dropLast(1), name, folderPageMeta(state), description, links.onOpen)
+                FolderHead(state.path.dropLast(1), name, folderPageMeta(state), description, links.onOpenCrumb)
             }
             folderRowItems(folders, links)
             items(rows, key = FeedRow::key, contentType = FeedRow::contentType) { row ->
@@ -91,10 +93,10 @@ private fun FolderHead(
     name: String,
     meta: String?,
     description: String?,
-    onOpen: (String?) -> Unit,
+    onOpenCrumb: (String?) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
-        Breadcrumb(ancestors, onOpen, style = MaterialTheme.typography.bodySmall, endsAtCurrent = false)
+        Breadcrumb(ancestors, onOpenCrumb, style = MaterialTheme.typography.bodySmall, endsAtCurrent = false)
         Text(
             name,
             fontSize = 28.sp,

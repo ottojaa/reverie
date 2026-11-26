@@ -126,7 +126,7 @@ class SearchViewModel @Inject constructor(
     private suspend fun runSearch(ask: SearchAsk, sortBy: SortBy, sortOrder: SortOrder, offset: Int) {
         val (q, scope) = ask
         if (q.isBlank()) {
-            control.update { it.copy(results = emptyList(), total = 0, facets = null, answered = ask, isLoading = false, error = null, offset = 0) }
+            control.update { it.copy(results = emptyList(), resultsQuery = q, total = 0, facets = null, answered = ask, isLoading = false, error = null, offset = 0) }
             return
         }
         control.update { it.copy(isLoading = offset == 0, error = null) }
@@ -142,6 +142,7 @@ class SearchViewModel @Inject constructor(
                 val merged = if (offset == 0) response.results else it.results + response.results
                 it.copy(
                     results = merged.distinctBy { it.dedupeKey },
+                    resultsQuery = q,
                     total = response.total,
                     facets = if (offset == 0) response.facets ?: it.facets else it.facets,
                     answered = ask,
@@ -204,9 +205,16 @@ class SearchViewModel @Inject constructor(
         replaceFilter(FilterKey.SIZE, preset)
     }
 
-    /** Keeps the query among the recent searches: it was submitted, or one of its results was opened. */
-    fun rememberSearch() {
-        val query = input.value.ask.query
+    /** Keeps what is typed among the recent searches: it was submitted. */
+    fun rememberSubmitted() = record(input.value.ask.query)
+
+    /**
+     * Keeps the query of the results on show among the recent searches: one of them was opened. More may
+     * have been typed since, with its own results still on their way.
+     */
+    fun rememberOpened() = record(control.value.resultsQuery)
+
+    private fun record(query: String) {
         viewModelScope.launch { searchRepository.recordSearch(query) }
     }
 

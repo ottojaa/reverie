@@ -166,6 +166,16 @@ describeDb('GET /documents/summary', () => {
         expect(body.media_dates).toEqual({ first: '2025-08-21T09:00:00.000Z', last: '2025-08-25T18:00:00.000Z' });
     });
 
+    it('dates a folder only: the whole library and its top level are asked for counts alone', async () => {
+        const whole = await summary();
+        const top = await summary('?top_level=true');
+        const folder = await summary('?folder_id=' + trips);
+
+        expect(whole.body.media_dates).toBeNull();
+        expect(top.body.media_dates).toBeNull();
+        expect(folder.body.media_dates).not.toBeNull();
+    });
+
     it('leaves private-folder, trashed and other users documents out', async () => {
         const { body } = await summary();
 

@@ -170,7 +170,8 @@ export default async function (fastify: FastifyInstance) {
             locks.assertOpen(folder_id ?? null);
 
             const scope = { userId, folderId: folder_id, topLevel: top_level, privateFolderIds: locks.privateFolderIds };
-            const [summary, mediaDates] = await Promise.all([summariseDocuments(scope), loadMediaDates(scope)]);
+            // Only a folder's page says when its photos and videos were taken; a wider scope is asked for counts alone.
+            const [summary, mediaDates] = await Promise.all([summariseDocuments(scope), folder_id ? loadMediaDates(scope) : null]);
 
             return { ...summary, media_dates: mediaDates };
         },

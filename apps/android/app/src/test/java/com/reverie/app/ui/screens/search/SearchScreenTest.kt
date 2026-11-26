@@ -30,6 +30,7 @@ import com.reverie.app.data.api.model.SearchResponse
 import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.repository.SearchRepository
+import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import com.reverie.app.ui.theme.ReverieTheme
@@ -54,6 +55,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -79,6 +81,8 @@ class SearchScreenTest {
     private val requests = CopyOnWriteArrayList<Url>()
     private val calls = mutableListOf<String>()
     private lateinit var viewModel: SearchViewModel
+    /** How many results the server says there are; it answers every page with [hit]. */
+    private var total = 1
 
     private val hit = DocumentSearchResult(
         document_id = "tram", display_name = "Tram 28 in Lisbon", filename = "tram.pdf",
@@ -89,7 +93,7 @@ class SearchScreenTest {
     private val client = HttpClient(MockEngine { request ->
         requests += request.url
         val body = when (request.url.encodedPath) {
-            "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(1, listOf(hit), timing_ms = 1.0))
+            "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(total, listOf(hit), timing_ms = 1.0))
             "/search/facets" -> """{"facets":{}}"""
             else -> return@MockEngine respondError(HttpStatusCode.NotFound)
         }
@@ -153,6 +157,11 @@ class SearchScreenTest {
 
     private val searched: List<Url> get() = requests.filter { it.encodedPath == "/search" }
 
+    private val facetsAsked: List<Url> get() = requests.filter { it.encodedPath == "/search/facets" }
+
+    /** The requests for a page after the first. */
+    private val laterPages: List<Url> get() = searched.filter { it.parameters["offset"] != "0" }
+
     private fun recents(): List<String> = runBlocking { searches.observeRecent().first() }
 
     private fun search(query: String) {
@@ -193,6 +202,39 @@ class SearchScreenTest {
         icon.performClick()
         await { searched.size == 2 }
         assertNull(searched.last().parameters["media"])
+    }
+
+    /** Searches a scope with a second page of results, removes the chip and checks [scoped] is sent no more. */
+    private fun removingTheChipDrops(scoped: String, removeChip: () -> Unit) {
+        total = 2
+        // The photos search shows its results as tiles, so there is no name to wait for.
+        type("lisbon")
+        await { laterPages.isNotEmpty() && facetsAsked.isNotEmpty() }
+        assertTrue((searched + facetsAsked).all { it.parameters[scoped] != null })
+        val before = requests.size
+
+        removeChip()
+        fun since(path: String) = requests.drop(before).filter { it.encodedPath == path }
+        await { since("/search/facets").isNotEmpty() && since("/search").any { it.parameters["offset"] != "0" } }
+
+        val after = since("/search") + since("/search/facets")
+        assertEquals(emptyList<String>(), after.mapNotNull { it.parameters[scoped] })
+    }
+
+    @Test fun `once a folder's chip is removed, facets and further pages are the whole library's`() {
+        openFolderSearch()
+        awaitText("In Portugal – 2025")
+
+        removingTheChipDrops("folder_id") { compose.onNodeWithText("In Portugal – 2025").performClick() }
+    }
+
+    @Test fun `once the photos chip is removed, facets and further pages are the whole library's`() {
+        open("media" to true)
+        awaitText("Photos and videos")
+
+        removingTheChipDrops("media") {
+            compose.onNodeWithContentDescription("Search the whole library instead", useUnmergedTree = true).performClick()
+        }
     }
 
     @Test fun `the row under the results looks for the same words in the whole library`() {
@@ -237,7 +279,19 @@ class SearchScreenTest {
         assertEquals(listOf("document:tram"), calls)
     }
 
-    @Test fun `a recent search brings back exactly what was searched`() {
+    @Test fun `opening a result records the search it answered, not what was typed since`() {
+        open()
+        search("lisbon")
+
+        // Typed on, and a result tapped before the next search is on its way.
+        type(" tr")
+        compose.onNodeWithText(hit.display_name).performClick()
+
+        await { recents().isNotEmpty() }
+        assertEquals(listOf("lisbon"), recents())
+    }
+
+    @Test fun `a recent search brings back its filters and its words`() {
         runBlocking { searches.recordSearch("category:receipt lisbon") }
         open()
         awaitText("category:receipt lisbon")
@@ -247,6 +301,19 @@ class SearchScreenTest {
 
         assertEquals("category:receipt lisbon", searched.last().parameters["q"])
         compose.onNode(hasSetTextAction()).assertTextContains("lisbon")
+    }
+
+    // Recent searches show only while nothing is asked, so no tap on the screen replays one over other filters.
+    @Test fun `replaying a search replaces the filters already there`() {
+        open()
+        compose.runOnUiThread {
+            viewModel.toggleFilter(FilterKey.CATEGORY, "receipt")
+            viewModel.setQuery("category:receipt lisbon")
+        }
+
+        await { searched.isNotEmpty() }
+
+        assertEquals("category:receipt lisbon", searched.last().parameters["q"])
     }
 
     @Test fun `a space typed between two words stays`() {

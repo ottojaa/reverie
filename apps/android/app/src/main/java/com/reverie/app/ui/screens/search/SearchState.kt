@@ -102,6 +102,8 @@ internal data class SearchControl(
     // The search the current [results] answer; lets the UI tell "typing, results are stale" apart
     // from "searched, genuinely empty" so it never flashes "No results" during the debounce.
     val answered: SearchAsk? = null,
+    // The query the [results] on show came from. Unlike [answered], a search that failed leaves it be.
+    val resultsQuery: String = "",
     val quickFilters: List<QuickFilter> = emptyList(),
     val sortBy: SortBy = SortBy.RELEVANCE,
     val sortOrder: SortOrder = SortOrder.DESC,

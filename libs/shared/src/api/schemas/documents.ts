@@ -253,8 +253,8 @@ export const DocumentSummaryResponseSchema = z.object({
         top_types: z.array(DocumentTopTypeSchema).max(4),
     }),
     /**
-     * The first and last day the scope's photos and videos were taken (upload time where there is no date taken),
-     * on `GET /documents/summary` only; null when it holds none.
+     * The first and last day a folder's photos and videos were taken (upload time where there is no date taken), on
+     * `GET /documents/summary?folder_id=` only; null when it holds none, and for any wider scope.
      */
     media_dates: z.object({ first: z.string().datetime(), last: z.string().datetime() }).nullable().optional(),
 });

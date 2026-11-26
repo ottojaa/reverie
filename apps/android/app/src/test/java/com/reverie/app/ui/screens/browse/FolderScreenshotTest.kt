@@ -127,7 +127,7 @@ class FolderScreenshotTest {
             Box(Modifier.weight(1f)) {
                 FolderBody(
                     state = state, name = name, description = description,
-                    links = FolderLinks(covers, starredIds = setOf("Lisbon"), onOpen = {}),
+                    links = FolderLinks(covers, starredIds = setOf("Lisbon"), onOpen = {}, onOpenCrumb = {}),
                     layout = layout, actions = actions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
                     error = null, slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onHeading = {}, onUpload = {}),
                 )

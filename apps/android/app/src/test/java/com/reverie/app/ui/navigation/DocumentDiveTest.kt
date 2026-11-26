@@ -160,7 +160,7 @@ class DocumentDiveTest {
                 files = FeedDocuments(files, total = files.size, fetched = true),
             ),
             name = "Trips", description = null,
-            links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}),
+            links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}, onOpenCrumb = {}),
             layout = layout,
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
