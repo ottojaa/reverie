@@ -43,10 +43,9 @@ function Surface({ children }: { children?: ReactNode }) {
 }
 
 /** Two rows as the Files view holds them: selectable, and cleared by a click outside a document. */
-function mountRows() {
-    const rows = documents.map((document) =>
-        createElement(DocumentRow, { key: document.id, document, orderedIds: ['doc-1', 'doc-2'], columns: '1fr', folderName: undefined, style: {} }),
-    );
+function mountRows({ member = false } = {}) {
+    const shared = { orderedIds: ['doc-1', 'doc-2'], columns: '1fr', folderName: undefined, style: {}, member };
+    const rows = documents.map((document) => createElement(DocumentRow, { key: document.id, document, ...shared }));
     const frame = createElement(BrowseFrame, { documents, children: rows });
     view = mount(
         createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Surface, null, createElement(SelectionProvider, null, frame))),
@@ -183,6 +182,26 @@ describe('a document row on a touch screen', () => {
         await press(findByText('[role="menuitem"]', 'Move to…'));
 
         expect(document.querySelector('output')?.textContent).toBe('doc-1 doc-2');
+    });
+});
+
+describe('the menu button of a document row', () => {
+    /** The background classes an element shows at rest, in either theme. */
+    function backgroundOf(element: Element) {
+        return element.className.split(' ').filter((name) => /^(dark:)?bg-/.test(name));
+    }
+
+    beforeEach(() => {
+        state.isMobile = true;
+    });
+
+    it.each([false, true])('has the background of its row, selected or not (in a group: %s)', async (member) => {
+        mountRows({ member });
+
+        await longPress(linkAt(0));
+
+        expect(backgroundOf(actionsButton(0)!)).toEqual(backgroundOf(linkAt(0)));
+        expect(backgroundOf(actionsButton(1)!)).toEqual(backgroundOf(linkAt(1)));
     });
 });
 
