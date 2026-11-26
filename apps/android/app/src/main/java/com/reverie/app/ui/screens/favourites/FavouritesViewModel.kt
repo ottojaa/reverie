@@ -2,7 +2,7 @@ package com.reverie.app.ui.screens.favourites
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.reverie.app.domain.FolderTree
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.screens.manage.ManageController
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,9 +23,8 @@ class FavouritesViewModel @Inject constructor(private val deps: FavouriteDeps) :
     /** Folder menus, and moving folders. */
     val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, viewModelScope)
 
-    val folders: StateFlow<FavouriteFolders> = combine(deps.folders.observeTree(), deps.folders.covers) { tree, covers ->
-        FavouriteFolders(FolderTree(tree).all().associateBy { it.id }, covers)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FavouriteFolders())
+    val folders: StateFlow<CachedFolders> = deps.folders.observeCached()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CachedFolders())
 
     private val _isFetching = MutableStateFlow(false)
 

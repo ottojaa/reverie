@@ -101,8 +101,9 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
 
     reverieComposable(Routes.SEARCH, Routes.searchArguments) { entry ->
         SearchScreen(
+            onBack = { navController.popBackStack() },
             onDocumentClick = { navController.openDocument(entry, it) },
-            onOpenFolder = { navController.navigate(Routes.folder(it)) },
+            onOpenFolder = { navController.openFolder(it) },
         )
     }
 }

@@ -38,8 +38,8 @@ object Routes {
     /** Search looking in [scope], with [query] already typed. */
     fun search(scope: SearchScope = SearchScope.Library, query: String = ""): String {
         val params = listOfNotNull(
-            (scope as? SearchScope.Folder)?.let { "folder=${it.id}" },
-            "media=true".takeIf { scope == SearchScope.Media },
+            scope.folderId?.let { "folder=$it" },
+            "media=true".takeIf { scope.isMediaOnly },
             query.takeIf { it.isNotEmpty() }?.let { "q=${Uri.encode(it)}" },
         )
         return if (params.isEmpty()) SEARCH_PATH else "$SEARCH_PATH?${params.joinToString("&")}"

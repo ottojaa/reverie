@@ -1,14 +1,6 @@
 package com.reverie.app.ui.screens.favourites
 
 import androidx.compose.foundation.layout.Box
-import com.reverie.app.data.api.model.FavouriteType
-import com.reverie.app.data.api.model.KindCountsDto
-import com.reverie.app.ui.BLURHASHES
-import com.reverie.app.ui.photoCover
-import com.reverie.app.ui.snapshotThemes
-import com.reverie.app.ui.navigation.BottomPill
-import com.reverie.app.ui.navigation.Tab
-import com.reverie.app.ui.screens.destination.node
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,19 +19,28 @@ import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.FavouriteType
+import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.domain.model.InsightPhase
+import com.reverie.app.ui.BLURHASHES
+import com.reverie.app.ui.navigation.BottomPill
+import com.reverie.app.ui.navigation.Tab
+import com.reverie.app.ui.photoCover
 import com.reverie.app.ui.screens.browse.FeedLayout
-import com.reverie.app.ui.screens.browse.FileMenuItems
 import com.reverie.app.ui.screens.browse.FeedList
 import com.reverie.app.ui.screens.browse.FeedSource
+import com.reverie.app.ui.screens.browse.FileMenuItems
 import com.reverie.app.ui.screens.browse.RowActions
+import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.screens.document.ViewerToolbar
-import org.junit.Rule
-import org.junit.Test
+import com.reverie.app.ui.snapshotThemes
 import java.time.LocalDate
 import java.time.ZoneOffset
+import org.junit.Rule
+import org.junit.Test
 
 /**
  * The Favourites screen and the stars that lead to it, dark and light. Blurhashes stand in for thumbnails:
@@ -157,7 +158,7 @@ class FavouritesScreenshotTest {
     private val photos = tree("f-photos", "Photos", KindCountsDto(image = 27), folders = 5)
     private val portugal = tree("f-portugal", "Portugal - 2025", KindCountsDto(image = 25))
 
-    private val folders = FavouriteFolders(
+    private val folders = CachedFolders(
         byId = listOf(coding, photos, portugal).associateBy { it.id },
         covers = listOf(coding, photos, portugal).associate { it.id to photoCover(it.id) },
     )

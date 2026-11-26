@@ -25,6 +25,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.repository.FavouritesState
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
@@ -56,7 +57,7 @@ class FavouritesContentTest {
         ReverieTheme {
             FavouritesContent(
                 state = state,
-                folders = FavouriteFolders(byId = mapOf(portugal.id to portugal)),
+                folders = CachedFolders(byId = mapOf(portugal.id to portugal)),
                 actions = FavouritesActions(
                     onBack = { calls += "back" },
                     onOpen = { calls += "open:${it.id}" },

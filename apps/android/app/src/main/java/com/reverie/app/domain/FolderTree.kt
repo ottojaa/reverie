@@ -1,6 +1,13 @@
 package com.reverie.app.domain
 
+import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
+
+/** The cached folders and their covers by folder id: what a list needs to draw a row for a folder it only names. */
+data class CachedFolders(
+    val byId: Map<String, FolderWithChildren> = emptyMap(),
+    val covers: Map<String, FolderCoverDto> = emptyMap(),
+)
 
 /** The library's folders, nested to any depth as GET /folders/tree returns them, with lookups. */
 class FolderTree(val roots: List<FolderWithChildren>) {

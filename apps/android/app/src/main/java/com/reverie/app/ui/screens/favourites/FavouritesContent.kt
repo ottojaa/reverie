@@ -28,9 +28,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.FavouriteDto
-import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.repository.FavouritesState
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.navigation.bottomBarInset
@@ -39,12 +39,6 @@ import com.reverie.app.ui.screens.browse.BrowseTitle
 
 private const val NOTHING_STARRED = "Nothing starred yet. Star a file or folder to find it here."
 private const val NOT_LOADED = "Couldn't load favourites. Pull down to try again."
-
-/** What the cached folder tree knows about the folders in the list. */
-data class FavouriteFolders(
-    val byId: Map<String, FolderWithChildren> = emptyMap(),
-    val covers: Map<String, FolderCoverDto> = emptyMap(),
-)
 
 data class FavouritesActions(
     val onBack: () -> Unit,
@@ -64,7 +58,7 @@ data class FavouritesActions(
 @Composable
 fun FavouritesContent(
     state: FavouritesState,
-    folders: FavouriteFolders,
+    folders: CachedFolders,
     actions: FavouritesActions,
     modifier: Modifier = Modifier,
     isFetching: Boolean = false,
@@ -112,7 +106,7 @@ private fun FocusScroll(rows: List<FavouriteRow>, listState: LazyListState, focu
 }
 
 @Composable
-private fun FavouriteRowView(row: FavouriteRow, folders: FavouriteFolders, actions: FavouritesActions) {
+private fun FavouriteRowView(row: FavouriteRow, folders: CachedFolders, actions: FavouritesActions) {
     when (row) {
         is FavouriteRow.Heading -> Heading(row.title)
         is FavouriteRow.Folder -> FolderFavourite(row.item, folders, actions)

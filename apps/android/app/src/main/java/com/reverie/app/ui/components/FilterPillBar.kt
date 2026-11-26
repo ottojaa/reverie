@@ -1,7 +1,6 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -10,7 +9,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,7 +26,7 @@ val PRIMARY_DIMENSIONS = listOf(
     FilterDimension("Tags", FilterKey.TAG),
 )
 
-/** Horizontally-scrolling filter pills; each opens a facet/date/more sheet. */
+/** Horizontally-scrolling filter pills; each opens a facet/date/more sheet. [leading] comes before them. */
 @Composable
 fun FilterPillBar(
     activeValues: (FilterKey) -> List<String>,
@@ -39,12 +37,14 @@ fun FilterPillBar(
     onOpenMore: () -> Unit,
     onClearAll: () -> Unit,
     modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     LazyRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
     ) {
+        if (leading != null) item(key = "leading") { leading() }
         items(PRIMARY_DIMENSIONS, key = { it.label }) { dim ->
             val active = activeValues(dim.key)
             DimensionPill(

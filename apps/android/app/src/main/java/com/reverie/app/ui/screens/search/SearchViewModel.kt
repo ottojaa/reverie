@@ -4,19 +4,17 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
-import com.reverie.app.data.api.model.CollectionSearchResult
 import com.reverie.app.data.api.model.DocumentSearchResult
-import com.reverie.app.data.api.model.QuickFilter
-import com.reverie.app.data.api.model.SearchFacets
-import com.reverie.app.data.api.model.SearchHit
 import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
 import com.reverie.app.data.connectivity.ConnectivityMonitor
+import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.SearchRepository
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import com.reverie.app.domain.search.FilterKey
+import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.domain.search.addFilter
 import com.reverie.app.domain.search.getFilterTokens
 import com.reverie.app.domain.search.getFreeText
@@ -38,71 +36,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class ViewMode { LIST, GRID }
-
-enum class HasTextMode { ANY, HAS, NONE }
-
-data class SearchUiState(
-    val query: String = "",
-    val freeText: String = "",
-    val results: List<SearchHit> = emptyList(),
-    val total: Int = 0,
-    val facets: SearchFacets? = null,
-    val quickFilters: List<QuickFilter> = emptyList(),
-    val recents: List<String> = emptyList(),
-    val sortBy: SortBy = SortBy.RELEVANCE,
-    val sortOrder: SortOrder = SortOrder.DESC,
-    val viewMode: ViewMode = ViewMode.LIST,
-    val isLoading: Boolean = false,
-    val isSearching: Boolean = false,
-    val error: String? = null,
-    val hasMore: Boolean = false,
-    val isOffline: Boolean = false,
-) {
-    val hasQuery: Boolean get() = query.isNotBlank()
-    fun activeValues(key: FilterKey): List<String> =
-        getFilterTokens(tokenizeQuery(query), key).map { it.value }
-}
-
-private data class SearchControl(
-    val results: List<SearchHit> = emptyList(),
-    val total: Int = 0,
-    val facets: SearchFacets? = null,
-    // Whole-library facets, fetched once, so the filter sheets have options before/without a query.
-    val baseFacets: SearchFacets? = null,
-    // The query the current [results] belong to; lets the UI tell "typing, results are stale" apart
-    // from "searched, genuinely empty" so it never flashes "No results" during the debounce.
-    val resultsQuery: String? = null,
-    val quickFilters: List<QuickFilter> = emptyList(),
-    val sortBy: SortBy = SortBy.RELEVANCE,
-    val sortOrder: SortOrder = SortOrder.DESC,
-    val userViewMode: ViewMode? = null,
-    val offset: Int = 0,
-    val isLoading: Boolean = false,
-    // In-flight guard for pagination: unlike [isLoading] (offset-0 only), this serializes load-more
-    // so concurrent scroll triggers can't refetch and re-append the same page.
-    val isLoadingMore: Boolean = false,
-    val error: String? = null,
-)
-
-/** Stable identity for de-duping merged pages; must match the LazyColumn/LazyGrid item keys. */
-private val SearchHit.dedupeKey: String
-    get() = when (this) {
-        is DocumentSearchResult -> "doc:$document_id"
-        is CollectionSearchResult -> "col:$id"
-    }
-
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchRepository: SearchRepository,
+    folderRepository: FolderRepository,
     private val connectivity: ConnectivityMonitor,
     private val sequenceHolder: DocumentSequenceHolder,
-    savedState: SavedStateHandle,
+    private val savedState: SavedStateHandle,
 ) : ViewModel() {
 
-    /** Starts as the query the screen was opened with (a smart view's, say), usually none. */
-    private val query = MutableStateFlow(savedState.get<String>("q").orEmpty())
+    /** Starts as the scope the screen was opened with, and its query (a smart view's, say; usually none). */
+    private val input = MutableStateFlow(SearchInput(openedWith(savedState)))
     private val control = MutableStateFlow(SearchControl())
 
     /** What the viewer is showing, so the grid can scroll it into view on return from a viewer opened here. */
@@ -112,33 +57,37 @@ class SearchViewModel @Inject constructor(
     fun clearViewerFocus() = sequenceHolder.setFocus(null)
 
     val uiState: StateFlow<SearchUiState> = combine(
-        query,
+        input,
         control,
         searchRepository.observeRecent(),
         connectivity.isOnline,
-    ) { q, ctrl, recents, online ->
+        folderRepository.observeCached(),
+    ) { typed, ctrl, recents, online, folders ->
+        val (q, scope) = typed.ask
         SearchUiState(
             query = q,
-            freeText = getFreeText(tokenizeQuery(q)),
+            freeText = typed.freeText,
+            scope = scope,
+            folders = folders,
             results = ctrl.results,
             total = ctrl.total,
-            facets = ctrl.facets ?: ctrl.baseFacets,
+            facets = ctrl.facets ?: ctrl.baseFacets[scope],
             quickFilters = ctrl.quickFilters,
             recents = recents,
             sortBy = ctrl.sortBy,
             sortOrder = ctrl.sortOrder,
-            viewMode = ctrl.userViewMode ?: if (isPhotoish(q)) ViewMode.GRID else ViewMode.LIST,
+            viewMode = ctrl.userViewMode ?: defaultViewMode(typed.ask, folders),
             isLoading = ctrl.isLoading,
             // True from the first keystroke (before the debounce fires) until the response for the
-            // current query lands — so the UI shows a loading bar, not a "No results" flash.
-            isSearching = q.isNotBlank() && (ctrl.isLoading || ctrl.resultsQuery != q),
+            // current search lands — so the UI shows a loading bar, not a "No results" flash.
+            isSearching = q.isNotBlank() && (ctrl.isLoading || ctrl.answered != typed.ask),
             error = ctrl.error,
             // Track against the server offset, not results.size: de-duping can drop overlapping rows,
             // and gating on the deduped size would keep re-fetching an already-exhausted result set.
             hasMore = ctrl.offset < ctrl.total,
             isOffline = !online,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), openingState(input.value))
 
     init {
         viewModelScope.launch {
@@ -147,33 +96,46 @@ class SearchViewModel @Inject constructor(
         }
         ensureBaseFacets()
         viewModelScope.launch {
-            combine(query, control.map { it.sortBy to it.sortOrder }.distinctUntilChanged()) { q, sort -> Triple(q, sort.first, sort.second) }
+            val asks = input.map { it.ask }.distinctUntilChanged()
+            val sorts = control.map { it.sortBy to it.sortOrder }.distinctUntilChanged()
+            combine(asks, sorts) { ask, sort -> ask to sort }
                 .debounce(300)
-                .collect { (q, sortBy, sortOrder) -> runSearch(q, sortBy, sortOrder, offset = 0) }
+                .collect { (ask, sort) -> runSearch(ask, sort.first, sort.second, offset = 0) }
         }
     }
 
-    /** Fetch whole-library facets so the filter sheets have options before/without a query. */
+    /** Fetch the scope's facets so the filter sheets have options before/without a query. */
     fun ensureBaseFacets() {
-        if (control.value.baseFacets != null) return
+        val scope = input.value.ask.scope
+        if (scope in control.value.baseFacets) return
         viewModelScope.launch {
-            runCatching { searchRepository.facets("") }
-                .onSuccess { f -> control.update { it.copy(baseFacets = f) } }
+            runCatching { searchRepository.facets("", scope) }
+                .onSuccess { f -> control.update { it.copy(baseFacets = it.baseFacets + (scope to f)) } }
         }
     }
 
-    private suspend fun runSearch(q: String, sortBy: SortBy, sortOrder: SortOrder, offset: Int) {
+    /** Searches the whole library from here on, for the same query. */
+    fun removeScope() {
+        input.update { it.copy(ask = it.ask.copy(scope = SearchScope.Library)) }
+        savedState["folder"] = null
+        savedState["media"] = false
+        control.update { it.copy(facets = null) }
+        ensureBaseFacets()
+    }
+
+    private suspend fun runSearch(ask: SearchAsk, sortBy: SortBy, sortOrder: SortOrder, offset: Int) {
+        val (q, scope) = ask
         if (q.isBlank()) {
-            control.update { it.copy(results = emptyList(), total = 0, facets = null, resultsQuery = "", isLoading = false, error = null, offset = 0) }
+            control.update { it.copy(results = emptyList(), total = 0, facets = null, answered = ask, isLoading = false, error = null, offset = 0) }
             return
         }
         control.update { it.copy(isLoading = offset == 0, error = null) }
         runCatching {
-            searchRepository.search(q, PAGE_SIZE, offset, sortBy.wire, sortOrder.wire, includeFacets = offset == 0)
+            searchRepository.search(q, scope, PAGE_SIZE, offset, sortBy.wire, sortOrder.wire, includeFacets = offset == 0)
         }.onSuccess { response ->
-            // A load-more that resolves after the query moved on would append rows from the old query;
+            // A load-more that resolves after the search moved on would append rows from the old one;
             // drop it — the fresh offset-0 search now owns the state.
-            if (offset > 0 && q != query.value) return@onSuccess
+            if (offset > 0 && ask != input.value.ask) return@onSuccess
             control.update {
                 // distinctBy protects the lazy-list item keys: concurrent load-mores or reshuffled
                 // relevance-sorted offset windows can repeat a row, and duplicate keys crash Compose.
@@ -182,47 +144,46 @@ class SearchViewModel @Inject constructor(
                     results = merged.distinctBy { it.dedupeKey },
                     total = response.total,
                     facets = if (offset == 0) response.facets ?: it.facets else it.facets,
-                    resultsQuery = q,
+                    answered = ask,
                     offset = offset + response.results.size,
                     isLoading = false,
                     error = null,
                 )
             }
-            if (offset == 0) searchRepository.recordSearch(q)
         }.onFailure { t ->
             control.update {
-                it.copy(resultsQuery = q, isLoading = false, error = if (connectivity.currentlyOnline()) messageFor(t) else null)
+                it.copy(answered = ask, isLoading = false, error = if (connectivity.currentlyOnline()) messageFor(t) else null)
             }
         }
     }
 
     fun setFreeText(text: String) {
-        query.value = setFreeText(query.value, text)
+        input.update { SearchInput(it.ask.copy(query = setFreeText(it.ask.query, text)), typed = text) }
     }
 
+    /** Replaces the whole query, filters included: a recent search or a ready-made one. */
     fun setQuery(raw: String) {
-        query.value = raw
+        input.update { SearchInput(it.ask.copy(query = raw)) }
     }
 
-    fun toggleFilter(key: FilterKey, value: String) {
-        val current = query.value
-        query.value = if (getFilterTokens(tokenizeQuery(current), key).any { it.value.equals(value, ignoreCase = true) }) {
+    private fun changeQuery(change: (String) -> String) = setQuery(change(input.value.ask.query))
+
+    fun toggleFilter(key: FilterKey, value: String) = changeQuery { current ->
+        if (getFilterTokens(tokenizeQuery(current), key).any { it.value.equals(value, ignoreCase = true) }) {
             removeFilter(current, key, value)
         } else {
             addFilter(current, key, value)
         }
     }
 
-    fun replaceFilter(key: FilterKey, value: String?) {
-        query.value = if (value == null) removeFilter(query.value, key) else replaceFilter(query.value, key, value)
+    fun replaceFilter(key: FilterKey, value: String?) = changeQuery {
+        if (value == null) removeFilter(it, key) else replaceFilter(it, key, value)
     }
 
-    fun clearFilters() {
-        query.value = getFreeText(tokenizeQuery(query.value))
-    }
+    fun clearFilters() = changeQuery { getFreeText(tokenizeQuery(it)) }
 
     fun currentHasTextMode(): HasTextMode {
-        val hasTokens = getFilterTokens(tokenizeQuery(query.value), FilterKey.HAS).filter { it.value.equals("text", ignoreCase = true) }
+        val hasTokens = getFilterTokens(tokenizeQuery(input.value.ask.query), FilterKey.HAS).filter { it.value.equals("text", ignoreCase = true) }
         return when {
             hasTokens.isEmpty() -> HasTextMode.ANY
             hasTokens.any { it.negated } -> HasTextMode.NONE
@@ -230,9 +191,9 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun setHasText(mode: HasTextMode) {
-        val base = removeFilter(query.value, FilterKey.HAS, "text")
-        query.value = when (mode) {
+    fun setHasText(mode: HasTextMode) = changeQuery { current ->
+        val base = removeFilter(current, FilterKey.HAS, "text")
+        when (mode) {
             HasTextMode.ANY -> base
             HasTextMode.HAS -> addFilter(base, FilterKey.HAS, "text")
             HasTextMode.NONE -> addFilter(base, FilterKey.HAS, "text", negated = true)
@@ -243,8 +204,10 @@ class SearchViewModel @Inject constructor(
         replaceFilter(FilterKey.SIZE, preset)
     }
 
-    fun applyRawQuery(raw: String) {
-        query.value = raw
+    /** Keeps the query among the recent searches: it was submitted, or one of its results was opened. */
+    fun rememberSearch() {
+        val query = input.value.ask.query
+        viewModelScope.launch { searchRepository.recordSearch(query) }
     }
 
     fun removeRecent(recent: String) {
@@ -281,23 +244,20 @@ class SearchViewModel @Inject constructor(
 
     fun loadMore() {
         val ctrl = control.value
+        val ask = input.value.ask
+        // Results of an earlier search are still on show while this one is on its way: nothing to add to them.
+        if (ctrl.answered != ask) return
         if (ctrl.isLoading || ctrl.isLoadingMore || ctrl.offset >= ctrl.total) return
         // Flip the guard synchronously (loadMore is called from the main-thread scroll collector) so
         // a burst of scroll triggers can't launch overlapping fetches of the same page.
         control.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             try {
-                runSearch(query.value, ctrl.sortBy, ctrl.sortOrder, ctrl.offset)
+                runSearch(ask, ctrl.sortBy, ctrl.sortOrder, ctrl.offset)
             } finally {
                 control.update { it.copy(isLoadingMore = false) }
             }
         }
-    }
-
-    private fun isPhotoish(q: String): Boolean {
-        val values = getFilterTokens(tokenizeQuery(q), FilterKey.TYPE).map { it.value.lowercase() } +
-            getFilterTokens(tokenizeQuery(q), FilterKey.CATEGORY).map { it.value.lowercase() }
-        return values.any { it in setOf("photo", "image", "screenshot", "graphic") }
     }
 
     private fun messageFor(throwable: Throwable): String =
@@ -305,5 +265,15 @@ class SearchViewModel @Inject constructor(
 
     private companion object {
         const val PAGE_SIZE = 20
+
+        fun openedWith(savedState: SavedStateHandle): SearchAsk {
+            val folderId = savedState.get<String>("folder")
+            val scope = when {
+                folderId != null -> SearchScope.Folder(folderId)
+                savedState.get<Boolean>("media") == true -> SearchScope.Media
+                else -> SearchScope.Library
+            }
+            return SearchAsk(savedState.get<String>("q").orEmpty(), scope)
+        }
     }
 }

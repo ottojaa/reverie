@@ -106,7 +106,7 @@ class DtoSerializationTest {
                  "snippet":"...total...","has_text":true,"thumbnail_urls":null,"blurhash":null,
                  "size_bytes":9000,"duration_seconds":90.0,"tags":["tax"],"relevance":0.8},
                 {"result_type":"collection","id":"c1","name":"Finance","path":"/Finance","description":null,
-                 "emoji":"💰","folder_type":"collection","document_count":12,"snippet":null,"relevance":0.5}
+                 "emoji":"💰","snippet":null,"relevance":0.5}
               ],
               "timing_ms": 12.5
             }
@@ -118,7 +118,6 @@ class DtoSerializationTest {
         assertTrue(res.results[1] is CollectionSearchResult)
         assertEquals("Invoice", (res.results[0] as DocumentSearchResult).display_name)
         assertEquals(90.0, (res.results[0] as DocumentSearchResult).duration_seconds!!, 0.0001)
-        assertEquals(FolderType.COLLECTION, (res.results[1] as CollectionSearchResult).folder_type)
     }
 
     private fun fixture(name: String): String =

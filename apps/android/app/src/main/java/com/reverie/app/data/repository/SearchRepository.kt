@@ -7,6 +7,7 @@ import com.reverie.app.data.api.model.SearchResponse
 import com.reverie.app.data.local.dao.SearchHistoryDao
 import com.reverie.app.data.local.entity.SearchHistoryEntity
 import com.reverie.app.di.IoDispatcher
+import com.reverie.app.domain.search.SearchScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,16 +26,19 @@ class SearchRepository @Inject constructor(
 
     suspend fun search(
         q: String,
+        scope: SearchScope,
         limit: Int,
         offset: Int,
         sortBy: String,
         sortOrder: String,
         includeFacets: Boolean,
     ): SearchResponse = withContext(io) {
-        searchApi.search(q, limit, offset, sortBy, sortOrder, includeFacets)
+        searchApi.search(q, limit, offset, sortBy, sortOrder, includeFacets, scope.folderId, scope.isMediaOnly)
     }
 
-    suspend fun facets(q: String): SearchFacets = withContext(io) { searchApi.facets(q) }
+    suspend fun facets(q: String, scope: SearchScope): SearchFacets = withContext(io) {
+        searchApi.facets(q, scope.folderId, scope.isMediaOnly)
+    }
 
     suspend fun suggest(type: String, q: String): List<String> = withContext(io) {
         runCatching { searchApi.suggest(type, q) }.getOrDefault(emptyList())

@@ -15,12 +15,14 @@ import com.reverie.app.data.local.flattenToEntities
 import com.reverie.app.data.local.toDto
 import com.reverie.app.data.local.toTree
 import com.reverie.app.di.IoDispatcher
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.domain.FolderTree
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -52,6 +54,11 @@ class FolderRepository @Inject constructor(
     /** The folder tree, reassembled from cached rows. */
     fun observeTree(): Flow<List<FolderWithChildren>> =
         folderDao.observeAll().map { it.toTree() }
+
+    /** Every cached folder by id, with the covers fetched this session. */
+    fun observeCached(): Flow<CachedFolders> = combine(observeTree(), covers) { tree, covers ->
+        CachedFolders(FolderTree(tree).all().associateBy { it.id }, covers)
+    }
 
     /** A single folder (for headers), from cache. */
     fun observeFolder(id: String): Flow<FolderDto?> =

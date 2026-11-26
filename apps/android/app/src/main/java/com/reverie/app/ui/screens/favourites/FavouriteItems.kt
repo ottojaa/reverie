@@ -35,6 +35,7 @@ import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
+import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.components.CoverIconBlock
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FavouriteMenuItem
@@ -52,7 +53,7 @@ private val PICTURE_SHAPE = RoundedCornerShape(12.dp)
  * does not hold offers only what any favourite does.
  */
 @Composable
-internal fun FolderFavourite(item: FavouriteDto, folders: FavouriteFolders, actions: FavouritesActions) {
+internal fun FolderFavourite(item: FavouriteDto, folders: CachedFolders, actions: FavouritesActions) {
     if (item.isPrivate) return PrivateFavourite(item, actions)
     val cached = folders.byId[item.id]
     if (cached != null) {
