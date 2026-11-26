@@ -147,7 +147,7 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const { tree, locks } = await loadTreeAndLocks(request);
             const folder = tree.folder(request.params.id);
 

@@ -26,7 +26,7 @@ export default async function (fastify: FastifyInstance) {
                 },
             },
         },
-        async function (request, reply) {
+        async function (request) {
             const userId = request.user.id;
             const files: UploadedFile[] = [];
 
