@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.RestoreFromTrash
@@ -13,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -31,13 +34,15 @@ internal fun TrashDialogHost(viewModel: TrashViewModel) {
         null -> Unit
         is TrashDialog.Menu -> ModalBottomSheet(
             onDismissRequest = viewModel::dismiss,
+            // Half open, a short screen would hide the last row.
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
             TrashMenu(
                 name = shown.item.name,
                 onRestore = { viewModel.restore(shown.item) },
                 onPurge = { viewModel.askToPurge(shown.item) },
-                modifier = Modifier.navigationBarsPadding(),
+                modifier = Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()),
             )
         }
         is TrashDialog.ConfirmPurge -> ConfirmDialog(

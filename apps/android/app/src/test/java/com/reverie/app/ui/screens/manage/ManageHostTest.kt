@@ -81,6 +81,14 @@ class ManageHostTest {
         compose.onNodeWithText("Edit folder").assertIsDisplayed()
     }
 
+    @Config(qualifiers = "w320dp-h480dp")
+    @Test fun `on a short screen the menu opens far enough to show its last row`() {
+        show()
+        compose.runOnIdle { manage.openMenu(trips) }
+
+        compose.onNodeWithText("Delete").assertIsDisplayed()
+    }
+
     @Test fun `a folder private through one above it is not offered to change that`() {
         show()
         compose.runOnIdle { manage.openMenu(node("Taxes", parent = "Safe", lockId = "Safe")) }

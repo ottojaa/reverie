@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -52,7 +54,8 @@ fun UploadActionSheet(
     onNewFolder: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
+    // Half open, a short screen would hide the last rows.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showMediaPicker by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -97,6 +100,7 @@ fun UploadActionSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 16.dp),
         ) {
             Text(

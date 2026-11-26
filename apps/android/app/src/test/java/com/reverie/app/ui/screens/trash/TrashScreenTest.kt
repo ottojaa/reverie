@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.trash
 
 import android.os.Looper
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -10,9 +11,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import com.reverie.app.data.api.ServerUrlProvider
@@ -135,6 +138,18 @@ class TrashScreenTest {
 
         awaitText("Deleted for good")
         assertEquals(listOf("""POST trash/purge {"folder_ids":["Taxes"]}"""), sent("POST trash/"))
+    }
+
+    @Config(qualifiers = "w640dp-h360dp")
+    @Test fun `on a short screen the menu opens far enough to show its last row`() {
+        open()
+        awaitText("receipt.pdf")
+
+        compose.onNodeWithText("receipt.pdf").performScrollTo().performSemanticsAction(SemanticsActions.OnLongClick)
+        awaitText("Delete forever")
+
+        val bottom = compose.onNodeWithText("Delete forever").getUnclippedBoundsInRoot().bottom
+        assertTrue("the last row ends at $bottom", bottom <= 360.dp)
     }
 
     @Test fun `a locked folder asks for its password and is then named`() {
