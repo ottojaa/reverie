@@ -1,5 +1,6 @@
 package com.reverie.app.ui.components
 
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.filled.Close
@@ -13,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.sp
 
 /** Contextual app bar shown while the grid is in multi-select mode. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +28,14 @@ fun SelectionTopBar(
 ) {
     TopAppBar(
         windowInsets = TopAppBarDefaults.windowInsets,
-        title = { Text("$count selected") },
+        title = {
+            Text(
+                "$count selected",
+                maxLines = 1,
+                // A large count shrinks rather than wraps beside the three actions on a narrow phone.
+                autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = MaterialTheme.typography.titleLarge.fontSize),
+            )
+        },
         navigationIcon = {
             IconButton(onClick = onClose) {
                 Icon(Icons.Filled.Close, contentDescription = "Clear selection")
