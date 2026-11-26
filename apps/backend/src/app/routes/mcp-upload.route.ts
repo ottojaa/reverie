@@ -7,7 +7,7 @@ import { uploadByLink } from '../../mcp/upload-by-link.js';
 const rateLimit = {
     max: 30,
     timeWindow: '1 minute',
-    // An AppError, because the app's error handler answers 500 to the plugin's own error.
+    // Its own code and wording in place of the plugin's.
     errorResponseBuilder: () => new AppError(429, 'RATE_LIMITED', 'Too many upload requests, try again in a minute'),
 };
 

@@ -6,7 +6,7 @@ import { env } from '../config/env.js';
 import { db } from '../db/kysely.js';
 import type { Database } from '../db/schema.js';
 import type { FolderNode, FolderTree } from './folders/snapshot.js';
-import { fetchLockSecretState } from './lock-secret.js';
+import { fetchLockSecretState, type LockSecretState } from './lock-secret.js';
 import { loadLockMap, toLockMap, type LockMap } from './privacy.js';
 
 /**
@@ -130,6 +130,23 @@ function readOpenLocks(fastify: FastifyInstance, request: FastifyRequest, userId
 }
 
 /**
+ * The lock state of the request's user, with the lock secret state it was read against. A caller that already holds
+ * the user's lock map passes it, and it is not read again.
+ */
+export async function loadFolderLocksAndSecret(
+    fastify: FastifyInstance,
+    request: FastifyRequest,
+    userId: string,
+    lockMap?: LockMap,
+    conn: Kysely<Database> = db,
+): Promise<{ locks: FolderLocks; secret: LockSecretState }> {
+    const [lockOf, secret] = await Promise.all([lockMap ?? loadLockMap(userId, conn), fetchLockSecretState(userId, conn)]);
+    const openLocks = new Set(readOpenLocks(fastify, request, userId, secret.generation));
+
+    return { locks: new FolderLocks(lockOf, openLocks, secret.enforced), secret };
+}
+
+/**
  * The lock state of the request's user: their private folders and which locks this session opened. A caller that
  * already read the folder tree passes it, so the locks describe the same moment and the table is read once. One
  * inside a transaction passes that too, so no second connection is needed while it holds locks.
@@ -141,9 +158,9 @@ export async function loadFolderLocks(
     tree?: FolderTree<FolderNode>,
     conn: Kysely<Database> = db,
 ): Promise<FolderLocks> {
-    const [lockOf, secret] = await Promise.all([tree ? toLockMap(tree) : loadLockMap(userId, conn), fetchLockSecretState(userId, conn)]);
+    const { locks } = await loadFolderLocksAndSecret(fastify, request, userId, tree && toLockMap(tree), conn);
 
-    return new FolderLocks(lockOf, new Set(readOpenLocks(fastify, request, userId, secret.generation)), secret.enforced);
+    return locks;
 }
 
 /** Set the session cookie carrying exactly these open locks, opened under this generation of the lock secret. */

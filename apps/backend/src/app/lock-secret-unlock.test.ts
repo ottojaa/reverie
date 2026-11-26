@@ -219,7 +219,7 @@ describeDb('opening a folder lock', () => {
 
         for (let sent = 0; sent < 30; sent += 1) expect((await send()).status).toBe(401);
 
-        // The limiter's 429, or the 500 the app's error handler makes of it.
+        // The limiter's 429.
         expect((await send()).status).toBeGreaterThanOrEqual(429);
     }, 30_000);
 });

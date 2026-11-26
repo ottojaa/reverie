@@ -10,6 +10,9 @@ export const ApiErrorSchema = z.object({
 
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
+/** For a status that a route answers with its own `{ error, message }` and the server's error handler with its envelope. */
+export const RouteErrorSchema = ApiErrorSchema.extend({ statusCode: z.number().optional(), details: z.unknown().optional() });
+
 // Pagination
 export const PaginationQuerySchema = z.object({
     limit: z.coerce.number().min(1).max(100).default(20),

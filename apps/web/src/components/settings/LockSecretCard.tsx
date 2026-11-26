@@ -1,12 +1,9 @@
 import type { VaultStatus } from '@reverie/shared';
 import { useQuery } from '@tanstack/react-query';
 import { LockKeyhole } from 'lucide-react';
-import { vaultStatusQuery } from '../../lib/api/vault';
+import { LOCK_SETTINGS_ANCHOR, vaultStatusQuery } from '../../lib/api/vault';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { LockSecretForm } from './LockSecretForm';
-
-/** The page anchor of the card, for a link that leads to it. */
-export const LOCK_SETTINGS_ANCHOR = 'private-folders-lock';
 
 function toInUse({ ask, secret_kind }: VaultStatus): string {
     if (ask === 'pin') return 'They open with your PIN now.';

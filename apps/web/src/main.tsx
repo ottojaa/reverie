@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
-import { LOCK_SETTINGS_ANCHOR } from './components/settings/LockSecretCard';
+import { LOCK_SETTINGS_ANCHOR } from './lib/api/vault';
 import { AuthProvider } from './lib/auth';
 import { ConfirmProvider } from './lib/confirm';
 import { getQueryClient } from './lib/query-client/queryClient';
