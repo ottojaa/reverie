@@ -40,10 +40,10 @@ export function isMediaSql(column: MimeTypeColumn) {
 }
 
 /** documentKindOf in SQL; everything that is neither a photo nor a video is a file. */
-export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
-    if (kind === 'file') return eb.not(isMediaSql('mime_type'));
+export function isOfKind(column: MimeTypeColumn, kind: DocumentKind) {
+    if (kind === 'file') return sql<boolean>`not ${isMediaSql(column)}`;
 
-    return hasKindPrefix('mime_type', kind);
+    return hasKindPrefix(column, kind);
 }
 
 /**
@@ -70,7 +70,7 @@ export function applyDocumentListFilters<O>(
 
     if (processing) filtered = filtered.where(isStillProcessing);
 
-    if (kind) filtered = filtered.where((eb) => isOfKind(eb, kind));
+    if (kind) filtered = filtered.where(isOfKind('mime_type', kind));
 
     if (media) filtered = filtered.where(isMediaSql('mime_type'));
 

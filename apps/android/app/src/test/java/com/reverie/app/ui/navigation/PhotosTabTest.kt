@@ -48,20 +48,20 @@ class PhotosTabTest {
         compose.runOnUiThread { app.nav.navigate(Routes.PHOTOS) }
         compose.waitUntil(WAIT_MS) {
             shadowOf(Looper.getMainLooper()).idle()
-            count(named("clip.mp4")) > 0
+            count(named("photo.jpg")) > 0
         }
     }
 
-    @Test fun `lists photos and videos together and no other files`() {
+    @Test fun `lists photos, and no videos or other files`() {
         showPhotos()
         assertEquals(1, count(named("photo.jpg")))
-        assertEquals(1, count(named("clip.mp4")))
+        assertEquals(0, count(named("clip.mp4")))
         assertEquals(0, count(named("report.pdf")))
     }
 
-    @Test fun `a video opens in the viewer`() {
+    @Test fun `a photo opens in the viewer`() {
         showPhotos()
-        compose.onNode(named("clip.mp4")).performClick()
+        compose.onNode(named("photo.jpg")).performClick()
         compose.waitForIdle()
         assertEquals(Routes.DOCUMENT, compose.runOnUiThread { app.nav.currentBackStackEntry?.destination?.route })
     }

@@ -17,6 +17,7 @@ import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
+import java.util.Locale
 
 /**
  * A list of documents as a screen of its own (see [FeedSource]): paged, selectable and swipeable in the
@@ -83,7 +84,7 @@ fun FeedScreen(
         manage = viewModel.manage,
         modifier = modifier,
         headerActions = {
-            SearchAction(source.searchScope) { onSearch(source.searchScope) }
+            SearchAction(source) { onSearch(source.searchScope) }
             account()
         },
     ) { slot ->
@@ -104,12 +105,10 @@ fun FeedScreen(
 }
 
 @Composable
-private fun SearchAction(scope: SearchScope, onClick: () -> Unit) {
+private fun SearchAction(source: FeedSource, onClick: () -> Unit) {
+    val searched = if (source.searchScope is SearchScope.Kind) source.title.lowercase(Locale.ROOT) else "the library"
     IconButton(onClick = onClick) {
-        Icon(
-            Icons.Outlined.Search,
-            contentDescription = if (scope == SearchScope.Media) "Search photos and videos" else "Search the library",
-        )
+        Icon(Icons.Outlined.Search, contentDescription = "Search $searched")
     }
 }
 

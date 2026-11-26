@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.reverie.app.data.api.model.CollectionSearchResult
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.domain.CachedFolders
@@ -20,7 +21,7 @@ import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
 
-/** Searching inside a folder, dark and light: photos as a grid, and a mixed page as a list. */
+/** Searching inside a folder or one kind of document, dark and light: media as a grid, other pages as a list. */
 class SearchScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5)
@@ -65,6 +66,35 @@ class SearchScreenshotTest {
         val state = page.copy(results = hits, total = hits.size)
 
         paparazzi.snapshotThemes("scopedList") { SearchBody(state, SearchActions()) }
+    }
+
+    private fun ofKind(kind: DocumentKind, hits: List<DocumentSearchResult>) = page.copy(
+        scope = SearchScope.Kind(kind),
+        results = hits,
+        total = hits.size,
+        viewMode = if (kind == DocumentKind.FILE) ViewMode.LIST else ViewMode.GRID,
+    )
+
+    @Test fun photoScope() {
+        val state = ofKind(DocumentKind.IMAGE, (0 until 9).map { hit(it, "IMG_20250823_${1000 + it}.jpg") })
+
+        paparazzi.snapshotThemes("photoScope") { SearchBody(state, SearchActions()) }
+    }
+
+    @Test fun videoScope() {
+        val state = ofKind(DocumentKind.VIDEO, (0 until 5).map { hit(it, "VID_20250823_${1000 + it}.mp4", "video/mp4") })
+
+        paparazzi.snapshotThemes("videoScope") { SearchBody(state, SearchActions()) }
+    }
+
+    @Test fun fileScope() {
+        val hits = listOf(
+            hit(1, "Lisbon apartment booking confirmation – Rua dos Remédios 74.pdf", "application/pdf"),
+            hit(2, "Lisbon tram and metro day tickets.pdf", "application/pdf"),
+            hit(3, "Lisbon packing list.txt", "text/plain"),
+        )
+
+        paparazzi.snapshotThemes("fileScope") { SearchBody(ofKind(DocumentKind.FILE, hits), SearchActions()) }
     }
 
     @Composable

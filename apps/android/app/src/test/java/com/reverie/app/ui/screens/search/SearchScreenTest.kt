@@ -208,25 +208,10 @@ class SearchScreenTest {
         compose.onNodeWithText("In Portugal – 2025").assertDoesNotExist()
     }
 
-    @Test fun `the photos search asks for photos and videos only`() {
-        open("media" to true)
-        awaitText("Photos and videos")
-
-        type("lisbon")
-        await { searched.size == 1 }
-        assertEquals("true", searched.last().parameters["media"])
-
-        val icon = compose.onNodeWithContentDescription("Search the whole library instead", useUnmergedTree = true)
-        icon.assertIsDisplayed()
-        icon.performClick()
-        await { searched.size == 2 }
-        assertNull(searched.last().parameters["media"])
-    }
-
     /** Searches a scope with a second page of results, removes the chip and checks [scoped] is sent no more. */
     private fun removingTheChipDrops(scoped: String, removeChip: () -> Unit) {
         total = 2
-        // The photos search shows its results as tiles, so there is no name to wait for.
+        // A photo search shows its results as tiles, so there is no name to wait for.
         type("lisbon")
         await { laterPages.isNotEmpty() && facetsAsked.isNotEmpty() }
         assertTrue((searched + facetsAsked).all { it.parameters[scoped] != null })
@@ -247,11 +232,11 @@ class SearchScreenTest {
         removingTheChipDrops("folder_id") { compose.onNodeWithText("In Portugal – 2025").performClick() }
     }
 
-    @Test fun `once the photos chip is removed, facets and further pages are the whole library's`() {
-        open("media" to true)
-        awaitText("Photos and videos")
+    @Test fun `once a kind's chip is removed, facets and further pages are the whole library's`() {
+        open("kind" to "image")
+        awaitText("In Photos")
 
-        removingTheChipDrops("media") {
+        removingTheChipDrops("kind") {
             compose.onNodeWithContentDescription("Search the whole library instead", useUnmergedTree = true).performClick()
         }
     }

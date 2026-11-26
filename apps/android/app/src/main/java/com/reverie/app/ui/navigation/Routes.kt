@@ -20,9 +20,9 @@ object Routes {
     val feedArguments = listOf(navArgument("source") { type = NavType.StringType })
     fun feed(source: FeedSource) = "list/${source.argument}"
 
-    /** The Photos tab is the list of all photos and videos. */
+    /** The Photos tab is the list of all photos. */
     val photosArguments = listOf(
-        navArgument("source") { type = NavType.StringType; defaultValue = FeedSource.MEDIA.argument },
+        navArgument("source") { type = NavType.StringType; defaultValue = FeedSource.PHOTOS.argument },
     )
 
     const val FAVOURITES = "favourites"
@@ -30,10 +30,10 @@ object Routes {
     const val TRASH = "trash"
 
     private const val SEARCH_PATH = "search"
-    const val SEARCH = "$SEARCH_PATH?folder={folder}&media={media}&q={q}"
+    const val SEARCH = "$SEARCH_PATH?folder={folder}&kind={kind}&q={q}"
     val searchArguments = listOf(
         navArgument("folder") { type = NavType.StringType; nullable = true; defaultValue = null },
-        navArgument("media") { type = NavType.BoolType; defaultValue = false },
+        navArgument("kind") { type = NavType.StringType; nullable = true; defaultValue = null },
         navArgument("q") { type = NavType.StringType; defaultValue = "" },
     )
 
@@ -41,7 +41,7 @@ object Routes {
     fun search(scope: SearchScope = SearchScope.Library, query: String = ""): String {
         val params = listOfNotNull(
             scope.folderId?.let { "folder=$it" },
-            "media=true".takeIf { scope.isMediaOnly },
+            scope.kind?.let { "kind=${it.wire}" },
             query.takeIf { it.isNotEmpty() }?.let { "q=${Uri.encode(it)}" },
         )
         return if (params.isEmpty()) SEARCH_PATH else "$SEARCH_PATH?${params.joinToString("&")}"

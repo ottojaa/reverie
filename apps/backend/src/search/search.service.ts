@@ -1,5 +1,6 @@
 import type {
     CollectionSearchResult,
+    DocumentKind,
     DocumentSearchResult,
     ParsedQuery,
     SearchFacets,
@@ -40,7 +41,7 @@ export interface SearchServiceOptions {
 export async function search(query: SearchQuery, options: SearchServiceOptions): Promise<SearchResponse> {
     const startTime = performance.now();
 
-    const parsed = toScopedQuery(query.q, { folderId: query.folder_id, media: query.media });
+    const parsed = toScopedQuery(query.q, { folderId: query.folder_id, media: query.media, kind: query.kind });
 
     // Validate the parsed query
     const errors = validateQuery(parsed);
@@ -86,11 +87,13 @@ interface SearchScope {
     folderId?: string;
     /** Photos and videos only. */
     media?: boolean;
+    /** Documents of this kind only. */
+    kind?: DocumentKind;
 }
 
 /** The query string parsed (all its filtering is in the q DSL), narrowed to the scope the request names. */
-function toScopedQuery(q: string, { folderId, media }: SearchScope): ParsedQuery {
-    return { ...parseQuery(q), ...(folderId && { scopeFolderId: folderId }), ...(media && { scopeMedia: true }) };
+function toScopedQuery(q: string, { folderId, media, kind }: SearchScope): ParsedQuery {
+    return { ...parseQuery(q), ...(folderId && { scopeFolderId: folderId }), ...(media && { scopeMedia: true }), ...(kind && { scopeKind: kind }) };
 }
 
 /**
@@ -107,7 +110,7 @@ function shouldSearchFolders(parsed: ParsedQuery, query: SearchQuery): boolean {
 
     if (parsed.searchScope === 'content' || parsed.searchScope === 'summary') return false;
 
-    if (parsed.folders?.length || parsed.scopeFolderId || parsed.scopeMedia) return false;
+    if (parsed.folders?.length || parsed.scopeFolderId || parsed.scopeMedia || parsed.scopeKind) return false;
 
     const hasDocumentFilters = Boolean(
         parsed.types?.length ||

@@ -14,6 +14,8 @@ enum class DocumentKind(val wire: String) {
     ;
 
     companion object {
+        fun ofWire(wire: String?): DocumentKind? = entries.firstOrNull { it.wire == wire }
+
         fun of(mimeType: String): DocumentKind {
             val mime = mimeType.lowercase(Locale.ROOT)
             return when {
