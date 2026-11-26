@@ -26,6 +26,7 @@ object Routes {
     )
 
     const val FAVOURITES = "favourites"
+    const val PRIVATE_FOLDERS = "private"
 
     private const val SEARCH_PATH = "search"
     const val SEARCH = "$SEARCH_PATH?folder={folder}&media={media}&q={q}"
@@ -63,7 +64,7 @@ object Routes {
     const val SETTINGS_BACKUP = "settings/backup"
 
     /** The places the library is browsed from: the bottom pill floats over these and no others. */
-    val pillRoutes = setOf(LIBRARY, PHOTOS, FOLDER, FEED, FAVOURITES)
+    val pillRoutes = setOf(LIBRARY, PHOTOS, FOLDER, FEED, FAVOURITES, PRIVATE_FOLDERS)
 
     /** Where the pill has the round whole-library search button beside it; other lists search what they show. */
     val searchButtonRoutes = setOf(LIBRARY, FAVOURITES)

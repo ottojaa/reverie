@@ -18,6 +18,7 @@ import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.library.LibraryLinks
 import com.reverie.app.ui.screens.library.LibraryScreen
+import com.reverie.app.ui.screens.privatefolders.PrivateFoldersScreen
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.ChangePasswordScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
@@ -76,7 +77,7 @@ private fun NavHostController.libraryLinks() = LibraryLinks(
 
 private fun NavHostController.accountLinks() = AccountLinks(
     onOpenBackup = { navigate(Routes.SETTINGS_BACKUP) },
-    onOpenPrivateFolders = {},
+    onOpenPrivateFolders = { navigate(Routes.PRIVATE_FOLDERS) },
     onOpenSettings = { navigate(Routes.SETTINGS) },
 )
 
@@ -105,6 +106,13 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onBack = { navController.popBackStack() },
             onOpenFolder = { navController.navigate(Routes.folder(it)) },
             onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+        )
+    }
+
+    composable(Routes.PRIVATE_FOLDERS) {
+        PrivateFoldersScreen(
+            onBack = { navController.popBackStack() },
+            onOpenFolder = { navController.openFolder(it) },
         )
     }
 
