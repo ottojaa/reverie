@@ -114,7 +114,7 @@ function SettingsPage() {
                         <CardDescription>
                             Update your account password.{' '}
                             {vault?.secret_kind
-                                ? 'It also resets the lock on your private folders.'
+                                ? 'It is also needed to change or remove the lock on your private folders.'
                                 : 'It is also the password that unlocks your private folders.'}
                         </CardDescription>
                     </CardHeader>
