@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
-import { getLockedFolderId, isFolderLockedError, toUnlockErrorMessage } from './folder-locked.js';
+import { getLockedFolderId, isFolderLockedError, toUnlockFailure } from './folder-locked.js';
 
 function toAxiosError(status: number, data: unknown): AxiosError {
     const config: InternalAxiosRequestConfig = { headers: new AxiosHeaders() };
@@ -31,14 +31,38 @@ describe('getLockedFolderId', () => {
     });
 });
 
-describe('toUnlockErrorMessage', () => {
-    it('explains a wrong password and a missing account password', () => {
-        expect(toUnlockErrorMessage(toAxiosError(401, { error: 'invalid_credentials' }))).toContain('Incorrect password');
-        expect(toUnlockErrorMessage(toAxiosError(400, { error: 'no_password' }))).toContain('Set one in Settings');
+describe('toUnlockFailure', () => {
+    const refused = (ask: string, tries_left: number | null) =>
+        toAxiosError(403, { statusCode: 403, error: 'invalid_credentials', message: 'x', details: { ask, tries_left } });
+
+    it.each([
+        ['pin', 7, 'Incorrect PIN. 7 tries left.'],
+        ['pin', 1, 'Incorrect PIN. 1 try left.'],
+        ['password', 9, 'Incorrect password. 9 tries left.'],
+    ] as const)('counts down a wrong %s with %i left', (ask, left, message) => {
+        expect(toUnlockFailure(refused(ask, left), ask)).toEqual({ status: { ask, secret_kind: ask }, message });
     });
 
-    it('falls back to a generic message', () => {
-        expect(toUnlockErrorMessage(toAxiosError(404, { error: 'NOT_FOUND' }))).toContain('Could not unlock');
-        expect(toUnlockErrorMessage(new Error('network'))).toContain('Could not unlock');
+    it('names the kind the server asks for now, whatever was asked', () => {
+        expect(toUnlockFailure(refused('password', 3), 'pin').status).toEqual({ ask: 'password', secret_kind: 'password' });
+    });
+
+    it('turns to the account password when stopped, keeping which secret is set', () => {
+        expect(toUnlockFailure(refused('account_password', null), 'pin')).toEqual({ status: { ask: 'account_password' }, message: null });
+        expect(toUnlockFailure(refused('account_password', null), 'account_password').message).toBe('Incorrect password. Try again.');
+    });
+
+    it('takes a 401 to mean no lock secret is set', () => {
+        const wrong = toAxiosError(401, { error: 'invalid_credentials', message: 'Incorrect password' });
+        const noSecret = { ask: 'account_password', secret_kind: null };
+
+        expect(toUnlockFailure(wrong, 'account_password')).toEqual({ status: noSecret, message: 'Incorrect password. Try again.' });
+        expect(toUnlockFailure(wrong, 'pin')).toEqual({ status: noSecret, message: null });
+    });
+
+    it('explains a missing account password and anything else', () => {
+        expect(toUnlockFailure(toAxiosError(400, { error: 'no_password' }), 'account_password').message).toContain('Set one in Settings');
+        expect(toUnlockFailure(toAxiosError(404, { error: 'NOT_FOUND' }), 'pin').message).toContain('Could not unlock');
+        expect(toUnlockFailure(new Error('network'), 'pin').message).toContain('Could not unlock');
     });
 });

@@ -1,0 +1,9 @@
+{
+    "statusCode": 403,
+    "error": "invalid_credentials",
+    "message": "Too many wrong tries. Enter your account password.",
+    "details": {
+        "ask": "account_password",
+        "tries_left": null
+    }
+}

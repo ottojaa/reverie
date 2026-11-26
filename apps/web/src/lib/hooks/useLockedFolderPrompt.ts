@@ -3,8 +3,8 @@ import { useVault } from '@/lib/vault';
 import { useCallback, useEffect, useRef } from 'react';
 
 /**
- * Handles a query that failed with 403 FOLDER_LOCKED (deep link, reload, stale tab): asks for
- * the password once for the locked folder. A successful unlock refetches the lock-dependent
+ * Handles a query that failed with 403 FOLDER_LOCKED (deep link, reload, stale tab): asks once
+ * for what opens the locked folder. A successful unlock refetches the lock-dependent
  * queries, so the failed one recovers on its own. `unlock` re-opens the prompt after a cancel.
  */
 export function useLockedFolderPrompt(error: unknown) {

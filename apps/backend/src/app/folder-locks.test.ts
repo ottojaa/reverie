@@ -193,9 +193,9 @@ describeDb('folder locks over HTTP', () => {
         it('reports the status of the session', async () => {
             const session = newSession();
 
-            expect((await session.get('/vault/status')).body).toEqual({ unlocked: false, has_password: true });
+            expect((await session.get('/vault/status')).body).toEqual({ unlocked: false, has_password: true, secret_kind: null, ask: 'account_password' });
             await session.unlock(world().folders.lockedFolder.id);
-            expect((await session.get('/vault/status')).body).toEqual({ unlocked: true, has_password: true });
+            expect((await session.get('/vault/status')).body).toEqual({ unlocked: true, has_password: true, secret_kind: null, ask: 'account_password' });
         });
     });
 
@@ -771,7 +771,7 @@ describeDb('folder locks over HTTP', () => {
             const folder = await seedFolder(db, nopass.id, 'Mine', { isPrivate: true });
             const session = new Session(app, app.jwt.sign({ sub: nopass.id, email: 'nopass@example.test' } as never));
 
-            expect((await session.get('/vault/status')).body).toEqual({ unlocked: false, has_password: false });
+            expect((await session.get('/vault/status')).body).toEqual({ unlocked: false, has_password: false, secret_kind: null, ask: null });
             expect((await session.unlock(folder.id)).status).toBe(400);
             expect((await session.get('/documents?folder_id=' + folder.id)).status).toBe(200);
         });
