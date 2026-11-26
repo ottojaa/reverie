@@ -26,6 +26,7 @@ export function Sidebar({ isOpen = false, onClose, treeDragHandlersRef }: Sideba
     const params = useParams({ strict: false });
     const location = useLocation();
     const currentSectionId = (params as { sectionId?: string }).sectionId;
+    const isAllDocuments = location.pathname.startsWith('/browse') && !currentSectionId;
     const { user: authUser } = useAuth();
     const { data: userFromQuery } = useUser();
     const { data: sections = [], isLoading } = useSections();
@@ -68,12 +69,12 @@ export function Sidebar({ isOpen = false, onClose, treeDragHandlersRef }: Sideba
                         onClick={onClose}
                         className={cn(
                             'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium transition-colors',
-                            !currentSectionId
+                            isAllDocuments
                                 ? 'bg-sidebar-accent text-sidebar-primary shadow-sm'
                                 : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground',
                         )}
                     >
-                        <LayoutGrid className={cn('size-4 shrink-0', !currentSectionId ? 'text-sidebar-primary' : 'text-muted-foreground')} aria-hidden />
+                        <LayoutGrid className={cn('size-4 shrink-0', isAllDocuments ? 'text-sidebar-primary' : 'text-muted-foreground')} aria-hidden />
                         <span>All Documents</span>
                     </Link>
                     <Link

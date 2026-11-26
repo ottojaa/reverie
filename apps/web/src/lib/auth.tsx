@@ -1,5 +1,4 @@
 import type { LoginResponse, User } from '@reverie/shared';
-import { useNavigate } from '@tanstack/react-router';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { initApiAuth } from './api/client';
 import { getQueryClient } from './query-client/queryClient';
@@ -35,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: true,
         isAuthenticated: false,
     });
-    const navigate = useNavigate();
     const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
 
     // Initialize auth state from localStorage
@@ -103,7 +101,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isLoading: false,
             isAuthenticated: false,
         });
-        navigate({ to: '/login', search: { error: undefined } });
     };
 
     const login = async (email: string, password: string) => {

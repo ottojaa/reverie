@@ -6,7 +6,8 @@ export const dndMeasuring = {
     },
 };
 
-const mouseActivationConstraint = { delay: 200, tolerance: 2 };
+/** A mouse drag starts on movement, so a press that stays put is a click however long it is held. */
+const mouseActivationConstraint = { distance: 8 };
 /** Long press + small tolerance: scroll wins if finger moves during the window; drag only after deliberate hold (Notion-like). */
 const touchActivationConstraint = { delay: 500, tolerance: 4 };
 

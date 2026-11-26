@@ -17,7 +17,7 @@ interface DocumentCardProps {
 export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplete, className }: DocumentCardProps) {
     const prefetchDocument = usePrefetchDocument(document);
     const interaction = useDocumentInteraction({ document, orderedIds });
-    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, dragListeners, longPressHandlers } = interaction;
+    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, gestureHandlers } = interaction;
 
     return (
         <DocumentActionsMenu document={document} interaction={interaction}>
@@ -27,8 +27,7 @@ export function DocumentCard({ document, orderedIds, shouldPulse, onPulseComplet
                 className="relative"
                 style={{ touchAction: isMobile ? 'pan-y' : 'none' }}
                 {...dragAttributes}
-                {...dragListeners}
-                {...longPressHandlers}
+                {...gestureHandlers}
                 onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
             >
                 <Link

@@ -1,7 +1,7 @@
 import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
-import { getFileTooLargeMessage, isFileTooLarge } from './limits';
+import { getFileTooLargeMessage, isFileTooLarge, isRetryable } from './limits';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFile } from './uploadApi';
 
@@ -18,7 +18,6 @@ type UploadAction =
     | { type: 'REMOVE_FILE'; fileId: string }
     | { type: 'CLEAR_COMPLETED' }
     | { type: 'CLEAR_FAILED' }
-    | { type: 'RETRY_FAILED' }
     | { type: 'RETRY_FILE'; fileId: string }
     | { type: 'START_UPLOAD'; totalBytes: number }
     | { type: 'START_FILE_UPLOAD'; fileId: string }
@@ -38,6 +37,11 @@ const initialState: UploadState = {
     uploadBytesLoaded: 0,
     uploadBytesTotal: 0,
 };
+
+/** Whether an upload of this file can begin: it is waiting, or it failed and can be tried again. */
+function isStartable(file: UploadFile): boolean {
+    return file.status === 'queued' || isRetryable(file);
+}
 
 function applyJobEventToFile(file: UploadFile, event: JobEvent): UploadFile {
     if (!file.jobs || file.jobs.length === 0) {
@@ -134,29 +138,11 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             return { ...state, files: newFiles };
         }
 
-        case 'RETRY_FAILED': {
-            const newFiles = new Map(state.files);
-
-            for (const [id, file] of newFiles) {
-                // Retrying a file that is over the size limit can never succeed
-                if (file.status === 'error' && !isFileTooLarge(file.file)) {
-                    const { error: _, ...rest } = file;
-                    newFiles.set(id, {
-                        ...rest,
-                        status: 'queued',
-                        uploadProgress: 0,
-                    });
-                }
-            }
-
-            return { ...state, files: newFiles };
-        }
-
         case 'RETRY_FILE': {
             const newFiles = new Map(state.files);
             const file = newFiles.get(action.fileId);
 
-            if (file && file.status === 'error' && !isFileTooLarge(file.file)) {
+            if (file && isRetryable(file)) {
                 newFiles.set(action.fileId, {
                     ...file,
                     status: 'queued',
@@ -180,8 +166,9 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
             const newFiles = new Map(state.files);
             const file = newFiles.get(action.fileId);
 
-            if (file && file.status === 'queued') {
-                newFiles.set(action.fileId, { ...file, status: 'uploading', uploadProgress: 0 });
+            if (file && isStartable(file)) {
+                const { error: _, uploadLoaded: __, ...rest } = file;
+                newFiles.set(action.fileId, { ...rest, status: 'uploading', uploadProgress: 0 });
             }
 
             return { ...state, files: newFiles };
@@ -321,12 +308,12 @@ interface UploadContextType {
     clearCompleted: () => void;
     /** Clear failed files */
     clearFailed: () => void;
-    /** Retry all failed files */
-    retryFailed: () => void;
     /** Retry a specific file */
     retryFile: (fileId: string) => void;
-    /** Start uploading queued files (optionally with conflict strategy when duplicates were detected) */
-    /** `onlyFileIds` limits the batch to those queued files (a caller that just removed others can't rely on this render's state). */
+    /**
+     * Start uploading the queued files, optionally with a conflict strategy when duplicates were detected. `onlyFileIds` instead
+     * names the files to send, queued or failed (a caller that just removed others can't rely on this render's state).
+     */
     startUpload: (folderId?: string, conflictStrategy?: 'replace' | 'keep_both', onlyFileIds?: ReadonlySet<string>) => Promise<void>;
     /** Reset all state */
     reset: () => void;
@@ -393,10 +380,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'CLEAR_FAILED' });
     }, []);
 
-    const retryFailed = useCallback(() => {
-        dispatch({ type: 'RETRY_FAILED' });
-    }, []);
-
     const retryFile = useCallback((fileId: string) => {
         dispatch({ type: 'RETRY_FILE', fileId });
     }, []);
@@ -419,7 +402,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
     const startUpload = useCallback(
         async (folderId?: string, conflictStrategy?: 'replace' | 'keep_both', onlyFileIds?: ReadonlySet<string>) => {
-            const queuedFiles = Array.from(state.files.values()).filter((f) => f.status === 'queued' && (!onlyFileIds || onlyFileIds.has(f.id)));
+            const queuedFiles = Array.from(state.files.values()).filter((f) => (onlyFileIds ? onlyFileIds.has(f.id) && isStartable(f) : f.status === 'queued'));
 
             if (queuedFiles.length === 0) {
                 return;
@@ -544,7 +527,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         removeFile,
         clearCompleted,
         clearFailed,
-        retryFailed,
         retryFile,
         startUpload,
         reset,
