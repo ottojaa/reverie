@@ -57,8 +57,8 @@ interface DocumentListHandler {
 
     fun toggleSelect(id: String)
 
-    /** Hand the shown list's order to the viewer. */
-    fun prepareSequence()
+    /** Hand the order of the list [opened] sits in to the viewer. */
+    fun prepareSequence(opened: DocumentDto)
 
     fun prefetch(document: DocumentDto)
 }
@@ -69,6 +69,8 @@ internal fun documentRowActions(
     selectedIds: Set<String>,
     starredIds: Set<String>,
     openDocument: (DocumentDto) -> Unit,
+    onGroupClick: (RecentRow.Group) -> Unit = {},
+    onGroupLongClick: (RecentRow.Group) -> Unit = {},
 ): RowActions {
     val selecting = selectedIds.isNotEmpty()
     return RowActions(
@@ -78,7 +80,7 @@ internal fun documentRowActions(
                 handler.toggleSelect(doc.id)
             } else {
                 // Publish the shown list's order so the viewer swipes through it and nothing else.
-                handler.prepareSequence()
+                handler.prepareSequence(doc)
                 handler.prefetch(doc)
                 openDocument(doc)
             }
@@ -86,5 +88,7 @@ internal fun documentRowActions(
         onLongClick = { doc -> if (selecting) handler.toggleSelect(doc.id) else handler.enterSelection(doc.id) },
         starred = { it.id in starredIds },
         onToggleStar = { handler.favourites.toggle(FavouriteKey(FavouriteType.DOCUMENT, it.id)) },
+        onGroupClick = onGroupClick,
+        onGroupLongClick = onGroupLongClick,
     )
 }

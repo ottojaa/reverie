@@ -3,19 +3,24 @@ package com.reverie.app.ui.screens.browse
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
-import com.reverie.app.data.settings.FolderViewMode
+import com.reverie.app.data.api.model.FolderCoverDto
+import com.reverie.app.data.api.model.DocumentScope
+import com.reverie.app.ui.components.FolderFormData
+import com.reverie.app.ui.components.createFolder
+import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** A folder's page: its documents by kind, as cards or as a list. */
+/** One folder's page: its lists and selection, a folder made inside it, and the viewer hand-off. */
 @HiltViewModel
 class FolderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -24,15 +29,16 @@ class FolderViewModel @Inject constructor(
 
     val folderId: String = checkNotNull(savedStateHandle["folderId"]) { "A folder page needs a folder id" }
 
-    // One Room observer for the whole screen: the chips' feeds and the unfinished-document watcher share it.
-    private val cache = deps.documents.observeDocuments(folderId)
+    private val folder = DocumentScope.Folder(folderId)
+
+    private val cache = deps.documents.observeDocuments(folder)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val session: BrowseSession = BrowseSession(
         scope = viewModelScope,
         folderId = folderId,
         deps = deps,
-        selection = { model.selectedIds },
+        selection = { model.selectedDocuments },
         clearSelection = { model.clearSelection() },
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
@@ -40,23 +46,31 @@ class FolderViewModel @Inject constructor(
 
     private val model: FolderModel = FolderModel(
         scope = viewModelScope,
+        folderId = folderId,
+        tree = deps.folders.observeTree(),
         cache = cache,
-        summary = deps.documents.summary(folderId),
-        fetchPage = { kind, offset -> deps.documents.refresh(folderId, BROWSE_PAGE_SIZE, offset, kind) },
-        fetchSummary = { deps.documents.fetchSummary(folderId) },
+        summary = deps.documents.summary(folder),
+        fetchPage = { filter, offset -> deps.documents.refresh(folder, BROWSE_PAGE_SIZE, offset, filter) },
+        fetchSummary = { deps.documents.fetchSummary(folder) },
+        reconcile = { filter, keep -> deps.documents.dropStale(folder, filter, keep) },
         onFirstPageFailed = session::onRefreshFailed,
+        isLockRefusal = { (it as? ReverieApiException)?.lockedFolderId() != null },
     )
+
+    private val messages = Channel<String>(Channel.BUFFERED)
+
+    /** One-off messages for the page's snackbar. */
+    val notices: Flow<String> = messages.receiveAsFlow()
 
     val state: StateFlow<FolderState> get() = model.state
     val ui: StateFlow<SessionUi> get() = session.ui
+    val covers: StateFlow<Map<String, FolderCoverDto>> get() = deps.folders.covers
     val unlocker get() = session.unlocker
     override val favourites get() = session.favourites
-    val focusedDocumentId: StateFlow<String?> get() = session.focusedDocumentId
-
-    /** Cards or list, one choice for every folder; null until it has been read, so neither is drawn by guess. */
-    val viewMode: StateFlow<FolderViewMode?> = deps.settings.settings
-        .map { it.folderViewMode }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val manage get() = session.manage
+    val gridLayoutMode get() = session.gridLayoutMode
+    val mosaicFeatureEvery get() = session.mosaicFeatureEvery
+    val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
 
     init {
         session.keepUnfinishedLive(cache)
@@ -64,14 +78,9 @@ class FolderViewModel @Inject constructor(
 
     fun refresh(initial: Boolean = false) {
         session.beginRefresh()
+        session.refreshFolders()
         model.refresh(initial)
     }
-
-    fun setViewMode(mode: FolderViewMode) {
-        viewModelScope.launch { deps.settings.setFolderViewMode(mode) }
-    }
-
-    fun select(kind: DocumentKind?) = model.select(kind)
 
     fun loadMore() = model.loadMore()
 
@@ -81,12 +90,21 @@ class FolderViewModel @Inject constructor(
 
     fun clearSelection() = model.clearSelection()
 
-    /** Hand the shown list, and only it, to the viewer. Call right before navigating into a document. */
-    override fun prepareSequence() = session.publish(model.prepareSequence())
+    /** Hand the opened document's section to the viewer. Call right before opening one. */
+    override fun prepareSequence(opened: DocumentDto) = session.publish(model.prepareSequence(opened))
 
     override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
-    fun clearFocusedDocument() = session.clearFocusedDocument()
+    fun clearViewerFocus() = session.clearViewerFocus()
+
+    /** Makes a folder inside this one; its row appears with the refreshed tree. */
+    fun createFolder(form: FolderFormData) {
+        viewModelScope.launch {
+            deps.folders.createFolder(form, parentId = folderId)?.let { messages.send(it) }
+        }
+    }
+
+    fun moveSelected() = session.moveSelected()
 
     fun deleteSelected() = session.deleteSelected()
 

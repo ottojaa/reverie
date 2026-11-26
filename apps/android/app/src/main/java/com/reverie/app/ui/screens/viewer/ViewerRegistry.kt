@@ -41,7 +41,7 @@ fun isImageDocument(document: DocumentDto): Boolean = viewerTypeFor(document) ==
 /**
  * Whether this document plays in the [VideoViewer]. Media (images + videos) size the dive
  * transform to their aspect — the morph box is the content rect the poster grows into — so the
- * grid passes their aspect as the nav arg (see BrowseScreen).
+ * grid passes their aspect as the nav arg (see rememberOpenDocument).
  */
 fun isVideoDocument(document: DocumentDto): Boolean = viewerTypeFor(document) == ViewerType.VIDEO
 

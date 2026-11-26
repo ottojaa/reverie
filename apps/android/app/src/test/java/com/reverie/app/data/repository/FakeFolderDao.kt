@@ -24,5 +24,6 @@ internal object NoopPurger : PrivateDataPurger {
     override suspend fun purgeCachedCopies(ids: Collection<String>) {}
     override suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>) {}
     override suspend fun forgetMoved(ids: Collection<String>) {}
+    override suspend fun forgetInFolders(folderIds: Collection<String>) {}
     override suspend fun clearSession() {}
 }

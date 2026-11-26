@@ -44,8 +44,6 @@ data class CollectionSearchResult(
     val path: String,
     val description: String? = null,
     val emoji: String? = null,
-    val folder_type: FolderType,
-    val document_count: Int,
     val snippet: String? = null,
     val relevance: Double? = null,
 ) : SearchHit

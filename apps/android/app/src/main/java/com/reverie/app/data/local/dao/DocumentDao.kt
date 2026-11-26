@@ -21,8 +21,16 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE folderId = :folderId ORDER BY createdAt DESC")
     fun observeByFolder(folderId: String): Flow<List<DocumentEntity>>
 
+    /** Cached documents that are in no folder. */
+    @Query("SELECT * FROM documents WHERE folderId IS NULL ORDER BY createdAt DESC")
+    fun observeTopLevel(): Flow<List<DocumentEntity>>
+
     @Query("SELECT * FROM documents WHERE id = :id")
     fun observeById(id: String): Flow<DocumentEntity?>
+
+    /** Those of [ids] whose thumbnail status is one of [statuses] (stored as JobStatus names). */
+    @Query("SELECT id FROM documents WHERE id IN (:ids) AND thumbnailStatus IN (:statuses)")
+    fun observeIdsWithThumbnailStatus(ids: List<String>, statuses: List<String>): Flow<List<String>>
 
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getById(id: String): DocumentEntity?
@@ -33,10 +41,6 @@ interface DocumentDao {
     @Query("DELETE FROM documents WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 
-    /** Reconcile a fully-loaded folder: drop cached rows the server no longer returns. */
-    @Query("DELETE FROM documents WHERE folderId = :folderId AND id NOT IN (:keepIds)")
-    suspend fun deleteInFolderNotIn(folderId: String, keepIds: List<String>)
-
     /** Id and MIME type of every cached document: enough to tell which of them are of a given kind. */
     @Query("SELECT id, mimeType FROM documents")
     suspend fun allMimeTypes(): List<DocumentMimeType>
@@ -44,6 +48,14 @@ interface DocumentDao {
     /** Id and MIME type of every cached document in [folderId]: enough to tell which of them are of a given kind. */
     @Query("SELECT id, mimeType FROM documents WHERE folderId = :folderId")
     suspend fun mimeTypesInFolder(folderId: String): List<DocumentMimeType>
+
+    /** Id and MIME type of every cached document that is in no folder. */
+    @Query("SELECT id, mimeType FROM documents WHERE folderId IS NULL")
+    suspend fun mimeTypesAtTopLevel(): List<DocumentMimeType>
+
+    /** Cached documents in any of [folderIds]. */
+    @Query("SELECT id FROM documents WHERE folderId IN (:folderIds)")
+    suspend fun idsInFolders(folderIds: List<String>): List<String>
 
     /** The date taken of the cached rows among [ids] that have one. */
     @Query("SELECT id, takenAt FROM documents WHERE id IN (:ids) AND takenAt IS NOT NULL")

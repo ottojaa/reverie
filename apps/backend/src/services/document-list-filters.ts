@@ -17,6 +17,8 @@ export interface DocumentListFilters {
     dateTo?: string;
     processing?: boolean;
     kind?: DocumentKind;
+    /** Photos and videos only. */
+    media?: boolean;
 }
 
 /** A document whose text recognition, thumbnail or AI summary has not finished yet (transcoding is its own clock). */
@@ -24,16 +26,24 @@ function isStillProcessing(eb: ExpressionBuilder<Database, 'documents'>) {
     return eb.or([eb('ocr_status', 'in', RUNNING_STATUSES), eb('thumbnail_status', 'in', RUNNING_STATUSES), eb('llm_status', 'in', RUNNING_STATUSES)]);
 }
 
-/** documentKindOf in SQL: a case-insensitive MIME prefix; everything else is a file. mime_type is NOT NULL. */
+/** The MIME type column, as a query names the documents table. */
+type MimeTypeColumn = 'mime_type' | 'd.mime_type';
+
+/** What makes a document an image or a video, as in documentKindOf: a case-insensitive MIME prefix. mime_type is NOT NULL. */
+function hasKindPrefix(column: MimeTypeColumn, kind: 'image' | 'video') {
+    return sql<boolean>`lower(${sql.ref(column)}) like ${sql.lit(kind + '/%')}`;
+}
+
+/** A photo or a video (the image and video kinds together). */
+export function isMediaSql(column: MimeTypeColumn) {
+    return sql<boolean>`(${hasKindPrefix(column, 'image')} or ${hasKindPrefix(column, 'video')})`;
+}
+
+/** documentKindOf in SQL; everything that is neither a photo nor a video is a file. */
 export function isOfKind(eb: ExpressionBuilder<Database, 'documents'>, kind: DocumentKind) {
-    const isImage = eb(sql<string>`lower(mime_type)`, 'like', 'image/%');
-    const isVideo = eb(sql<string>`lower(mime_type)`, 'like', 'video/%');
+    if (kind === 'file') return eb.not(isMediaSql('mime_type'));
 
-    if (kind === 'image') return isImage;
-
-    if (kind === 'video') return isVideo;
-
-    return eb.not(eb.or([isImage, isVideo]));
+    return hasKindPrefix('mime_type', kind);
 }
 
 /**
@@ -44,7 +54,7 @@ export function applyDocumentListFilters<O>(
     query: SelectQueryBuilder<Database, 'documents', O>,
     filters: DocumentListFilters,
 ): SelectQueryBuilder<Database, 'documents', O> {
-    const { userId, folderId, topLevel, privateFolderIds, category, dateFrom, dateTo, processing, kind } = filters;
+    const { userId, folderId, topLevel, privateFolderIds, category, dateFrom, dateTo, processing, kind, media } = filters;
 
     let filtered = excludeTrashed(query.where('user_id', '=', userId), '');
 
@@ -61,6 +71,8 @@ export function applyDocumentListFilters<O>(
     if (processing) filtered = filtered.where(isStillProcessing);
 
     if (kind) filtered = filtered.where((eb) => isOfKind(eb, kind));
+
+    if (media) filtered = filtered.where(isMediaSql('mime_type'));
 
     return filtered;
 }

@@ -5,9 +5,9 @@ import com.reverie.app.data.api.model.DocumentCategory
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentPhotoMetadata
 import com.reverie.app.data.api.model.FolderDto
-import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.local.entity.DocumentEntity
 import com.reverie.app.data.local.entity.FolderEntity
 import kotlinx.serialization.json.JsonObject
@@ -104,57 +104,58 @@ fun FolderEntity.toDto(): FolderDto = FolderDto(
     description = description,
     emoji = emoji,
     sort_order = sortOrder,
-    type = runCatching { FolderType.valueOf(type) }.getOrDefault(FolderType.FOLDER),
     is_private = isPrivate,
+    lock_id = lockId,
     locked = locked,
     created_at = createdAt,
     updated_at = updatedAt,
 )
 
-/** Flatten a nested tree into rows for Room (each node keeps its own document_count). */
-fun List<FolderWithChildren>.flattenToEntities(now: Long): List<FolderEntity> {
-    val out = mutableListOf<FolderEntity>()
-    fun visit(node: FolderWithChildren) {
-        out += FolderEntity(
-            id = node.id,
-            parentId = node.parent_id,
-            name = node.name,
-            path = node.path,
-            description = node.description,
-            emoji = node.emoji,
-            sortOrder = node.sort_order,
-            type = node.type.name,
-            isPrivate = node.is_private,
-            locked = node.locked,
-            documentCount = node.document_count,
-            createdAt = node.created_at,
-            updatedAt = node.updated_at,
-            cachedAt = now,
-        )
-        node.children.forEach(::visit)
-    }
-    forEach(::visit)
-    return out
+/** Flatten a nested tree into rows for Room. */
+fun List<FolderWithChildren>.flattenToEntities(now: Long): List<FolderEntity> = flatMap { node ->
+    listOf(node.toEntity(now)) + node.children.flattenToEntities(now)
 }
 
-/** Reassemble the two-level tree from flat cached rows. */
+private fun FolderWithChildren.toEntity(now: Long) = FolderEntity(
+    id = id,
+    parentId = parent_id,
+    name = name,
+    path = path,
+    description = description,
+    emoji = emoji,
+    sortOrder = sort_order,
+    isPrivate = is_private,
+    lockId = lock_id,
+    locked = locked,
+    imageCount = kind_counts.image,
+    videoCount = kind_counts.video,
+    fileCount = kind_counts.file,
+    createdAt = created_at,
+    updatedAt = updated_at,
+    cachedAt = now,
+)
+
+/** Reassemble the tree from flat cached rows. */
 fun List<FolderEntity>.toTree(): List<FolderWithChildren> {
     val byParent = groupBy { it.parentId }
-    fun build(entity: FolderEntity): FolderWithChildren = FolderWithChildren(
-        id = entity.id,
-        parent_id = entity.parentId,
-        name = entity.name,
-        path = entity.path,
-        description = entity.description,
-        emoji = entity.emoji,
-        sort_order = entity.sortOrder,
-        type = runCatching { FolderType.valueOf(entity.type) }.getOrDefault(FolderType.FOLDER),
-        is_private = entity.isPrivate,
-        locked = entity.locked,
-        created_at = entity.createdAt,
-        updated_at = entity.updatedAt,
-        document_count = entity.documentCount,
-        children = (byParent[entity.id].orEmpty()).sortedBy { it.sortOrder }.map(::build),
-    )
-    return (byParent[null].orEmpty()).sortedBy { it.sortOrder }.map(::build)
+    fun build(entity: FolderEntity): FolderWithChildren =
+        entity.toNode(children = byParent[entity.id].orEmpty().sortedBy { it.sortOrder }.map(::build))
+    return byParent[null].orEmpty().sortedBy { it.sortOrder }.map(::build)
 }
+
+private fun FolderEntity.toNode(children: List<FolderWithChildren>) = FolderWithChildren(
+    id = id,
+    parent_id = parentId,
+    name = name,
+    path = path,
+    description = description,
+    emoji = emoji,
+    sort_order = sortOrder,
+    is_private = isPrivate,
+    lock_id = lockId,
+    locked = locked,
+    created_at = createdAt,
+    updated_at = updatedAt,
+    kind_counts = KindCountsDto(imageCount, videoCount, fileCount),
+    children = children,
+)

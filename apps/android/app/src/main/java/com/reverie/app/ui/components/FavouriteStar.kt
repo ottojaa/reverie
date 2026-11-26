@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,14 +21,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.reverie.app.ui.theme.ReverieTheme
 
 @Composable
 fun StarIcon(
     filled: Boolean,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
-    tint: Color = ReverieTheme.extendedColors.star,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Icon(
         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarOutline,
@@ -41,7 +41,7 @@ fun StarIcon(
 @Composable
 fun StarredBadge(modifier: Modifier = Modifier) {
     Box(modifier.size(22.dp).background(ON_PICTURE_SCRIM, CircleShape), contentAlignment = Alignment.Center) {
-        StarIcon(filled = true, contentDescription = "Favourite", tint = ReverieTheme.extendedColors.starOnScrim, modifier = Modifier.size(13.dp))
+        StarIcon(filled = true, contentDescription = "Favourite", tint = Color.White, modifier = Modifier.size(13.dp))
     }
 }
 

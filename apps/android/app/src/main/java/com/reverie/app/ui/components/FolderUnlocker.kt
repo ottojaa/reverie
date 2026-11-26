@@ -63,6 +63,6 @@ class FolderUnlocker(
 fun UnlockOutcome.toPromptError(): String? = when (this) {
     UnlockOutcome.Unlocked, UnlockOutcome.NotPrivate -> null
     UnlockOutcome.WrongPassword -> "Incorrect password."
-    UnlockOutcome.NoPassword -> "Your account has no password yet. Set one in Settings on the web app."
+    UnlockOutcome.NoPassword -> "Your account has no password yet."
     is UnlockOutcome.Failed -> message
 }

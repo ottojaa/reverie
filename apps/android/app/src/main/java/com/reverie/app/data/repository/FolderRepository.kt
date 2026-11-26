@@ -15,12 +15,17 @@ import com.reverie.app.data.local.flattenToEntities
 import com.reverie.app.data.local.toDto
 import com.reverie.app.data.local.toTree
 import com.reverie.app.di.IoDispatcher
+import com.reverie.app.domain.CachedFolders
+import com.reverie.app.domain.FolderTree
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,9 +51,14 @@ class FolderRepository @Inject constructor(
         _covers.value = emptyMap()
     }
 
-    /** The two-level tree, reassembled from cached rows. */
+    /** The folder tree, reassembled from cached rows. */
     fun observeTree(): Flow<List<FolderWithChildren>> =
         folderDao.observeAll().map { it.toTree() }
+
+    /** Every cached folder by id, with the covers fetched this session. */
+    fun observeCached(): Flow<CachedFolders> = combine(observeTree(), covers) { tree, covers ->
+        CachedFolders(FolderTree(tree).all().associateBy { it.id }, covers)
+    }
 
     /** A single folder (for headers), from cache. */
     fun observeFolder(id: String): Flow<FolderDto?> =
@@ -60,7 +70,7 @@ class FolderRepository @Inject constructor(
         val entities = tree.flattenToEntities(System.currentTimeMillis())
         folderDao.upsertAll(entities)
         folderDao.deleteNotIn(entities.map { it.id })
-        // A folder (or whole collection) may have gone private since its documents were cached.
+        // A folder, or one above it, may have gone private since its documents were cached.
         purger.purgeOutsideFolders(entities.toPublicFolderIds())
     }
 
@@ -72,9 +82,21 @@ class FolderRepository @Inject constructor(
         foldersApi.update(id, request).also { refresh() }
     }
 
+    /** Moves a folder into [parentId], or to the top level when it is null. */
+    suspend fun move(id: String, parentId: String?): FolderDto = withContext(io) {
+        foldersApi.move(id, parentId).also { refresh() }
+    }
+
+    /** Sends the folder to the trash and drops it here at once, with everything beneath it. */
     suspend fun delete(id: String) = withContext(io) {
         foldersApi.delete(id)
-        folderDao.deleteByIds(listOf(id))
+        val gone = FolderTree(folderDao.observeAll().first().toTree()).subtreeIds(id)
+        folderDao.deleteByIds(gone.toList())
+        _covers.update { it - gone }
+        purger.forgetInFolders(gone)
+        // The folders above it count less now; offline, the next refresh catches up.
+        runCatching { refresh() }
+        Unit
     }
 
     suspend fun reorder(updates: List<ReorderFolderUpdate>) = withContext(io) {
@@ -83,13 +105,11 @@ class FolderRepository @Inject constructor(
     }
 }
 
-/** Ids of folders that are not private, neither by their own flag nor through their parent. */
-internal fun List<FolderEntity>.toPublicFolderIds(): List<String> {
-    val privateIds = filter { it.isPrivate }.map { it.id }.toSet()
-    return filterNot { it.id in privateIds || it.parentId in privateIds }.map { it.id }
-}
+/** Ids of folders that are private neither by their own flag nor through any folder above them. */
+internal fun List<FolderEntity>.toPublicFolderIds(): List<String> =
+    filter { it.lockId == null && !it.isPrivate }.map { it.id }
 
-/** Covers by folder id, for every node that has one (collections and locked nodes have none). */
+/** Covers by folder id, for every node that has one (private folders have none). */
 internal fun List<FolderWithChildren>.toCoverMap(): Map<String, FolderCoverDto> = buildMap {
     fun visit(nodes: List<FolderWithChildren>) {
         nodes.forEach { node ->

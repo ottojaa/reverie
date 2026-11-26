@@ -2,7 +2,7 @@ import type { DocumentKind, DocumentSummaryResponse } from '@reverie/shared';
 import { sql, type ExpressionBuilder } from 'kysely';
 import { db } from '../db/kysely.js';
 import type { Database } from '../db/schema.js';
-import { applyDocumentListFilters, isOfKind, type DocumentListFilters } from './document-list-filters.js';
+import { applyDocumentListFilters, isOfKind, TAKEN_OR_CREATED_SQL, type DocumentListFilters } from './document-list-filters.js';
 
 export const TOP_TYPES = 4;
 export const KINDS: DocumentKind[] = ['image', 'video', 'file'];
@@ -42,6 +42,18 @@ export async function summariseDocuments(filters: Omit<DocumentListFilters, 'kin
     const [row, topTypes] = await Promise.all([totals, types]);
 
     return toSummary(row, topTypes);
+}
+
+/** The first and last day the scope's photos and videos were taken (upload time without one); null when it has none. */
+export async function loadMediaDates(filters: Omit<DocumentListFilters, 'kind' | 'media'>): Promise<DocumentSummaryResponse['media_dates']> {
+    const range = db
+        .selectFrom('documents')
+        .select([sql<Date | null>`min(${TAKEN_OR_CREATED_SQL})`.as('first'), sql<Date | null>`max(${TAKEN_OR_CREATED_SQL})`.as('last')]);
+    const { first, last } = await applyDocumentListFilters(range, { ...filters, media: true }).executeTakeFirstOrThrow();
+
+    if (!first || !last) return null;
+
+    return { first: first.toISOString(), last: last.toISOString() };
 }
 
 /** One row of totalsOf's columns: `<kind>_count` and `<kind>_bytes`, as numbers or the strings the driver returns. */

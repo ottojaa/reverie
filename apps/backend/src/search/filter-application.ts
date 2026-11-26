@@ -3,6 +3,7 @@ import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kys
 import { db } from '../db/kysely';
 import type { Database } from '../db/schema';
 import { inNamedFoldersSql, outsideNamedFoldersSql, withinFolderSql } from '../services/folders/scope';
+import { isMediaSql } from '../services/document-list-filters';
 import { excludePrivateDocuments, excludeTrashed } from '../services/privacy';
 import { resolveRelativeDate } from './query-parser';
 
@@ -228,7 +229,7 @@ function applyNegations<T extends SearchQueryBase>(
  * Apply all ParsedQuery filters (plus user scoping and privacy exclusion) to a
  * documents query. Dimensions listed in `omit` are skipped entirely — positive
  * and negated filters alike. User scoping, privacy and the folder the search is
- * scoped to (`scopeFolderId`) are never omittable.
+ * scoped to (`scopeFolderId`, `scopeMedia`) are never omittable.
  * `alsoMatchIds` lets documents that matched by meaning stand in for the full-text match.
  */
 export function applySearchFilters(
@@ -245,6 +246,8 @@ export function applySearchFilters(
     query = excludeTrashed(query, 'd.');
 
     if (parsed.scopeFolderId) query = query.where(withinFolderSql('d.folder_id', userId, parsed.scopeFolderId));
+
+    if (parsed.scopeMedia) query = query.where(isMediaSql('d.mime_type'));
 
     // Full-text search
     if (!omit?.has('fullText') && parsed.fullText) {

@@ -13,7 +13,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.settings.GridLayoutMode
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.LocalDate
@@ -28,13 +27,13 @@ data class FeedLayout(
 )
 
 /**
- * A kind screen's scrolling list, shared by Photos, Videos and Files: the kind only changes which
- * rows [buildFeed] produces. [focusedId] is the document the viewer last showed; [onHeading] reports
- * the group under the top edge, for the floating date chip.
+ * A [FeedSource]'s scrolling list: the source only changes which rows [feedRows] produces. [focusedId] is
+ * the document the viewer last showed; [expanded] holds the keys of a folded list's opened groups;
+ * [onHeading] reports the day under the top edge, for the floating date chip.
  */
 @Composable
-fun KindFeed(
-    kind: DocumentKind,
+fun FeedList(
+    source: FeedSource,
     documents: List<DocumentDto>,
     hasMore: Boolean,
     listState: LazyListState,
@@ -45,28 +44,31 @@ fun KindFeed(
     onFocusConsumed: () -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
+    expanded: Set<String> = emptySet(),
     onHeading: ((FeedItem.Header?) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         val width = maxWidth.value
-        val rows = remember(kind, documents, width, layout) {
-            toRows(buildFeed(kind, documents, layout.today, layout.zone), width, layout.mode, layout.featureEvery)
+        val rows = remember(source, documents, expanded, width, layout) {
+            feedRows(source, documents, expanded, width, layout)
         }
         FeedScrollEffects(rows, listState, hasMore, onLoadMore, focusedId, onFocusConsumed, onHeading)
         LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             items(rows.size, key = { rows[it].key }, contentType = { rows[it].contentType }) { index ->
-                FeedRowView(rows[index], actions)
+                FeedRowView(rows[index], actions, layout.today, layout.zone)
             }
         }
     }
 }
 
 /**
- * The three things a kind screen's list does on scroll: ask for the next page near the end, scroll the
+ * The three things a document list does on scroll: ask for the next page near the end, scroll the
  * viewer's last document into view on return, and tell the date chip which group is at the top.
+ *
+ * @param leading how many items of the lazy list come before the first of [rows].
  */
 @Composable
-private fun FeedScrollEffects(
+internal fun FeedScrollEffects(
     rows: List<FeedRow>,
     listState: LazyListState,
     hasMore: Boolean,
@@ -74,21 +76,26 @@ private fun FeedScrollEffects(
     focusedId: String?,
     onFocusConsumed: () -> Unit,
     onHeading: ((FeedItem.Header?) -> Unit)?,
+    leading: Int = 0,
 ) {
     val loadMore by rememberUpdatedState(onLoadMore)
-    LaunchedEffect(listState, rows.size, hasMore) {
+    // Keyed on the documents too: a page that only extends a folded group adds no row, and a list that does
+    // not fill the screen must keep asking until it does.
+    val loaded = rows.sumOf { it.docIds.size }
+    LaunchedEffect(listState, leading, rows.size, loaded, hasMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
-            .collect { last -> if (isNearEnd(last, rows.size, hasMore)) loadMore() }
+            .collect { last -> if (isNearEnd(last - leading, rows.size, hasMore)) loadMore() }
     }
 
     // Scroll only when the document's row is off screen, and consume the signal so a later list
     // update (a thumbnail finishing) doesn't scroll again. A document this list hasn't loaded keeps
     // the signal until its page arrives.
-    LaunchedEffect(focusedId, rows) {
+    LaunchedEffect(focusedId, leading, rows) {
         val id = focusedId ?: return@LaunchedEffect
-        val index = rowIndexOf(rows, id)
-        if (index < 0) return@LaunchedEffect
+        val row = rowIndexOf(rows, id)
+        if (row < 0) return@LaunchedEffect
+        val index = leading + row
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
         onFocusConsumed()
     }
@@ -96,7 +103,7 @@ private fun FeedScrollEffects(
     if (onHeading == null) return
     val report by rememberUpdatedState(onHeading)
     LaunchedEffect(listState, rows) {
-        snapshotFlow { headingAt(rows, listState.firstVisibleItemIndex) }
+        snapshotFlow { headingAt(rows, listState.firstVisibleItemIndex - leading) }
             .distinctUntilChanged()
             .collect { report(it) }
     }

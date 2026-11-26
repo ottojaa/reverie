@@ -82,6 +82,9 @@ android {
         jvmTarget = "17"
     }
 
+    // Responses the backend's tests produce from its real routes; the DTO tests parse them.
+    sourceSets.getByName("test").resources.srcDir("../../../libs/shared/src/fixtures")
+
     testOptions {
         // Media3 calls android.text.TextUtils from its pure-Kotlin/Java helpers (e.g. MimeTypes);
         // let the JVM unit-test stubs return defaults instead of throwing "not mocked".

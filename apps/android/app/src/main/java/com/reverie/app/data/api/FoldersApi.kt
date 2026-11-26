@@ -14,6 +14,8 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,6 +37,14 @@ class FoldersApi @Inject constructor(
         setBody(request)
     }.decode()
 
+    /** Moves a folder into [parentId], or to the top level when it is null. */
+    suspend fun move(id: String, parentId: String?): FolderDto = client.patch("folders/$id") {
+        contentType(ContentType.Application.Json)
+        // Built by hand: the JSON settings leave out null properties, and here null is the instruction.
+        setBody(buildJsonObject { put("parent_id", parentId) })
+    }.decode()
+
+    /** Sends the folder, with everything in it, to the trash. */
     suspend fun delete(id: String) = client.delete("folders/$id").throwIfError()
 
     suspend fun reorder(request: ReorderFoldersRequest) = client.put("folders/reorder") {

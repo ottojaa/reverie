@@ -32,7 +32,8 @@ import com.reverie.app.data.local.entity.UploadTaskEntity
     // v6: adds the auto-backup ledger and retry tables (additive; see Migration5To6).
     // Other version jumps fall back to a destructive rebuild from the network (DatabaseModule).
     // v7: documents gained takenAt, the date taken the Photos and Videos tabs order by (additive; see Migration6To7).
-    version = 7,
+    // v8: folders gained lockId and per-kind counts; uploads may have no folder (see Migration7To8).
+    version = 8,
     exportSchema = false,
 )
 abstract class ReverieDatabase : RoomDatabase() {

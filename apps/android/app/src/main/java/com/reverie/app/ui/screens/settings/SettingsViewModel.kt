@@ -9,7 +9,6 @@ import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.data.settings.VideoBackground
-import com.reverie.app.domain.model.AuthState
 import com.reverie.app.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,8 +24,6 @@ class SettingsViewModel @Inject constructor(
     private val fileCacheManager: FileCacheManager,
     private val imageLoader: ImageLoader,
 ) : ViewModel() {
-
-    val authState: StateFlow<AuthState> = authRepository.authState
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings.stateIn(
         scope = viewModelScope,
@@ -73,10 +70,6 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setServerUrlOverride(url)
             authRepository.logout() // re-auth against the new server
         }
-    }
-
-    fun signOut() {
-        viewModelScope.launch { authRepository.logout() }
     }
 
     suspend fun changePassword(current: String, new: String): Result<Unit> =

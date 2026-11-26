@@ -1,133 +1,158 @@
 package com.reverie.app.ui.screens.browse
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.reverie.app.data.settings.FolderViewMode
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import java.time.LocalDate
-import java.time.ZoneId
+import androidx.compose.ui.unit.sp
+import com.reverie.app.data.api.model.FolderCoverDto
+import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.domain.folderMeta
+import com.reverie.app.ui.components.Breadcrumb
+import com.reverie.app.ui.components.FolderRow
 
-private const val GRID_COLUMNS = 3
+/** What the rows of the folders inside a folder are drawn from, and where they and the breadcrumb lead. */
+class FolderLinks(
+    val covers: Map<String, FolderCoverDto>,
+    val starredIds: Set<String>,
+    /** A folder's row was tapped. */
+    val onOpen: (folderId: String) -> Unit,
+    /** A breadcrumb step was tapped; null is the Library itself. */
+    val onOpenCrumb: (folderId: String?) -> Unit,
+    /** A long press on a folder's row. */
+    val onHold: ((FolderWithChildren) -> Unit)? = null,
+)
 
 /**
- * A folder page's body: the selected chip's documents as tiles or rows, newest first, or its skeleton or
- * empty state. Each chip keeps its own scroll position. Stateless: the screen hands it the state and what to
- * do, so the same body is drawn in a screenshot or a navigation test.
+ * A folder page's body, one list: where the folder is, its name and figures, a row per folder inside it, then
+ * its own documents by day, photos and videos before the other files. Stateless: the screen hands it the state
+ * and what to do, so the same body is drawn in a screenshot or a navigation test.
  *
- * @param viewMode null while the saved choice is being read.
+ * @param name shown as the page's title.
  */
 @Composable
 fun FolderBody(
     state: FolderState,
-    viewMode: FolderViewMode?,
+    name: String,
+    description: String?,
+    links: FolderLinks,
+    layout: FeedLayout,
     actions: RowActions,
-    today: LocalDate,
-    zone: ZoneId,
     focusedId: String?,
     onFocusConsumed: () -> Unit,
     onLoadMore: () -> Unit,
     error: String?,
     slot: ChromeSlot,
+    listState: LazyListState = rememberLazyListState(),
 ) {
-    // Ahead of the early returns, so a chip's position survives another chip's skeleton.
-    val scrollPositions = rememberSaveableStateHolder()
-    val documents = state.feed.documents
-    if (viewMode == null || isFirstLoad(documents, error)) {
-        LoadingGrid(slot.contentPadding)
-        return
-    }
-    if (documents.fetched && documents.documents.isEmpty()) {
-        val title = state.selected?.let { emptyTitle(it) } ?: "This folder is empty"
-        EmptyList(title, slot.contentPadding, slot.onUpload)
-        return
-    }
-    scrollPositions.SaveableStateProvider(state.selected?.name ?: "ALL") {
-        val gridState = rememberLazyGridState()
-        val isGrid = viewMode == FolderViewMode.GRID
-        val columns = if (isGrid) GRID_COLUMNS else 1
-        val docs = documents.documents
-        ShowArrivalsAtTop(gridState, docs.firstOrNull()?.id)
-        LoadNearEnd(gridState, columns, docs.size, documents.hasMore, onLoadMore)
-        LaunchedEffect(focusedId, docs) {
-            // The viewer's last document: scrolled to once it is loaded, and only if it is off screen.
-            val index = docs.indexOfFirst { it.id == focusedId }
-            if (index < 0) return@LaunchedEffect
-            if (gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) gridState.scrollToItem(index)
-            onFocusConsumed()
+    BoxWithConstraints(slot.modifier.fillMaxSize()) {
+        val width = maxWidth.value
+        val rows = remember(state, width, layout) { folderRows(state, width, layout) }
+        val folders = state.node?.children.orEmpty()
+        // The list starts with the title block and the folder rows.
+        FeedScrollEffects(
+            rows, listState, state.hasMore, onLoadMore, focusedId, onFocusConsumed,
+            onHeading = null, leading = 1 + folders.size,
+        )
+        LazyColumn(state = listState, contentPadding = slot.contentPadding, modifier = Modifier.fillMaxSize()) {
+            item(key = "head", contentType = "head") {
+                FolderHead(state.path.dropLast(1), name, folderPageMeta(state), description, links.onOpenCrumb)
+            }
+            folderRowItems(folders, links)
+            items(rows, key = FeedRow::key, contentType = FeedRow::contentType) { row ->
+                FeedRowView(row, actions, layout.today, layout.zone)
+            }
+            if (rows.isEmpty()) noDocuments(state, error, slot.onUpload)
         }
-        val side = if (isGrid) 20.dp else 0.dp
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            state = gridState,
-            contentPadding = PaddingValues(
-                start = side,
-                end = side,
-                top = if (isGrid) 8.dp else 0.dp,
-                bottom = slot.contentPadding.calculateBottomPadding(),
-            ),
-            verticalArrangement = Arrangement.spacedBy(if (isGrid) 12.dp else 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = slot.modifier.fillMaxSize(),
-        ) {
-            items(docs, key = { it.id }, contentType = { isGrid }) { doc ->
-                if (isGrid) {
-                    FolderTile(doc, actions)
-                } else {
-                    FolderDocumentRow(doc, folderRowMeta(doc, state.selected, today, zone), actions)
-                }
+    }
+}
+
+@Composable
+private fun FolderHead(
+    ancestors: List<FolderWithChildren>,
+    name: String,
+    meta: String?,
+    description: String?,
+    onOpenCrumb: (String?) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
+        Breadcrumb(ancestors, onOpenCrumb, style = MaterialTheme.typography.bodySmall, endsAtCurrent = false)
+        Text(
+            name,
+            fontSize = 28.sp,
+            lineHeight = 34.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() },
+        )
+        if (meta != null) HeadLine(meta)
+        if (!description.isNullOrBlank()) HeadLine(description)
+    }
+}
+
+@Composable
+private fun HeadLine(text: String) {
+    Text(
+        text,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+private fun LazyListScope.folderRowItems(folders: List<FolderWithChildren>, links: FolderLinks) {
+    items(folders, key = { "folder:" + it.id }, contentType = { "folder" }) { folder ->
+        FolderRow(
+            folder = folder,
+            cover = links.covers[folder.id],
+            meta = folderMeta(folder),
+            onClick = { links.onOpen(folder.id) },
+            onLongClick = links.onHold?.let { hold -> { hold(folder) } },
+            starred = folder.id in links.starredIds,
+        )
+    }
+}
+
+/** In place of the document rows: a spinner while they are on their way, or that the folder holds nothing. */
+private fun LazyListScope.noDocuments(state: FolderState, error: String?, onUpload: () -> Unit) {
+    val files = state.files
+    val isLoading = isFirstLoad(state.media, error) || files == null || isFirstLoad(files, error)
+    if (isLoading) {
+        item(key = "loading") {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
         }
+        return
     }
-}
-
-/**
- * A lazy grid stays on the item it was showing, so a document added above the first one (an upload) would
- * arrive off screen. A grid that is at its top stays at its top instead.
- */
-@Composable
-private fun ShowArrivalsAtTop(gridState: LazyGridState, firstId: String?) {
-    remember(firstId) {
-        Snapshot.withoutReadObservation {
-            val atTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
-            if (atTop) gridState.requestScrollToItem(0)
-        }
-    }
-}
-
-/**
- * Asks for the next page when the end is near. Re-checked after every page (keyed on how much is loaded), so
- * a short list that doesn't fill the screen keeps asking until it does.
- */
-@Composable
-private fun LoadNearEnd(gridState: LazyGridState, columns: Int, loadedCount: Int, hasMore: Boolean, onLoadMore: () -> Unit) {
-    val loadMore by rememberUpdatedState(onLoadMore)
-    LaunchedEffect(gridState, columns, loadedCount, hasMore) {
-        if (!hasMore) return@LaunchedEffect
-        snapshotFlow {
-            val info = gridState.layoutInfo
-            // Until the grid has measured everything loaded, its layout (empty, or a page behind) reads as the end.
-            if (info.totalItemsCount != loadedCount) return@snapshotFlow false
-            val lastRow = (info.visibleItemsInfo.lastOrNull()?.index ?: -1) / columns
-            isNearEnd(lastRow, (info.totalItemsCount + columns - 1) / columns, hasMore)
-        }
-            .distinctUntilChanged()
-            .filter { it }
-            .collect { loadMore() }
+    val hasFolders = !state.node?.children.isNullOrEmpty()
+    // A read that failed leaves it unknown whether the folder is empty.
+    if (hasFolders || !state.media.fetched || files?.fetched != true) return
+    item(key = "empty") {
+        Box(Modifier.fillParentMaxHeight(0.7f)) { EmptyList("This folder is empty", PaddingValues(), onUpload) }
     }
 }

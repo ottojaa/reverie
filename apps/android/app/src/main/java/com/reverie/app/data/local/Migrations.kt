@@ -107,3 +107,41 @@ object Migration6To7 : Migration(6, 7) {
         db.execSQL("ALTER TABLE `documents` ADD COLUMN `takenAt` TEXT")
     }
 }
+
+/**
+ * v7 -> v8: folders nest to any depth and documents may sit at the top level.
+ *
+ * `folders` is only a copy of the server's tree, so it is dropped and made again empty: a row carried
+ * over would have no lock id and read as public. The next tree refresh fills it. `upload_tasks` is
+ * rebuilt so an upload can have no folder; its rows are kept, because queued uploads point at them.
+ */
+object Migration7To8 : Migration(7, 8) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        replaceFolders(db)
+        allowUploadsWithoutFolder(db)
+    }
+
+    private fun replaceFolders(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE `folders`")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `folders` (`id` TEXT NOT NULL, `parentId` TEXT, `name` TEXT NOT NULL, " +
+                "`path` TEXT NOT NULL, `description` TEXT, `emoji` TEXT, `sortOrder` INTEGER NOT NULL, " +
+                "`isPrivate` INTEGER NOT NULL, `lockId` TEXT, `locked` INTEGER NOT NULL, `imageCount` INTEGER NOT NULL, " +
+                "`videoCount` INTEGER NOT NULL, `fileCount` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, " +
+                "`updatedAt` TEXT NOT NULL, `cachedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_folders_parentId` ON `folders` (`parentId`)")
+    }
+
+    private fun allowUploadsWithoutFolder(db: SupportSQLiteDatabase) {
+        val columns = "sessionId, folderId, conflictStrategy, status, createdAt"
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `upload_tasks_v8` (`sessionId` TEXT NOT NULL, `folderId` TEXT, " +
+                "`conflictStrategy` TEXT, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`sessionId`))",
+        )
+        db.execSQL("INSERT INTO upload_tasks_v8 ($columns) SELECT $columns FROM upload_tasks")
+        db.execSQL("DROP TABLE upload_tasks")
+        db.execSQL("ALTER TABLE upload_tasks_v8 RENAME TO upload_tasks")
+    }
+}

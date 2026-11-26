@@ -2,6 +2,7 @@ package com.reverie.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.reverie.app.data.processing.MissedThumbnails
 import com.reverie.app.data.repository.AuthRepository
 import com.reverie.app.data.settings.AppSettings
 import com.reverie.app.data.settings.SettingsRepository
@@ -18,6 +19,7 @@ import javax.inject.Inject
 class AppViewModel @Inject constructor(
     authRepository: AuthRepository,
     settingsRepository: SettingsRepository,
+    val missedThumbnails: MissedThumbnails,
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = authRepository.authState

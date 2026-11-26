@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.reverie.app.ui.theme.ReverieTheme
 
 /**
  * A tonal chip showing how many documents are still processing (thumbnail, text recognition, AI
@@ -39,7 +39,7 @@ fun ProcessingStatusBadge(
     onClick: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(visible = count > 0, modifier = modifier) {
-        val extended = ReverieTheme.extendedColors
+        val colors = MaterialTheme.colorScheme
         val transition = rememberInfiniteTransition(label = "processing")
         val angle by transition.animateFloat(
             initialValue = 0f,
@@ -58,21 +58,21 @@ fun ProcessingStatusBadge(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = tappable
-                .background(extended.infoContainer, RoundedCornerShape(50))
+                .background(colors.secondaryContainer, RoundedCornerShape(50))
                 .padding(horizontal = 10.dp, vertical = 5.dp),
         ) {
             Icon(
                 Icons.Outlined.AutoAwesome,
                 contentDescription = null,
-                tint = extended.onInfoContainer,
+                tint = colors.onSecondaryContainer,
                 modifier = Modifier
                     .size(14.dp)
                     .rotate(angle),
             )
             Text(
                 text = " Processing $count",
-                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                color = extended.onInfoContainer,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSecondaryContainer,
             )
         }
     }

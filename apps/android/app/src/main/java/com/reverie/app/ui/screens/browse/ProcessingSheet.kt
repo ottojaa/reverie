@@ -44,7 +44,7 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.EmptyState
-import com.reverie.app.ui.components.fileTypeVisual
+import com.reverie.app.ui.components.fileTypeIcon
 
 /** Rows this close to the end of the list trigger loading the next page. */
 private const val LOAD_MORE_THRESHOLD = 5
@@ -193,15 +193,14 @@ private fun RowThumbnail(document: DocumentDto) {
         )
         return
     }
-    // No picture yet: the file-type icon on a faint wash of its colour, like the grid's tiles.
-    val visual = fileTypeVisual(document.mime_type, document.original_filename)
-    Box(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .background(visual.tint.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(visual.icon, contentDescription = null, tint = visual.tint, modifier = Modifier.size(26.dp))
+    // No picture yet: the file type's icon, like the grid's tiles.
+    Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+        Icon(
+            fileTypeIcon(document.mime_type, document.original_filename),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(26.dp),
+        )
     }
 }
 

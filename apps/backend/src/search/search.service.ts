@@ -40,7 +40,7 @@ export interface SearchServiceOptions {
 export async function search(query: SearchQuery, options: SearchServiceOptions): Promise<SearchResponse> {
     const startTime = performance.now();
 
-    const parsed = toScopedQuery(query.q, query.folder_id);
+    const parsed = toScopedQuery(query.q, { folderId: query.folder_id, media: query.media });
 
     // Validate the parsed query
     const errors = validateQuery(parsed);
@@ -81,11 +81,16 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
     };
 }
 
-/** The query string parsed (all its filtering is in the q DSL), narrowed to a folder when the request names one. */
-function toScopedQuery(q: string, folderId: string | undefined): ParsedQuery {
-    const parsed = parseQuery(q);
+/** What a request narrows a search to, on top of the filters in the query string. */
+interface SearchScope {
+    folderId?: string;
+    /** Photos and videos only. */
+    media?: boolean;
+}
 
-    return folderId ? { ...parsed, scopeFolderId: folderId } : parsed;
+/** The query string parsed (all its filtering is in the q DSL), narrowed to the scope the request names. */
+function toScopedQuery(q: string, { folderId, media }: SearchScope): ParsedQuery {
+    return { ...parseQuery(q), ...(folderId && { scopeFolderId: folderId }), ...(media && { scopeMedia: true }) };
 }
 
 /**
@@ -102,7 +107,7 @@ function shouldSearchFolders(parsed: ParsedQuery, query: SearchQuery): boolean {
 
     if (parsed.searchScope === 'content' || parsed.searchScope === 'summary') return false;
 
-    if (parsed.folders?.length || parsed.scopeFolderId) return false;
+    if (parsed.folders?.length || parsed.scopeFolderId || parsed.scopeMedia) return false;
 
     const hasDocumentFilters = Boolean(
         parsed.types?.length ||
@@ -294,8 +299,8 @@ export async function countDocuments(parsed: ParsedQuery, userId: string, privat
 /**
  * Get facets only (without full search results)
  */
-export async function getFacetsOnly(query: string, userId: string, folderId?: string): Promise<SearchFacets> {
-    const parsed = toScopedQuery(query, folderId);
+export async function getFacetsOnly(query: string, userId: string, scope: SearchScope = {}): Promise<SearchFacets> {
+    const parsed = toScopedQuery(query, scope);
     const privateFolderIds = await getPrivateFolderIds(userId);
     const semantic = await getSemanticSearch().load(parsed, { userId, privateFolderIds });
 

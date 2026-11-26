@@ -1,7 +1,7 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.repository.PageResult
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import kotlinx.coroutines.CoroutineDispatcher
@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
+/** Documents per page of every Browse list. */
+const val BROWSE_PAGE_SIZE = 30
+
 /** One feed's rows, its selection and whether a pull-to-refresh is running. */
 data class FeedState(
     val documents: FeedDocuments = FeedDocuments(),
@@ -34,12 +37,11 @@ private data class Control(
 )
 
 /**
- * One list of Browse (the dashboard's Recently added, a picture card's preview, or a kind screen)
- * over the cache observer [cache]. It pages the server for [kind] (null is Recently added: every kind), starting with page one as
- * soon as it is made, and shows the cached rows that lie above how far it has read. Plain Kotlin (no
- * Android types) so it can be tested on the JVM.
+ * One list of documents over the cache observer [cache]. It pages the server for the kinds of [filter],
+ * starting with page one as soon as it is made, and shows the cached rows that lie above how far it has
+ * read. Plain Kotlin (no Android types) so it can be tested on the JVM.
  *
- * @param fetchPage fetches one page of [kind] from [offset] into the cache the [cache] flow reads.
+ * @param fetchPage fetches one page of [filter] from [offset] into the cache the [cache] flow reads.
  * @param reconcile told, with the ids the server returned, when the feed has read its whole list from the
  *   server in one steady read: the caller drops the cached rows of this feed's kind that are not among them.
  * @param onFirstPageFailed told when the first page, or a refresh of it, fails; later pages retry silently.
@@ -47,7 +49,7 @@ private data class Control(
  */
 class BrowseFeedModel(
     private val scope: CoroutineScope,
-    val kind: DocumentKind?,
+    val filter: DocumentFilter,
     cache: Flow<List<DocumentDto>>,
     private val fetchPage: suspend (offset: Int) -> PageResult,
     private val onFirstPageFailed: (Throwable) -> Unit = {},
@@ -60,7 +62,7 @@ class BrowseFeedModel(
 
     // Selecting rows must not re-sort the library, so the rows depend only on the cache and the cursor.
     private val derived: Flow<FeedDocuments> =
-        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> deriveFeed(docs, kind, cursor) }
+        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> deriveFeed(docs, filter, cursor) }
             .flowOn(computation)
 
     val state: StateFlow<FeedState> = combine(derived, control) { documents, c ->
@@ -68,6 +70,9 @@ class BrowseFeedModel(
     }.stateIn(scope, sharing, FeedState())
 
     val selectedIds: Set<String> get() = control.value.selectedIds
+
+    /** The selected documents, as the feed holds them now. */
+    val selectedDocuments: List<DocumentDto> get() = state.value.documents.documents.filter { it.id in selectedIds }
 
     init {
         fetch(offset = 0, refreshing = false)
@@ -105,9 +110,13 @@ class BrowseFeedModel(
     /**
      * The viewer's swipe order: this feed's loaded documents and nothing else. Its ids follow the feed as
      * pages arrive, and reaching the end asks this same feed for its next page.
+     *
+     * @param order the ids in the order the screen shows them, where that differs from the feed's own.
      */
-    fun prepareSequence(): DocumentSequence {
-        fun idsOf(state: FeedState) = state.documents.documents.map(DocumentDto::id)
+    fun prepareSequence(
+        order: (List<DocumentDto>) -> List<String> = { documents -> documents.map { it.id } },
+    ): DocumentSequence {
+        fun idsOf(state: FeedState) = order(state.documents.documents)
         return DocumentSequence(
             initialIds = idsOf(state.value),
             ids = state.map(::idsOf).distinctUntilChanged(),
@@ -122,7 +131,7 @@ class BrowseFeedModel(
         scope.launch {
             try {
                 val page = fetchPage(offset)
-                control.update { it.copy(cursor = it.cursor.after(kind, offset, page), isRefreshing = false) }
+                control.update { it.copy(cursor = it.cursor.after(filter, offset, page), isRefreshing = false) }
                 // Page one starts the reads over; a later page adds to them (there are none before page one).
                 val read = if (offset == 0) FeedReads.first(page) else reads?.plus(page)
                 reads = read
@@ -155,9 +164,22 @@ class BrowseFeedModel(
     }
 }
 
+/** Runs [read]; a failure (offline, or the server is down) is dropped, so whatever is shown stays. */
+internal fun CoroutineScope.readQuietly(read: suspend () -> Unit) {
+    launch {
+        try {
+            read()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Nothing to report: see above.
+        }
+    }
+}
+
 /** The cursor once [page] (read from [offset]) has arrived. */
-private fun FeedCursor.after(kind: DocumentKind?, offset: Int, page: PageResult): FeedCursor {
-    val reached = page.last?.let { sortKeyOf(it, kind) }
+private fun FeedCursor.after(filter: DocumentFilter, offset: Int, page: PageResult): FeedCursor {
+    val reached = page.last?.let { sortKeyOf(it, filter) }
     return copy(
         // Page one starts the offset over: rows may have been deleted since, so the old offset could
         // step over rows that moved up. The frontier keeps its minimum, so nothing already shown

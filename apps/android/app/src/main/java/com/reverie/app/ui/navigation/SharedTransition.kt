@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -32,16 +33,30 @@ val LocalNavAnimatedContentScope = staticCompositionLocalOf<AnimatedVisibilitySc
 
 /**
  * The back-stack entry id of the screen a document is opened from: a list screen's own, and in the viewer
- * that of the list that opened it, or a value no screen has when it dives from no list. Provided by each
- * nav destination alongside its AnimatedContentScope.
+ * that of the list that opened it, or a value no screen has when no list did. Provided by each nav
+ * destination alongside its AnimatedContentScope. It decides which list a document dives out of and which
+ * one scrolls to the last document shown when the viewer closes.
  */
 val LocalDiveOrigin = staticCompositionLocalOf<String?> { null }
 
 /**
- * The origin is part of the key because the same document is often on two list screens (the dashboard and a
+ * The origin is part of the key because the same document is often on two list screens (the Library and a
  * kind screen): keyed by the document alone, its row would morph from one to the other as they slide.
  */
 fun documentBoundsKey(originId: String, documentId: String): String = "document-$originId-$documentId"
+
+/** The origin of one list among several on a screen. */
+fun sectionOrigin(originId: String, section: String): String = "$originId~$section"
+
+/**
+ * Gives [content] an origin of its own within this screen. A screen that can show one document in two lists
+ * needs it: with one key between them, both would dive and either could be the one flying back.
+ */
+@Composable
+fun DiveSection(section: String, content: @Composable () -> Unit) {
+    val origin = LocalDiveOrigin.current?.let { sectionOrigin(it, section) }
+    CompositionLocalProvider(LocalDiveOrigin provides origin, content = content)
+}
 
 // Portion of the dive over which mismatched contents crossfade (see documentSharedBounds).
 private const val DIVE_CROSSFADE_FRACTION = 0.4f

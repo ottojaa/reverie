@@ -37,7 +37,7 @@ private const val CHIP_SURFACE_ALPHA = 0.78f
  * What stays on screen once the header has slid away: a light fade behind the status bar, the month or
  * day of the list's top edge in a rounded chip at the left, and the Processing pill as a matching chip
  * at the right. No solid band. [visibility] is read at draw time (0 = header fully shown, 1 = fully
- * hidden), so scrolling doesn't recompose it. The dashboard passes no [heading]: it shows only the pill.
+ * hidden), so scrolling doesn't recompose it. The Library passes no [heading]: it shows only the pill.
  */
 @Composable
 fun ScrollChips(

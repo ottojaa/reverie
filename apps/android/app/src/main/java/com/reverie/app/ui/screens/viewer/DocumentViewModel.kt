@@ -60,6 +60,7 @@ class DocumentViewModel @Inject constructor(
     val favourites = FavouriteController(favouriteDeps, viewModelScope)
 
     private val initialId: String = checkNotNull(savedStateHandle["id"])
+    private val originId: String = checkNotNull(savedStateHandle["from"])
     private val fallback = listOf(initialId)
     private val sequence = sequenceHolder.current
 
@@ -117,7 +118,7 @@ class DocumentViewModel @Inject constructor(
     fun observeDocument(id: String): Flow<DocumentDto?> = documentRepository.observeDocument(id)
 
     /** Signed URL for [id] — served from the repository's app-scoped cache (warmed on tap) or fetched. */
-    suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(::absolute)
+    suspend fun fileUrl(id: String): String? = documentRepository.fileUrl(id)?.let(serverUrlProvider::toAbsolute)
 
     /** The original's and the HLS renditions' signed URLs for [id], made absolute; both from one fetch. */
     suspend fun signedUrls(id: String): SignedUrls? = documentRepository.signedUrls(id)?.let(::absoluteUrls)
@@ -125,7 +126,7 @@ class DocumentViewModel @Inject constructor(
     /** Fresh URLs after a 403/410 on the stream: a signature expired while the video played or sat paused. */
     suspend fun refreshSignedUrls(id: String): SignedUrls? = documentRepository.refreshSignedUrls(id)?.let(::absoluteUrls)
 
-    /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin grid. */
+    /** The pager settled on [id]: move the realtime subscription, mark accessed, sync the origin list. */
     fun onPageSettled(id: String) {
         if (id == currentId) return
         currentId = id
@@ -134,7 +135,7 @@ class DocumentViewModel @Inject constructor(
         currentSub?.close()
         viewModelScope.launch { currentSub = realtimeManager.subscribeDocument(id) }
         viewModelScope.launch { documentRepository.touchAccessed(id) }
-        sequenceHolder.setFocused(id)
+        sequenceHolder.setFocus(ViewerFocus(originId, id))
         // Pull the detail record into Room so observers get llm_summary/llm_metadata (insights) and
         // photo_metadata (location map) — the list endpoint serializes all three as null. This used to
         // happen as a side effect of fileUrl()'s fetch, but list-page URL warming now lets fileUrl()
@@ -204,8 +205,5 @@ class DocumentViewModel @Inject constructor(
     }
 
     private fun absoluteUrls(urls: SignedUrls): SignedUrls =
-        SignedUrls(absolute(urls.fileUrl), urls.hlsUrl?.let(::absolute))
-
-    private fun absolute(url: String): String =
-        if (url.startsWith("http")) url else serverUrlProvider.current().removeSuffix("/") + url
+        SignedUrls(serverUrlProvider.toAbsolute(urls.fileUrl), urls.hlsUrl?.let(serverUrlProvider::toAbsolute))
 }

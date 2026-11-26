@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -41,16 +44,18 @@ import com.reverie.app.data.upload.MediaAsset
 import java.io.File
 import java.util.UUID
 
-/** FAB action sheet: Scan / Take photo / Photos & videos / Files, each wiring the right picker. */
+/** The "add" sheet: Scan / Take photo / Photos & videos / Files, each wiring the right picker, and a new folder where one can be made. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UploadActionSheet(
     onFilesPicked: (List<Uri>) -> Unit,
     loadMedia: suspend () -> List<MediaAsset>,
     onDismiss: () -> Unit,
+    onNewFolder: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
+    // Half open, a short screen would hide the last rows.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showMediaPicker by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -95,6 +100,7 @@ fun UploadActionSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 16.dp),
         ) {
             Text(
@@ -111,6 +117,9 @@ fun UploadActionSheet(
             }
             ActionRow(Icons.Outlined.Folder, "Files") {
                 documentsLauncher.launch(arrayOf("application/pdf", "image/*", "video/*", "audio/*", "text/*", "application/*"))
+            }
+            if (onNewFolder != null) {
+                ActionRow(Icons.Outlined.CreateNewFolder, "New folder") { onNewFolder(); onDismiss() }
             }
         }
     }

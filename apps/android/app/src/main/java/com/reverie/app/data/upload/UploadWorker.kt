@@ -11,6 +11,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.reverie.app.R
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.local.dao.UploadDao
@@ -90,9 +91,9 @@ class UploadWorker @AssistedInject constructor(
         stager.cleanup(sessionId)
 
         // Pull the newly-uploaded documents into the Room cache so the browse grid (both the folder
-        // and the all-documents view) and the collection counts update without a manual refresh.
+        // and the whole-library lists) and the folder counts update without a manual refresh.
         // Swallowed so a refresh hiccup can never flip a successful upload to a retry/failure.
-        runCatching { documentRepository.refresh(task.folderId, limit = 30, offset = 0) }
+        runCatching { documentRepository.refresh(DocumentScope.of(task.folderId), limit = 30, offset = 0) }
         runCatching { folderRepository.refresh() }
         // The server has started processing what was just uploaded: count it and listen for it.
         processingTracker.refresh()

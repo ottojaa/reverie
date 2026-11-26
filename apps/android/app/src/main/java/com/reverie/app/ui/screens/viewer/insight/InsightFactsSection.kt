@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.ui.components.fileTypeVisual
+import com.reverie.app.ui.components.fileTypeIcon
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatDayDate
@@ -79,8 +79,7 @@ private fun FactRows(document: DocumentDto) {
         FactRow(Icons.Outlined.Videocam, subtle, primary, secondary)
     }
 
-    val visual = fileTypeVisual(document.mime_type, document.original_filename)
-    FactRow(visual.icon, visual.tint, fileTitle(document), fileSubtitle(document))
+    FactRow(fileTypeIcon(document.mime_type, document.original_filename), subtle, fileTitle(document), fileSubtitle(document))
 
     FactRow(Icons.Outlined.CloudUpload, subtle, formatDayDate(document.created_at), uploadedSubtitle(document))
 }

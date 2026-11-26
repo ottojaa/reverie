@@ -4,12 +4,11 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteLocationDto
 import com.reverie.app.data.api.model.FavouriteType
-import com.reverie.app.data.api.model.FolderType
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.repository.FavouritesState
-import com.reverie.app.ui.screens.collections.CollectionsFixtures
+import com.reverie.app.ui.screens.destination.node
 
-/** The favourites on the design boards: two folders, files, a collection and a private item. */
+/** Some of each favourite: folders at the top and further down, a photo, a video, files and a private item. */
 internal object FavouriteFixtures {
     private const val STAMP = "2026-11-01T00:00:00.000Z"
     const val HASH = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
@@ -27,29 +26,28 @@ internal object FavouriteFixtures {
         FavouriteType.DOCUMENT, document.id, STAMP, isPrivate = false, location = path(*location), document = document,
     )
 
-    fun folder(id: String, name: String, cover: String, vararg location: String) = FavouriteDto(
+    /** A folder as the favourites answer carries it: without what it holds, which only the tree says. */
+    fun folder(id: String, name: String, vararg location: String) = FavouriteDto(
         FavouriteType.FOLDER, id, STAMP, isPrivate = false, location = path(*location),
-        folder = CollectionsFixtures.node(id, name).copy(cover = CollectionsFixtures.covers.getValue(cover)),
-    )
-
-    fun collection(id: String, name: String, emoji: String) = FavouriteDto(
-        FavouriteType.FOLDER, id, STAMP, isPrivate = false, location = emptyList(),
-        folder = CollectionsFixtures.node(id, name, FolderType.COLLECTION, emoji = emoji),
+        folder = node(id).copy(name = name),
     )
 
     fun private(id: String, locked: Boolean, type: FavouriteType = FavouriteType.DOCUMENT) = FavouriteDto(
         type, id, STAMP, isPrivate = true, locked = locked, lockId = "lock-1",
     )
 
-    val portugal = folder("f-portugal", "Portugal - 2025", "f-iceland", "Photos")
+    val portugal = folder("f-portugal", "Portugal - 2025", "Photos")
     val invoice = file(document("d-invoice", "invoice-march.pdf", "application/pdf", 219_000), "Other", "Misc")
-    val builds = folder("f-builds", "Builds", "f-apk", "App Releases")
+    val builds = folder("f-builds", "Builds", "App Releases")
     val sunset = file(document("d-sunset", "sunset.jpg", "image/jpeg", 3_250_000, HASH), "Photos", "Portugal - 2025")
-    val code = collection("c-code", "Code", "code")
+    val code = folder("f-code", "Code")
+    val clip = file(
+        document("d-clip", "tram-28.mp4", "video/mp4", 48_000_000, HASH).copy(duration_seconds = 42.0), "Photos",
+    )
     val notes = file(document("d-notes", "notes.md", "text/markdown", 8_200))
     val secret = private("d-secret", locked = true)
 
-    val all = listOf(portugal, invoice, builds, sunset, code, notes, secret)
+    val all = listOf(portugal, invoice, builds, sunset, code, clip, notes, secret)
 
     fun state(vararg items: FavouriteDto) = FavouritesState(items = items.toList())
 

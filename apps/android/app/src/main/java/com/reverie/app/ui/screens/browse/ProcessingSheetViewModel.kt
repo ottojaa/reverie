@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.processing.ProcessingTracker
 import com.reverie.app.data.repository.DocumentRepository
@@ -68,7 +69,7 @@ class ProcessingSheetViewModel @Inject constructor(
      * finishes (its cached row is refreshed by the tracker) leaves the list on its own, in place.
      */
     val state: StateFlow<ProcessingSheetState> = combine(
-        documentRepository.observeDocuments(null),
+        documentRepository.observeDocuments(DocumentScope.All),
         paged,
         tracker.count,
     ) { docs, page, total ->
