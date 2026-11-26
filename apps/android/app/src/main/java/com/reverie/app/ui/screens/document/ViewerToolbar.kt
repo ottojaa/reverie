@@ -146,7 +146,7 @@ fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> 
 
 private fun fileTypeLabel(mime: String): String = when {
     mime == "application/pdf" -> "PDF document"
-    mime.startsWith("image/") -> "Image"
+    mime.startsWith("image/") -> "Photo"
     mime.startsWith("video/") -> "Video"
     mime.startsWith("text/") || mime == "application/json" -> "Text file"
     else -> "File"

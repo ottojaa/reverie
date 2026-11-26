@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,11 +13,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
-import com.android.resources.NightMode
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.settings.GridLayoutMode
-import com.reverie.app.ui.theme.ReverieTheme
+import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
 import java.time.Instant
@@ -32,7 +29,7 @@ import java.time.ZoneOffset
  */
 class BrowseScreenshotTest {
     @get:Rule
-    val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5.copy(nightMode = NightMode.NIGHT))
+    val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5)
 
     private val today = LocalDate.of(2026, 11, 23)
     private val zone = ZoneOffset.UTC
@@ -93,26 +90,22 @@ class BrowseScreenshotTest {
                 focusedId = null, onFocusConsumed = {}, onLoadMore = {},
             )
         }
-        ReverieTheme {
-            Surface(color = MaterialTheme.colorScheme.background) {
-                if (scrolledTo != null) {
-                    Box(Modifier.fillMaxSize()) {
-                        body()
-                        ScrollChips(
-                            heading = headingNow(source, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
-                            visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    }
-                    return@Surface
-                }
-                Column(Modifier.fillMaxSize()) {
-                    BrowseHeader(
-                        title = BrowseTitle(source.title, subtitle), processingCount = 2, onProcessingClick = {},
-                        onBack = {},
-                    )
-                    Box(Modifier.weight(1f)) { body() }
-                }
+        if (scrolledTo != null) {
+            Box(Modifier.fillMaxSize()) {
+                body()
+                ScrollChips(
+                    heading = headingNow(source, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
+                    visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
+                )
             }
+            return
+        }
+        Column(Modifier.fillMaxSize()) {
+            BrowseHeader(
+                title = BrowseTitle(source.title, subtitle), processingCount = 2, onProcessingClick = {},
+                onBack = {},
+            )
+            Box(Modifier.weight(1f)) { body() }
         }
     }
 
@@ -122,27 +115,23 @@ class BrowseScreenshotTest {
         val headerPx = with(LocalDensity.current) { headerHeight.roundToPx() }
         val offset = -headerPx / 2f
         val listState = rememberLazyListState()
-        ReverieTheme {
-            Surface(color = MaterialTheme.colorScheme.background) {
-                Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().belowHeader(headerPx = { headerPx }, heightOffset = { offset })) {
-                        FeedList(
-                            source = FeedSource.PHOTOS, documents = photoLibrary, hasMore = false, listState = listState,
-                            contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
-                            focusedId = null, onFocusConsumed = {}, onLoadMore = {},
-                        )
-                    }
-                    ScrollChips(
-                        heading = headingNow(FeedSource.PHOTOS, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
-                        visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
-                    )
-                    BrowseHeader(
-                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty()),
-                        processingCount = 2, onProcessingClick = {}, onBack = {},
-                        modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
-                    )
-                }
+        Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().belowHeader(headerPx = { headerPx }, heightOffset = { offset })) {
+                FeedList(
+                    source = FeedSource.PHOTOS, documents = photoLibrary, hasMore = false, listState = listState,
+                    contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
+                    focusedId = null, onFocusConsumed = {}, onLoadMore = {},
+                )
             }
+            ScrollChips(
+                heading = headingNow(FeedSource.PHOTOS, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
+                visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
+            )
+            BrowseHeader(
+                title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty()),
+                processingCount = 2, onProcessingClick = {}, onBack = {},
+                modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
+            )
         }
     }
 
@@ -150,17 +139,17 @@ class BrowseScreenshotTest {
     private fun headingNow(source: FeedSource, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
         headingAt(feedRows(source, documents, emptySet(), 390f, layout), index)
 
-    @Test fun kindPhotos() = paparazzi.snapshot { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary) }
+    @Test fun kindPhotos() = paparazzi.snapshotThemes("kindPhotos") { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary) }
 
-    @Test fun kindVideos() = paparazzi.snapshot { ListScreen(FeedSource.VIDEOS, "19 videos", videoLibrary) }
+    @Test fun kindVideos() = paparazzi.snapshotThemes("kindVideos") { ListScreen(FeedSource.VIDEOS, "19 videos", videoLibrary) }
 
-    @Test fun kindFiles() = paparazzi.snapshot { ListScreen(FeedSource.FILES, "191 files", fileLibrary) }
+    @Test fun kindFiles() = paparazzi.snapshotThemes("kindFiles") { ListScreen(FeedSource.FILES, "191 files", fileLibrary) }
 
-    @Test fun kindPhotosScrolled() = paparazzi.snapshot { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary, scrolledTo = 3) }
+    @Test fun kindPhotosScrolled() = paparazzi.snapshotThemes("kindPhotosScrolled") { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary, scrolledTo = 3) }
 
-    @Test fun unfiledList() = paparazzi.snapshot { ListScreen(FeedSource.UNFILED, "4 files", fileLibrary) }
+    @Test fun unfiledList() = paparazzi.snapshotThemes("unfiledList") { ListScreen(FeedSource.UNFILED, "4 files", fileLibrary) }
 
-    @Test fun recentList() = paparazzi.snapshot { ListScreen(FeedSource.RECENT, "", newestFirst) }
+    @Test fun recentList() = paparazzi.snapshotThemes("recentList") { ListScreen(FeedSource.RECENT, "", newestFirst) }
 
-    @Test fun headerHalfHidden() = paparazzi.snapshot { HalfHiddenScreen() }
+    @Test fun headerHalfHidden() = paparazzi.snapshotThemes("headerHalfHidden") { HalfHiddenScreen() }
 }

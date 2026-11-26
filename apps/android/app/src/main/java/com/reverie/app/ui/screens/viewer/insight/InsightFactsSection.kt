@@ -151,7 +151,7 @@ private fun isMeaningfullyModified(created: String, updated: String): Boolean =
     }.getOrDefault(false)
 
 private fun mimeBucketLabel(mime: String): String = when {
-    mime.startsWith("image/") -> "Image"
+    mime.startsWith("image/") -> "Photo"
     mime.startsWith("video/") -> "Video"
     mime.startsWith("audio/") -> "Audio"
     mime.startsWith("text/") -> "Text"

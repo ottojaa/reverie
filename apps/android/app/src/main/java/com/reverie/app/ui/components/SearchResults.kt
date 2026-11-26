@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentSearchResult
@@ -36,10 +37,11 @@ fun SearchResultRow(
             .fillMaxWidth()
             .selectedBackground(selected)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        SelectablePicture(selected, 56.dp) {
+        SelectablePicture(selected, 52.dp) {
             DocumentThumbnail(
                 documentId = hit.document_id,
                 mimeType = hit.mime_type,
@@ -47,16 +49,17 @@ fun SearchResultRow(
                 blurhash = hit.blurhash,
                 hasThumbnail = !hit.blurhash.isNullOrBlank(),
                 size = ThumbnailSize.SM,
-                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
+                modifier = Modifier.size(52.dp).clip(MaterialTheme.shapes.medium),
             )
         }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(hit.display_name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f)) {
+            Text(
+                hit.display_name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 text = listOfNotNull(
                     hit.folder_path?.trim('/')?.takeIf { it.isNotBlank() },
