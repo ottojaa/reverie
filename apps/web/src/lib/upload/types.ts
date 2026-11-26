@@ -58,10 +58,8 @@ export interface UploadState {
     session: UploadSession | null;
     /** Whether an upload is in progress */
     isUploading: boolean;
-    /** Bytes uploaded so far (XHR progress) – for phase indicator and smooth 0–50% */
-    uploadBytesLoaded: number;
-    /** Total bytes to upload (XHR total) */
-    uploadBytesTotal: number;
+    /** The files of the latest batch to be sent: what the byte progress is counted over */
+    batchFileIds: string[];
 }
 
 /**

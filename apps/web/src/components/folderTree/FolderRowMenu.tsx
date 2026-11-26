@@ -1,24 +1,18 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MenuItems, type MenuEntry } from '@/components/ui/MenuItems';
 import { isInheritedPrivate } from '@/lib/folders/privacy.js';
 import { cn } from '@/lib/utils';
 import type { FolderWithChildren } from '@reverie/shared';
 import { FolderPlus, Lock, LockOpen, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { Fragment, type ComponentProps, type ComponentType, type ReactNode } from 'react';
+import { type ComponentProps, type ReactNode } from 'react';
 
 export interface FolderRowActions {
     onNewFolder: (parentId: string) => void;
     onEdit: (folder: FolderWithChildren) => void;
     onTogglePrivate: (folder: FolderWithChildren) => void;
     onDelete: (folder: FolderWithChildren) => void;
-}
-
-interface MenuEntry {
-    label: string;
-    icon: typeof Pencil;
-    onSelect?: () => void;
-    isDestructive?: boolean;
 }
 
 function toPrivateEntry(folder: FolderWithChildren, actions: FolderRowActions): MenuEntry {
@@ -40,24 +34,6 @@ function toMenuEntries(folder: FolderWithChildren, actions: FolderRowActions): M
         toPrivateEntry(folder, actions),
         { label: 'Delete', icon: Trash2, onSelect: () => actions.onDelete(folder), isDestructive: true },
     ];
-}
-
-/** The parts a context menu and a dropdown menu share. */
-interface MenuParts {
-    Item: ComponentType<{ variant?: 'default' | 'destructive'; disabled?: boolean; onSelect?: () => void; children: ReactNode }>;
-    Separator: ComponentType;
-}
-
-function MenuItems({ entries, Item, Separator }: MenuParts & { entries: MenuEntry[] }) {
-    return entries.map(({ label, icon: Icon, onSelect, isDestructive }) => (
-        <Fragment key={label}>
-            {isDestructive && <Separator />}
-            <Item variant={isDestructive ? 'destructive' : 'default'} disabled={!onSelect} {...(onSelect && { onSelect })}>
-                <Icon className="size-4" />
-                {label}
-            </Item>
-        </Fragment>
-    ));
 }
 
 function ActionsButton({ className, ...props }: ComponentProps<typeof Button>) {

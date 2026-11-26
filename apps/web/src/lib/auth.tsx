@@ -10,6 +10,8 @@ interface AuthState {
     accessToken: string | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    /** The user ended the last session with Sign Out, as opposed to it expiring. */
+    hasSignedOut: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken: null,
         isLoading: true,
         isAuthenticated: false,
+        hasSignedOut: false,
     });
     const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
 
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     accessToken: storedToken,
                     isLoading: false,
                     isAuthenticated: true,
+                    hasSignedOut: false,
                 });
                 // Verify token is still valid by fetching current user
                 verifyToken(storedToken);
@@ -95,12 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const clearAuthState = () => {
         localStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
-        setState({
+        setState(({ hasSignedOut }) => ({
             user: null,
             accessToken: null,
             isLoading: false,
             isAuthenticated: false,
-        });
+            hasSignedOut,
+        }));
     };
 
     const login = async (email: string, password: string) => {
@@ -128,10 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             accessToken: data.access_token,
             isLoading: false,
             isAuthenticated: true,
+            hasSignedOut: false,
         });
     };
 
-    const logout = async () => {
+    /** Drops the session, whatever ended it. */
+    const endSession = async () => {
         try {
             await fetch(`${API_BASE}/auth/logout`, {
                 method: 'POST',
@@ -143,6 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
             clearAuthState();
         }
+    };
+
+    const logout = async () => {
+        setState((prev) => ({ ...prev, hasSignedOut: true }));
+        await endSession();
     };
 
     const refreshToken = useCallback(async (): Promise<boolean> => {
@@ -194,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
         localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-        setState({ user: data.user, accessToken, isLoading: false, isAuthenticated: true });
+        setState({ user: data.user, accessToken, isLoading: false, isAuthenticated: true, hasSignedOut: false });
     }, []);
 
     useEffect(() => {
@@ -207,9 +219,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // the source of truth and is always at least as fresh as state.
             getToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
             refresh: refreshToken,
-            logout,
+            logout: endSession,
         });
-    }, [refreshToken, logout]);
+    }, [refreshToken, endSession]);
 
     return (
         <AuthContext.Provider

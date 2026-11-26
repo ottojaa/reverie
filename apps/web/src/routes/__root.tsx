@@ -14,7 +14,7 @@ const publicRoutes = ['/', '/login', '/login/callback'];
 const fullBleedRouteIds = ['/canvas'];
 
 function RootComponent() {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, hasSignedOut } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const matches = useMatches();
@@ -43,8 +43,8 @@ function RootComponent() {
 
         if (isPublic) return;
 
-        navigate({ to: '/login', search: { error: 'unauthorized_access' }, replace: true });
-    }, [isAuthenticated, isLoading, location.pathname, navigate]);
+        navigate({ to: '/login', search: { error: hasSignedOut ? undefined : 'unauthorized_access' }, replace: true });
+    }, [isAuthenticated, isLoading, hasSignedOut, location.pathname, navigate]);
 
     // Show loading state
     if (isLoading) {

@@ -5,6 +5,7 @@ import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import type { FolderWithChildren } from '@reverie/shared';
 import { createPortal } from 'react-dom';
+import { snapBesidePointer } from './snapBesidePointer';
 import type { TreeDrag } from './useTreeDrag';
 
 /** The preview fades out just past where it was dropped, while the dragged element fades back in. */
@@ -31,10 +32,13 @@ const dropAnimationConfig: DropAnimation = {
     },
 };
 
+/** Without this the preview takes the size of the dragged row, and its label can end up far from the pointer. */
+const FIT_CONTENT = { width: 'max-content', height: 'auto' };
+
 function PreviewContent({ drag, tree }: { drag: TreeDrag; tree: FolderWithChildren[] }) {
     if (drag.type === 'documents') {
         return (
-            <div className="rounded-md border border-primary/50 bg-primary/15 px-3 py-2 text-sm font-medium text-primary shadow-md">
+            <div className="rounded-md border border-primary/50 bg-popover px-3 py-2 text-sm font-medium text-primary shadow-md">
                 {drag.documentIds.length === 1 ? '1 document' : `${drag.documentIds.length} documents`}
             </div>
         );
@@ -54,8 +58,14 @@ function PreviewContent({ drag, tree }: { drag: TreeDrag; tree: FolderWithChildr
 
 /** What follows the pointer during a drag. */
 export function DragPreview({ drag, tree }: { drag: TreeDrag | null; tree: FolderWithChildren[] }) {
+    const isDocuments = drag?.type === 'documents';
+
     return createPortal(
-        <DragOverlay dropAnimation={dropAnimationConfig} modifiers={[snapCenterToCursor]}>
+        <DragOverlay
+            dropAnimation={dropAnimationConfig}
+            modifiers={[isDocuments ? snapBesidePointer : snapCenterToCursor]}
+            {...(isDocuments && { style: FIT_CONTENT })}
+        >
             {drag && <PreviewContent drag={drag} tree={tree} />}
         </DragOverlay>,
         document.body,
