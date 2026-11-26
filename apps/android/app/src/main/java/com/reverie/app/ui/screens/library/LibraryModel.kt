@@ -135,6 +135,12 @@ class LibraryModel(
 
     val selectedIds: Set<String> get() = recent.selectedIds
 
+    /** The selected documents, from whichever section lists them. */
+    val selectedDocuments: List<DocumentDto>
+        get() = with(state.value) { recent.documents.documents + unfiled.documents }
+            .distinctBy { it.id }
+            .filter { it.id in selectedIds }
+
     init {
         readOverview()
     }

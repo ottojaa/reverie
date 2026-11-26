@@ -37,6 +37,9 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The most documents one delete request may name. */
+private const val DELETE_REQUEST_LIMIT = 100
+
 /** Most ids one delete statement takes (SQLite's variable limit is 999 on older Android). */
 private const val DELETE_CHUNK = 500
 
@@ -275,6 +278,10 @@ class DocumentRepository @Inject constructor(
     }
 
     suspend fun delete(ids: List<String>) = withContext(io) {
+        ids.chunked(DELETE_REQUEST_LIMIT).forEach { deleteBatch(it) }
+    }
+
+    private suspend fun deleteBatch(ids: List<String>) {
         documentsApi.deleteBatch(ids)
         documentDao.deleteByIds(ids)
         privateStore.remove(ids)

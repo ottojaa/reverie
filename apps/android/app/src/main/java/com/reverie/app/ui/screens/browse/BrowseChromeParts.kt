@@ -58,7 +58,11 @@ internal fun UnlockSheetHost(unlocker: FolderUnlocker) {
 internal fun DeleteDocumentsDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     ConfirmDialog(
         title = "Delete $count ${plural(count)}?",
-        message = "These files will be permanently deleted — this can't be undone.",
+        message = if (count == 1) {
+            "It goes to the trash, where you can restore it."
+        } else {
+            "They go to the trash, where you can restore them."
+        },
         confirmLabel = "Delete",
         destructive = true,
         onConfirm = onConfirm,

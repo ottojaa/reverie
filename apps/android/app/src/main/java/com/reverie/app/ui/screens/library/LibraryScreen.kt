@@ -63,6 +63,7 @@ fun LibraryScreen(
             onLoadMore = viewModel::loadMore,
             onNewFolder = { isNamingFolder = true },
             onFocusConsumed = viewModel::clearViewerFocus,
+            onHoldFolder = viewModel.manage::openMenu,
         )
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
@@ -73,7 +74,7 @@ fun LibraryScreen(
         folderId = null,
         isRefreshing = state.recent.isRefreshing,
         isEmpty = state.isEmpty,
-        selection = ChromeSelection(selectedIds.size, viewModel::clearSelection, viewModel::deleteSelected, viewModel::downloadSelected),
+        selection = ChromeSelection(selectedIds.size, viewModel::clearSelection, viewModel::moveSelected, viewModel::deleteSelected, viewModel::downloadSelected),
         unlocker = viewModel.unlocker,
         onRefresh = { viewModel.refresh() },
         onRetry = { viewModel.refresh(initial = true) },
@@ -81,6 +82,7 @@ fun LibraryScreen(
         onOpenDocument = openRecent,
         uploadViewModel = uploadViewModel,
         favourites = viewModel.favourites,
+        manage = viewModel.manage,
         modifier = modifier,
         onFavourite = onFavourite,
         headerActions = { openUpload ->

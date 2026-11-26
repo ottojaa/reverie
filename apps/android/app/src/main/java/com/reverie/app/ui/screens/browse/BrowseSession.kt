@@ -20,6 +20,7 @@ import com.reverie.app.data.settings.SettingsRepository
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDeps
+import com.reverie.app.ui.screens.manage.ManageController
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import com.reverie.app.ui.screens.viewer.ViewerFocus
@@ -73,9 +74,9 @@ private data class SessionControl(val error: String? = null, val lockedFolderId:
 
 /**
  * What the Library, a folder page and a list screen do the same way, held once: the lock prompt and
- * load errors, the viewer hand-off, delete and download of the selection, the document warm-up, the
- * processing watchers, the grid settings, and the signals that documents changed (a delete anywhere,
- * uploads finishing).
+ * load errors, the viewer hand-off, delete, move and download of the selection, changing folders, the
+ * document warm-up, the processing watchers, the grid settings, and the signals that the library changed
+ * (a delete or a move anywhere, uploads finishing).
  *
  * The owner (a view model) passes [selection] and [clearSelection] for its own feeds, [refresh] to re-read
  * after a password unlock, and [onContentChanged] for what it re-reads when the library changes.
@@ -84,7 +85,7 @@ class BrowseSession(
     private val scope: CoroutineScope,
     val folderId: String?,
     private val deps: BrowseDeps,
-    private val selection: () -> Set<String>,
+    private val selection: () -> List<DocumentDto>,
     private val clearSelection: () -> Unit,
     refresh: () -> Unit,
     private val onContentChanged: () -> Unit,
@@ -109,6 +110,9 @@ class BrowseSession(
 
     /** Starring and opening favourites from this screen. */
     val favourites = FavouriteController(deps.favouriteDeps, scope)
+
+    /** Folder menus, and moving folders and documents. */
+    val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, scope)
 
     /** How a photo grid arranges its tiles (user setting). */
     val gridLayoutMode: StateFlow<GridLayoutMode> = deps.settings.settings
@@ -190,8 +194,10 @@ class BrowseSession(
         }
     }
 
+    fun moveSelected() = manage.pickDocumentDestination(selection(), clearSelection)
+
     fun deleteSelected() {
-        val ids = selection().toList()
+        val ids = selection().map { it.id }
         if (ids.isEmpty()) return
         scope.launch {
             // The repository announces the delete, which every open Browse screen answers (this one included).
@@ -205,7 +211,7 @@ class BrowseSession(
      * hand them to [onTargets] to enqueue; the caller owns the platform DownloadManager.
      */
     fun downloadSelected(onTargets: (List<DownloadTarget>) -> Unit) {
-        val ids = selection().toList()
+        val ids = selection().map { it.id }
         if (ids.isEmpty()) return
         scope.launch {
             val targets = ids.mapNotNull { id ->
@@ -220,7 +226,7 @@ class BrowseSession(
     }
 
     /**
-     * A screen stays alive while another is on top of it, so a delete on any of them, or uploads finishing
+     * A screen stays alive while another is on top of it, so a change made on any of them, or uploads finishing
      * (once, when the last one is done, not per file), must reach them all.
      */
     private fun watchContentChanges() {

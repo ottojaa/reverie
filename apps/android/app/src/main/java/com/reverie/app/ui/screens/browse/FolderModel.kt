@@ -108,6 +108,10 @@ class FolderModel(
 
     val selectedIds: Set<String> get() = selected.value
 
+    /** The selected documents, as the page holds them now. */
+    val selectedDocuments: List<DocumentDto>
+        get() = with(state.value) { media.documents + files?.documents.orEmpty() }.filter { it.id in selectedIds }
+
     init {
         refreshSummary()
         scope.launch {

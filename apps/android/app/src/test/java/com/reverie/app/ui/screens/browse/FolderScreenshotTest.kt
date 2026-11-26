@@ -133,7 +133,7 @@ class FolderScreenshotTest {
                 )
             }
         }
-        if (selectedIds.isNotEmpty()) SelectionTopBar(selectedIds.size, onClose = {}, onDownload = {}, onDelete = {})
+        if (selectedIds.isNotEmpty()) SelectionTopBar(selectedIds.size, onClose = {}, onDownload = {}, onMove = {}, onDelete = {})
     }
 
     private fun shoot(state: String, folder: FolderState, description: String? = null) =

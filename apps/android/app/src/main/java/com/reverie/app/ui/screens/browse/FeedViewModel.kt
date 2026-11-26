@@ -32,7 +32,7 @@ class FeedViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = null,
         deps = deps,
-        selection = { feed.selectedIds },
+        selection = { feed.selectedDocuments },
         clearSelection = { feed.clearSelection() },
         refresh = { feed.refresh() },
         onContentChanged = { feed.contentChanged() },
@@ -57,6 +57,7 @@ class FeedViewModel @Inject constructor(
     val ui: StateFlow<SessionUi> get() = session.ui
     val unlocker get() = session.unlocker
     override val favourites get() = session.favourites
+    val manage get() = session.manage
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
     val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
@@ -98,6 +99,8 @@ class FeedViewModel @Inject constructor(
     override fun prefetch(document: DocumentDto) = session.prefetch(document)
 
     fun clearViewerFocus() = session.clearViewerFocus()
+
+    fun moveSelected() = session.moveSelected()
 
     fun deleteSelected() = session.deleteSelected()
 

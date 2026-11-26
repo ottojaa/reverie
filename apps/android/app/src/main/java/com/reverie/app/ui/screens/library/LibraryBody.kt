@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.backup.BackupStatus
 import com.reverie.app.domain.folderMeta
@@ -68,6 +69,8 @@ class LibraryActions(
     val onLoadMore: () -> Unit,
     val onNewFolder: () -> Unit,
     val onFocusConsumed: () -> Unit,
+    /** A long press on a folder's row. */
+    val onHoldFolder: (FolderWithChildren) -> Unit = {},
 )
 
 /** The document the viewer was last on, in the section that opened it, until it has been brought into view. */
@@ -110,7 +113,7 @@ fun LibraryBody(
             if (state.hasNoDocuments) return@item NothingUploaded(slot.onUpload)
             RecentlyAdded(state.recent, actions.recent, day, recentRowState, actions.onLoadMore)
         }
-        folderSection(state, marks, links, actions.onNewFolder)
+        folderSection(state, marks, links, actions)
         unfiledSection(state, links, actions.unfiled, day)
     }
 }
@@ -119,15 +122,16 @@ private fun LazyListScope.folderSection(
     state: LibraryState,
     marks: LibraryMarks,
     links: LibraryLinks,
-    onNewFolder: () -> Unit,
+    actions: LibraryActions,
 ) {
-    item(key = "folders-heading") { SectionHeading("Folders", "New folder", onNewFolder) }
+    item(key = "folders-heading") { SectionHeading("Folders", "New folder", actions.onNewFolder) }
     items(state.folders, key = { "folder:" + it.id }) { folder ->
         FolderRow(
             folder = folder,
             cover = marks.folderCovers[folder.id],
             meta = folderMeta(folder),
             onClick = { links.onOpenFolder(folder.id) },
+            onLongClick = { actions.onHoldFolder(folder) },
             starred = folder.id in marks.starredFolderIds,
         )
     }

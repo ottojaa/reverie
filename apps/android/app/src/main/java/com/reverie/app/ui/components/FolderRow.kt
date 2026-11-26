@@ -44,7 +44,11 @@ fun FolderRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = "Folder actions".takeIf { onLongClick != null },
+            )
             .heightIn(min = coverSize + 18.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

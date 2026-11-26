@@ -94,6 +94,7 @@ class LibraryBodyTest {
                     onLoadMore = {},
                     onNewFolder = { calls += "new folder" },
                     onFocusConsumed = { focus = LibraryFocus() },
+                    onHoldFolder = { calls += "hold folder:${it.id}" },
                 ),
                 day = LibraryDay(LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
@@ -187,6 +188,14 @@ class LibraryBodyTest {
             listOf("recent:open:holiday", "recent:hold:notes", "unfiled:open:loose1", "unfiled:hold:loose2"),
             calls,
         )
+    }
+
+    @Test fun `a long press on a folder row asks for its actions`() {
+        show()
+
+        compose.onNodeWithText("Travel").performTouchInput { longClick() }
+
+        assertEquals(listOf("hold folder:Travel"), calls)
     }
 
     @OptIn(ExperimentalTestApi::class)

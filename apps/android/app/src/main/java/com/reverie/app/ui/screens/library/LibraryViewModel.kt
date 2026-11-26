@@ -48,7 +48,7 @@ class LibraryViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = null,
         deps = deps,
-        selection = { model.selectedIds },
+        selection = { model.selectedDocuments },
         clearSelection = { model.clearSelection() },
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
@@ -75,6 +75,7 @@ class LibraryViewModel @Inject constructor(
     val covers: StateFlow<Map<String, FolderCoverDto>> get() = deps.folders.covers
     val unlocker get() = session.unlocker
     val favourites get() = session.favourites
+    val manage get() = session.manage
     val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
 
     val backup: StateFlow<BackupStatus> = backupSource.observe()
@@ -112,6 +113,8 @@ class LibraryViewModel @Inject constructor(
             deps.folders.createFolder(form, parentId = null)?.let { messages.send(it) }
         }
     }
+
+    fun moveSelected() = session.moveSelected()
 
     fun deleteSelected() = session.deleteSelected()
 

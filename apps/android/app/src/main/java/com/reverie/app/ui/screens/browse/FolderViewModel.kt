@@ -38,7 +38,7 @@ class FolderViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = folderId,
         deps = deps,
-        selection = { model.selectedIds },
+        selection = { model.selectedDocuments },
         clearSelection = { model.clearSelection() },
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
@@ -67,6 +67,7 @@ class FolderViewModel @Inject constructor(
     val covers: StateFlow<Map<String, FolderCoverDto>> get() = deps.folders.covers
     val unlocker get() = session.unlocker
     override val favourites get() = session.favourites
+    val manage get() = session.manage
     val gridLayoutMode get() = session.gridLayoutMode
     val mosaicFeatureEvery get() = session.mosaicFeatureEvery
     val viewerFocus: StateFlow<ViewerFocus?> get() = session.viewerFocus
@@ -102,6 +103,8 @@ class FolderViewModel @Inject constructor(
             deps.folders.createFolder(form, parentId = folderId)?.let { messages.send(it) }
         }
     }
+
+    fun moveSelected() = session.moveSelected()
 
     fun deleteSelected() = session.deleteSelected()
 

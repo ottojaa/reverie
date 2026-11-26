@@ -68,7 +68,12 @@ class FolderBodyTest {
                 ),
                 name = "Portugal",
                 description = "The August trip",
-                links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = { calls += "folder:$it" }),
+                links = FolderLinks(
+                    emptyMap(),
+                    starredIds = emptySet(),
+                    onOpen = { calls += "folder:$it" },
+                    onHold = { calls += "hold folder:${it.id}" },
+                ),
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = RowActions(
                     selected = { it.id in selected },
@@ -92,6 +97,15 @@ class FolderBodyTest {
         compose.onNodeWithText("Lisbon").performClick()
 
         assertEquals(listOf("folder:Lisbon"), calls)
+    }
+
+    @Test fun `a long press on a folder row asks for its actions`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        show()
+
+        compose.onNodeWithText("Lisbon").performTouchInput { longClick() }
+
+        assertEquals(listOf("hold folder:Lisbon"), calls)
     }
 
     @Test fun `every breadcrumb step leads somewhere, the Library included, even from a folder one level down`() {

@@ -55,7 +55,7 @@ class BrowseSessionTest {
         scope = scope,
         folderId = "f1",
         deps = browseDeps(context, database, scope, FavouriteWorld()),
-        selection = { emptySet() },
+        selection = { emptyList() },
         clearSelection = {},
         refresh = onRefresh,
         onContentChanged = {},

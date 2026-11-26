@@ -48,6 +48,8 @@ import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouriteHost
 import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
+import com.reverie.app.ui.screens.manage.ManageController
+import com.reverie.app.ui.screens.manage.ManageHost
 import com.reverie.app.ui.screens.upload.UploadActionSheet
 import com.reverie.app.ui.screens.upload.UploadDialog
 import com.reverie.app.ui.screens.upload.UploadProgressBar
@@ -74,6 +76,7 @@ class ChromeSlot(
 class ChromeSelection(
     val count: Int,
     val onClear: () -> Unit,
+    val onMove: () -> Unit,
     val onDelete: () -> Unit,
     val onDownload: ((List<DownloadTarget>) -> Unit) -> Unit,
 )
@@ -81,7 +84,7 @@ class ChromeSelection(
 /**
  * Everything around a Browse list that the Library, a folder page and a list screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
- * the upload sheets, the delete confirmation and the password prompt for a locked folder.
+ * the upload sheets, the delete confirmation, folder actions and the password prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].
  *
  * @param title null where the list carries its own title.
@@ -107,6 +110,7 @@ fun BrowseChrome(
     onOpenDocument: (DocumentDto) -> Unit,
     uploadViewModel: UploadViewModel,
     favourites: FavouriteController,
+    manage: ManageController,
     modifier: Modifier = Modifier,
     onFavourite: (FavouriteDestination) -> Unit = {},
     headerActions: @Composable (openUpload: () -> Unit) -> Unit = {},
@@ -198,6 +202,7 @@ fun BrowseChrome(
                                 }
                             }
                         },
+                        onMove = selection.onMove,
                         onDelete = { showDeleteConfirm = true },
                     )
                 }
@@ -254,6 +259,7 @@ fun BrowseChrome(
         )
     }
 
+    ManageHost(manage, snackbarHostState)
     UnlockSheetHost(unlocker)
     FavouriteHost(favourites, snackbarHostState, onFavourite)
 }

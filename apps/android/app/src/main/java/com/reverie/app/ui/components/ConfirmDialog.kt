@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 
 /**
  * Standard confirm/cancel dialog. When [destructive] is set, the confirm button is tinted
- * with the error colour — used for permanent deletes (Reverie has no trash/undo).
+ * with the error colour, for anything that deletes.
  */
 @Composable
 fun ConfirmDialog(

@@ -37,6 +37,8 @@ class FolderLinks(
     val starredIds: Set<String>,
     /** Null opens the Library itself. */
     val onOpen: (folderId: String?) -> Unit,
+    /** A long press on a folder's row. */
+    val onHold: ((FolderWithChildren) -> Unit)? = null,
 )
 
 /**
@@ -127,6 +129,7 @@ private fun LazyListScope.folderRowItems(folders: List<FolderWithChildren>, link
             cover = links.covers[folder.id],
             meta = folderMeta(folder),
             onClick = { links.onOpen(folder.id) },
+            onLongClick = links.onHold?.let { hold -> { hold(folder) } },
             starred = folder.id in links.starredIds,
         )
     }

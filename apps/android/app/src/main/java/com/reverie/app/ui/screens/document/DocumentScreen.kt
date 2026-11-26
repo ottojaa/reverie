@@ -396,7 +396,7 @@ fun DocumentScreen(
     if (showDelete) {
         ConfirmDialog(
             title = "Delete this document?",
-            message = "It will be permanently deleted — this can't be undone.",
+            message = "It goes to the trash, where you can restore it.",
             confirmLabel = "Delete",
             destructive = true,
             onConfirm = {

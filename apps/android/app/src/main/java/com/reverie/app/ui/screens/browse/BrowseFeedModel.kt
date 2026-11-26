@@ -71,6 +71,9 @@ class BrowseFeedModel(
 
     val selectedIds: Set<String> get() = control.value.selectedIds
 
+    /** The selected documents, as the feed holds them now. */
+    val selectedDocuments: List<DocumentDto> get() = state.value.documents.documents.filter { it.id in selectedIds }
+
     init {
         fetch(offset = 0, refreshing = false)
     }

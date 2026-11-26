@@ -1,6 +1,7 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
@@ -20,6 +21,7 @@ fun SelectionTopBar(
     count: Int,
     onClose: () -> Unit,
     onDownload: () -> Unit,
+    onMove: () -> Unit,
     onDelete: () -> Unit,
 ) {
     TopAppBar(
@@ -33,6 +35,9 @@ fun SelectionTopBar(
         actions = {
             IconButton(onClick = onDownload) {
                 Icon(Icons.Outlined.Download, contentDescription = "Download")
+            }
+            IconButton(onClick = onMove) {
+                Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = "Move")
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Outlined.Delete, contentDescription = "Delete")

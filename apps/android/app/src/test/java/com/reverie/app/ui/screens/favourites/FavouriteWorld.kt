@@ -5,6 +5,7 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.FavouritesApi
 import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.VaultApi
+import com.reverie.app.data.api.model.CheckDuplicatesResponse
 import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
@@ -22,6 +23,7 @@ import com.reverie.app.data.repository.FavouritesRepository
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.NoopPurger
 import com.reverie.app.data.repository.VaultRepository
+import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.screens.viewer.DocumentSequenceHolder
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -71,6 +73,15 @@ internal class FavouriteWorld {
     /** Answers for the next PUTs, in order; after they run out a PUT succeeds. */
     val putFailures = ArrayDeque<Pair<HttpStatusCode, String>>()
 
+    /** Answers for the next folder writes and document moves, in order, null for success; then all succeed. */
+    val writeAnswers = ArrayDeque<Pair<HttpStatusCode, String>?>()
+
+    /** The names POST /documents/check-duplicates reports as taken. */
+    @Volatile var takenNames: List<String> = emptyList()
+
+    /** What GET /vault/status says about the account. */
+    @Volatile var hasPassword = true
+
     val requests = CopyOnWriteArrayList<String>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -119,9 +130,27 @@ internal class FavouriteWorld {
             path == "vault/unlock" -> reply("""{"unlocked":true,"has_password":true}""")
             path == "folders" && request.method == HttpMethod.Post -> replyCreated(body)
             path == "folders/tree" -> reply(ApiJson.encodeToString(ListSerializer(FolderWithChildren.serializer()), tree))
+            path == "vault/status" -> reply("""{"unlocked":false,"has_password":$hasPassword}""")
+            path == "documents/check-duplicates" ->
+                reply(ApiJson.encodeToString(CheckDuplicatesResponse.serializer(), CheckDuplicatesResponse(takenNames)))
+            path == "documents/move" || path.startsWith("folders/") -> replyWrite(path)
             else -> reply("", HttpStatusCode.NoContent)
         }
     }
+
+    /** The next of [writeAnswers]; a write that succeeds on a folder answers with the folder. */
+    private fun MockRequestHandleScope.replyWrite(path: String): HttpResponseData {
+        val failure = writeAnswers.removeFirstOrNull()
+        if (failure != null) return reply(failure.second, failure.first)
+        val id = path.removePrefix("folders/").takeIf { path.startsWith("folders/") }
+        val node = id?.let { FolderTree(tree).find(it) } ?: return reply("", HttpStatusCode.NoContent)
+        return reply(ApiJson.encodeToString(FolderDto.serializer(), node.toFolder()))
+    }
+
+    private fun FolderWithChildren.toFolder() = FolderDto(
+        id = id, parent_id = parent_id, name = name, path = path, sort_order = sort_order,
+        is_private = is_private, created_at = created_at, updated_at = updated_at,
+    )
 
     /** Adds the asked-for folder to [tree], under its parent, and answers with it. */
     private fun MockRequestHandleScope.replyCreated(body: String): HttpResponseData {
@@ -131,11 +160,7 @@ internal class FavouriteWorld {
             sort_order = 0, is_private = false, created_at = "2026-11-25T00:00:00Z", updated_at = "2026-11-25T00:00:00Z",
         )
         tree = if (asked.parent_id == null) tree + node else tree.map { it.adopting(node) }
-        val folder = FolderDto(
-            id = node.id, parent_id = node.parent_id, name = node.name, path = node.path, sort_order = 0,
-            is_private = false, created_at = node.created_at, updated_at = node.updated_at,
-        )
-        return reply(ApiJson.encodeToString(FolderDto.serializer(), folder))
+        return reply(ApiJson.encodeToString(FolderDto.serializer(), node.toFolder()))
     }
 
     private fun FolderWithChildren.adopting(node: FolderWithChildren): FolderWithChildren =
