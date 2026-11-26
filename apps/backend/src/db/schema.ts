@@ -64,6 +64,23 @@ export interface FavouritesTable {
 export type Favourite = Selectable<FavouritesTable>;
 export type NewFavourite = Insertable<FavouritesTable>;
 
+// Folder lock secrets table: a user's own PIN or password for private folders, at most one row per user
+export type FolderLockSecretKind = 'pin' | 'password';
+
+export interface FolderLockSecretsTable {
+    user_id: string;
+    /** Null together with `secret_hash` when the row holds no secret. */
+    kind: FolderLockSecretKind | null;
+    secret_hash: string | null;
+    wrong_tries: ColumnType<number, number | undefined, number>;
+    generation: ColumnType<number, number | undefined, number>;
+    updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+export type FolderLockSecret = Selectable<FolderLockSecretsTable>;
+export type NewFolderLockSecret = Insertable<FolderLockSecretsTable>;
+export type FolderLockSecretUpdate = Updateable<FolderLockSecretsTable>;
+
 // Documents table
 export interface DocumentsTable {
     id: Generated<string>;
@@ -491,4 +508,5 @@ export interface Database {
     document_duplicate_scans: DocumentDuplicateScansTable;
     duplicate_dismissals: DuplicateDismissalsTable;
     favourites: FavouritesTable;
+    folder_lock_secrets: FolderLockSecretsTable;
 }
