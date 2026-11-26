@@ -12,7 +12,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SearchFacets
 import com.reverie.app.domain.search.FilterKey
-import com.reverie.app.ui.components.PRIMARY_DIMENSIONS
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 
 @Composable
@@ -38,7 +37,7 @@ fun SearchScreen(
             onRemoveScope = viewModel::removeScope,
             onOpenSheet = { sheet ->
                 openSheet = sheet
-                if (sheet is SearchSheet.Facet) viewModel.ensureBaseFacets()
+                if (sheet != SearchSheet.Date) viewModel.ensureBaseFacets()
             },
             onClearFilters = viewModel::clearFilters,
             onSort = viewModel::setSort,
@@ -51,7 +50,7 @@ fun SearchScreen(
             onLoadMore = viewModel::loadMore,
         ),
     )
-    openSheet?.let { FilterSheet(it, state, viewModel, onDismiss = { openSheet = null }) }
+    openSheet?.let { FilterSheet(it, state, viewModel, onOpenSheet = { next -> openSheet = next }) }
 }
 
 /**
@@ -73,10 +72,11 @@ private fun ReturnToViewedResult(viewModel: SearchViewModel, state: SearchUiStat
 }
 
 @Composable
-private fun FilterSheet(sheet: SearchSheet, state: SearchUiState, viewModel: SearchViewModel, onDismiss: () -> Unit) {
+private fun FilterSheet(sheet: SearchSheet, state: SearchUiState, viewModel: SearchViewModel, onOpenSheet: (SearchSheet?) -> Unit) {
+    val onDismiss = { onOpenSheet(null) }
     when (sheet) {
         is SearchSheet.Facet -> FacetListSheet(
-            title = PRIMARY_DIMENSIONS.first { it.key == sheet.key }.label,
+            title = facetTitle(sheet.key),
             options = facetOptions(state.facets, sheet.key),
             activeValues = state.activeValues(sheet.key),
             onToggle = { viewModel.toggleFilter(sheet.key, it) },
@@ -89,8 +89,10 @@ private fun FilterSheet(sheet: SearchSheet, state: SearchUiState, viewModel: Sea
             onDismiss = onDismiss,
         )
         SearchSheet.More -> MoreFiltersSheet(
+            state = state,
             hasTextMode = viewModel.currentHasTextMode(),
-            sizeValue = state.activeValues(FilterKey.SIZE).firstOrNull(),
+            onOpenFacet = { onOpenSheet(SearchSheet.Facet(it)) },
+            onRemoveFolder = { viewModel.replaceFilter(FilterKey.FOLDER, null) },
             onSetHasText = viewModel::setHasText,
             onSetSize = viewModel::setSize,
             onDismiss = onDismiss,
@@ -98,10 +100,15 @@ private fun FilterSheet(sheet: SearchSheet, state: SearchUiState, viewModel: Sea
     }
 }
 
+private fun facetTitle(key: FilterKey) = when (key) {
+    FilterKey.CATEGORY -> "Category"
+    FilterKey.TAG -> "Tags"
+    else -> "Type"
+}
+
 private fun facetOptions(facets: SearchFacets?, key: FilterKey) = when (key) {
     FilterKey.TYPE -> facets?.types
     FilterKey.CATEGORY -> facets?.categories
-    FilterKey.FOLDER -> facets?.folders
     FilterKey.TAG -> facets?.tags
     else -> null
 }.orEmpty()

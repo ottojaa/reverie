@@ -1,9 +1,10 @@
 package com.reverie.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -14,25 +15,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.reverie.app.domain.search.FilterKey
 
-data class FilterDimension(val label: String, val key: FilterKey)
-
-val PRIMARY_DIMENSIONS = listOf(
-    FilterDimension("Type", FilterKey.TYPE),
-    FilterDimension("Category", FilterKey.CATEGORY),
-    FilterDimension("Folder", FilterKey.FOLDER),
-    FilterDimension("Tags", FilterKey.TAG),
-)
-
-/** Horizontally-scrolling filter pills; each opens a facet/date/more sheet. [leading] comes before them. */
+/**
+ * Horizontally-scrolling filter pills: Type, Date and More, each opening a sheet. [leading] comes before
+ * them. [moreValues] are the chosen values More is labelled with; it can also be selected without any.
+ */
 @Composable
 fun FilterPillBar(
-    activeValues: (FilterKey) -> List<String>,
+    typeValues: List<String>,
     dateActive: Boolean,
+    moreValues: List<String>,
+    isMoreActive: Boolean,
     hasAnyActive: Boolean,
-    onOpenDimension: (FilterKey) -> Unit,
+    onOpenType: () -> Unit,
     onOpenDate: () -> Unit,
     onOpenMore: () -> Unit,
     onClearAll: () -> Unit,
@@ -42,35 +39,25 @@ fun FilterPillBar(
     LazyRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         if (leading != null) item(key = "leading") { leading() }
-        items(PRIMARY_DIMENSIONS, key = { it.label }) { dim ->
-            val active = activeValues(dim.key)
-            DimensionPill(
-                label = pillLabel(dim.label, active),
-                selected = active.isNotEmpty(),
-                onClick = { onOpenDimension(dim.key) },
-            )
+        item(key = "type") {
+            DimensionPill(label = pillLabel("Type", typeValues), selected = typeValues.isNotEmpty(), onClick = onOpenType)
         }
-        item {
-            DimensionPill(
-                label = "Date",
-                selected = dateActive,
-                leadingIcon = Icons.Outlined.CalendarToday,
-                onClick = onOpenDate,
-            )
+        item(key = "date") {
+            DimensionPill(label = "Date", selected = dateActive, leadingIcon = Icons.Outlined.CalendarToday, onClick = onOpenDate)
         }
-        item {
+        item(key = "more") {
             DimensionPill(
-                label = "More",
-                selected = false,
+                label = pillLabel("More", moreValues),
+                selected = isMoreActive,
                 leadingIcon = Icons.Outlined.Tune,
                 onClick = onOpenMore,
             )
         }
         if (hasAnyActive) {
-            item { TextButton(onClick = onClearAll) { Text("Clear all") } }
+            item(key = "clear") { TextButton(onClick = onClearAll) { Text("Clear all") } }
         }
     }
 }
@@ -80,11 +67,12 @@ private fun DimensionPill(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    leadingIcon: ImageVector? = null,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
+        shape = CircleShape,
         label = { Text(label) },
         leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(18.dp)) } },
         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) },

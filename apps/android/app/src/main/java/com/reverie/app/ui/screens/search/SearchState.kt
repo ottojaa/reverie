@@ -59,6 +59,18 @@ data class SearchUiState(
     fun activeValues(key: FilterKey): List<String> =
         getFilterTokens(tokenizeQuery(query), key).map { it.value }
 
+    val isDateActive: Boolean get() = hasValue(FilterKey.UPLOADED, FilterKey.DATE)
+
+    /** The chosen values the More pill is labelled with. A folder filter only arrives with an older search. */
+    val moreValues: List<String>
+        get() = listOf(FilterKey.CATEGORY, FilterKey.TAG, FilterKey.FOLDER).flatMap(::activeValues)
+
+    val isMoreActive: Boolean get() = moreValues.isNotEmpty() || hasValue(FilterKey.SIZE, FilterKey.HAS)
+
+    val hasFilters: Boolean get() = isDateActive || isMoreActive || hasValue(FilterKey.TYPE)
+
+    private fun hasValue(vararg keys: FilterKey): Boolean = keys.any { activeValues(it).isNotEmpty() }
+
     private val scopeFolderName: String? get() = scope.folderId?.let { folders.byId[it]?.name }
 
     /** What the empty search field says it searches. */

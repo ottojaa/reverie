@@ -5,8 +5,14 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Looper
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -16,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -67,6 +74,9 @@ import org.robolectric.shadows.ShadowNetworkCapabilities
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 
+private const val FACETS =
+    """{"facets":{"categories":[{"name":"receipt","count":3}],"tags":[{"name":"lisbon-trip","count":1}]}}"""
+
 /** The search screen over its real view model: what it asks the server for, and what it remembers. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class, qualifiers = "w400dp-h1200dp")
@@ -94,7 +104,7 @@ class SearchScreenTest {
         requests += request.url
         val body = when (request.url.encodedPath) {
             "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(total, listOf(hit), timing_ms = 1.0))
-            "/search/facets" -> """{"facets":{}}"""
+            "/search/facets" -> FACETS
             else -> return@MockEngine respondError(HttpStatusCode.NotFound)
         }
         respond(body, headers = headersOf(HttpHeaders.ContentType, "application/json"))
@@ -154,6 +164,9 @@ class SearchScreenTest {
     private fun awaitText(text: String) = await { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
 
     private fun type(text: String) = compose.onNode(hasSetTextAction()).performTextInput(text)
+
+    /** A click by its action: Robolectric drops some touches on a bottom sheet's window. */
+    private fun pressInSheet(node: SemanticsNodeInteraction) = node.performSemanticsAction(SemanticsActions.OnClick)
 
     private val searched: List<Url> get() = requests.filter { it.encodedPath == "/search" }
 
@@ -323,6 +336,53 @@ class SearchScreenTest {
 
         compose.onNode(hasSetTextAction()).assertTextContains("lisbon beach")
         await { searched.lastOrNull()?.parameters?.get("q") == "lisbon beach" }
+    }
+
+    @Config(qualifiers = "w800dp-h1200dp")
+    @Test fun `after the scope chip come Type, Date and More, and no other pill`() {
+        openFolderSearch()
+        awaitText("In Portugal – 2025")
+
+        val lefts = listOf("In Portugal – 2025", "Type", "Date", "More").map { compose.onNodeWithText(it).getBoundsInRoot().left }
+
+        assertEquals(lefts.sortedBy { it.value }, lefts)
+        listOf("Folder", "Category", "Tags").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+    }
+
+    @Test fun `category and tags are chosen under More`() {
+        open()
+        compose.onNodeWithText("More").performClick()
+        awaitText("Category")
+        compose.onNodeWithText("Tags").assertIsDisplayed()
+
+        pressInSheet(compose.onNodeWithText("Category"))
+        awaitText("Receipt")
+        pressInSheet(compose.onNodeWithText("Receipt"))
+
+        await { searched.lastOrNull()?.parameters?.get("q") == "category:receipt" }
+    }
+
+    @Test fun `a search opened with a category and a tag shows them as chosen`() {
+        open("q" to "category:receipt tag:lisbon-trip")
+        awaitText("More: Receipt +1")
+        compose.onNodeWithText("More: Receipt +1").assertIsSelected()
+
+        compose.onNodeWithText("More: Receipt +1").performClick()
+        awaitText("Lisbon-trip")
+        pressInSheet(compose.onNodeWithText("Tags"))
+
+        await { compose.onAllNodes(isToggleable()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(isToggleable()).assertIsOn()
+    }
+
+    @Test fun `an older search's folder filter shows under More and can be removed`() {
+        open("q" to "folder:work lisbon")
+        awaitText("More: Work")
+
+        compose.onNodeWithText("More: Work").performClick()
+        pressInSheet(compose.onNodeWithContentDescription("Remove the folder filter"))
+
+        await { searched.lastOrNull()?.parameters?.get("q") == "lisbon" }
     }
 
     @Test fun `the back button leaves the search`() {

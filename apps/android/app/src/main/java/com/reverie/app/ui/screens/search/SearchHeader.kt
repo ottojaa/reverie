@@ -43,14 +43,10 @@ import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
 import com.reverie.app.domain.search.FilterKey
 import com.reverie.app.ui.components.FilterPillBar
-import com.reverie.app.ui.components.PRIMARY_DIMENSIONS
 
 /** Back and the search field, the scope and filter pills, and with a query the result count and its order. */
 @Composable
 internal fun SearchHeader(state: SearchUiState, actions: SearchActions, modifier: Modifier = Modifier) {
-    val dateActive = state.activeValues(FilterKey.UPLOADED).isNotEmpty() || state.activeValues(FilterKey.DATE).isNotEmpty()
-    val hasAnyActive = PRIMARY_DIMENSIONS.any { state.activeValues(it.key).isNotEmpty() } ||
-        dateActive || state.activeValues(FilterKey.SIZE).isNotEmpty() || state.activeValues(FilterKey.HAS).isNotEmpty()
     Column(modifier) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
@@ -62,10 +58,12 @@ internal fun SearchHeader(state: SearchUiState, actions: SearchActions, modifier
             SearchField(state.freeText, state.placeholder, actions, Modifier.weight(1f).padding(start = 4.dp))
         }
         FilterPillBar(
-            activeValues = state::activeValues,
-            dateActive = dateActive,
-            hasAnyActive = hasAnyActive,
-            onOpenDimension = { actions.onOpenSheet(SearchSheet.Facet(it)) },
+            typeValues = state.activeValues(FilterKey.TYPE),
+            dateActive = state.isDateActive,
+            moreValues = state.moreValues,
+            isMoreActive = state.isMoreActive,
+            hasAnyActive = state.hasFilters,
+            onOpenType = { actions.onOpenSheet(SearchSheet.Facet(FilterKey.TYPE)) },
             onOpenDate = { actions.onOpenSheet(SearchSheet.Date) },
             onOpenMore = { actions.onOpenSheet(SearchSheet.More) },
             onClearAll = actions.onClearFilters,
@@ -108,6 +106,7 @@ private fun ScopeChip(label: String, onRemove: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     FilterChip(
         selected = true,
+        shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = colors.primaryContainer,
             selectedLabelColor = colors.onPrimaryContainer,
