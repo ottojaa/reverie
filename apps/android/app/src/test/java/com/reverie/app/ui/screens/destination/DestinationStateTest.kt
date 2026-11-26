@@ -25,11 +25,11 @@ class DestinationStateTest {
     private fun state(rules: DestinationRules = DestinationRules(), at: String? = null, query: String? = null) =
         DestinationState(tree, rules, at, query)
 
-    @Test fun `the top level is the Library`() {
+    @Test fun `the top level is My files`() {
         val shown = state()
 
         assertEquals(listOf("Photos", "Papers"), shown.rows.map { it.name })
-        assertEquals(Destination(null, "Library"), shown.destination)
+        assertEquals(Destination(null, "My files"), shown.destination)
         assertTrue(shown.canSelect)
     }
 
@@ -56,7 +56,7 @@ class DestinationStateTest {
         assertEquals(listOf("Inside"), state(query = "inside").rows.map { it.name })
     }
 
-    @Test fun `where a folder is required, the Library itself cannot be picked`() {
+    @Test fun `where a folder is required, My files itself cannot be picked`() {
         val rules = DestinationRules(allowTop = false)
 
         assertFalse(state(rules).canSelect)
@@ -67,7 +67,7 @@ class DestinationStateTest {
         val shown = state(query = " lis ")
 
         assertEquals(listOf("Lisbon"), shown.rows.map { it.name })
-        assertEquals("Library › Photos › Portugal", shown.locationOf(shown.rows.single()))
+        assertEquals("My files › Photos › Portugal", shown.locationOf(shown.rows.single()))
     }
 
     @Test fun `an empty search field still lists the current folder`() {

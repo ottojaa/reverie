@@ -16,7 +16,7 @@ import com.reverie.app.domain.FolderTree
 import com.reverie.app.domain.upload.NameStrategy
 import com.reverie.app.domain.upload.UploadProgress
 import com.reverie.app.domain.upload.toFindings
-import com.reverie.app.ui.components.LIBRARY_NAME
+import com.reverie.app.ui.components.ROOT_NAME
 import com.reverie.app.ui.screens.destination.Destination
 import com.reverie.app.ui.screens.destination.DestinationBrowser
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,14 +60,14 @@ class UploadViewModel @Inject constructor(
 
     private var checkJob: Job? = null
 
-    /** Opens the upload screen for [uris], headed for [folderId] (null: the Library). */
+    /** Opens the upload screen for [uris], headed for [folderId] (null: the root). */
     fun beginReview(uris: List<Uri>, folderId: String?) {
         if (uris.isEmpty() || _review.value?.isStarting == true) return
         checkJob?.cancel()
         _review.value = ReviewState(
             files = uris.map { context.toPickedFile(it) },
             folderId = folderId,
-            folderName = if (folderId == null) LIBRARY_NAME else "This folder",
+            folderName = if (folderId == null) ROOT_NAME else "This folder",
         )
     }
 

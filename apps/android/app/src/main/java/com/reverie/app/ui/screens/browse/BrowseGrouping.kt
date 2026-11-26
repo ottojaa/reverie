@@ -83,10 +83,20 @@ fun byDay(filter: DocumentFilter, docs: List<DocumentDto>, zone: ZoneId): List<P
 fun dayOrderedIds(filter: DocumentFilter, docs: List<DocumentDto>, zone: ZoneId): List<String> =
     byDay(filter, docs, zone).flatMap { (_, day) -> day.map { it.id } }
 
-/** [byDay] as list items: a heading per day, over one grid of its photos and videos or over its rows. */
-fun buildFeed(filter: DocumentFilter, docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): List<FeedItem> =
-    byDay(filter, docs, zone).flatMap { (day, group) ->
-        val title = day?.let { dayLabel(it, today) } ?: "Undated"
-        val held = if (filter.isByDateTaken) listOf(FeedItem.Media(group)) else group.map { FeedItem.FileRow(it) }
-        listOf(FeedItem.Header(key = "day:$day", title = title)) + held
+/** What a day is called where a list names it; [day] is null for documents with no readable date. */
+fun dayTitle(day: LocalDate?, today: LocalDate): String = day?.let { dayLabel(it, today) } ?: "Undated"
+
+/**
+ * [docs] as list items, in [byDay] order. Photos and videos are one grid with nothing between the days (the date
+ * chip names them); any other list has a heading per day over its rows.
+ */
+fun buildFeed(filter: DocumentFilter, docs: List<DocumentDto>, today: LocalDate, zone: ZoneId): List<FeedItem> {
+    val days = byDay(filter, docs, zone)
+    if (!filter.isByDateTaken) {
+        return days.flatMap { (day, group) ->
+            listOf(FeedItem.Header(key = "day:$day", title = dayTitle(day, today))) + group.map { FeedItem.FileRow(it) }
+        }
     }
+    if (docs.isEmpty()) return emptyList()
+    return listOf(FeedItem.Media(days.flatMap { it.second }))
+}

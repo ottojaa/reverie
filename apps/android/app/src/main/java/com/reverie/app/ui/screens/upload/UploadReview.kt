@@ -8,7 +8,7 @@ import com.reverie.app.domain.upload.ContentFinding
 import com.reverie.app.domain.upload.NameStrategy
 import com.reverie.app.domain.upload.keptItems
 import com.reverie.app.domain.upload.needsNameChoice
-import com.reverie.app.ui.components.LIBRARY_NAME
+import com.reverie.app.ui.components.ROOT_NAME
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.util.formatBytes
 
@@ -18,9 +18,9 @@ data class PickedFile(val uri: Uri, val name: String, val mimeType: String?, val
 /** An upload being put together on the upload screen. */
 data class ReviewState(
     val files: List<PickedFile>,
-    /** Where the files go; null is the Library, outside every folder. */
+    /** Where the files go; null is the root, "My files". */
     val folderId: String? = null,
-    val folderName: String = LIBRARY_NAME,
+    val folderName: String = ROOT_NAME,
     /** Hashing the files / asking the server about them; null when not checking. */
     val checking: HashProgress? = null,
     /** Files whose content or name is already in the library, awaiting a decision. Empty: nothing to ask. */

@@ -48,19 +48,13 @@ class BrowseRowsTest {
         assertEquals(listOf("v1"), grid(FeedSource.VIDEOS))
     }
 
-    @Test fun `the files outside any folder are one row each, with no headings`() {
-        val unfiled = rows(FeedSource.UNFILED, mixed)
-        assertEquals(mixed.map { listOf(it.id) }, unfiled.map { it.docIds })
-        assertTrue(unfiled.all { it is FeedRow.Added })
-    }
-
     @Test fun `recently added folds media uploaded together into one row`() {
         val together = listOf(doc("p1", created = "2026-11-23T12:00:00Z"), doc("p2", created = "2026-11-23T11:55:00Z"))
         assertEquals(listOf(listOf("p1", "p2")), rows(FeedSource.RECENT, together).map { it.docIds })
     }
 
     @Test fun `each list finds a loaded document's row and reports one it has not loaded`() {
-        val bySource = mapOf(FeedSource.PHOTOS to "p2", FeedSource.VIDEOS to "v1", FeedSource.FILES to "f1", FeedSource.UNFILED to "f2")
+        val bySource = mapOf(FeedSource.PHOTOS to "p2", FeedSource.VIDEOS to "v1", FeedSource.FILES to "f1")
         bySource.forEach { (source, id) ->
             val rows = rows(source, mixed)
             val at = rowIndexOf(rows, id)
@@ -77,13 +71,40 @@ class BrowseRowsTest {
         assertFalse(isNearEnd(lastVisibleIndex = 9, rowCount = 10, hasMore = false))
     }
 
-    @Test fun `the floating heading is the nearest one above the first visible row`() {
+    private fun dateAt(rows: List<FeedRow>, index: Int) = topDateAt(rows, index, today, ZoneOffset.UTC)
+
+    @Test fun `over files the date is the nearest heading above the first visible row`() {
         val rows = rows(FeedSource.FILES, mixed + doc("f3", "text/plain", created = "2026-11-22T12:00:00Z"))
-        val firstDay = (rows.first() as FeedRow.Heading).header
         val secondHeading = rows.indexOfLast { it is FeedRow.Heading }
-        assertEquals(firstDay, headingAt(rows, 1))
-        assertEquals("Yesterday", headingAt(rows, secondHeading + 1)?.title)
-        assertNull(headingAt(emptyList(), 0))
+        assertEquals(TopDate("Today", 1, isOverPhotos = false), dateAt(rows, 1))
+        assertEquals("Yesterday", dateAt(rows, secondHeading + 1)?.title)
+    }
+
+    @Test fun `over photos the date is that of the first photo of the first visible band`() {
+        // Three to a row: one day per row.
+        val photos = listOf("2026-11-23", "2026-11-22", "2026-11-06").flatMap { day ->
+            (1..3).map { doc("$day-$it", taken = "${day}T1$it:00:00.000Z") }
+        }
+        val rows = rows(FeedSource.PHOTOS, photos)
+        assertEquals(listOf("Today", "Yesterday", "Fri 6 Nov"), rows.indices.map { dateAt(rows, it)?.title })
+        assertEquals(TopDate("Yesterday", 1, isOverPhotos = true), dateAt(rows, 1))
+    }
+
+    @Test fun `photos with no readable date are named undated`() {
+        val rows = rows(FeedSource.PHOTOS, listOf(doc("broken", created = "soon")))
+        assertEquals("Undated", dateAt(rows, 0)?.title)
+    }
+
+    @Test fun `a section title takes the date of what comes under it`() {
+        val band = rows(FeedSource.PHOTOS, mixed).first()
+        val rows = listOf(FeedRow.Section("Photos and videos"), band)
+        assertEquals(TopDate("Today", 1, isOverPhotos = true), dateAt(rows, 0))
+    }
+
+    @Test fun `there is no date above the first row, past the last, or in a list without days`() {
+        assertNull(dateAt(rows(FeedSource.FILES, mixed), -1))
+        assertNull(dateAt(emptyList(), 0))
+        assertNull(dateAt(rows(FeedSource.RECENT, mixed), 0))
     }
 
     @Test fun `a day's photos continue across a page boundary without a seam`() {
@@ -91,11 +112,17 @@ class BrowseRowsTest {
         fun bandIds(rows: List<FeedRow>) = rows.filterIsInstance<FeedRow.Band>().map { it.docIds }
         val firstPage = rows(FeedSource.PHOTOS, photos.take(7))
         val both = rows(FeedSource.PHOTOS, photos)
-        // One day heading only, and every full band of page one is unchanged once page two arrives.
-        assertEquals(1, both.count { it is FeedRow.Heading })
+        // Every full band of page one is unchanged once page two arrives.
         val settled = bandIds(firstPage).dropLast(1)
         assertEquals(settled, bandIds(both).take(settled.size))
         assertEquals(photos.map { it.id }, bandIds(both).flatten())
+    }
+
+    @Test fun `a grid of photos or videos has no heading between its rows`() {
+        listOf(FeedSource.PHOTOS, FeedSource.VIDEOS).forEach { source ->
+            val rows = rows(source, mixed)
+            assertTrue("$source: $rows", rows.isNotEmpty() && rows.all { it is FeedRow.Band })
+        }
     }
 
     @Test fun `a list's subtitle names its total, and the lists by date have none`() {
@@ -103,7 +130,7 @@ class BrowseRowsTest {
         assertEquals("1 photo", FeedSource.PHOTOS.subtitle(1))
         assertEquals("19 videos", FeedSource.VIDEOS.subtitle(19))
         assertEquals("191 files", FeedSource.FILES.subtitle(191))
-        assertEquals("1 file", FeedSource.UNFILED.subtitle(1))
+        assertEquals("1 file", FeedSource.FILES.subtitle(1))
         assertNull(FeedSource.RECENT.subtitle(126))
     }
 }

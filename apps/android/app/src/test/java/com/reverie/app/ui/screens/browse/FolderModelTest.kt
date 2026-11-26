@@ -3,11 +3,14 @@ package com.reverie.app.ui.screens.browse
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentSummaryDto
+import com.reverie.app.data.api.model.FileTotalsDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.KindCountsDto
+import com.reverie.app.data.api.model.KindTotalsDto
 import com.reverie.app.data.api.model.MediaDatesDto
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.domain.folderMeta
+import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.screens.destination.node
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,7 +54,7 @@ class FolderModelTest {
 
     private fun TestScope.start(
         server: FakeServer,
-        folderId: String = "lisbon",
+        folderId: String? = "lisbon",
         isLockRefusal: Boolean = false,
     ): Fixture {
         val summary = MutableStateFlow<DocumentSummaryDto?>(null)
@@ -78,6 +81,32 @@ class FolderModelTest {
 
         assertEquals("lisbon", f.state.node?.name)
         assertEquals(listOf("trips", "lisbon"), f.state.path.map(FolderWithChildren::id))
+    }
+
+    @Test fun `the root holds the top-level folders, under no folder of its own`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos), folderId = null)
+
+        assertTrue(f.state.isRoot)
+        assertNull(f.state.node)
+        assertTrue(f.state.path.isEmpty())
+        assertEquals(listOf("trips"), f.state.children.map(FolderWithChildren::id))
+    }
+
+    @Test fun `search from the root looks through the whole library`() = runTest(UnconfinedTestDispatcher()) {
+        val f = start(FakeServer(photos), folderId = null)
+
+        assertEquals(SearchScope.Library, f.state.searchScope)
+    }
+
+    @Test fun `the root's header counts its own folders and files`() = runTest(UnconfinedTestDispatcher()) {
+        val summary = DocumentSummaryDto(image = KindTotalsDto(count = 2), file = FileTotalsDto(count = 3))
+
+        assertEquals(
+            "1 folder · 5 files",
+            folderPageMeta(FolderState(isRoot = true, children = tree, summary = summary)),
+        )
+        assertEquals("2 photos", folderPageMeta(FolderState(isRoot = true, summary = summary.copy(file = FileTotalsDto()))))
+        assertNull(folderPageMeta(FolderState(isRoot = true, children = tree)))
     }
 
     @Test fun `the other files are asked for once the photos and videos have been read to the end`() =
@@ -195,14 +224,14 @@ class FolderModelTest {
     }
 
     @Test fun `only a folder known to be public offers search`() {
-        assertTrue(FolderState(node = leaf).isSearchable)
-        assertFalse(FolderState(node = leaf.copy(is_private = true)).isSearchable)
+        assertEquals(SearchScope.Folder("lisbon"), FolderState(node = leaf).searchScope)
+        assertNull(FolderState(node = leaf.copy(is_private = true)).searchScope)
         // Inside a private folder further up.
-        assertFalse(FolderState(node = leaf.copy(lock_id = "trips")).isSearchable)
-        assertFalse(FolderState().isSearchable)
+        assertNull(FolderState(node = leaf.copy(lock_id = "trips")).searchScope)
+        assertNull(FolderState().searchScope)
     }
 
-    @Test fun `a folder with both kinds names its two sections, and one day in both gives two headings`() {
+    @Test fun `a folder with both kinds names its two sections, and only the files are headed by day`() {
         val sameDay = "2026-11-23T10:00:00Z"
         val state = FolderState(
             media = FeedDocuments(documents = listOf(doc("p", created = sameDay)), fetched = true),
@@ -212,20 +241,17 @@ class FolderModelTest {
         val rows = folderRows(state, 360f, layout)
 
         assertEquals(listOf("Photos and videos", "Files"), rows.filterIsInstance<FeedRow.Section>().map { it.title })
-        assertEquals(2, rows.filterIsInstance<FeedRow.Heading>().size)
+        assertEquals(1, rows.filterIsInstance<FeedRow.Heading>().size)
         assertEquals(rows.size, rows.map(FeedRow::key).toSet().size)
     }
 
-    @Test fun `a folder holding one kind has date headings and no section titles`() {
+    @Test fun `a folder of photos is one grid, with no headings and no section titles`() {
         val state = FolderState(media = FeedDocuments(documents = photos, fetched = true))
 
         val rows = folderRows(state, 360f, layout)
 
-        assertTrue(rows.none { it is FeedRow.Section })
-        assertEquals(
-            listOf("Wed 3 Jun", "Tue 2 Jun", "Mon 1 Jun"),
-            rows.filterIsInstance<FeedRow.Heading>().map { it.header.title },
-        )
+        assertTrue(rows.isNotEmpty())
+        assertTrue(rows.none { it is FeedRow.Section || it is FeedRow.Heading })
     }
 
     @Test fun `the photos are titled before the files have been read, when the server counts some`() =

@@ -1,16 +1,26 @@
 package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.KindCountsDto
+import com.reverie.app.domain.contentsMeta
 import com.reverie.app.domain.folderMeta
 
 /**
  * The line under a folder's name: what its row says, plus the days its photos span where it has no folders
- * of its own (the span covers only the folder's own documents). Null until the folder is known.
+ * of its own (the span covers only the folder's own documents). The root has no row, so its line counts what
+ * is directly in it. Null until the folder, or the root's figures, are known.
  */
 fun folderPageMeta(state: FolderState): String? {
-    val folder = state.node ?: return null
-    val span = state.summary?.media_dates?.takeIf { folder.children.isEmpty() }?.let(::daySpan)
-    return listOfNotNull(folderMeta(folder), span).joinToString(" · ")
+    val contents = if (state.isRoot) rootMeta(state) else state.node?.let(::folderMeta)
+    if (contents == null) return null
+    val span = state.summary?.media_dates?.takeIf { state.children.isEmpty() }?.let(::daySpan)
+    return listOfNotNull(contents, span).joinToString(" · ")
+}
+
+private fun rootMeta(state: FolderState): String? {
+    val summary = state.summary ?: return null
+    val documents = KindCountsDto(summary.image.count, summary.video.count, summary.file.count)
+    return contentsMeta(state.children.size, documents)
 }
 
 /**

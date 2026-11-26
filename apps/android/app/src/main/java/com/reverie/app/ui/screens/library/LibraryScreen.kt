@@ -48,6 +48,7 @@ fun LibraryScreen(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val backup by viewModel.backup.collectAsStateWithLifecycle()
     val covers by viewModel.covers.collectAsStateWithLifecycle()
+    val shortcutOrder by viewModel.shortcutOrder.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val openRecent = rememberOpenDocument { id, aspect -> onDocumentClick(id, aspect, null) }
     val openUnfiled = rememberOpenDocument { id, aspect -> onDocumentClick(id, aspect, UNFILED_SECTION) }
@@ -68,6 +69,7 @@ fun LibraryScreen(
             onNewFolder = { isNamingFolder = true },
             onFocusConsumed = viewModel::clearViewerFocus,
             folders = RowSelection(selectedIds, viewModel.selection::toggle),
+            onReorderShortcuts = viewModel::reorderShortcuts,
         )
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
@@ -102,6 +104,7 @@ fun LibraryScreen(
                 starredFolderIds = favourites.starredFolderIds,
                 favouriteCount = favourites.visible.size.takeIf { favourites.isLoaded },
                 backup = backup,
+                shortcutOrder = shortcutOrder,
             ),
             links = links,
             actions = actions,

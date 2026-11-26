@@ -78,7 +78,8 @@ private data class SessionControl(val error: String? = null, val lockedFolderId:
  * processing watchers, the grid settings, and the signals that the library changed (a delete or a move
  * anywhere, uploads finishing).
  *
- * The owner (a view model) passes [refresh] to re-read after a password unlock, and [onContentChanged] for
+ * [folderId] is the folder the screen shows, if it shows one; [showsFolders] that it draws folder rows from
+ * the tree, which the root's page does without being a folder. The owner (a view model) passes [refresh] to re-read after a password unlock, and [onContentChanged] for
  * what it re-reads when the library changes.
  */
 class BrowseSession(
@@ -87,6 +88,7 @@ class BrowseSession(
     private val deps: BrowseDeps,
     refresh: () -> Unit,
     private val onContentChanged: () -> Unit,
+    private val showsFolders: Boolean = folderId != null,
 ) {
     private val control = MutableStateFlow(SessionControl())
 
@@ -163,7 +165,7 @@ class BrowseSession(
 
     /** Re-reads the folder tree for a folder page, whose rows and counts come from it. Offline, the cached one stays. */
     fun refreshFolders() {
-        if (folderId == null) return
+        if (!showsFolders) return
         scope.launch { runCatching { deps.folders.refresh() } }
     }
 

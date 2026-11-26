@@ -1,14 +1,10 @@
 package com.reverie.app.ui.screens.trash
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -16,9 +12,9 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.TrashDocumentDto
-import com.reverie.app.ui.components.CoverIconBlock
 import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.FolderThumbnail
 import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.rememberBlurhashPainter
 import java.time.Instant
@@ -49,7 +45,8 @@ fun TrashRow(
 private fun TrashPicture(item: TrashItem) {
     when (item) {
         is TrashItem.Document -> DocumentPicture(item.document)
-        is TrashItem.Folder -> IconPicture(if (item.folder.locked) Icons.Outlined.Lock else Icons.Outlined.Folder)
+        // The trash lists no covers, so a trashed folder is its badge on a plain tile.
+        is TrashItem.Folder -> FolderThumbnail(item.folder.locked, cover = null)
     }
 }
 
@@ -74,9 +71,4 @@ private fun DocumentPicture(document: TrashDocumentDto) {
         error = placeholder,
         modifier = picture,
     )
-}
-
-@Composable
-private fun IconPicture(icon: ImageVector) {
-    CoverIconBlock(icon, MaterialTheme.colorScheme.onSurfaceVariant, size = ROW_PICTURE, shape = MaterialTheme.shapes.medium)
 }

@@ -4,21 +4,21 @@ import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.domain.isInPrivateTree
-import com.reverie.app.ui.components.LIBRARY_NAME
+import com.reverie.app.ui.components.ROOT_NAME
 
 /** What a destination browser may pick. */
 data class DestinationRules(
     /** Folders that are neither listed nor opened: a folder being moved, with everything in it. */
     val excluded: Set<String> = emptySet(),
     val allowPrivate: Boolean = true,
-    /** Whether the Library itself, outside every folder, can be picked. */
+    /** Whether the root, "My files" itself, can be picked. */
     val allowTop: Boolean = true,
 ) {
     fun offers(folder: FolderWithChildren): Boolean =
         folder.id !in excluded && (allowPrivate || !folder.isInPrivateTree)
 }
 
-/** The picked place: a folder, or the Library itself when [folderId] is null. */
+/** The picked place: a folder, or the root when [folderId] is null. */
 data class Destination(val folderId: String?, val name: String)
 
 data class DestinationState(
@@ -44,10 +44,10 @@ data class DestinationState(
         tree.childrenOf(current?.id).filter(rules::offers)
     }
 
-    val destination: Destination = Destination(current?.id, current?.name ?: LIBRARY_NAME)
+    val destination: Destination = Destination(current?.id, current?.name ?: ROOT_NAME)
     val canSelect: Boolean = current != null || rules.allowTop
 
     /** Where [folder] sits, for telling apart search results that share a name. */
     fun locationOf(folder: FolderWithChildren): String =
-        (listOf(LIBRARY_NAME) + tree.pathTo(folder.parent_id).map { it.name }).joinToString(" › ")
+        (listOf(ROOT_NAME) + tree.pathTo(folder.parent_id).map { it.name }).joinToString(" › ")
 }

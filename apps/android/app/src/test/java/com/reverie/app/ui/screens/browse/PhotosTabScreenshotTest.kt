@@ -29,7 +29,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** The Photos tab: the photos under day headings, edge to edge, dark and light. */
+/** The Photos tab: the photos in one stream under the date chip, edge to edge, dark and light. */
 class PhotosTabScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5)
@@ -66,6 +66,10 @@ class PhotosTabScreenshotTest {
                     contentPadding = PaddingValues(bottom = 96.dp), layout = layout,
                     actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { it.id == "m2" }),
                     focusedId = null, onFocusConsumed = {}, onLoadMore = {},
+                )
+                ScrollChips(
+                    topDate = TopDate("Today", position = 0, isOverPhotos = true), processingCount = 0,
+                    onProcessingClick = {}, visibility = { 0f }, dateBelow = { 0 },
                 )
             }
         }

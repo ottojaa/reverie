@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.ui.components.LibraryIcon
+import com.reverie.app.ui.components.ROOT_NAME
 
 /** Where the upload goes, drawn as an outlined field; tapping it opens the destination browser. */
 @Composable
@@ -64,7 +65,7 @@ internal fun LocationField(state: ReviewState, onClick: () -> Unit) {
             )
         }
         Text(
-            if (state.folderId == null) "Not in a folder. Tap to choose one." else "Tap to choose another folder.",
+            if (state.folderId == null) "In $ROOT_NAME. Tap to choose a folder." else "Tap to choose another folder.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 14.dp, top = 6.dp),

@@ -15,7 +15,7 @@ object Routes {
     val folderArguments = listOf(navArgument("folderId") { type = NavType.StringType })
     fun folder(folderId: String) = "folder/$folderId"
 
-    /** A list of documents as its own screen: one kind of the library, Recently added or "Not in a folder". */
+    /** A list of documents as its own screen: one kind of the library, or Recently added. */
     const val FEED = "list/{source}"
     val feedArguments = listOf(navArgument("source") { type = NavType.StringType })
     fun feed(source: FeedSource) = "list/${source.argument}"
@@ -25,6 +25,8 @@ object Routes {
         navArgument("source") { type = NavType.StringType; defaultValue = FeedSource.PHOTOS.argument },
     )
 
+    /** The root of the folders as a folder page: the top-level folders and the files outside them. */
+    const val MY_FILES = "my-files"
     const val FAVOURITES = "favourites"
     const val PRIVATE_FOLDERS = "private"
     const val TRASH = "trash"
@@ -65,7 +67,7 @@ object Routes {
     const val SETTINGS_BACKUP = "settings/backup"
 
     /** The places the library is browsed from: the bottom pill floats over these and no others. */
-    val pillRoutes = setOf(LIBRARY, PHOTOS, FOLDER, FEED, FAVOURITES, PRIVATE_FOLDERS, TRASH)
+    val pillRoutes = setOf(LIBRARY, PHOTOS, MY_FILES, FOLDER, FEED, FAVOURITES, PRIVATE_FOLDERS, TRASH)
 
     /** Where the pill has the round whole-library search button beside it; other lists search what they show. */
     val searchButtonRoutes = setOf(LIBRARY, FAVOURITES)

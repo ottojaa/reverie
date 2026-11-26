@@ -43,7 +43,7 @@ class PickerScreenshotTest {
         UploadScreenContent(state, onClose = {}, onUpload = {}, onPickLocation = {}, onUploadAnyway = { _, _ -> }, onStrategy = {})
     }
 
-    @Test fun uploadToTheLibrary() = upload("upload_library", ReviewState(files))
+    @Test fun uploadToMyFiles() = upload("upload_my_files", ReviewState(files))
 
     @Test fun uploadWithFindings() = upload(
         "upload_findings",

@@ -1,5 +1,7 @@
 package com.reverie.app.ui.screens.trash
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import android.os.Looper
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -259,5 +261,14 @@ class TrashScreenTest {
 
         assertTrue(urls.sm.startsWith("http") && urls.sm.endsWith("/files/sm?s=1"))
         assertEquals("https://cdn.test/lg", urls.lg)
+    }
+
+
+    @Test fun `a trashed folder wears the folder badge, a locked one with its lock`() {
+        open()
+        awaitText("Taxes")
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Locked folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

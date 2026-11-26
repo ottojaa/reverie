@@ -119,9 +119,9 @@ class UploadViewModelTest {
         database.uploadDao().observeAllItems().first().map { database.uploadDao().getTask(it.sessionId)?.folderId }
     }
 
-    @Test fun `from the Library an upload goes outside every folder, with no folder needed`() {
+    @Test fun `from the Library an upload goes to My files, with no folder needed`() {
         begin()
-        assertEquals("Library", viewModel.review.value?.folderName)
+        assertEquals("My files", viewModel.review.value?.folderName)
 
         viewModel.upload()
         await { viewModel.review.value == null }

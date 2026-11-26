@@ -14,6 +14,7 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -30,6 +31,7 @@ import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,11 +51,13 @@ class FolderBodyTest {
     private var documents by mutableStateOf(files)
     private var photos by mutableStateOf(emptyList<DocumentDto>())
     private var folders by mutableStateOf(emptyList<FolderWithChildren>())
+    private var isRoot = false
     private var hasMore by mutableStateOf(false)
     private var pagesAsked = 0
     private var selected by mutableStateOf(emptySet<String>())
     private var focusedId by mutableStateOf<String?>(null)
     private val calls = mutableListOf<String>()
+    private var topDate: TopDate? = null
 
     private fun show() = compose.setContent {
         val trips = node("trips")
@@ -61,14 +65,16 @@ class FolderBodyTest {
         ReverieTheme {
             FolderBody(
                 state = FolderState(
-                    node = shown,
-                    path = listOf(trips, shown),
+                    node = shown.takeUnless { isRoot },
+                    path = if (isRoot) emptyList() else listOf(trips, shown),
+                    isRoot = isRoot,
+                    children = folders,
                     media = FeedDocuments(photos, total = photos.size, fetched = true),
                     files = FeedDocuments(documents, total = documents.size, hasMore = hasMore, fetched = true),
                     selectedIds = selected,
                 ),
-                name = "Portugal",
-                description = "The August trip",
+                name = if (isRoot) "My files" else "Portugal",
+                description = "The August trip".takeUnless { isRoot },
                 links = FolderLinks(
                     emptyMap(),
                     starredIds = emptySet(),
@@ -83,7 +89,7 @@ class FolderBodyTest {
                     onLongClick = { calls += "hold:${it.id}" },
                 ),
                 focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = { pagesAsked++ }, error = null,
-                slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
+                slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = { topDate = it }, onUpload = { calls += "upload" }),
             )
         }
     }
@@ -120,13 +126,56 @@ class FolderBodyTest {
         assertEquals(listOf("select folder:Lisbon"), calls)
     }
 
-    @Test fun `every breadcrumb step leads somewhere, the Library included, even from a folder one level down`() {
+    @Test fun `the root lists its folders above its files, with no breadcrumb to anywhere`() {
+        isRoot = true
+        folders = listOf(node("Lisbon").copy(kind_counts = KindCountsDto(image = 12)))
+        documents = files.take(2)
+        show()
+
+        // Once, as the page's name: a breadcrumb would say it a second time.
+        compose.onAllNodesWithText("My files").assertCountEquals(1)
+        compose.onNodeWithText("file-1.pdf").assertExists()
+        compose.onNodeWithText("Lisbon").performClick()
+
+        assertEquals(listOf("folder:Lisbon"), calls)
+    }
+
+    @Test fun `a root holding only folders is not called empty`() {
+        isRoot = true
+        folders = listOf(node("Lisbon"))
+        documents = emptyList()
+        show()
+
+        compose.onNodeWithText("Lisbon").assertIsDisplayed()
+        compose.onNodeWithText("This folder is empty").assertDoesNotExist()
+    }
+
+    @Test fun `every breadcrumb step leads somewhere, the root included, even from a folder one level down`() {
         show()
 
         compose.onNodeWithText("trips").performClick()
-        compose.onNodeWithText("Library").performClick()
+        compose.onNodeWithText("My files").performClick()
 
         assertEquals(listOf("crumb:trips", "crumb:null"), calls)
+    }
+
+    @Config(qualifiers = "w400dp-h500dp")
+    @Test fun `the date chip is told the day of the photos at the top, and nothing above the first of them`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"))
+        photos = listOf("2026-11-25", "2026-11-24", "2026-11-06", "2026-11-05", "2026-11-04", "2026-11-03", "2026-11-02").flatMap { day ->
+            (1..3).map { doc("$day-$it", taken = "${day}T1$it:00:00.000Z") }
+        }
+        documents = emptyList()
+        show()
+        compose.waitForIdle()
+        assertNull(topDate)
+
+        // The head and one folder, then a row of photos per day.
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(3)
+        compose.waitForIdle()
+
+        assertEquals("Yesterday", topDate?.title)
+        assertEquals(true, topDate?.isOverPhotos)
     }
 
     @Config(qualifiers = "w400dp-h900dp")
@@ -227,5 +276,14 @@ class FolderBodyTest {
 
         compose.onNodeWithText("Lisbon").assertIsDisplayed()
         compose.onNodeWithText("This folder is empty").assertDoesNotExist()
+    }
+
+
+    @Test fun `each folder inside wears the folder badge, a locked one with its lock`() {
+        folders = listOf(node("Lisbon", parent = "Portugal"), node("Vault", parent = "Portugal", isPrivate = true, locked = true))
+        show()
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Locked folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

@@ -41,11 +41,16 @@ fun ReverieNavGraph(
         popEnterTransition = { reveriePopEnter() },
         popExitTransition = { reveriePopExit() },
     ) {
-        tabs(navController)
-        lists(navController)
-        viewer(navController)
-        settings(navController)
+        reverieDestinations(navController)
     }
+}
+
+/** Every screen of the app, under its route. */
+internal fun NavGraphBuilder.reverieDestinations(navController: NavHostController) {
+    tabs(navController)
+    lists(navController)
+    viewer(navController)
+    settings(navController)
 }
 
 /** The two roots of the bottom pill. */
@@ -71,6 +76,7 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
 private fun NavHostController.libraryLinks() = LibraryLinks(
     onOpenFolder = { showFolder(it) },
     onOpenList = { navigate(Routes.feed(it)) },
+    onOpenMyFiles = { navigate(Routes.MY_FILES) },
     onOpenFavourites = { navigate(Routes.FAVOURITES) },
     onSearch = { navigate(Routes.search(query = it)) },
     onOpenTrash = { navigate(Routes.TRASH) },
@@ -84,15 +90,8 @@ private fun NavHostController.accountLinks() = AccountLinks(
 
 /** The screens pushed over a tab that list folders and documents. */
 private fun NavGraphBuilder.lists(navController: NavHostController) {
-    reverieComposable(Routes.FOLDER, Routes.folderArguments) { entry ->
-        FolderScreen(
-            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-            onBack = { navController.popBackStack() },
-            onOpenFolder = { navController.showFolder(it) },
-            onOpenCrumb = { navController.openCrumb(it) },
-            onSearch = { navController.navigate(Routes.search(it)) },
-        )
-    }
+    reverieComposable(Routes.MY_FILES) { entry -> FolderDestination(navController, entry) }
+    reverieComposable(Routes.FOLDER, Routes.folderArguments) { entry -> FolderDestination(navController, entry) }
 
     // A list pushed over the Library: its own list state, paging and selection; back finds the Library as it was.
     reverieComposable(Routes.FEED, Routes.feedArguments) { entry ->
@@ -129,6 +128,18 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onOpenFolder = { navController.showFolder(it) },
         )
     }
+}
+
+/** A folder's page; reached without a folder id it is the root, "My files". */
+@Composable
+private fun FolderDestination(navController: NavHostController, entry: NavBackStackEntry) {
+    FolderScreen(
+        onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
+        onBack = { navController.popBackStack() },
+        onOpenFolder = { navController.showFolder(it) },
+        onOpenCrumb = { navController.openCrumb(it) },
+        onSearch = { navController.navigate(Routes.search(it)) },
+    )
 }
 
 private fun NavGraphBuilder.viewer(navController: NavHostController) {
@@ -175,15 +186,12 @@ internal fun NavHostController.openDocument(
 internal fun NavHostController.showFolder(folderId: String) = navigate(Routes.folder(folderId))
 
 /**
- * Goes to a breadcrumb step (null: the Library root, as the pill's button does). A folder already on the way
- * here is gone back to; any other is opened on top.
+ * Goes to a breadcrumb step (null: the root, "My files"). A page already on the way here is gone back to; any
+ * other is opened on top.
  */
 internal fun NavHostController.openCrumb(folderId: String?) {
-    if (folderId == null) {
-        openTab(Tab.LIBRARY)
-        return
-    }
-    if (!popBackStack(Routes.folder(folderId), inclusive = false)) showFolder(folderId)
+    val route = folderId?.let(Routes::folder) ?: Routes.MY_FILES
+    if (!popBackStack(route, inclusive = false)) navigate(route)
 }
 
 /**

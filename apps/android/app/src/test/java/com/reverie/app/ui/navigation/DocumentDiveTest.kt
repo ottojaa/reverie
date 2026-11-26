@@ -141,13 +141,13 @@ class DocumentDiveTest {
                 unfiled = FeedDocuments(documents, total = 3, fetched = true),
             ),
             marks = LibraryMarks(),
-            links = LibraryLinks(onOpenFolder = {}, onOpenList = {}, onOpenFavourites = {}, onSearch = {}, onOpenTrash = {}),
+            links = LibraryLinks(onOpenFolder = {}, onOpenList = {}, onOpenMyFiles = {}, onOpenFavourites = {}, onSearch = {}, onOpenTrash = {}),
             actions = LibraryActions(
                 recent = opening(null), unfiled = opening(UNFILED_SECTION),
                 onLoadMore = {}, onNewFolder = {}, onFocusConsumed = {},
             ),
             day = LibraryDay(today, zone),
-            slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),
+            slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = {}, onUpload = {}),
         )
     }
 
@@ -164,7 +164,7 @@ class DocumentDiveTest {
             layout = layout,
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
-            slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),
+            slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = {}, onUpload = {}),
         )
     }
 
@@ -299,7 +299,7 @@ class DocumentDiveTest {
         compose.setContent { Host() }
         compose.waitForIdle()
         val library = compose.runOnUiThread { nav.currentBackStackEntry!!.id }
-        // The tile in Recently added comes first, then the row under "Not in a folder".
+        // The tile in Recently added comes first, then the row under "My files".
         listOf(library, sectionOrigin(library, UNFILED_SECTION)).forEachIndexed { copy, origin ->
             val tapped = compose.onAllNodesWithText("image.bin")[copy]
 

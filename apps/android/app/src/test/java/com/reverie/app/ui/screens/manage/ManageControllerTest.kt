@@ -48,7 +48,7 @@ class ManageControllerTest {
 
     private fun move(vararg documents: DocumentDto, to: String? = "Receipts") {
         manage.pickDestination(Picked(documents = documents.map { it.toPicked() })) { gone += it }
-        manage.moveTo(Destination(to, to ?: "Library"))
+        manage.moveTo(Destination(to, to ?: "My files"))
     }
 
     private fun trash(picked: Picked) {
@@ -141,7 +141,7 @@ class ManageControllerTest {
         assertEquals(setOf("Trips", "Japan"), offered.rules.excluded)
 
         manage.pickDestination(Picked(folders = trips.children)) {}
-        manage.moveTo(Destination(null, "Library"))
+        manage.moveTo(Destination(null, "My files"))
         await { sent("PATCH folders/Japan").isNotEmpty() }
 
         assertEquals(listOf("""PATCH folders/Japan {"parent_id":null}"""), sent("PATCH folders/Japan"))
@@ -149,7 +149,7 @@ class ManageControllerTest {
 
     @Test fun `a folder chosen to stay where it is sends nothing and is done with`() {
         manage.pickDestination(Picked(folders = listOf(trips))) { gone += it }
-        manage.moveTo(Destination(null, "Library"))
+        manage.moveTo(Destination(null, "My files"))
         awaitDone(1)
 
         assertEquals(listOf(setOf("Trips")), gone)

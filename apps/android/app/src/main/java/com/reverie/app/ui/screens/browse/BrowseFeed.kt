@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.settings.GridLayoutMode
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -29,7 +31,7 @@ data class FeedLayout(
 /**
  * A [FeedSource]'s scrolling list: the source only changes which rows [feedRows] produces. [focusedId] is
  * the document the viewer last showed; [expanded] holds the keys of a folded list's opened groups;
- * [onHeading] reports the day under the top edge, for the floating date chip.
+ * [onTopDate] reports the date of what is under the top edge, for the floating date chip.
  */
 @Composable
 fun FeedList(
@@ -45,14 +47,15 @@ fun FeedList(
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
     expanded: Set<String> = emptySet(),
-    onHeading: ((FeedItem.Header?) -> Unit)? = null,
+    onTopDate: (TopDate?) -> Unit = {},
 ) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         val width = maxWidth.value
         val rows = remember(source, documents, expanded, width, layout) {
             feedRows(source, documents, expanded, width, layout)
         }
-        FeedScrollEffects(rows, listState, hasMore, onLoadMore, focusedId, onFocusConsumed, onHeading)
+        FeedScrollEffects(rows, listState, hasMore, onLoadMore, focusedId, onFocusConsumed)
+        TopDateEffect(rows, listState, layout, onTopDate)
         LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             items(rows.size, key = { rows[it].key }, contentType = { rows[it].contentType }) { index ->
                 FeedRowView(rows[index], actions, layout.today, layout.zone)
@@ -62,8 +65,8 @@ fun FeedList(
 }
 
 /**
- * The three things a document list does on scroll: ask for the next page near the end, scroll the
- * viewer's last document into view on return, and tell the date chip which group is at the top.
+ * What a document list does as it scrolls: ask for the next page near the end, and scroll the viewer's last
+ * document into view on return.
  *
  * @param leading how many items of the lazy list come before the first of [rows].
  */
@@ -75,7 +78,6 @@ internal fun FeedScrollEffects(
     onLoadMore: () -> Unit,
     focusedId: String?,
     onFocusConsumed: () -> Unit,
-    onHeading: ((FeedItem.Header?) -> Unit)?,
     leading: Int = 0,
 ) {
     val loadMore by rememberUpdatedState(onLoadMore)
@@ -99,12 +101,27 @@ internal fun FeedScrollEffects(
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
         onFocusConsumed()
     }
+}
 
-    if (onHeading == null) return
-    val report by rememberUpdatedState(onHeading)
-    LaunchedEffect(listState, rows) {
-        snapshotFlow { headingAt(rows, listState.firstVisibleItemIndex - leading) }
-            .distinctUntilChanged()
+/**
+ * Tells the date chip what is at the top of the list, each time that changes: not on every row crossed. A list that
+ * leaves the screen takes its date with it.
+ *
+ * @param leading how many items of the lazy list come before the first of [rows].
+ */
+@Composable
+internal fun TopDateEffect(
+    rows: List<FeedRow>,
+    listState: LazyListState,
+    layout: FeedLayout,
+    onTopDate: (TopDate?) -> Unit,
+    leading: Int = 0,
+) {
+    val report by rememberUpdatedState(onTopDate)
+    LaunchedEffect(listState, rows, leading, layout) {
+        snapshotFlow { topDateAt(rows, listState.firstVisibleItemIndex - leading, layout.today, layout.zone) }
+            .distinctUntilChangedBy { it?.title to it?.isOverPhotos }
             .collect { report(it) }
     }
+    DisposableEffect(Unit) { onDispose { report(null) } }
 }

@@ -25,7 +25,8 @@ fun toFindings(names: List<String>, results: List<CheckContentResult>): List<Con
 fun toBreadcrumb(folderPath: List<String>): String = folderPath.joinToString(" › ")
 
 /**
- * The wording for where content already is. The web upload dialog says the same; keep them in step.
+ * The wording for where content already is. The web upload dialog says the same of folders, private folders
+ * and the Trash; keep those in step.
  * [detail] is the existing filename, only when it differs from the file being uploaded.
  */
 data class ContentDescription(val label: String, val detail: String? = null)
@@ -34,7 +35,7 @@ fun describeContent(content: ContentLocation, uploadName: String): ContentDescri
     PrivateContent -> ContentDescription("Already in a private folder")
     TrashContent -> ContentDescription("Already in Trash")
     is FolderContent -> ContentDescription(
-        label = content.folder_path?.let { "Already in ${toBreadcrumb(it)}" } ?: "Already in your library, not in a folder",
+        label = content.folder_path?.let { "Already in ${toBreadcrumb(it)}" } ?: "Already in My files",
         detail = if (content.filename == uploadName) null else "As ${content.filename}",
     )
 }

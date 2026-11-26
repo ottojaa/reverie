@@ -38,6 +38,7 @@ class PillNavigationTest {
         Routes.FOLDER to Routes.folderArguments,
         Routes.PHOTOS to Routes.photosArguments,
         Routes.FEED to Routes.feedArguments,
+        Routes.MY_FILES to emptyList(),
         Routes.FAVOURITES to emptyList(),
         Routes.SEARCH to Routes.searchArguments,
         Routes.DOCUMENT to Routes.documentArguments,
@@ -172,16 +173,25 @@ class PillNavigationTest {
         assertEquals(listOf("folder top", "folder a", Routes.LIBRARY), unwind())
     }
 
-    @Test fun `the breadcrumb's Library root keeps what Photos had`() {
-        tap("Photos")
+    @Test fun `the breadcrumb's root opens My files over the folder, with the pill's Library still selected`() {
         go(Routes.folder("a"))
 
         compose.runOnUiThread { nav.openCrumb(null) }
         compose.waitForIdle()
-        assertEquals(Routes.LIBRARY, here())
-        tap("Photos")
 
-        assertEquals(listOf("folder a", Routes.PHOTOS, Routes.LIBRARY), unwind())
+        button("Library").assertIsSelected()
+        assertEquals(listOf(Routes.MY_FILES, "folder a", Routes.LIBRARY), unwind())
+    }
+
+    @Test fun `the breadcrumb's root goes back to My files when the folder was opened from there`() {
+        go(Routes.MY_FILES)
+        go(Routes.folder("a"))
+        go(Routes.folder("b"))
+
+        compose.runOnUiThread { nav.openCrumb(null) }
+        compose.waitForIdle()
+
+        assertEquals(listOf(Routes.MY_FILES, Routes.LIBRARY), unwind())
     }
 
     @Test fun `Photos tapped while on Photos goes back to its root`() {

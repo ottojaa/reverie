@@ -73,6 +73,9 @@ class LibraryScreenshotTest {
     private val statement =
         item("bank-statement-october.pdf", "application/pdf", "2026-11-01T10:00:00Z", 220_000, picture = true)
 
+    private val archive =
+        item("photos-export-2026.zip", "application/zip", "2026-11-10T10:00:00Z", 48_000_000, picture = false)
+
     private val added = listOf(
         apk("b61deee", "2026-11-26T19:01:00Z"), apk("855423e", "2026-11-25T15:00:00Z"), screenshot, recording,
     )
@@ -94,7 +97,7 @@ class LibraryScreenshotTest {
 
     private val full = LibraryState(
         summary = DocumentSummaryDto(KindTotalsDto(126), KindTotalsDto(49), FileTotalsDto(77)),
-        covers = KindCovers(photo = photo, video = recording, files = listOf(results, statement)),
+        covers = KindCovers(photo = photo, video = recording, files = listOf(added[0], archive, results, statement)),
         smartViews = listOf(
             QuickFilter("screenshots", "Screenshots", "q", count = 45),
             QuickFilter("receipts", "Receipts", "q", count = 3),
@@ -126,13 +129,13 @@ class LibraryScreenshotTest {
                 LibraryBody(
                     state = state,
                     marks = LibraryMarks(covers, starredFolderIds = setOf("Coding", "Photos"), favouriteCount = 5, backup = backup),
-                    links = LibraryLinks(onOpenFolder = {}, onOpenList = {}, onOpenFavourites = {}, onSearch = {}, onOpenTrash = {}),
+                    links = LibraryLinks(onOpenFolder = {}, onOpenList = {}, onOpenMyFiles = {}, onOpenFavourites = {}, onSearch = {}, onOpenTrash = {}),
                     actions = LibraryActions(
                         rows, rows, onLoadMore = {}, onNewFolder = {}, onFocusConsumed = {},
                         folders = RowSelection(selectedIds),
                     ),
                     day = LibraryDay(LocalDate.of(2026, 11, 26), ZoneOffset.UTC),
-                    slot = ChromeSlot(Modifier, PaddingValues(bottom = 96.dp), onHeading = {}, onUpload = {}),
+                    slot = ChromeSlot(Modifier, PaddingValues(bottom = 96.dp), onTopDate = {}, onUpload = {}),
                 )
             }
         }

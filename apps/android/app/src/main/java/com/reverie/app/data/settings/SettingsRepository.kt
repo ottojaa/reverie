@@ -55,6 +55,8 @@ data class AppSettings(
     val mosaicFeatureEvery: Int = 3,
     /** Overrides BuildConfig.DEFAULT_SERVER_URL when non-blank. */
     val serverUrlOverride: String? = null,
+    /** The Library's shortcut chips as they were last put in order; empty until they have been. */
+    val shortcutOrder: List<String> = emptyList(),
     /** Original-file cache cap in bytes. */
     val fileCacheCapBytes: Long = DEFAULT_FILE_CACHE_CAP,
     // TEMPORARY / DEV TUNING — motion parameters editable from the debug-only "Animation settings"
@@ -90,6 +92,7 @@ class SettingsRepository @Inject constructor(
     private val mosaicFeatureEveryKey = intPreferencesKey("mosaic_feature_every")
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
+    private val shortcutOrderKey = stringPreferencesKey("shortcut_order")
     // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
     private val motionNavMsKey = intPreferencesKey("motion_nav_ms")
     private val motionDirEasingKey = stringPreferencesKey("motion_dir_easing")
@@ -111,6 +114,7 @@ class SettingsRepository @Inject constructor(
             videoBackground = prefs[videoBackgroundKey]?.let { runCatching { VideoBackground.valueOf(it) }.getOrNull() } ?: defaults.videoBackground,
             mosaicFeatureEvery = (prefs[mosaicFeatureEveryKey] ?: defaults.mosaicFeatureEvery).coerceIn(MOSAIC_FEATURE_EVERY_MIN, MOSAIC_FEATURE_EVERY_MAX),
             serverUrlOverride = prefs[serverUrlKey]?.takeIf { it.isNotBlank() },
+            shortcutOrder = shortcutOrderIn(prefs),
             fileCacheCapBytes = prefs[cacheCapKey] ?: AppSettings.DEFAULT_FILE_CACHE_CAP,
             motionNavMs = prefs[motionNavMsKey] ?: defaults.motionNavMs,
             motionDirectionalEasing = prefs[motionDirEasingKey] ?: defaults.motionDirectionalEasing,
@@ -156,6 +160,14 @@ class SettingsRepository @Inject constructor(
             if (url.isNullOrBlank()) it.remove(serverUrlKey) else it[serverUrlKey] = url.trim()
         }
     }
+
+    /** Replaces the saved order of the Library's shortcut chips with what [change] makes of it. */
+    suspend fun updateShortcutOrder(change: (List<String>) -> List<String>) {
+        context.settingsDataStore.edit { it[shortcutOrderKey] = change(shortcutOrderIn(it)).joinToString(",") }
+    }
+
+    private fun shortcutOrderIn(prefs: Preferences): List<String> =
+        prefs[shortcutOrderKey]?.split(',')?.filter { it.isNotEmpty() }.orEmpty()
 
     suspend fun setFileCacheCap(bytes: Long) {
         context.settingsDataStore.edit { it[cacheCapKey] = bytes }

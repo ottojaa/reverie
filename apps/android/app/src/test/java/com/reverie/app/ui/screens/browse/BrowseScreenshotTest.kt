@@ -80,32 +80,29 @@ class BrowseScreenshotTest {
         item("f4", "notes.md", "text/markdown", "2026-11-20T08:00:00Z", 4_000),
     )
 
+    /** A list screen with its header showing, or [scrolledTo] a row with the header gone. */
     @Composable
     private fun ListScreen(source: FeedSource, subtitle: String, documents: List<DocumentDto>, scrolledTo: Int? = null) {
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = scrolledTo ?: 0)
-        val body: @Composable () -> Unit = {
-            FeedList(
-                source = source, documents = documents, hasMore = false, listState = listState,
-                contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
-                focusedId = null, onFocusConsumed = {}, onLoadMore = {},
-            )
-        }
-        if (scrolledTo != null) {
-            Box(Modifier.fillMaxSize()) {
-                body()
-                ScrollChips(
-                    heading = headingNow(source, documents, scrolledTo), processingCount = 2, onProcessingClick = {},
-                    visibility = { 1f }, modifier = Modifier.align(Alignment.TopCenter),
+        Column(Modifier.fillMaxSize()) {
+            if (scrolledTo == null) {
+                BrowseHeader(
+                    title = BrowseTitle(source.title, subtitle), processingCount = 2, onProcessingClick = {},
+                    onBack = {},
                 )
             }
-            return
-        }
-        Column(Modifier.fillMaxSize()) {
-            BrowseHeader(
-                title = BrowseTitle(source.title, subtitle), processingCount = 2, onProcessingClick = {},
-                onBack = {},
-            )
-            Box(Modifier.weight(1f)) { body() }
+            Box(Modifier.weight(1f)) {
+                FeedList(
+                    source = source, documents = documents, hasMore = false, listState = listState,
+                    contentPadding = PaddingValues(bottom = 24.dp), layout = layout, actions = noRowActions,
+                    focusedId = null, onFocusConsumed = {}, onLoadMore = {},
+                )
+                ScrollChips(
+                    topDate = dateAt(source, documents, scrolledTo ?: 0), processingCount = 2, onProcessingClick = {},
+                    visibility = { if (scrolledTo == null) 0f else 1f }, modifier = Modifier.align(Alignment.TopCenter),
+                    dateBelow = { 0 },
+                )
+            }
         }
     }
 
@@ -124,8 +121,9 @@ class BrowseScreenshotTest {
                 )
             }
             ScrollChips(
-                heading = headingNow(FeedSource.PHOTOS, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
+                topDate = dateAt(FeedSource.PHOTOS, photoLibrary, 0), processingCount = 2, onProcessingClick = {},
                 visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
+                dateBelow = { (headerPx + offset).toInt() },
             )
             BrowseHeader(
                 title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty()),
@@ -135,9 +133,9 @@ class BrowseScreenshotTest {
         }
     }
 
-    /** The heading a list scrolled to [index] sits under, computed the way the feed reports it. */
-    private fun headingNow(source: FeedSource, documents: List<DocumentDto>, index: Int): FeedItem.Header? =
-        headingAt(feedRows(source, documents, emptySet(), 390f, layout), index)
+    /** What the date chip names for a list scrolled to [index], computed the way the feed reports it. */
+    private fun dateAt(source: FeedSource, documents: List<DocumentDto>, index: Int): TopDate? =
+        topDateAt(feedRows(source, documents, emptySet(), 390f, layout), index, today, zone)
 
     @Test fun kindPhotos() = paparazzi.snapshotThemes("kindPhotos") { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary) }
 
@@ -146,8 +144,6 @@ class BrowseScreenshotTest {
     @Test fun kindFiles() = paparazzi.snapshotThemes("kindFiles") { ListScreen(FeedSource.FILES, "191 files", fileLibrary) }
 
     @Test fun kindPhotosScrolled() = paparazzi.snapshotThemes("kindPhotosScrolled") { ListScreen(FeedSource.PHOTOS, "38 photos", photoLibrary, scrolledTo = 3) }
-
-    @Test fun unfiledList() = paparazzi.snapshotThemes("unfiledList") { ListScreen(FeedSource.UNFILED, "4 files", fileLibrary) }
 
     @Test fun recentList() = paparazzi.snapshotThemes("recentList") { ListScreen(FeedSource.RECENT, "", newestFirst) }
 

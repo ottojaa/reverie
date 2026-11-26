@@ -1,5 +1,7 @@
 package com.reverie.app.ui.screens.destination
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import android.os.Looper
 import android.view.KeyEvent
 import androidx.activity.ComponentDialog
@@ -96,7 +98,7 @@ class DestinationPickerTest {
         press(KeyEvent.KEYCODE_BACK)
         awaitText("Select Photos")
         press(KeyEvent.KEYCODE_BACK)
-        awaitText("Select Library")
+        awaitText("Select My files")
         press(KeyEvent.KEYCODE_BACK)
 
         await { browser.state.value == null }
@@ -110,7 +112,7 @@ class DestinationPickerTest {
 
         press(KeyEvent.KEYCODE_ESCAPE)
 
-        awaitText("Select Library")
+        awaitText("Select My files")
     }
 
     @Test fun `a locked folder asks for the password, and opens once it is accepted`() {
@@ -131,9 +133,9 @@ class DestinationPickerTest {
         show()
         compose.onNodeWithContentDescription("Search folders").performClick()
         compose.onNode(hasSetTextAction()).performTextInput("portu")
-        awaitText("Library › Photos")
+        awaitText("My files › Photos")
         // No folder is being looked at among the results, so there is none to select.
-        compose.onNodeWithText("Select Library").assertDoesNotExist()
+        compose.onNodeWithText("Select My files").assertDoesNotExist()
         compose.onNodeWithText("Open a folder to select it.").assertIsDisplayed()
 
         compose.onNode(hasSetTextAction()).performImeAction()
@@ -154,11 +156,19 @@ class DestinationPickerTest {
         assertEquals(true, world.requests.any { it.startsWith("POST folders ") && "\"parent_id\":\"Photos\"" in it })
     }
 
-    @Test fun `a backup destination offers no private folder and not the Library itself`() {
+    @Test fun `a backup destination offers no private folder and not the root itself`() {
         show(DestinationRules(allowPrivate = false, allowTop = false))
 
         compose.onNodeWithText("Secret").assertDoesNotExist()
-        compose.onNodeWithText("Select Library").assertIsNotEnabled()
+        compose.onNodeWithText("Select My files").assertIsNotEnabled()
         compose.onNodeWithText("Open a folder to select it.").assertIsDisplayed()
+    }
+
+
+    @Test fun `each folder to choose from wears the folder badge, a locked one with its lock`() {
+        show()
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Locked folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

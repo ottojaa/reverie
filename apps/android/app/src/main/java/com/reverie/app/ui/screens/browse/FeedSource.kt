@@ -10,10 +10,10 @@ enum class FeedStyle {
     /** Under day headings: photos and videos as a grid, any other documents as rows. */
     DAYS,
 
-    /** Rows that each say when their document was added. */
-    ROWS,
-
-    /** [ROWS], with media uploaded together folded into one row and same-named files stacked. */
+    /**
+     * Rows that each say when their document was added, with media uploaded together folded into one row and
+     * same-named files stacked.
+     */
     FOLDS,
 }
 
@@ -35,10 +35,6 @@ enum class FeedSource(
     VIDEOS("videos", "Videos", DocumentScope.All, DocumentFilter.VIDEOS, SearchScope.Kind(DocumentKind.VIDEO), "No videos yet"),
     FILES("files", "Files", DocumentScope.All, DocumentFilter.FILES, SearchScope.Kind(DocumentKind.FILE), "No files yet"),
     RECENT("recent", "Recently added", DocumentScope.All, DocumentFilter.ALL, SearchScope.Library, "No files yet", FeedStyle.FOLDS),
-    UNFILED(
-        "unfiled", "Not in a folder", DocumentScope.TopLevel, DocumentFilter.ALL, SearchScope.Library,
-        "Everything is in a folder", FeedStyle.ROWS,
-    ),
     ;
 
     /**
@@ -52,7 +48,7 @@ enum class FeedSource(
     fun subtitle(total: Int): String? = when (this) {
         PHOTOS -> count(total, "photo")
         VIDEOS -> count(total, "video")
-        FILES, UNFILED -> count(total, "file")
+        FILES -> count(total, "file")
         RECENT -> null
     }
 

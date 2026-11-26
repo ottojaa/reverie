@@ -1,5 +1,8 @@
 package com.reverie.app.ui.screens.search
 
+import com.reverie.app.data.api.model.CollectionSearchResult
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -98,6 +101,8 @@ class SearchScreenTest {
     private var back: OnBackPressedDispatcher? = null
     /** How many results the server says there are; it answers every page with [hit]. */
     private var total = 1
+    /** The folders it lists above the results. */
+    private var folderHits = emptyList<CollectionSearchResult>()
 
     private val hit = DocumentSearchResult(
         document_id = "tram", display_name = "Tram 28 in Lisbon", filename = "tram.pdf",
@@ -108,7 +113,7 @@ class SearchScreenTest {
     private val client = HttpClient(MockEngine { request ->
         requests += request.url
         val body = when (request.url.encodedPath) {
-            "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(total, listOf(hit), timing_ms = 1.0))
+            "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(total, folderHits + hit, timing_ms = 1.0))
             "/search/facets" -> FACETS
             else -> return@MockEngine respondError(HttpStatusCode.NotFound)
         }
@@ -428,5 +433,14 @@ class SearchScreenTest {
 
         await { searched.size == 2 && viewModel.selection.ids.value.isEmpty() }
         assertTrue("""DELETE documents {"ids":["tram"]}""" in world.requests)
+    }
+
+
+    @Test fun `a folder among the results wears the folder badge`() {
+        folderHits = listOf(CollectionSearchResult(id = "alfama", name = "Alfama", path = "/Alfama"))
+        open()
+        search("lisbon")
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

@@ -42,7 +42,6 @@ import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentEntryView
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.doc
-import com.reverie.app.ui.components.CoverMosaic
 import com.reverie.app.ui.theme.ReverieTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -133,7 +132,7 @@ class ThumbnailArrivalTest {
     @Test fun `a folder cover loads a new upload's thumbnail once it is ready`() {
         val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
 
-        assertThumbnailArrives { CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+        assertThumbnailArrives { FolderThumbnail(locked = false, cover = FolderCoverDto(tiles = listOf(tile))) }
 
         assertEquals("no list was read", 0, server.listReads)
     }
@@ -160,7 +159,7 @@ class ThumbnailArrivalTest {
         server.document = server.document.copy(thumbnail_status = JobStatus.FAILED)
         val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
 
-        show { CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+        show { FolderThumbnail(locked = false, cover = FolderCoverDto(tiles = listOf(tile))) }
 
         compose.waitUntil(TIMEOUT) { server.documentReads > 0 }
         compose.waitForIdle()
@@ -173,7 +172,7 @@ class ThumbnailArrivalTest {
         server.uploaded = false
         val uploaded = mutableStateOf(false)
         val tile = FolderCoverTileDto("new", "image/jpeg", "new.jpg", thumbnail_blurhash = BLURHASH)
-        show { if (uploaded.value) CoverMosaic(FolderCoverDto(tiles = listOf(tile))) }
+        show { if (uploaded.value) FolderThumbnail(locked = false, cover = FolderCoverDto(tiles = listOf(tile))) }
         compose.waitUntil(TIMEOUT) { server.processingReads > 0 }
         compose.waitForIdle()
 

@@ -1,11 +1,14 @@
 package com.reverie.app.ui.screens.favourites
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,7 +23,6 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.CachedFolders
-import com.reverie.app.ui.components.CoverIconBlock
 import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
@@ -89,13 +91,14 @@ internal fun FileFavourite(item: FavouriteDto, actions: FavouritesActions) {
 /** A private favourite, folder or file: a padlock, and nothing that says which one it is. */
 @Composable
 private fun PrivateFavourite(item: FavouriteDto, actions: FavouritesActions) {
-    FavouriteLine(item, privateLine(item), actions) {
-        CoverIconBlock(
-            icon = Icons.Outlined.Lock,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            size = ROW_PICTURE,
-            shape = MaterialTheme.shapes.medium,
-        )
+    FavouriteLine(item, privateLine(item), actions) { PadlockPicture() }
+}
+
+@Composable
+private fun PadlockPicture() {
+    val tile = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium)
+    Box(tile.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
 

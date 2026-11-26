@@ -74,12 +74,12 @@ class BrowseNavigationTest {
             state = LibraryState(folders = folders),
             marks = LibraryMarks(),
             links = LibraryLinks(
-                onOpenFolder = {}, onOpenList = { nav.navigate("kind") }, onOpenFavourites = {}, onSearch = {},
+                onOpenFolder = {}, onOpenList = { nav.navigate("kind") }, onOpenMyFiles = {}, onOpenFavourites = {}, onSearch = {},
                 onOpenTrash = {},
             ),
             actions = LibraryActions(actions, actions, onLoadMore = {}, onNewFolder = {}, onFocusConsumed = {}),
             day = LibraryDay(today, zone),
-            slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onHeading = {}, onUpload = {}),
+            slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onTopDate = {}, onUpload = {}),
             listState = listState,
         )
     }
