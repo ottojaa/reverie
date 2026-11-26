@@ -1,42 +1,28 @@
 package com.reverie.app.ui.screens.browse
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
+import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.DocumentThumbnail
-import com.reverie.app.ui.components.NameWithStar
-import com.reverie.app.ui.components.SelectedCheck
-import com.reverie.app.ui.components.selectedBackground
+import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
@@ -44,9 +30,7 @@ import com.reverie.app.util.formatDuration
 import java.time.LocalDate
 import java.time.ZoneId
 
-private val THUMB = 52.dp
 private val MEMBER_INDENT = 20.dp
-private val ADDED_NAME_STYLE = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
 
 /** Draws one entry of a list of additions: a row, or a member under an opened group. */
 @Composable
@@ -62,74 +46,30 @@ fun RecentEntryView(entry: RecentEntry, actions: RowActions, today: LocalDate, z
 
 @Composable
 private fun DocRow(doc: DocumentDto, actions: RowActions, today: LocalDate, zone: ZoneId, indent: Dp) {
-    RowShell(
+    DocumentRow(
         name = doc.original_filename,
         meta = listOf(docMeta(doc), recentWhen(doc, today, zone)).filter { it.isNotEmpty() }.joinToString(" · "),
-        selected = actions.selected(doc),
-        isStarred = actions.starred(doc),
-        indent = indent,
         onClick = { actions.onClick(doc) },
         onLongClick = { actions.onLongClick(doc) },
         modifier = Modifier.documentSharedBounds(doc.id),
-        thumb = { DocThumb(doc) },
-    )
+        selected = actions.selected(doc),
+        starred = actions.starred(doc),
+        indent = indent,
+    ) { DocThumb(doc) }
 }
 
 @Composable
 private fun GroupRow(group: RecentRow.Group, expanded: Boolean, actions: RowActions, today: LocalDate, zone: ZoneId) {
     val isStack = group.groupKind == GroupKind.STACK
     val label = if (isStack) stackLabel(group.docs, today, zone) else foldLabel(group.docs, today, zone)
-    RowShell(
+    DocumentRow(
         name = if (isStack) group.docs.first().original_filename else label,
         meta = if (isStack) label else recentWhen(group.docs.first(), today, zone),
-        selected = group.docs.all(actions.selected),
-        indent = 0.dp,
         onClick = { actions.onGroupClick(group) },
         onLongClick = { actions.onGroupLongClick(group) },
         modifier = Modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
-        thumb = { if (isStack) StackedBadge(group.docs.first()) else ThumbnailPile(group.docs) },
-    )
-}
-
-/** The one row shape of a list of additions: a 52dp picture and the name over a meta line. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RowShell(
-    name: String,
-    meta: String,
-    selected: Boolean,
-    indent: Dp,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isStarred: Boolean = false,
-    thumb: @Composable () -> Unit,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .selectedBackground(selected)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .heightIn(min = 64.dp)
-            .padding(start = 20.dp + indent, end = 20.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(Modifier.size(THUMB), contentAlignment = Alignment.Center) {
-            if (selected) SelectedCheck(Modifier.size(36.dp)) else thumb()
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            NameWithStar(name, isStarred, style = ADDED_NAME_STYLE)
-            Text(
-                meta,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+        selected = group.docs.all(actions.selected),
+    ) { if (isStack) StackedBadge(group.docs.first()) else ThumbnailPile(group.docs) }
 }
 
 /** "Photo · 3.2 MB", "Video · 0:42 · 18 MB", "APK · 6.2 MB". */
@@ -146,10 +86,10 @@ private fun docMeta(doc: DocumentDto): String {
 @Composable
 private fun DocThumb(doc: DocumentDto) {
     if (doc.kind == DocumentKind.FILE) {
-        TypeBadge(doc, THUMB)
+        TypeBadge(doc, ROW_PICTURE)
         return
     }
-    Thumbnail(doc, Modifier.size(THUMB).clip(MaterialTheme.shapes.medium))
+    Thumbnail(doc, Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
 }
 
 @Composable
@@ -169,7 +109,7 @@ private fun ThumbnailPile(docs: List<DocumentDto>) {
     val shown = docs.take(3)
     val ring = MaterialTheme.colorScheme.background
     val shape = MaterialTheme.shapes.medium
-    Box(Modifier.size(THUMB).semantics { contentDescription = "Folded" }) {
+    Box(Modifier.size(ROW_PICTURE).semantics { contentDescription = "Folded" }) {
         // Back to front, so the newest ends up on top at the bottom-left.
         shown.indices.reversed().forEach { depth ->
             Thumbnail(
@@ -191,7 +131,7 @@ private fun StackedBadge(doc: DocumentDto) {
         2 to MaterialTheme.colorScheme.surfaceContainer,
         1 to MaterialTheme.colorScheme.surfaceContainerHigh,
     )
-    Box(Modifier.size(THUMB).semantics { contentDescription = "Stacked versions" }) {
+    Box(Modifier.size(ROW_PICTURE).semantics { contentDescription = "Stacked versions" }) {
         sheets.forEach { (depth, sheet) ->
             Box(
                 Modifier.size(42.dp).offset(x = (depth * 4).dp, y = (10 - depth * 4).dp).clip(shape)

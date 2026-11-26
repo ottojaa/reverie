@@ -51,9 +51,10 @@ fun NameWithStar(
     isStarred: Boolean,
     modifier: Modifier = Modifier,
     style: TextStyle = TextStyle.Default,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(name, style = LocalTextStyle.current.merge(style), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(name, style = LocalTextStyle.current.merge(style), maxLines = 1, overflow = overflow, modifier = Modifier.weight(1f, fill = false))
         if (isStarred) StarIcon(filled = true, contentDescription = "Favourite", modifier = Modifier.size(14.dp))
     }
 }

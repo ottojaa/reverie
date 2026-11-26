@@ -2,9 +2,6 @@ package com.reverie.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,12 +9,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.domain.model.ThumbnailSize
@@ -28,49 +22,30 @@ import com.reverie.app.util.formatShortDate
 fun SearchResultRow(
     hit: DocumentSearchResult,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .selectedBackground(selected)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    DocumentRow(
+        name = hit.display_name,
+        meta = listOfNotNull(
+            hit.folder_path?.trim('/')?.takeIf { it.isNotBlank() },
+            formatShortDate(hit.extracted_date ?: hit.uploaded_at),
+        ).joinToString(" · "),
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        selected = selected,
     ) {
-        SelectablePicture(selected, 52.dp) {
-            DocumentThumbnail(
-                documentId = hit.document_id,
-                mimeType = hit.mime_type,
-                filename = hit.filename,
-                blurhash = hit.blurhash,
-                hasThumbnail = !hit.blurhash.isNullOrBlank(),
-                size = ThumbnailSize.SM,
-                modifier = Modifier.size(52.dp).clip(MaterialTheme.shapes.medium),
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                hit.display_name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = listOfNotNull(
-                    hit.folder_path?.trim('/')?.takeIf { it.isNotBlank() },
-                    formatShortDate(hit.extracted_date ?: hit.uploaded_at),
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        DocumentThumbnail(
+            documentId = hit.document_id,
+            mimeType = hit.mime_type,
+            filename = hit.filename,
+            blurhash = hit.blurhash,
+            hasThumbnail = !hit.blurhash.isNullOrBlank(),
+            size = ThumbnailSize.SM,
+            modifier = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium),
+        )
     }
 }
 

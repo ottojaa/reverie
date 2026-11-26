@@ -2,25 +2,16 @@ package com.reverie.app.ui.screens.favourites
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.request.CachePolicy
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
@@ -30,17 +21,14 @@ import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.components.CoverIconBlock
+import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.FolderRow
-import com.reverie.app.ui.components.SelectablePicture
+import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.SelectableTile
 import com.reverie.app.ui.components.VideoBadge
-import com.reverie.app.ui.components.selectedBackground
 import com.reverie.app.ui.navigation.documentSharedBounds
-import com.reverie.app.ui.screens.browse.ROW_NAME_STYLE
-
-private val PICTURE_SIZE = 52.dp
 
 /** A favourite folder, as the folder rows elsewhere. */
 @Composable
@@ -95,17 +83,17 @@ internal fun MediaFavourite(item: FavouriteDto, cell: Float, actions: Favourites
 internal fun FileFavourite(item: FavouriteDto, actions: FavouritesActions) {
     if (item.isPrivate) return PrivateFavourite(item, actions)
     val document = item.document ?: return
-    DocumentLine(item, fileLine(document, item), actions) { FilePicture(document) }
+    FavouriteLine(item, fileLine(document, item), actions) { FilePicture(document) }
 }
 
 /** A private favourite, folder or file: a padlock, and nothing that says which one it is. */
 @Composable
 private fun PrivateFavourite(item: FavouriteDto, actions: FavouritesActions) {
-    DocumentLine(item, privateLine(item), actions) {
+    FavouriteLine(item, privateLine(item), actions) {
         CoverIconBlock(
             icon = Icons.Outlined.Lock,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            size = PICTURE_SIZE,
+            size = ROW_PICTURE,
             shape = MaterialTheme.shapes.medium,
         )
     }
@@ -113,38 +101,18 @@ private fun PrivateFavourite(item: FavouriteDto, actions: FavouritesActions) {
 
 @Composable
 private fun FilePicture(document: DocumentDto) {
-    FileKindBlock(document.mime_type, document.original_filename, Modifier.size(PICTURE_SIZE).clip(MaterialTheme.shapes.medium))
+    FileKindBlock(document.mime_type, document.original_filename, Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DocumentLine(item: FavouriteDto, meta: String, actions: FavouritesActions, picture: @Composable () -> Unit) {
-    val selected = item.id in actions.selection
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .documentSharedBounds(item.id)
-            .selectedBackground(selected)
-            .combinedClickable(
-                onClick = { actions.selection.tap(item.id) { actions.onOpen(item) } },
-                onLongClick = { actions.selection.toggle(item.id) },
-            )
-            .heightIn(min = 68.dp)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        SelectablePicture(selected, PICTURE_SIZE, picture)
-        Column(Modifier.weight(1f)) {
-            Text(favouriteName(item), style = ROW_NAME_STYLE.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                meta,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+private fun FavouriteLine(item: FavouriteDto, meta: String, actions: FavouritesActions, picture: @Composable () -> Unit) {
+    DocumentRow(
+        name = favouriteName(item),
+        meta = meta,
+        onClick = { actions.selection.tap(item.id) { actions.onOpen(item) } },
+        onLongClick = { actions.selection.toggle(item.id) },
+        modifier = Modifier.documentSharedBounds(item.id),
+        selected = item.id in actions.selection,
+        picture = picture,
+    )
 }
