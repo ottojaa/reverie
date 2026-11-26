@@ -48,6 +48,7 @@ fun FeedScreen(
     val listState = rememberLazyListState()
     val source = viewModel.source
     val documents = state.documents
+    val total by viewModel.total.collectAsStateWithLifecycle()
 
     val favourites by viewModel.favourites.state.collectAsStateWithLifecycle()
     val starredIds = favourites.starredDocumentIds
@@ -65,7 +66,7 @@ fun FeedScreen(
     BrowseChrome(
         title = BrowseTitle(
             text = source.title,
-            subtitle = documents.total.takeIf { documents.fetched }?.let(source::subtitle).orEmpty(),
+            subtitle = total?.let(source::subtitle).orEmpty(),
         ),
         ui = ui,
         folderId = null,

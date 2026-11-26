@@ -49,12 +49,14 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.domain.model.toInsightPhase
-import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.aboveSharedElements
 import com.reverie.app.ui.navigation.animateViewerChrome
 import com.reverie.app.ui.screens.favourites.FavouriteHost
 import com.reverie.app.ui.screens.favourites.ReverieSnackbarHost
+import com.reverie.app.ui.screens.manage.Picked
+import com.reverie.app.ui.screens.manage.TrashConfirmDialog
+import com.reverie.app.ui.screens.manage.toPicked
 import com.reverie.app.ui.screens.viewer.DocumentViewModel
 import com.reverie.app.ui.screens.viewer.ViewerType
 import com.reverie.app.ui.screens.viewer.insight.InsightPanelContent
@@ -393,12 +395,9 @@ fun DocumentScreen(
         )
     }
 
-    if (showDelete) {
-        ConfirmDialog(
-            title = "Delete this document?",
-            message = "It goes to the trash, where you can restore it.",
-            confirmLabel = "Delete",
-            destructive = true,
+    if (showDelete && document != null) {
+        TrashConfirmDialog(
+            picked = Picked(documents = listOf(document!!.toPicked())),
             onConfirm = {
                 showDelete = false
                 // Room-backed sequences shrink themselves (→ pager advances, or the empty-guard pops);

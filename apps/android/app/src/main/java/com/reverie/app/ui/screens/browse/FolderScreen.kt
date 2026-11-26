@@ -131,7 +131,7 @@ fun FolderScreen(
         ComingSoonSheet(
             icon = Icons.Outlined.Dashboard,
             title = "Canvas is coming soon",
-            description = "Explore your documents in a spatial 3D view — available on desktop today, coming to Android.",
+            description = "Explore your files in a spatial 3D view — available on desktop today, coming to Android.",
             onDismiss = { isCanvasSoon = false },
         )
     }

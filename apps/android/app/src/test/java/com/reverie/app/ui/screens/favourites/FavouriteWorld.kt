@@ -11,6 +11,7 @@ import com.reverie.app.data.api.model.CheckDuplicatesResponse
 import com.reverie.app.data.api.model.CreateFolderRequest
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderDto
@@ -65,6 +66,9 @@ internal class FavouriteWorld {
 
     /** What the document listing answers with: all of it on one page, narrowed to the folder and kinds asked for. */
     @Volatile var listed: List<DocumentDto> = emptyList()
+
+    /** What GET /documents/summary answers; unset, it answers nothing. */
+    @Volatile var summary: DocumentSummaryDto? = null
 
     /** While set, a PUT waits for it before it is answered. */
     @Volatile var putGate: CompletableDeferred<Unit>? = null
@@ -124,6 +128,10 @@ internal class FavouriteWorld {
         if (isOffline) throw IOException("offline")
         val document = served.firstOrNull { path == "documents/${it.id}" && request.method == HttpMethod.Get }
         if (document != null) return reply(ApiJson.encodeToString(DocumentDto.serializer(), document))
+        val figures = summary
+        if (path == "documents/summary" && figures != null) {
+            return reply(ApiJson.encodeToString(DocumentSummaryDto.serializer(), figures))
+        }
         return when {
             path == "documents" && request.method == HttpMethod.Get && listed.isNotEmpty() -> replyListing(request)
             path == "favourites" -> {

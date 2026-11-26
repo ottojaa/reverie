@@ -38,6 +38,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Quick filters left out: they carry a kind's name but count what a picture was classified as (screenshots
+ * excluded), so their figures would disagree with the Library's, whose cards are the way to those lists.
+ */
+private val KIND_NAMED_FILTERS = setOf("photos", "videos")
+
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -103,7 +109,7 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val filters = runCatching { searchRepository.fetchQuickFilters() }.getOrDefault(emptyList())
-            control.update { it.copy(quickFilters = filters) }
+            control.update { ctrl -> ctrl.copy(quickFilters = filters.filterNot { it.id in KIND_NAMED_FILTERS }) }
         }
         ensureBaseFacets()
         viewModelScope.launch {

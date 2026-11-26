@@ -114,7 +114,7 @@ class TrashScreenTest {
         press("Restore")
 
         awaitText("Restored")
-        awaitText("The trash is empty.")
+        awaitText("Trash is empty.")
         assertEquals(listOf("""POST trash/restore {"document_ids":["receipt"]}"""), sent("POST trash/restore"))
         assertEquals(emptySet<String>(), world.documents.deletedIds.value)
         assertTrue(world.requests.contains("GET folders/tree"))
@@ -240,7 +240,7 @@ class TrashScreenTest {
     @Test fun `a trash that cannot be read says so and can be tried again`() {
         world.isOffline = true
         open()
-        awaitText("Couldn't load the trash.")
+        awaitText("Couldn't load Trash.")
 
         world.isOffline = false
         compose.onNodeWithText("Try again").performClick()

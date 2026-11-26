@@ -42,6 +42,13 @@ enum class FeedSource(
     ),
     ;
 
+    /**
+     * The kind this list holds all of. Its count is the server's count of that kind, the figure the Library
+     * shows, rather than what the list's own pages add up to.
+     */
+    val countedKind: DocumentKind?
+        get() = DocumentKind.entries.firstOrNull { of(it) == this }
+
     /** The line under the title for a list of [total] documents; null when this list shows none. */
     fun subtitle(total: Int): String? = when (this) {
         PHOTOS -> count(total, "photo")

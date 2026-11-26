@@ -230,5 +230,5 @@ class BrowseSession(
     }
 
     private fun messageFor(throwable: Throwable): String =
-        (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load documents."
+        (throwable as? ReverieApiException)?.userMessage() ?: "Couldn't load your files."
 }

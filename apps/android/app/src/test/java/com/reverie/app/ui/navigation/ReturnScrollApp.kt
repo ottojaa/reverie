@@ -19,6 +19,7 @@ import com.reverie.app.data.api.DocumentsApi
 import com.reverie.app.data.api.SearchApi
 import com.reverie.app.data.api.SessionCookieStorage
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.api.model.SearchResponse
 import com.reverie.app.data.auth.AuthSessionManager
 import com.reverie.app.data.auth.TokenBundle
@@ -65,6 +66,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.serialization.builtins.ListSerializer
 
 /**
  * The app's list screens, view models and viewer model over [world]'s server, in a graph that opens the
@@ -78,13 +80,19 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     /** What a search answers with. */
     var hits: List<DocumentSearchResult> = emptyList()
 
+    /** The ready-made searches the server offers. */
+    var quickFilters: List<QuickFilter> = emptyList()
+
     lateinit var nav: NavHostController
     lateinit var viewer: DocumentViewModel
     lateinit var search: SearchViewModel
 
     private val client = HttpClient(MockEngine { request ->
-        if (request.url.encodedPath != "/search") return@MockEngine respondError(HttpStatusCode.NotFound)
-        val body = ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(hits.size, hits, timing_ms = 1.0))
+        val body = when (request.url.encodedPath) {
+            "/search" -> ApiJson.encodeToString(SearchResponse.serializer(), SearchResponse(hits.size, hits, timing_ms = 1.0))
+            "/search/quick-filters" -> ApiJson.encodeToString(ListSerializer(QuickFilter.serializer()), quickFilters)
+            else -> return@MockEngine respondError(HttpStatusCode.NotFound)
+        }
         respond(body, headers = headersOf(HttpHeaders.ContentType, "application/json"))
     }) {
         expectSuccess = false

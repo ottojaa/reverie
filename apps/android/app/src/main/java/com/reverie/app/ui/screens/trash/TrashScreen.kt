@@ -45,7 +45,7 @@ import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.screens.manage.SelectionOverlay
 import java.time.Instant
 
-private const val EMPTY_TRASH = "The trash is empty."
+private const val EMPTY_TRASH = "Trash is empty."
 
 data class TrashActions(
     val onBack: () -> Unit,

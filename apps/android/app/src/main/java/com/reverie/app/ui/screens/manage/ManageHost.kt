@@ -52,8 +52,9 @@ fun ManageHost(controller: ManageController, snackbarHostState: SnackbarHostStat
     UnlockSheetHost(controller.unlocker)
 }
 
+/** The one confirmation every delete outside Trash shows. */
 @Composable
-private fun TrashConfirmDialog(picked: Picked, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun TrashConfirmDialog(picked: Picked, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val question = trashQuestion(picked)
     ConfirmDialog(
         title = question.title,

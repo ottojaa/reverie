@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private const val LOAD_FAILED = "Couldn't load the trash."
+private const val LOAD_FAILED = "Couldn't load Trash."
 private const val CHANGE_FAILED = "Couldn't save the change."
 
 data class TrashUiState(

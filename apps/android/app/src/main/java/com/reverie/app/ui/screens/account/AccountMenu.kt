@@ -66,7 +66,7 @@ internal fun AccountMenu(state: AccountState, links: AccountLinks, onSignOut: ()
     if (isConfirmingSignOut) {
         ConfirmDialog(
             title = "Sign out?",
-            message = "You'll need to sign in again to access your documents.",
+            message = "You'll need to sign in again to access your library.",
             confirmLabel = "Sign out",
             destructive = true,
             onConfirm = {

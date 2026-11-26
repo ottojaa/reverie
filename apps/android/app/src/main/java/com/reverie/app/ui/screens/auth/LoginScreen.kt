@@ -76,7 +76,7 @@ fun LoginScreen(
                 modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                text = "Sign in to access your documents",
+                text = "Sign in to access your library",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

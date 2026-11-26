@@ -4,13 +4,16 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.ui.screens.viewer.ViewerFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.time.ZoneId
 import javax.inject.Inject
@@ -32,8 +35,14 @@ class FeedViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = null,
         deps = deps,
-        refresh = { feed.refresh() },
-        onContentChanged = { feed.contentChanged() },
+        refresh = {
+            feed.refresh()
+            readCount()
+        },
+        onContentChanged = {
+            feed.contentChanged()
+            readCount()
+        },
     )
 
     private val feed: BrowseFeedModel = BrowseFeedModel(
@@ -45,6 +54,13 @@ class FeedViewModel @Inject constructor(
         reconcile = { keep -> deps.documents.dropStale(source.scope, source.filter, keep) },
         sharing = SharingStarted.Eagerly,
     )
+
+    /** How many documents the header says the list holds; null until the server has said. */
+    val total: StateFlow<Int?> = combine(deps.documents.summary(DocumentScope.All), feed.state) { summary, shown ->
+        val kind = source.countedKind
+            ?: return@combine shown.documents.total.takeIf { shown.documents.fetched }
+        summary?.countOf(kind)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val openGroups = MutableStateFlow<Set<String>>(emptySet())
 
@@ -63,11 +79,18 @@ class FeedViewModel @Inject constructor(
 
     init {
         session.keepUnfinishedLive(cache)
+        readCount()
     }
 
     fun refresh(initial: Boolean = false) {
         session.beginRefresh()
         feed.refresh(initial)
+        readCount()
+    }
+
+    private fun readCount() {
+        if (source.countedKind == null) return
+        viewModelScope.readQuietly { deps.documents.fetchSummary(DocumentScope.All) }
     }
 
     fun loadMore() = feed.loadMore()
