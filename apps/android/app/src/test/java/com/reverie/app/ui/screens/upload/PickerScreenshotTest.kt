@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import com.android.resources.Density
 import com.reverie.app.data.api.model.CheckContentResult
 import com.reverie.app.data.api.model.FolderContent
 import com.reverie.app.data.api.model.KindCountsDto
@@ -87,6 +88,14 @@ class PickerScreenshotTest {
 
     @Test fun destinationSearch() =
         destination("destination_search", DestinationState(tree, DestinationRules(), query = "po", covers = covers))
+
+    /** A 320dp-wide phone. */
+    @Test fun destinationNarrow() {
+        paparazzi.unsafeUpdateConfig(
+            DeviceConfig.PIXEL_5.copy(screenWidth = 640, screenHeight = 1300, xdpi = 320, ydpi = 320, density = Density.XHIGH),
+        )
+        destination("destination_narrow", DestinationState(tree, DestinationRules(), at = "Portugal – 2025", covers = covers))
+    }
 
     private fun item(id: String, status: String, progress: Int) = UploadItemEntity(
         id = id, sessionId = "s", stagedPath = "/$id", displayName = "$id.jpg", mimeType = "image/jpeg",
