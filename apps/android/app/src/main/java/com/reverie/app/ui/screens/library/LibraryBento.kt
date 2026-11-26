@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,8 +34,6 @@ import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.theme.ReverieTheme
 
-private val CARD_SHAPE = RoundedCornerShape(20.dp)
-private val SHEET_SHAPE = RoundedCornerShape(6.dp)
 private val SMALL_CARD_HEIGHT = 124.dp
 private val CARD_GAP = 10.dp
 
@@ -104,17 +101,18 @@ private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKi
 @Composable
 private fun CardFrame(onClick: () -> Unit, modifier: Modifier, content: @Composable BoxScope.() -> Unit) {
     Box(
-        modifier = modifier.clip(CARD_SHAPE).background(ReverieTheme.cardColor).clickable(onClick = onClick),
+        modifier = modifier.clip(MaterialTheme.shapes.large).background(ReverieTheme.cardColor).clickable(onClick = onClick),
         content = content,
     )
 }
 
 @Composable
 private fun BoxScope.Sheet(document: DocumentDto, placement: Modifier) {
+    val shape = MaterialTheme.shapes.small
     TilePicture(
         document,
         Modifier.align(Alignment.TopCenter).then(placement).size(width = 64.dp, height = 84.dp)
-            .shadow(3.dp, SHEET_SHAPE).clip(SHEET_SHAPE),
+            .shadow(3.dp, shape).clip(shape),
     )
 }
 

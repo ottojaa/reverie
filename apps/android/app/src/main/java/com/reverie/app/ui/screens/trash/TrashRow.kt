@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Lock
@@ -31,12 +30,11 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.TrashDocumentDto
 import com.reverie.app.ui.components.CoverIconBlock
-import com.reverie.app.ui.components.fileTypeIcon
+import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.rememberBlurhashPainter
 import java.time.Instant
 
 private val PICTURE_SIZE = 52.dp
-private val PICTURE_SHAPE = RoundedCornerShape(12.dp)
 
 /** One item in the trash. It cannot be opened, so a tap and a hold both ask what to do with it. */
 @Composable
@@ -92,7 +90,11 @@ private fun TrashPicture(item: TrashItem) {
 @Composable
 private fun DocumentPicture(document: TrashDocumentDto) {
     val url = document.thumbnail_urls?.sm
-        ?: return IconPicture(fileTypeIcon(document.mime_type, document.original_filename))
+    val picture = Modifier.size(PICTURE_SIZE).clip(MaterialTheme.shapes.medium)
+    if (url == null) {
+        FileKindBlock(document.mime_type, document.original_filename, picture)
+        return
+    }
     val placeholder = rememberBlurhashPainter(document.thumbnail_blurhash)
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current).data(url).diskCachePolicy(CachePolicy.DISABLED).build(),
@@ -100,11 +102,11 @@ private fun DocumentPicture(document: TrashDocumentDto) {
         contentScale = ContentScale.Crop,
         placeholder = placeholder,
         error = placeholder,
-        modifier = Modifier.size(PICTURE_SIZE).clip(PICTURE_SHAPE),
+        modifier = picture,
     )
 }
 
 @Composable
 private fun IconPicture(icon: ImageVector) {
-    CoverIconBlock(icon, MaterialTheme.colorScheme.onSurfaceVariant, size = PICTURE_SIZE, shape = PICTURE_SHAPE)
+    CoverIconBlock(icon, MaterialTheme.colorScheme.onSurfaceVariant, size = PICTURE_SIZE, shape = MaterialTheme.shapes.medium)
 }

@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Lock
@@ -38,6 +38,7 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
+import com.reverie.app.ui.theme.MEDIUM_CORNER
 
 /**
  * A Google-Photos-style gallery tile: an edge-to-edge cropped thumbnail with no caption and no
@@ -68,8 +69,8 @@ fun DocumentCard(
     )
     val scale = lerp(1f, 0.86f, progress)
     // Clamp for the corner: the bouncy spring undershoots below 0 on deselect, and a negative
-    // corner radius crashes RoundedCornerShape. Scale can keep the (always-positive) overshoot.
-    val corner = androidx.compose.ui.unit.lerp(0.dp, 12.dp, progress.coerceIn(0f, 1f))
+    // corner radius crashes the shape. Scale can keep the (always-positive) overshoot.
+    val corner = androidx.compose.ui.unit.lerp(0.dp, MEDIUM_CORNER, progress.coerceIn(0f, 1f))
 
     Box(
         modifier = modifier
@@ -86,7 +87,7 @@ fun DocumentCard(
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(corner)),
+                .clip(MaterialTheme.shapes.medium.copy(CornerSize(corner))),
         ) {
             // Shared tile visual (thumbnail-or-icon + video/type overlays), identical to the search grid.
             GalleryThumbnail(

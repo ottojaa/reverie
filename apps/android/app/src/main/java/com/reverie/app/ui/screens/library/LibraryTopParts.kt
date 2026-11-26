@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.library
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Delete
@@ -35,7 +35,6 @@ import com.reverie.app.data.backup.BackupStatus
 import com.reverie.app.ui.components.backupIcon
 import com.reverie.app.ui.components.backupLine
 
-private val CHIP_SHAPE = RoundedCornerShape(20.dp)
 
 @Composable
 internal fun BackupLine(status: BackupStatus, total: Int?) {
@@ -83,7 +82,7 @@ private fun LibraryChip(icon: ImageVector, label: String, count: Int?, onClick: 
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(CHIP_SHAPE)
+            .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)
             .padding(start = 12.dp, end = 14.dp),

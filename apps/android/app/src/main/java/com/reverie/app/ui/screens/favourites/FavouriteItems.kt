@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.DropdownMenu
@@ -46,7 +45,6 @@ import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.ui.screens.browse.ROW_NAME_STYLE
 
 private val PICTURE_SIZE = 52.dp
-private val PICTURE_SHAPE = RoundedCornerShape(12.dp)
 
 /**
  * A favourite folder, as the folder rows elsewhere with its menu on a long press. A folder the cached tree
@@ -118,14 +116,14 @@ private fun PrivateFavourite(item: FavouriteDto, actions: FavouritesActions) {
             icon = Icons.Outlined.Lock,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             size = PICTURE_SIZE,
-            shape = PICTURE_SHAPE,
+            shape = MaterialTheme.shapes.medium,
         )
     }
 }
 
 @Composable
 private fun FilePicture(document: DocumentDto) {
-    FileKindBlock(document.mime_type, document.original_filename, Modifier.size(PICTURE_SIZE).clip(PICTURE_SHAPE))
+    FileKindBlock(document.mime_type, document.original_filename, Modifier.size(PICTURE_SIZE).clip(MaterialTheme.shapes.medium))
 }
 
 @OptIn(ExperimentalFoundationApi::class)

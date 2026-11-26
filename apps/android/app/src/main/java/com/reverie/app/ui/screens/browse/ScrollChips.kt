@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.browse
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -88,8 +88,8 @@ private fun Chip(modifier: Modifier, content: @Composable () -> Unit) {
             .statusBarsPadding()
             .padding(top = CHIP_GAP)
             .height(CHIP_HEIGHT)
-            .shadow(6.dp, RoundedCornerShape(50), clip = false)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = CHIP_SURFACE_ALPHA), RoundedCornerShape(50)),
+            .shadow(6.dp, CircleShape, clip = false)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = CHIP_SURFACE_ALPHA), CircleShape),
         contentAlignment = Alignment.Center,
     ) { content() }
 }

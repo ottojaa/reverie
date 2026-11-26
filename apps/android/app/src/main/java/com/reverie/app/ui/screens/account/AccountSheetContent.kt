@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -40,7 +39,6 @@ import com.reverie.app.ui.components.backupIcon
 import com.reverie.app.ui.components.backupLine
 import com.reverie.app.ui.theme.ReverieTheme
 
-private val CARD_SHAPE = RoundedCornerShape(18.dp)
 
 /** Who is signed in, backup and storage, and the ways on from there. */
 @Composable
@@ -50,7 +48,7 @@ internal fun AccountSheetContent(state: AccountState, links: AccountLinks, onSig
     ) {
         state.user?.let { Identity(it) }
         Column(
-            Modifier.padding(top = 20.dp, bottom = 12.dp).fillMaxWidth().clip(CARD_SHAPE)
+            Modifier.padding(top = 20.dp, bottom = 12.dp).fillMaxWidth().clip(MaterialTheme.shapes.large)
                 .background(ReverieTheme.cardColor),
         ) {
             BackupRow(state, links.onOpenBackup)
@@ -124,7 +122,7 @@ private fun Secondary(text: String) {
 @Composable
 private fun SheetRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onClick)
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(role = Role.Button, onClick = onClick)
             .heightIn(min = 52.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

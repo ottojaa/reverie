@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.viewer.insight
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,11 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.ui.components.fileTypeIcon
+import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatDayDate
@@ -36,6 +36,8 @@ import com.reverie.app.util.formatTimeOfDay
 import com.reverie.app.ui.screens.viewer.insight.cameraSummary
 import com.reverie.app.ui.screens.viewer.insight.videoSummary
 import java.time.Instant
+
+private val LEADING_SIZE = 28.dp
 
 /**
  * The DETAILS card: full-width Google-Photos-style rows (leading icon, primary line, secondary
@@ -49,7 +51,7 @@ fun InsightFactsSection(document: DocumentDto) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
+                .clip(MaterialTheme.shapes.large)
                 .background(ReverieTheme.cardColor)
                 .padding(vertical = 6.dp),
         ) {
@@ -60,40 +62,49 @@ fun InsightFactsSection(document: DocumentDto) {
 
 @Composable
 private fun FactRows(document: DocumentDto) {
-    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
-
     document.extracted_date?.let { date ->
-        FactRow(Icons.Outlined.CalendarToday, subtle, formatDayDate(date), "Document date · extracted by AI")
+        FactRow(Icons.Outlined.CalendarToday, formatDayDate(date), "Document date · extracted by AI")
     }
 
     document.photo_metadata?.taken_at?.let { takenAt ->
         val time = formatTimeOfDay(takenAt)
-        FactRow(Icons.Outlined.PhotoCamera, subtle, formatDayDate(takenAt), "Taken" + (time?.let { " · $it" } ?: ""))
+        FactRow(Icons.Outlined.PhotoCamera, formatDayDate(takenAt), "Taken" + (time?.let { " · $it" } ?: ""))
     }
 
     document.photo_metadata?.let { photo -> cameraSummary(photo) }?.let { (primary, secondary) ->
-        FactRow(Icons.Outlined.CameraAlt, subtle, primary, secondary)
+        FactRow(Icons.Outlined.CameraAlt, primary, secondary)
     }
 
     document.video_metadata?.let { video -> videoSummary(video, document.duration_seconds) }?.let { (primary, secondary) ->
-        FactRow(Icons.Outlined.Videocam, subtle, primary, secondary)
+        FactRow(Icons.Outlined.Videocam, primary, secondary)
     }
 
-    FactRow(fileTypeIcon(document.mime_type, document.original_filename), subtle, fileTitle(document), fileSubtitle(document))
+    val tile = Modifier.size(LEADING_SIZE).clip(MaterialTheme.shapes.small)
+    FactRow(
+        leading = { FileKindBlock(document.mime_type, document.original_filename, tile, compact = true) },
+        primary = fileTitle(document),
+        secondary = fileSubtitle(document),
+    )
 
-    FactRow(Icons.Outlined.CloudUpload, subtle, formatDayDate(document.created_at), uploadedSubtitle(document))
+    FactRow(Icons.Outlined.CloudUpload, formatDayDate(document.created_at), uploadedSubtitle(document))
 }
 
 @Composable
-private fun FactRow(icon: ImageVector, iconTint: Color, primary: String, secondary: String?) {
+private fun FactRow(icon: ImageVector, primary: String, secondary: String?) {
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    FactRow({ Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) }, primary, secondary)
+}
+
+@Composable
+private fun FactRow(leading: @Composable () -> Unit, primary: String, secondary: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.size(16.dp))
+        Box(Modifier.size(LEADING_SIZE), contentAlignment = Alignment.Center) { leading() }
+        Spacer(Modifier.size(12.dp))
         Column {
             Text(primary, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             if (!secondary.isNullOrBlank()) {

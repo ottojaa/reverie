@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Star
@@ -54,7 +53,7 @@ fun FolderRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        val shape = RoundedCornerShape(if (coverSize > 48.dp) 12.dp else 10.dp)
+        val shape = MaterialTheme.shapes.medium
         if (folder.locked) {
             CoverIconBlock(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurfaceVariant, size = coverSize, shape = shape)
         } else {

@@ -129,7 +129,7 @@ private fun PermissionNotice(state: BackupUiState, onAllow: () -> Unit) {
 
 @Composable
 private fun NoticeCard(title: String, body: String, action: String, onAction: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
             Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -233,10 +233,10 @@ private fun BackupCard(title: String, content: @Composable () -> Unit) {
         Text(
             title,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
         )
-        Surface(color = ReverieTheme.cardColor, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+        Surface(color = ReverieTheme.cardColor, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) { content() }
         }
     }

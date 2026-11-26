@@ -11,14 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,7 +33,7 @@ import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
-import com.reverie.app.ui.components.fileTypeIcon
+import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.util.formatBytes
 
 /**
@@ -90,23 +87,14 @@ internal fun FallbackCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 520.dp)
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(MaterialTheme.shapes.medium),
             )
         } else {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier.size(80.dp),
-            ) {
-                Icon(
-                    fileTypeIcon(document.mime_type, document.original_filename),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(20.dp)
-                        .size(40.dp),
-                )
-            }
+            FileKindBlock(
+                document.mime_type,
+                document.original_filename,
+                Modifier.size(80.dp).clip(MaterialTheme.shapes.medium),
+            )
         }
         Text(
             text = document.original_filename,

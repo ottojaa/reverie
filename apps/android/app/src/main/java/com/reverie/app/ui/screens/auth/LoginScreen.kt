@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -87,7 +86,7 @@ fun LoginScreen(
             if (state.error != null) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
@@ -102,6 +101,8 @@ fun LoginScreen(
             }
 
             OutlinedTextField(
+
+                shape = MaterialTheme.shapes.medium,
                 value = state.email,
                 onValueChange = viewModel::onEmailChange,
                 label = { Text("Email") },
@@ -115,6 +116,7 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = state.password,
                 onValueChange = viewModel::onPasswordChange,
                 label = { Text("Password") },
@@ -185,7 +187,7 @@ private fun LogoMark() {
     // Geist now, so it reads cleanly rather than as the old system-font glyph.
     Surface(
         color = Color(0xFF121212),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.size(64.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {

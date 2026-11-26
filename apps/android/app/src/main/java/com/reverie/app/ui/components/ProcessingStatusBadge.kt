@@ -1,5 +1,6 @@
 package com.reverie.app.ui.components
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -12,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
@@ -52,13 +52,13 @@ fun ProcessingStatusBadge(
         } else {
             Modifier
                 .minimumInteractiveComponentSize()
-                .clip(RoundedCornerShape(50))
+                .clip(CircleShape)
                 .clickable(onClickLabel = "Show files being processed", role = Role.Button, onClick = onClick)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = tappable
-                .background(colors.secondaryContainer, RoundedCornerShape(50))
+                .background(colors.secondaryContainer, CircleShape)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
         ) {
             Icon(

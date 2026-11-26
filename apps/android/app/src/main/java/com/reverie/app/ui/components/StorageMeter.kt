@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.ui.theme.ReverieTheme
 import com.reverie.app.util.formatBytes
 
-private val BAR_SHAPE = RoundedCornerShape(3.dp)
 
 /** How much of the account's storage is used, over a bar that turns to warning near full. */
 @Composable
@@ -43,11 +41,11 @@ fun StorageMeter(
             )
         }
         BoxWithConstraints(
-            Modifier.fillMaxWidth().height(6.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, BAR_SHAPE),
+            Modifier.fillMaxWidth().height(6.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.shapes.extraSmall),
         ) {
             if (usedBytes <= 0) return@BoxWithConstraints
             // Wide enough to be seen however little is used.
-            Box(Modifier.width(max(maxWidth * fraction, 8.dp)).fillMaxHeight().background(fill, BAR_SHAPE))
+            Box(Modifier.width(max(maxWidth * fraction, 8.dp)).fillMaxHeight().background(fill, MaterialTheme.shapes.extraSmall))
         }
     }
 }

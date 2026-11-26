@@ -3,14 +3,9 @@ package com.reverie.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -22,8 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -37,11 +30,9 @@ import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.util.formatDuration
 
 /**
- * The thumbnail fill for a document: a cropped image, or — when there's no rendered preview — a
- * centered file-type icon over a subtle type-colored wash, with the filename beneath it so files
- * with no picture (binaries, archives, .apk, …) are still tellable apart at a glance. Primitive
- * overload so callers backed by a [DocumentDto] AND by a search result (a different DTO) can share
- * one implementation.
+ * The thumbnail fill for a document: a cropped image, or the neutral extension block when there's no
+ * rendered preview. [isCaptioned] adds the filename to that block, so files with no picture are still
+ * tellable apart in a grid. Takes plain values so a [DocumentDto] and a search result share it.
  */
 @Composable
 fun DocumentThumbnail(
@@ -54,6 +45,7 @@ fun DocumentThumbnail(
     size: ThumbnailSize = ThumbnailSize.MD,
     // READ_ONLY reads a thumbnail some other screen already cached but never writes one.
     diskCachePolicy: CachePolicy = CachePolicy.ENABLED,
+    isCaptioned: Boolean = false,
 ) {
     if (hasThumbnail) {
         val placeholder = rememberBlurhashPainter(blurhash)
@@ -82,31 +74,7 @@ fun DocumentThumbnail(
         return
     }
 
-    // No picture: the file type's icon over the filename.
-    Column(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = fileTypeIcon(mimeType, filename),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(34.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = filename,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    FileKindBlock(mimeType, filename, modifier, caption = filename.takeIf { isCaptioned })
 }
 
 /**
@@ -138,6 +106,7 @@ fun GalleryThumbnail(
             hasThumbnail = hasThumbnail,
             size = size,
             modifier = Modifier.matchParentSize(),
+            isCaptioned = true,
         )
         // The top corner, shared: the favourite star, then a video's badge or a type chip.
         Row(
@@ -147,8 +116,8 @@ fun GalleryThumbnail(
         ) {
             if (isStarred) StarredBadge()
             if (isVideo) VideoBadge(durationSeconds)
-            // A previewable document (a rendered PDF/office page) still needs a type marker; files with
-            // no preview already show their icon + name in the fill, so a corner chip would be redundant.
+            // A previewable document (a rendered PDF/office page) still needs a type marker; a file with
+            // no preview already shows its extension in the fill.
             if (!isImage && !isVideo && hasThumbnail) FileTypeBadge(mime = mimeType, filename = filename)
         }
     }
@@ -159,7 +128,7 @@ fun GalleryThumbnail(
 internal fun VideoBadge(seconds: Double?, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.small)
             .padding(start = 4.dp, top = 2.dp, end = 6.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -179,7 +148,7 @@ internal fun VideoBadge(seconds: Double?, modifier: Modifier = Modifier) {
 private fun FileTypeBadge(mime: String, filename: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.small)
             .padding(horizontal = 5.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {

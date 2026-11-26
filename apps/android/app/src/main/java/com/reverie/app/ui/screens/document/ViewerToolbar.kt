@@ -127,6 +127,7 @@ fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> 
         title = { Text("Rename") },
         text = {
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,

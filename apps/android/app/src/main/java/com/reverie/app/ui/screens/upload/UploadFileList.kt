@@ -1,5 +1,7 @@
 package com.reverie.app.ui.screens.upload
 
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +34,6 @@ import com.reverie.app.domain.upload.describeNameConflict
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.theme.ReverieTheme
 
-private val CARD_CORNER = 18.dp
 
 /** One file of the upload list, and under it the decision it needs when the check found something. */
 @Composable
@@ -46,12 +46,10 @@ internal fun UploadFileRow(
     isFirst: Boolean,
     isLast: Boolean,
 ) {
-    val top = if (isFirst) CARD_CORNER else 0.dp
-    val bottom = if (isLast) CARD_CORNER else 0.dp
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom))
+            .clip(cardSlice(isFirst, isLast))
             .background(MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Row(
@@ -70,11 +68,24 @@ internal fun UploadFileRow(
     }
 }
 
+/** One row's share of the list's card: only the first and last rows have its corners. */
+@Composable
+private fun cardSlice(isFirst: Boolean, isLast: Boolean): Shape {
+    val card = MaterialTheme.shapes.large
+    val square = CornerSize(0.dp)
+    return card.copy(
+        topStart = if (isFirst) card.topStart else square,
+        topEnd = if (isFirst) card.topEnd else square,
+        bottomStart = if (isLast) card.bottomStart else square,
+        bottomEnd = if (isLast) card.bottomEnd else square,
+    )
+}
+
 /** The picture of a photo; the file type's name for anything else, or a photo that won't load. */
 @Composable
 private fun FileThumbnail(file: PickedFile) {
     Box(
-        Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        Modifier.size(44.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         Text(

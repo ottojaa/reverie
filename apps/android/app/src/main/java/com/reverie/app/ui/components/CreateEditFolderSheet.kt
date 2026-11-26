@@ -108,6 +108,8 @@ fun CreateEditFolderSheet(
             }
 
             OutlinedTextField(
+
+                shape = MaterialTheme.shapes.medium,
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
@@ -123,6 +125,7 @@ fun CreateEditFolderSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
+                shape = MaterialTheme.shapes.medium,
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Description (optional)") },

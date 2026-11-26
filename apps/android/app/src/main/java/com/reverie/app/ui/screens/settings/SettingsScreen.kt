@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.settings
 
+import androidx.compose.foundation.shape.CircleShape
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -272,12 +273,12 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
         )
         Surface(
             color = ReverieTheme.cardColor,
-            shape = MaterialTheme.shapes.medium,
+            shape = MaterialTheme.shapes.large,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(16.dp)) { content() }
@@ -460,6 +461,7 @@ private fun EasingChips(selected: EasingPreset, onSelect: (EasingPreset) -> Unit
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         EasingPreset.entries.forEach { preset ->
             FilterChip(
+                shape = CircleShape,
                 selected = selected == preset,
                 onClick = { onSelect(preset) },
                 label = { Text(preset.displayName(), style = MaterialTheme.typography.labelSmall) },

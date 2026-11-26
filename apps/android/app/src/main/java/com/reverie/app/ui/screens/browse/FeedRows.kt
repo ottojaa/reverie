@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -146,7 +145,7 @@ fun fileMeta(doc: DocumentDto): String =
 /** A file's extension on a small block, in the place a photo's thumbnail would take. */
 @Composable
 fun TypeBadge(doc: DocumentDto, size: Dp = 36.dp) {
-    FileKindBlock(doc.mime_type, doc.original_filename, Modifier.size(size).clip(RoundedCornerShape(9.dp)))
+    FileKindBlock(doc.mime_type, doc.original_filename, Modifier.size(size).clip(MaterialTheme.shapes.medium))
 }
 
 /** A row's ⋮ button and its menu. */

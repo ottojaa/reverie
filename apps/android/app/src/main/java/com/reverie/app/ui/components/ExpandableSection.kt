@@ -59,7 +59,7 @@ fun ExpandableSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
+            .clip(MaterialTheme.shapes.large)
             .background(ReverieTheme.cardColor),
     ) {
         Row(

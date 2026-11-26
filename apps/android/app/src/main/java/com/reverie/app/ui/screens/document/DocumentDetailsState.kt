@@ -23,7 +23,6 @@ import com.reverie.app.ui.navigation.MotionTuning
 const val DETAILS_HEADER_FRACTION = 0.4f
 
 /** Radius of the details drawer's rounded top corners. */
-val DETAILS_CORNER_RADIUS = 16.dp
 
 enum class DetailsValue { Closed, Open }
 

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +39,7 @@ fun SearchResultRow(hit: DocumentSearchResult, onClick: () -> Unit, modifier: Mo
             blurhash = hit.blurhash,
             hasThumbnail = !hit.blurhash.isNullOrBlank(),
             size = ThumbnailSize.SM,
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
         )
         Column(
             modifier = Modifier

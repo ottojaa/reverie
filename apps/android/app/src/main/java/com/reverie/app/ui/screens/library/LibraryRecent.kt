@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +46,6 @@ import com.reverie.app.ui.screens.browse.recentWhen
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val TILE = 132.dp
-private val TILE_SHAPE = RoundedCornerShape(16.dp)
 
 /** What was added last, newest first, as a row that runs off the side and loads more as it is scrolled. */
 @Composable
@@ -84,7 +82,7 @@ private fun RecentTile(document: DocumentDto, actions: RowActions, day: LibraryD
             .combinedClickable(onClick = { actions.onClick(document) }, onLongClick = { actions.onLongClick(document) }),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Box(Modifier.padding(bottom = 6.dp).size(TILE).documentSharedBounds(document.id).clip(TILE_SHAPE)) {
+        Box(Modifier.padding(bottom = 6.dp).size(TILE).documentSharedBounds(document.id).clip(MaterialTheme.shapes.large)) {
             TilePicture(document, Modifier.matchParentSize())
             TileMarks(document, actions.starred(document), Modifier.align(Alignment.TopEnd))
             if (actions.selected(document)) SelectionCover()

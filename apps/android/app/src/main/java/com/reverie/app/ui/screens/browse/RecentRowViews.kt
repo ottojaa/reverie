@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,8 +45,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 private val THUMB = 52.dp
-private val THUMB_SHAPE = RoundedCornerShape(12.dp)
-private val PILE_SHAPE = RoundedCornerShape(10.dp)
 private val MEMBER_INDENT = 20.dp
 private val ADDED_NAME_STYLE = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
 
@@ -152,7 +149,7 @@ private fun DocThumb(doc: DocumentDto) {
         TypeBadge(doc, THUMB)
         return
     }
-    Thumbnail(doc, Modifier.size(THUMB).clip(THUMB_SHAPE))
+    Thumbnail(doc, Modifier.size(THUMB).clip(MaterialTheme.shapes.medium))
 }
 
 @Composable
@@ -171,13 +168,14 @@ private fun Thumbnail(doc: DocumentDto, modifier: Modifier) = DocumentThumbnail(
 private fun ThumbnailPile(docs: List<DocumentDto>) {
     val shown = docs.take(3)
     val ring = MaterialTheme.colorScheme.background
+    val shape = MaterialTheme.shapes.medium
     Box(Modifier.size(THUMB).semantics { contentDescription = "Folded" }) {
         // Back to front, so the newest ends up on top at the bottom-left.
         shown.indices.reversed().forEach { depth ->
             Thumbnail(
                 shown[depth],
                 Modifier.size(44.dp).offset(x = (depth * 4).dp, y = (8 - depth * 4).dp)
-                    .clip(PILE_SHAPE).border(2.dp, ring, PILE_SHAPE),
+                    .clip(shape).border(2.dp, ring, shape),
             )
         }
     }
@@ -187,6 +185,7 @@ private fun ThumbnailPile(docs: List<DocumentDto>) {
 @Composable
 private fun StackedBadge(doc: DocumentDto) {
     val ring = MaterialTheme.colorScheme.background
+    val shape = MaterialTheme.shapes.medium
     // Back to front, each a surface step lighter in weight than the badge.
     val sheets = listOf(
         2 to MaterialTheme.colorScheme.surfaceContainer,
@@ -195,9 +194,9 @@ private fun StackedBadge(doc: DocumentDto) {
     Box(Modifier.size(THUMB).semantics { contentDescription = "Stacked versions" }) {
         sheets.forEach { (depth, sheet) ->
             Box(
-                Modifier.size(42.dp).offset(x = (depth * 4).dp, y = (10 - depth * 4).dp).clip(PILE_SHAPE)
+                Modifier.size(42.dp).offset(x = (depth * 4).dp, y = (10 - depth * 4).dp).clip(shape)
                     .background(sheet)
-                    .border(1.5.dp, ring, PILE_SHAPE),
+                    .border(1.5.dp, ring, shape),
             )
         }
         Box(Modifier.offset(y = 10.dp)) { TypeBadge(doc, 42.dp) }

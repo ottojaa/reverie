@@ -1,5 +1,6 @@
 package com.reverie.app.ui.screens.viewer.insight
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Memory
@@ -114,7 +114,7 @@ private fun InsightSummarySection(
                 Icon(
                     Icons.Outlined.AutoAwesome,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -187,15 +187,15 @@ internal fun MicroLabel(text: String) {
     )
 }
 
-/** The document category, tinted with the brand (primary) container so it stands out. */
+/** The document category: a label, so neutral. */
 @Composable
 internal fun CategoryChip(label: String) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
             .padding(horizontal = 10.dp, vertical = 5.dp),
     )
 }

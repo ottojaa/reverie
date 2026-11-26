@@ -1,5 +1,6 @@
 package com.reverie.app.ui.components
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,6 +38,7 @@ fun QuickFilterChips(
     ) {
         filters.forEach { filter ->
             AssistChip(
+                shape = CircleShape,
                 onClick = { onSelect(filter) },
                 label = { Text("${filter.label} · ${filter.count}") },
                 leadingIcon = iconFor(filter.icon)?.let { icon ->

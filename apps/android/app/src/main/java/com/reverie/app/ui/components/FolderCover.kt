@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Icon
@@ -28,7 +27,6 @@ import com.reverie.app.data.api.model.FolderCoverTileDto
 import com.reverie.app.domain.model.ThumbnailSize
 
 internal val COVER_SIZE = 44.dp
-private val COVER_SHAPE = RoundedCornerShape(11.dp)
 private val TILE_GAP = 1.dp
 
 /**
@@ -37,7 +35,7 @@ private val TILE_GAP = 1.dp
  * shows it; one without shows its file type. No tiles shows the folder icon.
  */
 @Composable
-fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier, size: Dp = COVER_SIZE, shape: Shape = COVER_SHAPE) {
+fun CoverMosaic(cover: FolderCoverDto?, modifier: Modifier = Modifier, size: Dp = COVER_SIZE, shape: Shape = MaterialTheme.shapes.medium) {
     val tiles = cover?.tiles.orEmpty().take(4)
     if (tiles.isEmpty()) {
         CoverIconBlock(Icons.Outlined.Folder, MaterialTheme.colorScheme.onSurfaceVariant, modifier, size = size, shape = shape)
@@ -104,7 +102,7 @@ fun CoverIconBlock(
     background: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     iconSize: Dp = 20.dp,
     size: Dp = COVER_SIZE,
-    shape: Shape = COVER_SHAPE,
+    shape: Shape = MaterialTheme.shapes.medium,
 ) {
     Box(
         modifier.size(size).clip(shape).background(background),

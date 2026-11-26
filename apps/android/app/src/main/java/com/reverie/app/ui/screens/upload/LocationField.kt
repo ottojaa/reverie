@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Folder
@@ -29,7 +28,7 @@ import com.reverie.app.ui.components.LibraryIcon
 /** Where the upload goes, drawn as an outlined field; tapping it opens the destination browser. */
 @Composable
 internal fun LocationField(state: ReviewState, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = MaterialTheme.shapes.medium
     Column(Modifier.padding(top = 14.dp)) {
         Box {
             Row(

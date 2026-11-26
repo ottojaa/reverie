@@ -1,6 +1,5 @@
 package com.reverie.app.ui.screens.browse
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,12 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -44,7 +41,6 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.EmptyState
-import com.reverie.app.ui.components.fileTypeIcon
 
 /** Rows this close to the end of the list trigger loading the next page. */
 private const val LOAD_MORE_THRESHOLD = 5
@@ -179,29 +175,15 @@ private fun ProcessingRow(document: DocumentDto, onClick: () -> Unit, modifier: 
 
 @Composable
 private fun RowThumbnail(document: DocumentDto) {
-    val shape = RoundedCornerShape(10.dp)
-    val modifier = Modifier.size(52.dp).clip(shape)
-    if (document.hasRenderedThumbnail) {
-        DocumentThumbnail(
-            documentId = document.id,
-            mimeType = document.mime_type,
-            filename = document.original_filename,
-            blurhash = document.thumbnail_blurhash,
-            hasThumbnail = true,
-            modifier = modifier,
-            size = ThumbnailSize.SM,
-        )
-        return
-    }
-    // No picture yet: the file type's icon, like the grid's tiles.
-    Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-        Icon(
-            fileTypeIcon(document.mime_type, document.original_filename),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(26.dp),
-        )
-    }
+    DocumentThumbnail(
+        documentId = document.id,
+        mimeType = document.mime_type,
+        filename = document.original_filename,
+        blurhash = document.thumbnail_blurhash,
+        hasThumbnail = document.hasRenderedThumbnail,
+        modifier = Modifier.size(52.dp).clip(MaterialTheme.shapes.medium),
+        size = ThumbnailSize.SM,
+    )
 }
 
 @Composable
