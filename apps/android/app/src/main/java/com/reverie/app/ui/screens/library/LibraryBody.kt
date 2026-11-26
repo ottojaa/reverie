@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +45,7 @@ import com.reverie.app.ui.screens.manage.RowSelection
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Names the "My files" file rows as a list of their own to the dive transition. */
+/** Names the file rows under "My files" as a list of their own to the dive transition. */
 internal const val UNFILED_SECTION = "unfiled"
 
 /** The Library's ways out. */
@@ -93,12 +92,12 @@ data class LibraryFocus(val recent: String? = null, val unfiled: String? = null)
 /** The day the page is read on, for its "Yesterday" labels. */
 data class LibraryDay(val today: LocalDate, val zone: ZoneId)
 
-// Where Recently added sits in the page's list. Between it and the first file row of "My files" come that
-// section's heading and its folder rows.
+// Where Recently added sits in the page's list. Between it and the first file row under "My files" come the
+// folders' heading, the folder rows and the second heading.
 private const val RECENT_ITEM = 4
-private const val UNFILED_ITEM_AFTER_FOLDERS = RECENT_ITEM + 2
+private const val UNFILED_ITEM_AFTER_FOLDERS = RECENT_ITEM + 3
 
-/** The Library page: kinds, ready-made searches, what was added last, and the top of "My files". */
+/** The Library page: kinds, ready-made searches, what was added last, the folders and the first files in none. */
 @Composable
 fun LibraryBody(
     state: LibraryState,
@@ -129,22 +128,21 @@ fun LibraryBody(
             if (state.hasNoDocuments) return@item NothingUploaded(slot.onUpload)
             RecentlyAdded(state.recent, actions.recent, day, recentRowState, actions.onLoadMore)
         }
-        item(key = "my-files-heading") { SectionHeading(ROOT_NAME, "New folder", actions.onNewFolder) }
-        folderRows(state, marks, links, actions)
-        fileRows(state, actions.unfiled, day)
-        seeAllMyFiles(state, links.onOpenMyFiles)
+        folderSection(state, marks, links, actions)
+        unfiledSection(state, links.onOpenMyFiles, actions.unfiled, day)
     }
     if (isReordering) {
         ReorderShortcutsSheet(shortcuts, actions.onReorderShortcuts, onDismiss = { isReordering = false })
     }
 }
 
-private fun LazyListScope.folderRows(
+private fun LazyListScope.folderSection(
     state: LibraryState,
     marks: LibraryMarks,
     links: LibraryLinks,
     actions: LibraryActions,
 ) {
+    item(key = "folders-heading") { SectionHeading("Folders", "New folder", actions.onNewFolder) }
     items(state.folders, key = { "folder:" + it.id }) { folder ->
         FolderRow(
             folder = folder,
@@ -158,30 +156,18 @@ private fun LazyListScope.folderRows(
     }
 }
 
-/** The first of the files that are directly in "My files". */
-private fun LazyListScope.fileRows(state: LibraryState, actions: RowActions, day: LibraryDay) {
-    items(state.unfiledRows, key = { "unfiled:" + it.id }) { document ->
+/** The first files that are in no folder, with the way to all of "My files"; nothing while there are none. */
+private fun LazyListScope.unfiledSection(state: LibraryState, onSeeAll: () -> Unit, actions: RowActions, day: LibraryDay) {
+    val rows = state.unfiledRows
+    if (rows.isEmpty()) return
+    // The server's total, or what is cached when it has not answered.
+    val count = maxOf(state.unfiled.total, state.unfiled.documents.size)
+    item(key = "unfiled-heading") {
+        SectionHeading(ROOT_NAME, "See all $count".takeIf { count > rows.size }, onSeeAll)
+    }
+    items(rows, key = { "unfiled:" + it.id }) { document ->
         DiveSection(UNFILED_SECTION) {
             RecentEntryView(RecentEntry.Row(RecentRow.Single(document)), actions, day.today, day.zone)
-        }
-    }
-}
-
-/** The way to the whole of "My files", saying how much is directly in it; nothing while it holds nothing. */
-private fun LazyListScope.seeAllMyFiles(state: LibraryState, onOpen: () -> Unit) {
-    // The server's total of files, or what is cached when it has not answered.
-    val count = state.folders.size + maxOf(state.unfiled.total, state.unfiled.documents.size)
-    if (count == 0) return
-    item(key = "my-files-all") {
-        Button(
-            onClick = onOpen,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 6.dp, end = 20.dp).heightIn(min = 48.dp),
-        ) {
-            Text("See all $count in $ROOT_NAME")
         }
     }
 }

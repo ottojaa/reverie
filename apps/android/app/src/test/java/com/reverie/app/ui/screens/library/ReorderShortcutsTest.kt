@@ -104,13 +104,13 @@ class ReorderShortcutsTest {
         show()
         compose.onNodeWithText("Favourites").assertDoesNotExist()
         compose.onNodeWithContentDescription("Reorder shortcuts").assertDoesNotExist()
-        val before = compose.onNodeWithText("My files").getUnclippedBoundsInRoot().top
+        val before = compose.onNodeWithText("Folders").getUnclippedBoundsInRoot().top
 
         order = listOf("trash", "favourites")
         compose.waitForIdle()
 
         assertEquals(listOf("Trash", "Favourites", "Screenshots", "Receipts"), stripOrder())
-        assertEquals(before, compose.onNodeWithText("My files").getUnclippedBoundsInRoot().top)
+        assertEquals(before, compose.onNodeWithText("Folders").getUnclippedBoundsInRoot().top)
     }
 
     @Test fun `a button ends the strip and opens a sheet listing the chips on show`() {
