@@ -2,7 +2,7 @@ import { ConflictError, FolderNameSchema, ValidationError } from '@reverie/share
 import type { Kysely } from 'kysely';
 import type { Database, Folder, FolderUpdate } from '../../db/schema.js';
 import { assertLiveFolder, loadFolderTree } from './load.js';
-import { isNameTaken, rewritePaths, toFolderType, toNamePath, toPath } from './paths.js';
+import { isNameTaken, rewritePaths, toNamePath, toPath } from './paths.js';
 import type { FolderTree } from './snapshot.js';
 import { inFolderTransaction } from './transaction.js';
 
@@ -70,7 +70,6 @@ export function createFolder(userId: string, input: NewFolderInput, trx?: DbOrTr
                     description: input.description ?? null,
                     emoji: input.emoji ?? null,
                     sort_order: toNextSortOrder(tree.children(parentId)),
-                    type: toFolderType(parentId),
                 })
                 .returningAll()
                 .executeTakeFirstOrThrow();
@@ -166,51 +165,6 @@ export function reorderFolders(userId: string, updates: Array<{ id: string; sort
             for (const { id, sort_order } of updates) {
                 await t.updateTable('folders').set({ sort_order }).where('id', '=', id).where('user_id', '=', userId).execute();
             }
-        },
-        trx,
-    );
-}
-
-/**
- * How far `names` already exists below `parentId`, matching names in any case: the deepest folder reached
- * (`parentId` itself when none is) and the names still to be created.
- */
-export function findByNames(tree: FolderTree<Folder>, parentId: string | null, names: string[]): { deepestId: string | null; missing: string[] } {
-    let deepestId = parentId;
-
-    for (const [index, name] of names.entries()) {
-        const found = tree.children(deepestId).find((child) => child.name.toLowerCase() === name.trim().toLowerCase());
-
-        if (!found) return { deepestId, missing: names.slice(index) };
-
-        deepestId = found.id;
-    }
-
-    return { deepestId, missing: [] };
-}
-
-/** The folder reached by walking `names` down from `parentId`, creating the ones that are not there yet. */
-export function getOrCreateFolders(
-    userId: string,
-    parentId: string | null,
-    names: string[],
-    trx?: DbOrTrx,
-): Promise<{ folderId: string; createdCount: number }> {
-    return inFolderTransaction(
-        userId,
-        async (t) => {
-            const tree = await loadFolderTree(userId, t);
-
-            if (parentId !== null) assertLiveFolder(tree, parentId);
-
-            const { deepestId, missing } = findByNames(tree, parentId, names);
-            let folderId = deepestId;
-
-            for (const name of missing) folderId = (await createFolder(userId, { name, parentId: folderId }, t)).id;
-
-            if (folderId === null) throw new ValidationError('A folder name is required');
-
-            return { folderId, createdCount: missing.length };
         },
         trx,
     );

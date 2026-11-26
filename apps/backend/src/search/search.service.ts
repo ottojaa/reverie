@@ -10,7 +10,6 @@ import type {
 } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
-import { toFolderType } from '../services/folders/paths';
 import { withinFolderSql } from '../services/folders/scope';
 import { excludePrivateDocuments, excludePrivateFolders, excludeTrashed, getPrivateFolderIds } from '../services/privacy';
 import { fetchDocumentDetails } from './document-hydration';
@@ -220,7 +219,6 @@ function toCollectionHit(folder: FolderRow, parsed: ParsedQuery, documentCount: 
         path: folder.path,
         description: folder.description,
         emoji: folder.emoji,
-        folder_type: toFolderType(folder.parent_id),
         document_count: documentCount,
         snippet: folder.description ? generateSummarySnippet(folder.description, parsed.fullText!) : null,
         relevance: Number(folder.relevance ?? 0),

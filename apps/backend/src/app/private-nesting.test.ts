@@ -166,7 +166,7 @@ describeDb('private folders at any depth, over HTTP', () => {
         expect(without(tree)).toEqual(before.get('/folders/tree'));
         expect(rows).toHaveLength(2);
 
-        for (const row of rows) expect(row).toMatchObject({ locked: true, children: [], document_count: 0, kind_counts: NOTHING, cover: null });
+        for (const row of rows) expect(row).toMatchObject({ locked: true, children: [], kind_counts: NOTHING, cover: null });
     });
 
     it('keeps an open private folder out of the counts and covers above it, and gives it no cover', async () => {

@@ -39,7 +39,7 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."deleted_at" is null');
     });
 
-    it('excludes documents in private folders and collections, through the query organize retrieval uses', () => {
+    it('excludes documents in private folders from the search query', () => {
         const compiled = buildSearchQuery(documentJoins(), {}, USER_ID, { limit: 10, offset: 0, sortBy: 'uploaded', sortOrder: 'desc' }, [
             'private-folder',
             'private-child',

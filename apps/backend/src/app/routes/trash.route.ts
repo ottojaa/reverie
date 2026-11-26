@@ -11,7 +11,6 @@ import type { FastifyInstance } from 'fastify';
 import { db } from '../../db/kysely';
 import type { Document, Folder } from '../../db/schema';
 import { loadFolderLocks, type FolderLocks } from '../../services/folder-locks';
-import { toFolderType } from '../../services/folders/paths';
 import type { TrashUnitCounts } from '../../services/folders/trash';
 import { getStorageService } from '../../services/storage.service';
 import { getTrashService } from '../../services/trash.service';
@@ -41,7 +40,6 @@ function toTrashFolder(folder: Folder & TrashUnitCounts, locks: FolderLocks, pur
     return {
         id: folder.id,
         name: locked ? '' : folder.name,
-        type: toFolderType(folder.parent_id),
         emoji: locked ? null : folder.emoji,
         folder_count: locked ? 0 : folder.folder_count,
         document_count: locked ? 0 : folder.document_count,

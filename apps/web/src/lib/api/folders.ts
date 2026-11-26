@@ -19,7 +19,7 @@ export const foldersApi = {
         await apiClient.put('/folders/reorder', { updates });
     },
 
-    async create(data: Omit<CreateFolderRequest, 'type'>): Promise<Folder> {
+    async create(data: CreateFolderRequest): Promise<Folder> {
         const { data: folder } = await apiClient.post('/folders', data);
 
         return FolderSchema.parse(folder);

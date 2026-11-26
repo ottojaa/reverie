@@ -277,11 +277,11 @@ describeDb('folder locks over HTTP', () => {
                 name: string;
                 locked: boolean;
                 children: unknown[];
-                document_count: number;
+                kind_counts: { image: number; video: number; file: number };
             }>;
             const vault = tree.find((node) => node.id === world().folders.vault.id);
 
-            expect(vault).toMatchObject({ name: 'Vault', locked: true, children: [], document_count: 0 });
+            expect(vault).toMatchObject({ name: 'Vault', locked: true, children: [], kind_counts: { image: 0, video: 0, file: 0 } });
         });
 
         it('shows everything beneath an opened folder', async () => {

@@ -20,8 +20,6 @@ const HAS_THUMBNAIL_SQL = sql<boolean>`btrim(coalesce(thumbnail_blurhash, '')) <
 
 export interface FolderRollup {
     kind_counts: KindCounts;
-    /** The folder's own documents only. */
-    document_count: number;
     /**
      * Null for a private folder, open or not: private documents (ids, filenames) stay out of every listing and
      * are only reachable by asking for their folder. Also null when only counts were asked for.
@@ -30,7 +28,7 @@ export interface FolderRollup {
 }
 
 /** For a folder nothing is told about, such as one behind a closed lock. */
-export const EMPTY_ROLLUP: FolderRollup = { kind_counts: { image: 0, video: 0, file: 0 }, document_count: 0, cover: null };
+export const EMPTY_ROLLUP: FolderRollup = { kind_counts: { image: 0, video: 0, file: 0 }, cover: null };
 
 type Filters = Omit<DocumentListFilters, 'kind'>;
 type TileRow = Awaited<ReturnType<typeof fetchTiles>>[number];
@@ -149,10 +147,9 @@ function toCover(holdings: Holdings): FolderCover {
     return { tiles: holdings.tiles.map(toTile), summary: toSummary(holdings.totals, topTypes) };
 }
 
-function toRollup(own: Holdings, all: Holdings, hasCover: boolean): FolderRollup {
+function toRollup(all: Holdings, hasCover: boolean): FolderRollup {
     return {
         kind_counts: { image: all.totals['image_count']!, video: all.totals['video_count']!, file: all.totals['file_count']! },
-        document_count: KINDS.reduce((sum, kind) => sum + own.totals[kind + '_count']!, 0),
         cover: hasCover ? toCover(all) : null,
     };
 }
@@ -192,5 +189,5 @@ export async function loadFolderRollups(
         return sum;
     }
 
-    return new Map(open.map((id) => [id, toRollup(own.get(id)!, sumOf(id), covers && !locks.isPrivate(id))]));
+    return new Map(open.map((id) => [id, toRollup(sumOf(id), covers && !locks.isPrivate(id))]));
 }

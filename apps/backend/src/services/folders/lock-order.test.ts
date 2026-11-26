@@ -1,4 +1,3 @@
-import type { OrganizeTargetFolder } from '@reverie/shared';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('../../db/kysely', async () => ({ db: (await import('../../testing/db-proxy.js')).dbProxy.db }));
@@ -6,8 +5,6 @@ vi.mock('../../db/kysely', async () => ({ db: (await import('../../testing/db-pr
 import { countAdvisoryLockWaiters } from '../../testing/advisory-locks.js';
 import { seedDocument, seedFolder } from '../../testing/seed.js';
 import { describeDb, useWorld } from '../../testing/tool-world.js';
-import { FolderLocks } from '../folder-locks.js';
-import { executeOrganize } from '../organize.service.js';
 import { getTrashService } from '../trash.service.js';
 import { lockFolders } from './transaction.js';
 
@@ -32,33 +29,6 @@ describeDb('writes that touch documents and folders', () => {
 
         await running;
     }
-
-    it('organize takes the folder lock before it moves a document', async () => {
-        const { alice, db, folders } = ctx.world();
-        const id = await seedDocument(db, { userId: alice, name: 'organized.pdf', folderId: folders.work.id });
-        const move = (target_folder: OrganizeTargetFolder) => ({
-            type: 'move' as const,
-            document_ids: [id],
-            document_previews: [],
-            target_folder,
-        });
-        // The second move creates a folder after the first has already updated the document.
-        const operations = [
-            move({ id: folders.invoices.id, name: 'Invoices', is_new: false }),
-            move({ name: 'Later', is_new: true, new_parent_name: 'Sorted' }),
-        ];
-
-        await runBesideFolderWrite(id, () => executeOrganize({ userId: alice, locks: new FolderLocks(new Map(), new Set(), false), operations }));
-
-        const moved = await db
-            .selectFrom('documents')
-            .innerJoin('folders', 'folders.id', 'documents.folder_id')
-            .select('folders.path')
-            .where('documents.id', '=', id)
-            .executeTakeFirstOrThrow();
-
-        expect(moved.path).toBe('/Sorted/Later');
-    });
 
     it('restoring documents takes the folder lock before it restores one', async () => {
         const { alice, db } = ctx.world();

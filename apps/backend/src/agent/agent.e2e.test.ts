@@ -33,7 +33,6 @@ import authPlugin from '../app/plugins/auth.js';
 import errorHandler from '../app/plugins/error-handler.js';
 import agentRoute from '../app/routes/agent.route.js';
 import mcpRoute from '../app/routes/mcp.route.js';
-import organizeRoute from '../app/routes/organize.route.js';
 import { dbProxy } from '../testing/db-proxy.js';
 import { describeDb, useWorld } from '../testing/tool-world.js';
 
@@ -93,7 +92,6 @@ describeDb('in-app agent, end to end', () => {
         await app.register(errorHandler);
         await app.register(agentRoute);
         await app.register(mcpRoute);
-        await app.register(organizeRoute);
         await app.listen({ port: 0, host: '127.0.0.1' });
         mcpUrl = 'http://127.0.0.1:' + (app.server.address() as { port: number }).port + '/mcp';
         adminJwt = app.jwt.sign({ sub: world.alice, email: 'alice@example.test' });
@@ -437,29 +435,6 @@ describeDb('in-app agent, end to end', () => {
             expect((await as(bobAdmin, 'GET', '/agent/chats/' + id)).statusCode).toBe(404);
             expect((await as(bobAdmin, 'POST', '/agent/undo', { audit_id: '11111111-1111-4111-8111-111111111111' })).json()).toMatchObject({ ok: false });
             await dbProxy.db.updateTable('users').set({ role: 'user' }).where('id', '=', other.id).execute();
-        });
-    });
-
-    describe('the old organize chat', () => {
-        it('is gone, while the manual organize keeps working', async () => {
-            const world = ctx.world();
-
-            expect((await as(adminJwt, 'POST', '/organize/chat', { message: 'hi' })).statusCode).toBe(404);
-            expect((await as(adminJwt, 'GET', '/organize/conversations')).statusCode).toBe(404);
-
-            const execute = await as(adminJwt, 'POST', '/organize/execute', {
-                operations: [
-                    {
-                        type: 'move',
-                        document_ids: [world.docs.notes],
-                        document_previews: [],
-                        target_folder: { id: world.folders.invoices.id, name: 'Invoices', is_new: false },
-                    },
-                ],
-            });
-
-            expect(execute.statusCode).toBe(200);
-            expect(execute.json()).toMatchObject({ moved_count: 1 });
         });
     });
 });

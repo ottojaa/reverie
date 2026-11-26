@@ -24,9 +24,7 @@ import foldersRoute from './routes/folders.route.js';
 
 interface Node {
     id: string;
-    type: 'collection' | 'folder';
     locked: boolean;
-    document_count: number;
     kind_counts: { image: number; video: number; file: number };
     children: Node[];
     cover: { tiles: Array<{ document_id: string; original_filename: string; thumbnail_blurhash: string | null }>; summary: unknown } | null;
@@ -155,7 +153,6 @@ describeDb('GET /folders/tree covers', () => {
         const trips = find(await tree(), ids.trips as string);
         const rome = find(await tree(), ids.rome as string);
 
-        expect(trips?.document_count).toBe(0);
         expect(trips?.kind_counts).toEqual({ image: expect.any(Number), video: 0, file: expect.any(Number) });
         expect(trips!.kind_counts.image).toBeGreaterThanOrEqual(rome!.kind_counts.image);
         // Merged from Rome and Lonely, which both hold a thumbnailed photo of day two.
@@ -195,17 +192,22 @@ describeDb('GET /folders/tree covers', () => {
     it('gives a locked node no cover, no children and counts of 0', async () => {
         const vault = find(await tree(), ids.vault as string);
 
-        expect(vault).toMatchObject({ locked: true, children: [], document_count: 0, kind_counts: { image: 0, video: 0, file: 0 }, cover: null });
+        expect(vault).toMatchObject({ locked: true, children: [], kind_counts: { image: 0, video: 0, file: 0 }, cover: null });
         expect(JSON.stringify(vault)).not.toContain('inside-secret');
     });
 
     it('counts an open private folder and gives no cover beneath it: private documents stay out of every listing', async () => {
         const nodes = await tree([ids.vault as string, ids.diary as string]);
 
-        expect(find(nodes, ids.secret as string)).toMatchObject({ locked: false, is_private: false, cover: null, document_count: 1 });
+        expect(find(nodes, ids.secret as string)).toMatchObject({
+            locked: false,
+            is_private: false,
+            cover: null,
+            kind_counts: { image: 0, video: 0, file: 1 },
+        });
         expect(find(nodes, ids.vault as string)).toMatchObject({ kind_counts: { image: 0, video: 0, file: 1 }, cover: null });
         expect(find(nodes, ids.diary as string)).toMatchObject({ kind_counts: { image: 1, video: 0, file: 0 }, cover: null });
-        expect(find(nodes, ids.pages as string)).toMatchObject({ cover: null, document_count: 1 });
+        expect(find(nodes, ids.pages as string)).toMatchObject({ cover: null, kind_counts: { image: 1, video: 0, file: 0 } });
         expect(JSON.stringify(nodes)).not.toMatch(/inside-secret|inside-diary/);
 
         for (const id of [ids.inSecret, ids.inPages]) expect(JSON.stringify(nodes)).not.toContain(id as string);

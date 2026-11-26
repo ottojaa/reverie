@@ -81,7 +81,6 @@ export async function seedFolder(
             description: null,
             emoji: null,
             sort_order: 0,
-            type: opts.parent ? 'folder' : 'collection',
             is_private: opts.isPrivate ?? false,
             deleted_at: opts.deleted ? new Date() : null,
             created_at: opts.createdAt,

@@ -7,7 +7,6 @@
         "description": null,
         "emoji": null,
         "sort_order": 0,
-        "type": "collection",
         "is_private": false,
         "lock_id": null,
         "locked": false,
@@ -22,7 +21,6 @@
                 "description": null,
                 "emoji": null,
                 "sort_order": 0,
-                "type": "folder",
                 "is_private": true,
                 "lock_id": "10000000-0000-4000-8000-000000000004",
                 "locked": true,
@@ -34,7 +32,6 @@
                     "video": 0,
                     "file": 0
                 },
-                "document_count": 0,
                 "cover": null
             },
             {
@@ -45,7 +42,6 @@
                 "description": null,
                 "emoji": null,
                 "sort_order": 0,
-                "type": "folder",
                 "is_private": false,
                 "lock_id": null,
                 "locked": false,
@@ -60,7 +56,6 @@
                         "description": null,
                         "emoji": null,
                         "sort_order": 0,
-                        "type": "folder",
                         "is_private": false,
                         "lock_id": null,
                         "locked": false,
@@ -72,7 +67,6 @@
                             "video": 1,
                             "file": 0
                         },
-                        "document_count": 3,
                         "cover": {
                             "tiles": [
                                 {
@@ -117,7 +111,6 @@
                     "video": 1,
                     "file": 0
                 },
-                "document_count": 0,
                 "cover": {
                     "tiles": [
                         {
@@ -162,7 +155,6 @@
             "video": 1,
             "file": 0
         },
-        "document_count": 1,
         "cover": {
             "tiles": [
                 {
@@ -215,7 +207,6 @@
         "description": null,
         "emoji": null,
         "sort_order": 0,
-        "type": "collection",
         "is_private": false,
         "lock_id": null,
         "locked": false,
@@ -227,7 +218,6 @@
             "video": 0,
             "file": 2
         },
-        "document_count": 2,
         "cover": {
             "tiles": [
                 {
@@ -273,7 +263,6 @@
         "description": null,
         "emoji": null,
         "sort_order": 0,
-        "type": "collection",
         "is_private": true,
         "lock_id": "10000000-0000-4000-8000-000000000006",
         "locked": false,
@@ -288,7 +277,6 @@
                 "description": null,
                 "emoji": null,
                 "sort_order": 0,
-                "type": "folder",
                 "is_private": false,
                 "lock_id": "10000000-0000-4000-8000-000000000006",
                 "locked": false,
@@ -300,7 +288,6 @@
                     "video": 0,
                     "file": 1
                 },
-                "document_count": 1,
                 "cover": null
             }
         ],
@@ -309,7 +296,6 @@
             "video": 0,
             "file": 2
         },
-        "document_count": 1,
         "cover": null
     }
 ]

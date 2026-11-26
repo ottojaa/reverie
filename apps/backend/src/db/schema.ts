@@ -32,8 +32,6 @@ export type NewUser = Insertable<UsersTable>;
 export type UserUpdate = Updateable<UsersTable>;
 
 // Folders table
-export type FolderType = 'collection' | 'folder';
-
 export interface FoldersTable {
     id: Generated<string>;
     user_id: string;
@@ -43,7 +41,6 @@ export interface FoldersTable {
     description: string | null;
     emoji: string | null;
     sort_order: number;
-    type: FolderType;
     is_private: ColumnType<boolean, boolean | undefined, boolean>;
     /** When the folder went to the trash; null while live. */
     deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;

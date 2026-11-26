@@ -2,12 +2,7 @@ import { z } from 'zod';
 import { UuidSchema } from './common.js';
 import { DocumentSummaryResponseSchema } from './documents.js';
 
-/**
- * Folders hold documents and other folders, to any depth. `type` is deprecated and only says where a folder
- * sits ('collection': at the top level, 'folder': inside another one), for clients that still require it.
- */
-export const FolderTypeSchema = z.enum(['collection', 'folder']);
-export type FolderType = z.infer<typeof FolderTypeSchema>;
+/** Folders hold documents and other folders, to any depth, and both may sit at the top level. */
 
 /** A name a client may give a folder. '/' separates names in a folder's path, so a name never holds it. */
 export const FolderNameSchema = z
@@ -26,8 +21,6 @@ export const FolderSchema = z.object({
     description: z.string().nullable(),
     emoji: z.string().max(48).nullable(),
     sort_order: z.number(),
-    /** @deprecated Derived from `parent_id`. */
-    type: FolderTypeSchema,
     // Explicitly-set privacy flag on this folder. A folder anywhere beneath a private one is
     // private too, whatever this flag says; `lock_id` and `locked` already account for that.
     is_private: z.boolean(),
@@ -50,8 +43,6 @@ export const CreateFolderRequestSchema = z.object({
     parent_id: UuidSchema.optional(),
     description: z.string().optional(),
     emoji: z.string().max(48).optional(),
-    /** @deprecated Accepted and ignored. */
-    type: FolderTypeSchema.optional(),
 });
 
 export type CreateFolderRequest = z.infer<typeof CreateFolderRequestSchema>;
@@ -120,8 +111,6 @@ export interface FolderWithChildren extends z.infer<typeof FolderSchema> {
      * itself: nothing under a private folder counts toward a public one above it. All zero while locked.
      */
     kind_counts: KindCounts;
-    /** @deprecated The folder's own documents only. Count with `kind_counts`. */
-    document_count: number;
     /** Null for every private folder, open or not (private document ids and filenames stay out of the tree). */
     cover: FolderCover | null;
 }
@@ -129,7 +118,6 @@ export interface FolderWithChildren extends z.infer<typeof FolderSchema> {
 export const FolderWithChildrenSchema: z.ZodType<FolderWithChildren> = FolderSchema.extend({
     children: z.lazy(() => z.array(FolderWithChildrenSchema)),
     kind_counts: KindCountsSchema,
-    document_count: z.number(),
     cover: FolderCoverSchema.nullable(),
 });
 

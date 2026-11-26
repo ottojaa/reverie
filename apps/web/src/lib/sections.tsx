@@ -70,7 +70,7 @@ export function useCreateFolder() {
     const { requestUnlock } = useVault();
 
     return useMutation({
-        mutationFn: (data: Omit<CreateFolderRequest, 'type'>) => runUnlocking(() => foldersApi.create(data), requestUnlock),
+        mutationFn: (data: CreateFolderRequest) => runUnlocking(() => foldersApi.create(data), requestUnlock),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
         },

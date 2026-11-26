@@ -163,13 +163,12 @@ class DtoSerializationTest {
     @Test fun `decodes a nested folder tree`() {
         val payload = """
             [{"id":"c1","parent_id":null,"name":"Finance","path":"/Finance","description":null,"emoji":"💰",
-              "sort_order":0,"type":"collection","is_private":false,
+              "sort_order":0,"is_private":false,
               "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z",
-              "document_count":0,
               "children":[{"id":"f1","parent_id":"c1","name":"Receipts","path":"/Finance/Receipts",
-                "description":null,"emoji":null,"sort_order":0,"type":"folder","is_private":true,
+                "description":null,"emoji":null,"sort_order":0,"is_private":true,
                 "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z",
-                "document_count":5,"children":[]}]}]
+                "children":[]}]}]
         """.trimIndent()
 
         val tree = json.decodeFromString(ListSerializer(FolderWithChildren.serializer()), payload)

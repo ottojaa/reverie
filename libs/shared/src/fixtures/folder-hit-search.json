@@ -1,0 +1,29 @@
+{
+    "total": 1,
+    "results": [
+        {
+            "result_type": "collection",
+            "id": "10000000-0000-4000-8000-000000000003",
+            "name": "Norway",
+            "path": "/Photos/Trips/Norway",
+            "description": null,
+            "emoji": null,
+            "document_count": 3,
+            "snippet": null,
+            "relevance": 0.6079271
+        }
+    ],
+    "facets": {
+        "types": [],
+        "formats": [],
+        "folders": [],
+        "uploadPeriod": [],
+        "tags": [],
+        "hasText": [],
+        "categories": []
+    },
+    "query": {
+        "fullText": "norway"
+    },
+    "timing_ms": 0
+}

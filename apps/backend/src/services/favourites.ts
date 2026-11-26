@@ -100,13 +100,13 @@ function toFolderFavourite(star: DbFavourite, folderId: string, context: ListCon
 
     if (context.locks.isPrivate(folder.id)) return toPrivateFavourite(base, folder.id, context.locks);
 
-    const { document_count, cover } = context.rollups.get(folder.id) ?? EMPTY_ROLLUP;
+    const { cover } = context.rollups.get(folder.id) ?? EMPTY_ROLLUP;
 
     return {
         ...base,
         ...PUBLIC_FLAGS,
         location: toLocation(folder.parent_id, context.tree),
-        folder: { ...serializeFolder(folder, context.locks), document_count, cover },
+        folder: { ...serializeFolder(folder, context.locks), cover },
         document: null,
     };
 }

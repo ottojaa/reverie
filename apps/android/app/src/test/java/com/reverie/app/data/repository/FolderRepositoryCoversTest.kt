@@ -25,10 +25,10 @@ import org.junit.Test
 
 class FolderRepositoryCoversTest {
 
-    private fun node(id: String, name: String, type: String, isPrivate: Boolean, parent: String?, cover: String, children: String = "[]") = """
+    private fun node(id: String, name: String, isPrivate: Boolean, parent: String?, cover: String, children: String = "[]") = """
         {"id":"$id","parent_id":${parent?.let { "\"$it\"" }},"name":"$name","path":"/$name","description":null,"emoji":null,
-         "sort_order":0,"type":"$type","is_private":$isPrivate,"locked":false,"created_at":"2024-01-01T00:00:00.000Z",
-         "updated_at":"2024-01-01T00:00:00.000Z","document_count":1,"children":$children,"cover":$cover}
+         "sort_order":0,"is_private":$isPrivate,"locked":false,"created_at":"2024-01-01T00:00:00.000Z",
+         "updated_at":"2024-01-01T00:00:00.000Z","children":$children,"cover":$cover}
     """.trimIndent()
 
     private fun cover(docId: String, filename: String) = """
@@ -36,9 +36,9 @@ class FolderRepositoryCoversTest {
          "summary":{"image":{"count":0,"bytes":0},"video":{"count":0,"bytes":0},"file":{"count":1,"bytes":10,"top_types":[{"ext":"pdf","count":1}]}}}
     """.trimIndent()
 
-    private val publicFolder = node("f-open", "Receipts", "folder", false, "c1", cover("doc-open", "receipt.pdf"))
-    private val privateFolder = node("f-secret", "Taxes", "folder", true, "c1", cover("doc-secret", "secret-tax-return.pdf"))
-    private val collection = node("c1", "Finance", "collection", false, null, "null", "[$publicFolder,$privateFolder]")
+    private val publicFolder = node("f-open", "Receipts", false, "c1", cover("doc-open", "receipt.pdf"))
+    private val privateFolder = node("f-secret", "Taxes", true, "c1", cover("doc-secret", "secret-tax-return.pdf"))
+    private val finance = node("c1", "Finance", false, null, "null", "[$publicFolder,$privateFolder]")
 
     private fun TestScope.repo(dao: FakeFolderDao, status: () -> HttpStatusCode, body: () -> String): FolderRepository {
         val engine = MockEngine {
@@ -56,8 +56,8 @@ class FolderRepositoryCoversTest {
         return FolderRepository(dao, FoldersApi(client), NoopPurger, UnconfinedTestDispatcher(testScheduler))
     }
 
-    @Test fun `a refresh keeps each folder's cover in memory, none for the collection`() = runTest {
-        val repository = repo(FakeFolderDao(), { HttpStatusCode.OK }) { "[$collection]" }
+    @Test fun `a refresh keeps each folder's cover in memory, none for a folder sent without one`() = runTest {
+        val repository = repo(FakeFolderDao(), { HttpStatusCode.OK }) { "[$finance]" }
 
         repository.refresh()
 
@@ -68,7 +68,7 @@ class FolderRepositoryCoversTest {
 
     @Test fun `a private folder's cover never reaches Room`() = runTest {
         val dao = FakeFolderDao()
-        val repository = repo(dao, { HttpStatusCode.OK }) { "[$collection]" }
+        val repository = repo(dao, { HttpStatusCode.OK }) { "[$finance]" }
 
         repository.refresh()
 
@@ -84,7 +84,7 @@ class FolderRepositoryCoversTest {
 
     @Test fun `a failed refresh keeps the last covers so offline still shows them`() = runTest {
         var online = true
-        val repository = repo(FakeFolderDao(), { if (online) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable }) { if (online) "[$collection]" else "{}" }
+        val repository = repo(FakeFolderDao(), { if (online) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable }) { if (online) "[$finance]" else "{}" }
         repository.refresh()
 
         online = false
@@ -94,19 +94,19 @@ class FolderRepositoryCoversTest {
     }
 
     @Test fun `a refresh replaces the covers, so a folder that locked or went private drops out`() = runTest {
-        var tree = "[$collection]"
+        var tree = "[$finance]"
         val repository = repo(FakeFolderDao(), { HttpStatusCode.OK }) { tree }
         repository.refresh()
 
-        val lockedCollection = node("c1", "Finance", "collection", true, null, "null", "[]")
-        tree = "[$lockedCollection]"
+        val lockedFinance = node("c1", "Finance", true, null, "null", "[]")
+        tree = "[$lockedFinance]"
         repository.refresh()
 
         assertTrue(repository.covers.value.isEmpty())
     }
 
     @Test fun `logout clears the covers`() = runTest {
-        val repository = repo(FakeFolderDao(), { HttpStatusCode.OK }) { "[$collection]" }
+        val repository = repo(FakeFolderDao(), { HttpStatusCode.OK }) { "[$finance]" }
         repository.refresh()
 
         repository.clearCovers()
@@ -115,8 +115,8 @@ class FolderRepositoryCoversTest {
     }
 
     @Test fun `a tree from a server without covers still loads`() {
-        val old = """{"id":"f","parent_id":null,"name":"f","path":"/f","description":null,"emoji":null,"sort_order":0,"type":"folder",
-            "is_private":false,"created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z","document_count":0,"children":[]}"""
+        val old = """{"id":"f","parent_id":null,"name":"f","path":"/f","description":null,"emoji":null,"sort_order":0,
+            "is_private":false,"created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z","children":[]}"""
 
         val parsed = ApiJson.decodeFromString(com.reverie.app.data.api.model.FolderWithChildren.serializer(), old)
 
