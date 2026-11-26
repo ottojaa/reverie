@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.ReverieApiException
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.SortBy
 import com.reverie.app.data.api.model.SortOrder
@@ -145,7 +146,7 @@ class SearchViewModel @Inject constructor(
     fun removeScope() {
         input.update { it.copy(ask = it.ask.copy(scope = SearchScope.Library)) }
         savedState["folder"] = null
-        savedState["media"] = false
+        savedState["kind"] = null
         control.update { it.copy(facets = null) }
         ensureBaseFacets()
     }
@@ -303,9 +304,10 @@ class SearchViewModel @Inject constructor(
 
         fun openedWith(savedState: SavedStateHandle): SearchAsk {
             val folderId = savedState.get<String>("folder")
+            val kind = DocumentKind.ofWire(savedState.get<String>("kind"))
             val scope = when {
                 folderId != null -> SearchScope.Folder(folderId)
-                savedState.get<Boolean>("media") == true -> SearchScope.Media
+                kind != null -> SearchScope.Kind(kind)
                 else -> SearchScope.Library
             }
             return SearchAsk(savedState.get<String>("q").orEmpty(), scope)

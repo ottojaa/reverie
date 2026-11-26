@@ -33,11 +33,11 @@ class SearchRepository @Inject constructor(
         sortOrder: String,
         includeFacets: Boolean,
     ): SearchResponse = withContext(io) {
-        searchApi.search(q, limit, offset, sortBy, sortOrder, includeFacets, scope.folderId, scope.isMediaOnly)
+        searchApi.search(q, limit, offset, sortBy, sortOrder, includeFacets, scope.folderId, scope.kind)
     }
 
     suspend fun facets(q: String, scope: SearchScope): SearchFacets = withContext(io) {
-        searchApi.facets(q, scope.folderId, scope.isMediaOnly)
+        searchApi.facets(q, scope.folderId, scope.kind)
     }
 
     suspend fun suggest(type: String, q: String): List<String> = withContext(io) {

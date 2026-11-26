@@ -30,11 +30,10 @@ enum class FeedSource(
     val emptyTitle: String,
     val style: FeedStyle = FeedStyle.DAYS,
 ) {
-    /** The Photos tab: every photo and video. */
-    MEDIA("media", "Photos", DocumentScope.All, DocumentFilter.MEDIA, SearchScope.Media, "No photos or videos yet"),
-    PHOTOS("photos", "Photos", DocumentScope.All, DocumentFilter.IMAGES, SearchScope.Media, "No photos yet"),
-    VIDEOS("videos", "Videos", DocumentScope.All, DocumentFilter.VIDEOS, SearchScope.Media, "No videos yet"),
-    FILES("files", "Files", DocumentScope.All, DocumentFilter.FILES, SearchScope.Library, "No files yet"),
+    /** The Photos card's list, and the Photos tab. */
+    PHOTOS("photos", "Photos", DocumentScope.All, DocumentFilter.IMAGES, SearchScope.Kind(DocumentKind.IMAGE), "No photos yet"),
+    VIDEOS("videos", "Videos", DocumentScope.All, DocumentFilter.VIDEOS, SearchScope.Kind(DocumentKind.VIDEO), "No videos yet"),
+    FILES("files", "Files", DocumentScope.All, DocumentFilter.FILES, SearchScope.Kind(DocumentKind.FILE), "No files yet"),
     RECENT("recent", "Recently added", DocumentScope.All, DocumentFilter.ALL, SearchScope.Library, "No files yet", FeedStyle.FOLDS),
     UNFILED(
         "unfiled", "Not in a folder", DocumentScope.TopLevel, DocumentFilter.ALL, SearchScope.Library,
@@ -54,7 +53,7 @@ enum class FeedSource(
         PHOTOS -> count(total, "photo")
         VIDEOS -> count(total, "video")
         FILES, UNFILED -> count(total, "file")
-        MEDIA, RECENT -> null
+        RECENT -> null
     }
 
     companion object {

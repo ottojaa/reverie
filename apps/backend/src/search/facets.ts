@@ -1,5 +1,5 @@
 import { sql, type SqlBool } from 'kysely';
-import type { SearchFacets, FacetItem, ParsedQuery } from '@reverie/shared';
+import type { SearchFacets, FacetItem, ParsedQuery, DocumentKind } from '@reverie/shared';
 import { db } from '../db/kysely';
 import { loadFolderTree } from '../services/folders/load';
 import { isNamedBy } from '../services/folders/scope';
@@ -15,6 +15,16 @@ import { applySearchFilters, applyTypesFilter, documentJoins, type FilterDimensi
  */
 
 const CANONICAL_TYPES = ['photo', 'document', 'receipt', 'screenshot', 'video'] as const;
+
+/**
+ * The types a search scoped to one kind does not offer, because they name a different kind. The type filter goes by
+ * category, so it can still match a few such documents (a PDF filed under "other" counts as a photo).
+ */
+const TYPES_RULED_OUT: Record<DocumentKind, readonly string[]> = {
+    image: ['video'],
+    video: ['photo', 'document', 'receipt', 'screenshot'],
+    file: ['photo', 'video', 'screenshot'],
+};
 
 const countDistinctDocuments = sql<number>`count(DISTINCT d.id)::int`;
 
@@ -90,24 +100,30 @@ function appendMissingSelected(items: FacetItem[], activeValues: string[] | unde
 /**
  * Type facets (photo, document, receipt, screenshot, video). Each count runs
  * the narrowed query through the same type predicate search uses, so the facet
- * count always equals the result count when clicked.
+ * count always equals the result count when clicked. A search scoped to one kind
+ * lists none of the types that scope rules out, not even a selected one.
  */
 async function getTypeFacets(parsed: ParsedQuery, userId: string, privateFolderIds: string[], alsoMatchIds: readonly string[]): Promise<FacetItem[]> {
+    const ruledOut: readonly string[] = parsed.scopeKind ? TYPES_RULED_OUT[parsed.scopeKind] : [];
+    const offered = CANONICAL_TYPES.filter((type) => !ruledOut.includes(type));
     const counts = await Promise.all(
-        CANONICAL_TYPES.map((type) =>
+        offered.map((type) =>
             applyTypesFilter(narrowedBase(parsed, userId, privateFolderIds, ['types'], alsoMatchIds), [type])
                 .select(countDistinctDocuments.as('count'))
                 .executeTakeFirst(),
         ),
     );
 
-    const items = CANONICAL_TYPES.map((type, index) => ({
-        name: type as string,
-        count: counts[index]?.count ?? 0,
-        selected: parsed.types?.includes(type) ?? false,
-    })).filter((item) => item.count > 0 || item.selected);
+    const items = offered
+        .map((type, index) => ({
+            name: type as string,
+            count: counts[index]?.count ?? 0,
+            selected: parsed.types?.includes(type) ?? false,
+        }))
+        .filter((item) => item.count > 0 || item.selected);
+    const selected = parsed.types?.filter((type) => !ruledOut.includes(type));
 
-    return appendMissingSelected(items, parsed.types).sort((a, b) => b.count - a.count);
+    return appendMissingSelected(items, selected).sort((a, b) => b.count - a.count);
 }
 
 /**

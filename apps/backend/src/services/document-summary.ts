@@ -14,9 +14,9 @@ export function totalsOf(eb: ExpressionBuilder<Database, 'documents'>, kind: Doc
     return [
         eb.fn
             .countAll<string>()
-            .filterWhere(isOfKind(eb, kind))
+            .filterWhere(isOfKind('mime_type', kind))
             .as(kind + '_count'),
-        eb.fn.coalesce(eb.fn.sum<string>('size_bytes').filterWhere(isOfKind(eb, kind)), sql<string>`0`).as(kind + '_bytes'),
+        eb.fn.coalesce(eb.fn.sum<string>('size_bytes').filterWhere(isOfKind('mime_type', kind)), sql<string>`0`).as(kind + '_bytes'),
     ];
 }
 

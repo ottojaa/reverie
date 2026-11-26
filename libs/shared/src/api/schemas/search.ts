@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UuidSchema, DateOnlySchema, PaginationQuerySchema, QueryFlagSchema } from './common.js';
-import { DocumentCategoryEnum, ThumbnailUrlsSchema } from './documents.js';
+import { DocumentCategoryEnum, DocumentKindSchema, ThumbnailUrlsSchema } from './documents.js';
 
 // ============================================================================
 // Parsed Query Types (internal representation of search query)
@@ -36,6 +36,8 @@ const ParsedQueryBaseSchema = z.object({
     scopeFolderId: UuidSchema.optional(),
     // The request's `media`: everything else is narrowed to photos and videos
     scopeMedia: z.boolean().optional(),
+    // The request's `kind`: everything else is narrowed to that kind of document
+    scopeKind: DocumentKindSchema.optional(),
 
     // Property filters
     hasText: z.boolean().optional(),
@@ -76,6 +78,8 @@ export const SearchQuerySchema = PaginationQuerySchema.extend({
     folder_id: UuidSchema.optional(),
     /** true: search only photos and videos; folders are left out of the results. */
     media: QueryFlagSchema.optional(),
+    /** Search only documents of this kind (by MIME type, see documentKindOf); folders are left out of the results. */
+    kind: DocumentKindSchema.optional(),
     sort_by: SortByEnum.default('relevance'),
     sort_order: z.enum(['asc', 'desc']).default('desc'),
     // Not z.coerce.boolean(): that turns the query-string "false" into true
@@ -278,6 +282,8 @@ export const FacetsQuerySchema = z.object({
     folder_id: UuidSchema.optional(),
     /** true: count only photos and videos. */
     media: QueryFlagSchema.optional(),
+    /** Count only documents of this kind (by MIME type, see documentKindOf). */
+    kind: DocumentKindSchema.optional(),
 });
 
 export type FacetsQuery = z.infer<typeof FacetsQuerySchema>;

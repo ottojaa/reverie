@@ -11,6 +11,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.theme.ReverieTheme
@@ -208,7 +209,7 @@ class PillNavigationTest {
         compose.runOnUiThread {
             val arguments = nav.currentBackStackEntry!!.arguments!!
             assertNull(arguments.getString("folder"))
-            assertEquals(false, arguments.getBoolean("media"))
+            assertNull(arguments.getString("kind"))
             assertEquals("", arguments.getString("q"))
         }
     }
@@ -221,8 +222,8 @@ class PillNavigationTest {
             assertEquals("type:photo a&b=c", arguments.getString("q"))
         }
 
-        go(Routes.search(SearchScope.Media))
-        compose.runOnUiThread { assertEquals(true, nav.currentBackStackEntry!!.arguments!!.getBoolean("media")) }
+        go(Routes.search(SearchScope.Kind(DocumentKind.VIDEO)))
+        compose.runOnUiThread { assertEquals("video", nav.currentBackStackEntry!!.arguments!!.getString("kind")) }
     }
 
     @Test fun `the round button is beside the pill on the Library root and Favourites only`() {

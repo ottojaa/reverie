@@ -138,6 +138,12 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('lower("d"."mime_type") like \'image/%\' or lower("d"."mime_type") like \'video/%\'');
     });
 
+    it('keeps a kind scope whatever is omitted', () => {
+        const { sql } = compile({ types: ['photo'], scopeKind: 'file' }, ['types', 'formats', 'fullText']);
+
+        expect(sql).toContain('not (lower("d"."mime_type") like \'image/%\' or lower("d"."mime_type") like \'video/%\')');
+    });
+
     it('omitting tags drops positive and negated tag filters together', () => {
         const { sql } = compile({ tags: ['tax'], negations: { tags: ['archived'] } }, ['tags']);
 

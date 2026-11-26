@@ -1,5 +1,6 @@
 package com.reverie.app.data.api
 
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FacetsResponse
 import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.api.model.SearchFacets
@@ -17,8 +18,8 @@ class SearchApi @Inject constructor(
     private val client: HttpClient,
 ) {
     /**
-     * Matches of [q] in the whole library, narrowed to [folderId] and everything beneath it, or with
-     * [media] to photos and videos.
+     * Matches of [q] in the whole library, narrowed to [folderId] and everything beneath it, or to the
+     * documents of one [kind].
      */
     suspend fun search(
         q: String,
@@ -28,7 +29,7 @@ class SearchApi @Inject constructor(
         sortOrder: String,
         includeFacets: Boolean,
         folderId: String? = null,
-        media: Boolean = false,
+        kind: DocumentKind? = null,
     ): SearchResponse = client.get("search") {
         parameter("q", q)
         parameter("limit", limit)
@@ -36,13 +37,13 @@ class SearchApi @Inject constructor(
         parameter("sort_by", sortBy)
         parameter("sort_order", sortOrder)
         parameter("include_facets", includeFacets)
-        narrowedTo(folderId, media)
+        narrowedTo(folderId, kind)
     }.decode()
 
-    suspend fun facets(q: String, folderId: String? = null, media: Boolean = false): SearchFacets =
+    suspend fun facets(q: String, folderId: String? = null, kind: DocumentKind? = null): SearchFacets =
         client.get("search/facets") {
             parameter("q", q)
-            narrowedTo(folderId, media)
+            narrowedTo(folderId, kind)
         }.decode<FacetsResponse>().facets
 
     suspend fun suggest(type: String, q: String, limit: Int = 10): List<String> = client.get("search/suggest") {
@@ -56,7 +57,7 @@ class SearchApi @Inject constructor(
     suspend fun help(): SearchHelp = client.get("search/help").decode()
 }
 
-private fun HttpRequestBuilder.narrowedTo(folderId: String?, media: Boolean) {
+private fun HttpRequestBuilder.narrowedTo(folderId: String?, kind: DocumentKind?) {
     folderId?.let { parameter("folder_id", it) }
-    if (media) parameter("media", true)
+    kind?.let { parameter("kind", it.wire) }
 }

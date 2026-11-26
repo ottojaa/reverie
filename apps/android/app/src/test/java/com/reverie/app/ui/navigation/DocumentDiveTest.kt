@@ -250,10 +250,8 @@ class DocumentDiveTest {
         }
     }
 
-    @Test fun `a document opened from the lists of mixed documents dives into the viewer and shrinks back`() {
+    @Test fun `a document opened from Recently added dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
-        show(Routes.feed(FeedSource.MEDIA))
-        assertDives("video")
         show(Routes.feed(FeedSource.RECENT))
         assertDives("file")
     }
