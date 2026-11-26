@@ -30,7 +30,7 @@ export interface TestDatabase {
 const MIGRATIONS_DIR = join(__dirname, '../db/migrations');
 
 /** The real migration files, loaded through the test runner so their TypeScript needs no build. */
-const provider: MigrationProvider = {
+export const migrationProvider: MigrationProvider = {
     async getMigrations() {
         const files = readdirSync(MIGRATIONS_DIR).filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'));
         const entries = await Promise.all(
@@ -42,7 +42,7 @@ const provider: MigrationProvider = {
 };
 
 async function migrate(db: Kysely<Database>): Promise<void> {
-    const { error } = await new Migrator({ db, provider }).migrateToLatest();
+    const { error } = await new Migrator({ db, provider: migrationProvider }).migrateToLatest();
 
     if (error) throw error;
 }
