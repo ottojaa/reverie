@@ -14,8 +14,8 @@ import { canGenerateThumbnail, getFileCategory, getStorageService, type UserStor
 export type ConflictStrategy = 'replace' | 'keep_both';
 
 /**
- * Extension-to-MIME fallback for files where the browser reports a generic type
- * (e.g. application/octet-stream). Only covers types commonly misreported.
+ * Extension-to-MIME fallback for files that arrive with a generic type (application/octet-stream):
+ * browsers do that for a few types, curl (see upload_local_files) for most text, image and office files.
  */
 const EXTENSION_MIME_MAP: Record<string, string> = {
     // Video
@@ -36,8 +36,28 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
     '.heif': 'image/heif',
     '.webp': 'image/webp',
     '.svg': 'image/svg+xml',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+    '.bmp': 'image/bmp',
     // Documents
     '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown',
+    '.csv': 'text/csv',
+    '.json': 'application/json',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.odt': 'application/vnd.oasis.opendocument.text',
+    '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+    '.odp': 'application/vnd.oasis.opendocument.presentation',
 };
 
 /**
@@ -110,8 +130,6 @@ export class UploadService {
             }
         }
 
-        const documents: Document[] = [];
-        const jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> = [];
         const userContext = await this.storageService.getUserStorageContext(userId);
 
         const promises = files.map(async (file, index) => {
@@ -125,17 +143,18 @@ export class UploadService {
                 effectiveFilename,
                 copyMetadataFromDocumentId,
             );
-            documents.push(result.document);
-            jobs.push(...result.jobs);
             userContext.storageUsedBytes += file.size;
+
+            return result;
         });
 
-        await Promise.all(promises);
+        // In the order the files were given, whichever finished first.
+        const results = await Promise.all(promises);
 
         return {
             sessionId,
-            documents,
-            jobs,
+            documents: results.map((result) => result.document),
+            jobs: results.flatMap((result) => result.jobs),
         };
     }
 

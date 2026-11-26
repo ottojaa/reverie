@@ -22,6 +22,8 @@ const READS: Array<[string, Record<string, unknown>]> = [
 
 const WRITES = ['add_tags', 'remove_tags', 'move_documents', 'create_folder', 'rename_folder', 'rename_document', 'undo_write'];
 
+const ADDS = ['upload_local_files', 'save_text_document'];
+
 /** A tool answer without the fields that differ between any two identical calls, or repeat what was asked. */
 const toStable = (output: unknown): string => JSON.stringify(output, (key, value) => (['selection_id', 'timing_ms'].includes(key) ? undefined : value));
 
@@ -62,7 +64,7 @@ describeDb('private folders at any depth: agent tools, LLM workers and websocket
     }, 60_000);
 
     it('covers every tool there is', () => {
-        const covered = new Set([...READS.map(([name]) => name), 'get_document', ...WRITES]);
+        const covered = new Set([...READS.map(([name]) => name), 'get_document', ...WRITES, ...ADDS]);
 
         expect([...covered].sort()).toEqual(TOOLS.map((tool) => tool.name).sort());
     });
@@ -94,6 +96,8 @@ describeDb('private folders at any depth: agent tools, LLM workers and websocket
                     ['create_folder', { name: 'x', parent_id: id, dry_run: false }],
                     ['rename_folder', { folder_id: id, new_name: 'x', dry_run: false }],
                     ['move_documents', { document_ids: [library.docs.loose], folder_id: id, dry_run: false }],
+                    ['upload_local_files', { folder_id: id, paths: ['/x.pdf'] }],
+                    ['save_text_document', { folder_id: id, name: 'x', content: 'x', dry_run: false }],
                 ],
             ),
         ];

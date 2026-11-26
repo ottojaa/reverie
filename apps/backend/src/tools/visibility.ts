@@ -87,3 +87,18 @@ export async function assertVisibleFolder(trx: DbOrTrx, vis: Visibility, id: str
 
     return folder;
 }
+
+/** Where documents can be put: a folder, or the top level (a null id, path "/"). */
+export interface TargetFolder {
+    id: string | null;
+    path: string;
+}
+
+/** The top level, or a visible folder at any depth, locked for the transaction it is read in; refuses anything else. */
+export async function assertTargetFolder(conn: DbOrTrx, vis: Visibility, id: string | null): Promise<TargetFolder> {
+    if (id === null) return { id: null, path: '/' };
+
+    const folder = await assertVisibleFolder(conn, vis, id);
+
+    return { id: folder.id, path: folder.path };
+}

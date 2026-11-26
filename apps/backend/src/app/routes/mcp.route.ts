@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { env } from '../../config/env.js';
 import { createMcpServer } from '../../mcp/mcp-server.js';
+import { toPublicBaseUrl } from '../../mcp/public-base-url.js';
 import { readBearerToken } from '../plugins/api-token-auth.js';
 
 const JSON_RPC_INTERNAL_ERROR = { jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null };
@@ -32,7 +34,8 @@ export default async function (fastify: FastifyInstance) {
             schema: { hide: true },
         },
         async (request, reply) => {
-            const server = createMcpServer({ user: { id: request.user.id } });
+            const publicBaseUrl = toPublicBaseUrl(request, env.API_PUBLIC_URL);
+            const server = createMcpServer({ user: { id: request.user.id }, publicBaseUrl });
             const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
 
             reply.hijack();

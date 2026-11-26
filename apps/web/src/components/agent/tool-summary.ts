@@ -54,6 +54,8 @@ function describeWrite(name: string, out: Fields): string | null {
             return `Renamed "${toText(out.from)}" to "${toText(out.to)}"`;
         case 'create_folder':
             return `Created folder ${toText(out.path)}`;
+        case 'save_text_document':
+            return `Saved "${toText(toFields(out.document).name)}" to ${toText(toFields(toFields(out.document).folder).path)}`;
         case 'add_tags':
             return `Added ${plural(toNumber(out.tags_added), 'tag')} to ${plural(toNumber(out.documents_changed), 'document')}`;
         case 'remove_tags':

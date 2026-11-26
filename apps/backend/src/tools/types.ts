@@ -13,6 +13,8 @@ export type ToolAccess = 'read' | 'write';
 /** The authenticated caller. Transports (MCP, in-app agent) build this from their own auth. */
 export interface ToolContext {
     user: { id: string };
+    /** Where the caller reaches this server (no trailing slash), for a tool that hands out a URL on it. */
+    publicBaseUrl?: string;
 }
 
 export interface ToolDefinition<S extends z.ZodTypeAny = z.ZodTypeAny> {

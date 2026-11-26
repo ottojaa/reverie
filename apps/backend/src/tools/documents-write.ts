@@ -3,7 +3,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import type { Undoer } from './undo-types';
 import { defineTool, ToolError } from './types';
-import { assertVisibleDocuments, assertVisibleFolder, visibleDocuments, type Visibility } from './visibility';
+import { assertTargetFolder, assertVisibleDocuments, assertVisibleFolder, visibleDocuments, type Visibility } from './visibility';
 import { dryRunShape, documentTargetShape, PREVIEW_SAMPLE_SIZE, rebuildSearchVectors, resolveDocumentIds, runWrite } from './write';
 
 /** move_documents / rename_document, and the undo of each. */
@@ -89,14 +89,13 @@ export const moveDocuments = defineTool({
             input,
             dryRun: input.dry_run,
             plan: async (trx, vis) => {
-                const target = input.folder_id === null ? null : await assertVisibleFolder(trx, vis, input.folder_id);
-                const targetId = target?.id ?? null;
+                const target = await assertTargetFolder(trx, vis, input.folder_id);
                 const docs = await assertVisibleDocuments(trx, vis, ids);
-                const moving = docs.filter((doc) => doc.folder_id !== targetId);
+                const moving = docs.filter((doc) => doc.folder_id !== target.id);
                 const taken = await findNamesTakenIn(
                     trx,
                     vis,
-                    targetId,
+                    target.id,
                     moving.map((doc) => doc.original_filename),
                     moving.map((doc) => doc.id),
                 );
@@ -116,7 +115,7 @@ export const moveDocuments = defineTool({
 
                 return {
                     preview: {
-                        target: { id: targetId, path: target?.path ?? '/' },
+                        target,
                         documents: docs.length,
                         moved: moving.length,
                         already_there: docs.length - moving.length,
@@ -124,11 +123,11 @@ export const moveDocuments = defineTool({
                     },
                     changes: moving.length,
                     before: { moves: moving.map((doc) => ({ id: doc.id, folder_id: doc.folder_id })) } satisfies MoveState,
-                    after: { folder_id: targetId, document_ids: moving.map((doc) => doc.id) } satisfies MoveAfterState,
+                    after: { folder_id: target.id, document_ids: moving.map((doc) => doc.id) } satisfies MoveAfterState,
                     apply: async (t) => {
                         await t
                             .updateTable('documents')
-                            .set({ folder_id: targetId, updated_at: new Date() })
+                            .set({ folder_id: target.id, updated_at: new Date() })
                             .where(
                                 'id',
                                 'in',
