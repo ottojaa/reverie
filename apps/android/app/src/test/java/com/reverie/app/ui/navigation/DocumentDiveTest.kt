@@ -299,7 +299,7 @@ class DocumentDiveTest {
         compose.setContent { Host() }
         compose.waitForIdle()
         val library = compose.runOnUiThread { nav.currentBackStackEntry!!.id }
-        // The tile in Recently added comes first, then the row under "My files".
+        // The tile in Recently added comes first, then the row under the "My files" heading.
         listOf(library, sectionOrigin(library, UNFILED_SECTION)).forEachIndexed { copy, origin ->
             val tapped = compose.onAllNodesWithText("image.bin")[copy]
 

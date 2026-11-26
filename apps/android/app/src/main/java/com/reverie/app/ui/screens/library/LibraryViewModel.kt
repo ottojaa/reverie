@@ -89,7 +89,7 @@ class LibraryViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Recently added and the file rows of "My files" share one selection; each swipes through its own list. */
+    /** Recently added and the file rows under "My files" share one selection; each swipes through its own list. */
     val recentList: DocumentListHandler = handlerOf(LibrarySection.RECENT)
     val unfiledList: DocumentListHandler = handlerOf(LibrarySection.UNFILED)
 
