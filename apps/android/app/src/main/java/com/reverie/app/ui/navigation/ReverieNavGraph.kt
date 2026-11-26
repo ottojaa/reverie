@@ -10,13 +10,13 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.reverie.app.ui.screens.browse.BrowseScreen
 import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.FeedScreen
-import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.document.DocumentScreen
 import com.reverie.app.ui.screens.favourites.FavouriteDestination
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
+import com.reverie.app.ui.screens.library.LibraryLinks
+import com.reverie.app.ui.screens.library.LibraryScreen
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.ChangePasswordScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
@@ -48,11 +48,11 @@ fun ReverieNavGraph(
 /** The two roots of the bottom pill. */
 private fun NavGraphBuilder.tabs(navController: NavHostController) {
     reverieComposable(Routes.LIBRARY) { entry ->
-        BrowseScreen(
-            onDocumentClick = { id, aspect -> navController.openDocument(entry, id, aspect) },
-            onOpenKind = { navController.navigate(Routes.feed(FeedSource.of(it))) },
+        LibraryScreen(
+            links = navController.libraryLinks(),
+            onDocumentClick = { id, aspect, section -> navController.openDocument(entry, id, aspect, section) },
+            onOpenAccount = { navController.navigate(Routes.SETTINGS) },
             onFavourite = { navController.openFavourite(it) },
-            onSeeAllFavourites = { navController.navigate(Routes.FAVOURITES) },
         )
     }
 
@@ -65,6 +65,14 @@ private fun NavGraphBuilder.tabs(navController: NavHostController) {
         )
     }
 }
+
+private fun NavHostController.libraryLinks() = LibraryLinks(
+    onOpenFolder = { navigate(Routes.folder(it)) },
+    onOpenList = { navigate(Routes.feed(it)) },
+    onOpenFavourites = { navigate(Routes.FAVOURITES) },
+    onSearch = { navigate(Routes.search(query = it)) },
+    onOpenTrash = {},
+)
 
 /** The screens pushed over a tab that list folders and documents. */
 private fun NavGraphBuilder.lists(navController: NavHostController) {
@@ -135,9 +143,19 @@ private fun NavGraphBuilder.settings(navController: NavHostController) {
  */
 private const val NO_DIVE_ORIGIN = "none"
 
-/** Opens the viewer from [origin]'s screen, so the tile there dives into it. */
-internal fun NavHostController.openDocument(origin: NavBackStackEntry, documentId: String, aspect: Float? = null) =
-    navigate(Routes.document(documentId, origin.id, aspect))
+/**
+ * Opens the viewer from [origin]'s screen, so the tile there dives into it: the tile in [section], on a
+ * screen whose lists have origins of their own.
+ */
+internal fun NavHostController.openDocument(
+    origin: NavBackStackEntry,
+    documentId: String,
+    aspect: Float? = null,
+    section: String? = null,
+) {
+    val from = section?.let { sectionOrigin(origin.id, it) } ?: origin.id
+    navigate(Routes.document(documentId, from, aspect))
+}
 
 /**
  * Goes to a folder from inside one (null: the Library root). A folder already on the way here (a breadcrumb

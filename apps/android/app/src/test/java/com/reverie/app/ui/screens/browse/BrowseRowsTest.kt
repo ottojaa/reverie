@@ -97,11 +97,6 @@ class BrowseRowsTest {
         assertEquals(photos.map { it.id }, bandIds(both).flatten())
     }
 
-    @Test fun `the dashboard's subtitle counts the scope's files`() {
-        assertEquals("248 files", dashboardSubtitle(248))
-        assertEquals("1 file", dashboardSubtitle(1))
-    }
-
     @Test fun `a list's subtitle names its total, and the lists by date have none`() {
         assertEquals("38 photos", FeedSource.PHOTOS.subtitle(38))
         assertEquals("1 photo", FeedSource.PHOTOS.subtitle(1))

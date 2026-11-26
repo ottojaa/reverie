@@ -1,7 +1,6 @@
 package com.reverie.app.ui.screens.favourites
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,23 +22,12 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.ScreenOrientation
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FavouriteDto
-import com.reverie.app.data.api.model.FileTotalsDto
-import com.reverie.app.data.api.model.KindTotalsDto
-import com.reverie.app.data.api.model.TopTypeDto
 import com.reverie.app.data.repository.FavouritesState
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.theme.ThemeMode
 import com.reverie.app.domain.model.InsightPhase
-import com.reverie.app.ui.screens.browse.BrowseHeader
-import com.reverie.app.ui.screens.browse.BrowseTitle
-import com.reverie.app.ui.screens.browse.DashboardActions
-import com.reverie.app.ui.screens.browse.DashboardBody
-import com.reverie.app.ui.screens.browse.DashboardState
-import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedLayout
-import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.FileMenuItems
 import com.reverie.app.ui.screens.browse.FeedList
 import com.reverie.app.ui.screens.browse.FeedSource
@@ -57,7 +45,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * The stars and the three places favourites are listed, as the Fav boards draw them. Every state renders
+ * The stars and the places favourites are listed, as the Fav boards draw them. Every state renders
  * dark and light. Blurhashes stand in for thumbnails: a screenshot test has no network.
  */
 class FavouritesScreenshotTest {
@@ -194,41 +182,6 @@ class FavouritesScreenshotTest {
         FavouritesShelf(listOf(fixtures.portugal, fixtures.code, fixtures.invoice, fixtures.sunset, fixtures.builds, fixtures.secret, unlocked, fixtures.notes), onOpen = {}, onSeeAll = {})
     }
 
-    private val summary = DocumentSummaryDto(
-        image = KindTotalsDto(38, 210_000_000),
-        video = KindTotalsDto(19, 1_400_000_000),
-        file = FileTotalsDto(191, 2_900_000_000, listOf(TopTypeDto("apk", 120), TopTypeDto("zip", 31))),
-    )
-
-    @Composable
-    private fun Dashboard(favourites: List<FavouriteDto>, documents: List<DocumentDto>) {
-        Column {
-            BrowseHeader(title = BrowseTitle("My Files", if (documents.isEmpty()) "0 documents" else "248 documents"), processingCount = 0, onProcessingClick = {}, onBack = null)
-            Box(Modifier.weight(1f)) {
-                DashboardBody(
-                    state = DashboardState(
-                        summary = summary.takeIf { documents.isNotEmpty() },
-                        photoPreview = (1..4).map { media("s$it", "image/jpeg", 20) },
-                        videoPreview = media("preview", "video/mp4", 6, 74.0),
-                        recent = FeedState(FeedDocuments(documents, total = documents.size, hasMore = false, fetched = true)),
-                    ),
-                    listState = rememberLazyListState(), contentPadding = PaddingValues(bottom = 24.dp), today = today, zone = zone,
-                    actions = DashboardActions(onOpenKind = {}, recent = RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { it.id == "d-invoice" })),
-                    focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null, onUpload = {},
-                    favourites = favourites,
-                )
-            }
-        }
-    }
-
-    @Test fun dashboardStrip() = both("dashboardStrip") { Dashboard(fixtures.all, files) }
-
-    @Test fun dashboardStripEmptyLibrary() = both("dashboardStripEmptyLibrary") { Dashboard(listOf(fixtures.portugal, fixtures.secret), emptyList()) }
-
-    @Test fun stripTiles() = both("stripTiles", wide(width = 2300, height = 450)) {
-        FavouritesStrip(fixtures.all + unlocked, onOpen = {}, onSeeAll = {})
-    }
-
     private fun screen(name: String, state: FavouritesState, filter: FavouriteFilter, device: DeviceConfig = DeviceConfig.PIXEL_5) =
         both(name, device) { FavouritesContent(state, filter, FavouritesActions()) }
 
@@ -256,7 +209,6 @@ class FavouritesScreenshotTest {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val long = fixtures.folder("f-long", "Household paperwork and receipts 2025", "f-iceland", "Apartment contracts")
             FavouritesShelf(listOf(long) + fixtures.all, onOpen = {}, onSeeAll = {})
-            FavouritesStrip(listOf(long) + fixtures.all, onOpen = {}, onSeeAll = {})
         }
     }
 }

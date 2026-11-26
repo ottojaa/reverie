@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.ui.components.DocumentCardSkeleton
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.rememberSkeletonVisible
@@ -50,11 +49,3 @@ fun EmptyList(title: String, contentPadding: PaddingValues, onUpload: () -> Unit
 /** True while a list's first page is still on its way: nothing to show yet, and no failure to report. */
 fun isFirstLoad(documents: FeedDocuments, error: String?): Boolean =
     documents.documents.isEmpty() && (documents.isLoading || (!documents.fetched && !documents.failed && error == null))
-
-/** The empty state's title for the list of [kind]; null is every kind. */
-fun emptyTitle(kind: DocumentKind?): String = when (kind) {
-    null -> "No documents yet"
-    DocumentKind.IMAGE -> "No photos yet"
-    DocumentKind.VIDEO -> "No videos yet"
-    DocumentKind.FILE -> "No files yet"
-}

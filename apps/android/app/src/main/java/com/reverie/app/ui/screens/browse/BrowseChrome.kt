@@ -79,7 +79,7 @@ class ChromeSelection(
 )
 
 /**
- * Everything around a Browse list that the dashboard, a folder page and a kind screen share: the header that slides
+ * Everything around a Browse list that the Library, a folder page and a list screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
  * the upload sheets, the delete confirmation and the password prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].

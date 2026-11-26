@@ -172,15 +172,4 @@ class RecentRowsTest {
         assertEquals("Thu", whenOf("2026-11-19T09:05:00Z"))
         assertEquals("6 Nov", whenOf("2026-11-06T09:05:00Z"))
     }
-
-    @Test
-    fun `returning from the viewer scrolls to the drawn entry of a document, the member of an opened group`() {
-        val rows = recentRows(listOf(photo("a", 0), photo("b", 1), file("c", 90)))
-        val closed = recentEntries(rows, emptySet())
-        val open = recentEntries(rows, setOf(rows[0].key))
-        assertEquals(0, entryIndexOf(closed, "b"))
-        assertEquals(2, entryIndexOf(open, "b"))
-        assertEquals(3, entryIndexOf(open, "c"))
-        assertEquals(-1, entryIndexOf(open, "zzz"))
-    }
 }

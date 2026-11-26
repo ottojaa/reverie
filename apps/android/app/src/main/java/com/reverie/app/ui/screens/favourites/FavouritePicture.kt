@@ -39,7 +39,7 @@ import com.reverie.app.ui.components.CoverTiles
 import com.reverie.app.ui.screens.collections.collectionAccent
 import com.reverie.app.ui.screens.collections.current
 
-/** The three sizes a favourite's picture is drawn at: the Collections shelf, the Files strip and the grid. */
+/** The sizes a favourite's picture is drawn at: the Collections shelf and the grid. */
 enum class FavouritePictureStyle(
     val corner: Dp,
     val iconSize: Dp,
@@ -50,7 +50,6 @@ enum class FavouritePictureStyle(
     val thumbnail: ThumbnailSize,
 ) {
     SHELF(14.dp, 28.dp, 11.sp, Alignment.TopStart, null, ThumbnailSize.SM),
-    STRIP(16.dp, 24.dp, 12.sp, Alignment.Center, 20.dp, ThumbnailSize.SM),
     GRID(16.dp, 30.dp, 14.sp, Alignment.Center, 24.dp, ThumbnailSize.MD),
 }
 
@@ -115,7 +114,7 @@ private fun BoxScope.FolderPicture(folder: FolderWithChildren, style: FavouriteP
     } else {
         CoverTiles(tiles, gap = 2.dp, modifier = Modifier.fillMaxSize())
     }
-    style.folderMark?.let { FolderMark(it, Modifier.align(Alignment.BottomStart).padding(if (it > 20.dp) 8.dp else 6.dp)) }
+    style.folderMark?.let { FolderMark(it, Modifier.align(Alignment.BottomStart).padding(8.dp)) }
 }
 
 /** The same in both themes: it sits on the picture. */

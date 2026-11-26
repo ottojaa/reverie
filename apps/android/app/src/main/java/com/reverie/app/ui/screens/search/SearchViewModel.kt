@@ -142,7 +142,7 @@ class SearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val filters = searchRepository.quickFilters()
+            val filters = runCatching { searchRepository.fetchQuickFilters() }.getOrDefault(emptyList())
             control.update { it.copy(quickFilters = filters) }
         }
         ensureBaseFacets()

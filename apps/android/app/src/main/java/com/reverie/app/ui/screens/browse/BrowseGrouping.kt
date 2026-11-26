@@ -66,11 +66,6 @@ fun daySpan(dates: MediaDatesDto): String? {
     }
 }
 
-private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
-
-/** The dashboard's subtitle: the library's server total ("248 files"). */
-fun dashboardSubtitle(total: Int): String = count(total, "file", "files")
-
 /**
  * [docs] (in the order of a list of [filter]) grouped under the day that list files them: photos and videos by
  * the day taken, any other list by the day of the upload. Newest day first, each day in the order it came, and

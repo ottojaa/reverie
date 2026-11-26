@@ -130,25 +130,13 @@ class ReturnScrollTest {
         compose.waitForIdle()
     }
 
-    @Test fun `a starred document from the dashboard strip scrolls nothing`() {
-        tapStarredTile()
-        viewAndReturn(swipeTo = null)
-        assertAtTop("the dashboard")
-    }
-
-    @Test fun `swiping on from a starred document from the dashboard strip scrolls nothing`() {
-        tapStarredTile()
-        viewAndReturn(swipeTo = FARTHER)
-        assertAtTop("the dashboard")
-    }
-
     private fun starredFromFavourites(swipeTo: String?) {
         act { app.nav.navigate(Routes.FAVOURITES) }
         tapStarredTile()
         viewAndReturn(swipeTo)
         assertEquals(Routes.FAVOURITES, currentRoute())
         back()
-        assertAtTop("the dashboard")
+        assertAtTop("the Library")
     }
 
     @Test fun `a starred document from the Favourites screen scrolls no list`() = starredFromFavourites(swipeTo = null)
@@ -163,7 +151,7 @@ class ReturnScrollTest {
         viewAndReturn(swipeTo)
         assertAtTop(route)
         back()
-        assertAtTop("the dashboard")
+        assertAtTop("the Library")
     }
 
     @Test fun `a starred document over a folder page scrolls no list`() = starredOver(FOLDER_ROUTE, swipeTo = null)
@@ -182,14 +170,14 @@ class ReturnScrollTest {
         assertScrolledTo(FARTHER)
     }
 
-    /** Opens the first document of the list on [route], over the dashboard, and swipes far down it. */
+    /** Opens the first document of the list on [route], over the Library, and swipes far down it. */
     private fun onlyThatListScrolls(route: String) {
         show(route)
         tapFirstRow()
         viewAndReturn(swipeTo = FARTHER)
         assertScrolledTo(FARTHER)
         back()
-        assertAtTop("the dashboard")
+        assertAtTop("the Library")
     }
 
     @Test fun `a document from a folder page scrolls that page and nothing else`() = onlyThatListScrolls(FOLDER_ROUTE)
@@ -211,15 +199,15 @@ class ReturnScrollTest {
         viewAndReturn(swipeTo = FARTHER)
         assertScrolledTo(FARTHER)
         back()
-        assertAtTop("the dashboard")
+        assertAtTop("the Library")
     }
 
-    @Test fun `a document from the search list leaves the dashboard where it was`() {
+    @Test fun `a document from the search list leaves the Library where it was`() {
         showResults(ViewMode.LIST)
         tapFirstRow()
         viewAndReturn(swipeTo = FARTHER)
         back()
-        assertAtTop("the dashboard")
+        assertAtTop("the Library")
     }
 
     private companion object {

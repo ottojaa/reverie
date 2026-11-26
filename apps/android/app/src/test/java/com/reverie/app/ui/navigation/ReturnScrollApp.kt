@@ -23,23 +23,28 @@ import com.reverie.app.data.api.model.SearchResponse
 import com.reverie.app.data.auth.AuthSessionManager
 import com.reverie.app.data.auth.TokenBundle
 import com.reverie.app.data.auth.TokenStore
+import com.reverie.app.data.backup.BackupMedia
+import com.reverie.app.data.backup.BackupMediaSource
+import com.reverie.app.data.backup.BackupScheduler
+import com.reverie.app.data.backup.BackupSettingsRepository
+import com.reverie.app.data.backup.BackupStatusSource
 import com.reverie.app.data.local.FileCacheManager
 import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.realtime.RealtimeManager
 import com.reverie.app.data.repository.AuthRepository
 import com.reverie.app.data.repository.SearchRepository
 import com.reverie.app.data.upload.MediaStorePhotoSource
-import com.reverie.app.ui.screens.browse.BrowseScreen
-import com.reverie.app.ui.screens.browse.BrowseViewModel
 import com.reverie.app.ui.screens.browse.FolderScreen
 import com.reverie.app.ui.screens.browse.FolderViewModel
 import com.reverie.app.ui.screens.browse.FeedScreen
-import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.screens.browse.FeedViewModel
 import com.reverie.app.ui.screens.browse.browseDeps
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.favourites.FavouritesViewModel
+import com.reverie.app.ui.screens.library.LibraryLinks
+import com.reverie.app.ui.screens.library.LibraryScreen
+import com.reverie.app.ui.screens.library.LibraryViewModel
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.search.SearchViewModel
 import com.reverie.app.ui.screens.upload.UploadViewModel
@@ -94,6 +99,12 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
         context, client, deps.serverUrl, DocumentsApi(client), database.cachedFileDao(), deps.settings, Dispatchers.Unconfined,
     )
 
+    /** Backup is never switched on here, so the phone's photos are never asked for. */
+    private val backup = BackupStatusSource(
+        BackupSettingsRepository(context), BackupScheduler(context), database.backupDao(), NoPhotos, context,
+        Dispatchers.Unconfined,
+    )
+
     fun close() {
         scope.cancel()
         database.close()
@@ -108,7 +119,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     @Composable
     private fun Graph() {
         NavHost(nav, startDestination = Routes.LIBRARY) {
-            reverieComposable(Routes.LIBRARY) { Browse(it) }
+            reverieComposable(Routes.LIBRARY) { Library(it) }
             reverieComposable(Routes.FAVOURITES) {
                 FavouritesScreen(
                     onBack = { nav.popBackStack() },
@@ -130,15 +141,24 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     }
 
     @Composable
-    private fun Browse(entry: NavBackStackEntry) {
-        BrowseScreen(
-            onDocumentClick = { id, aspect -> nav.openDocument(entry, id, aspect) },
-            onOpenKind = { nav.navigate(Routes.feed(FeedSource.of(it))) },
+    private fun Library(entry: NavBackStackEntry) {
+        LibraryScreen(
+            links = LibraryLinks(
+                onOpenFolder = { nav.openFolder(it) },
+                onOpenList = { nav.navigate(Routes.feed(it)) },
+                onOpenFavourites = { nav.navigate(Routes.FAVOURITES) },
+                onSearch = {},
+                onOpenTrash = {},
+            ),
+            onDocumentClick = { id, aspect, section -> nav.openDocument(entry, id, aspect, section) },
+            onOpenAccount = {},
             onFavourite = { nav.openFavourite(it) },
-            viewModel = viewModel { BrowseViewModel(deps) },
+            viewModel = viewModel { LibraryViewModel(deps, searchRepository(), backup) },
             uploadViewModel = uploads(),
         )
     }
+
+    private fun searchRepository() = SearchRepository(SearchApi(client), database.searchHistoryDao(), Dispatchers.Unconfined)
 
     @Composable
     private fun Folder(entry: NavBackStackEntry) {
@@ -168,8 +188,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
     @Composable
     private fun Search(entry: NavBackStackEntry) {
         search = viewModel {
-            val repository = SearchRepository(SearchApi(client), database.searchHistoryDao(), Dispatchers.Unconfined)
-            SearchViewModel(repository, deps.connectivity, world.sequences, createSavedStateHandle())
+            SearchViewModel(searchRepository(), deps.connectivity, world.sequences, createSavedStateHandle())
         }
         SearchScreen(onDocumentClick = { nav.openDocument(entry, it) }, viewModel = search)
     }
@@ -185,6 +204,10 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
         viewer = model
         LaunchedEffect(model) { model.onPageSettled(entry.arguments?.getString("id").orEmpty()) }
         Box(Modifier.fillMaxSize())
+    }
+
+    private object NoPhotos : BackupMediaSource {
+        override suspend fun queryMedia(): List<BackupMedia> = emptyList()
     }
 
     private object SignedOut : TokenStore {

@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
+/** Documents per page of every Browse list. */
+const val BROWSE_PAGE_SIZE = 30
+
 /** One feed's rows, its selection and whether a pull-to-refresh is running. */
 data class FeedState(
     val documents: FeedDocuments = FeedDocuments(),
@@ -154,6 +157,19 @@ class BrowseFeedModel(
             throw cancelled
         } catch (_: Exception) {
             // Best effort, as above.
+        }
+    }
+}
+
+/** Runs [read]; a failure (offline, or the server is down) is dropped, so whatever is shown stays. */
+internal fun CoroutineScope.readQuietly(read: suspend () -> Unit) {
+    launch {
+        try {
+            read()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Nothing to report: see above.
         }
     }
 }

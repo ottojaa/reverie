@@ -40,9 +40,8 @@ class SearchRepository @Inject constructor(
         runCatching { searchApi.suggest(type, q) }.getOrDefault(emptyList())
     }
 
-    suspend fun quickFilters(): List<QuickFilter> = withContext(io) {
-        runCatching { searchApi.quickFilters() }.getOrDefault(emptyList())
-    }
+    /** The ready-made searches that find something, with their counts. */
+    suspend fun fetchQuickFilters(): List<QuickFilter> = withContext(io) { searchApi.quickFilters() }
 
     suspend fun recordSearch(query: String) = withContext(io) {
         val trimmed = query.trim()

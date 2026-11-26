@@ -72,7 +72,7 @@ class BrowseDeps @Inject constructor(
 private data class SessionControl(val error: String? = null, val lockedFolderId: String? = null)
 
 /**
- * What the dashboard, a folder page and a kind screen do the same way, held once: the lock prompt and
+ * What the Library, a folder page and a list screen do the same way, held once: the lock prompt and
  * load errors, the viewer hand-off, delete and download of the selection, the document warm-up, the
  * processing watchers, the grid settings, and the signals that documents changed (a delete anywhere,
  * uploads finishing).

@@ -21,7 +21,7 @@ const val FOLD_WINDOW_MILLIS = 10 * 60 * 1000L
 const val FOLD_MAX_MEMBERS = 30
 
 /**
- * One row of the dashboard's Recently added list. A [Group] holds several documents (newest first)
+ * One row of the Recently added list. A [Group] holds several documents (newest first)
  * behind one line: a [GroupKind.FOLD] of media uploaded together, or a [GroupKind.STACK] of files that
  * share a name. A group's key is its newest member's id, so a page that extends a group keeps its row.
  */
