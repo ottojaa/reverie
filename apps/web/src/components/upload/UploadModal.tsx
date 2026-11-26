@@ -199,13 +199,13 @@ export function UploadModal() {
                         <UploadDestinationMenu folderId={targetFolderId} onPick={setPicked} />
                     </DialogHeader>
 
-                    {/* Linear progress bar (Motion) – only after upload has started */}
+                    {/* Linear progress bar (Motion) – only after upload has started. It has no exit animation: a leaving
+                        element keeps its last render, which would still count the bytes of files that have just failed. */}
                     <AnimatePresence initial={false}>
                         {uploadStarted && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
                                 transition={{ duration: 0.2 }}
                                 className="space-y-2 overflow-hidden"
                                 layout

@@ -1,6 +1,7 @@
 import type { Job, JobEvent } from '@reverie/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { ensureSocketConnected, onJobEvents, subscribeToDocument, subscribeToSession, unsubscribeFromDocument, unsubscribeFromSession } from '../socket';
+import { toBatchBytes } from './batchProgress';
 import { getFileTooLargeMessage, isFileTooLarge, isRetryable } from './limits';
 import type { UploadFile, UploadSession, UploadState } from './types';
 import { uploadFile } from './uploadApi';
@@ -19,7 +20,7 @@ type UploadAction =
     | { type: 'CLEAR_COMPLETED' }
     | { type: 'CLEAR_FAILED' }
     | { type: 'RETRY_FILE'; fileId: string }
-    | { type: 'START_UPLOAD'; totalBytes: number }
+    | { type: 'START_UPLOAD'; fileIds: string[] }
     | { type: 'START_FILE_UPLOAD'; fileId: string }
     | { type: 'UPLOAD_PROGRESS'; fileId: string; progress: number; loaded: number; total: number }
     | { type: 'FILE_UPLOAD_SUCCESS'; fileId: string; documentId: string; jobs: Array<{ id: string }> }
@@ -34,8 +35,7 @@ const initialState: UploadState = {
     pendingJobEvents: new Map(),
     session: null,
     isUploading: false,
-    uploadBytesLoaded: 0,
-    uploadBytesTotal: 0,
+    batchFileIds: [],
 };
 
 /** Whether an upload of this file can begin: it is waiting, or it failed and can be tried again. */
@@ -154,12 +154,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
         }
 
         case 'START_UPLOAD': {
-            return {
-                ...state,
-                isUploading: true,
-                uploadBytesLoaded: 0,
-                uploadBytesTotal: action.totalBytes,
-            };
+            return { ...state, isUploading: true, batchFileIds: action.fileIds };
         }
 
         case 'START_FILE_UPLOAD': {
@@ -182,19 +177,7 @@ function uploadReducer(state: UploadState, action: UploadAction): UploadState {
                 newFiles.set(action.fileId, { ...file, uploadProgress: action.progress, uploadLoaded: action.loaded });
             }
 
-            // Aggregate: sum of completed/processing file sizes + sum of loaded for all uploading files
-            const completedBytes = Array.from(newFiles.values()).reduce(
-                (sum, f) => (f.status === 'complete' || f.status === 'processing' ? sum + f.file.size : sum),
-                0,
-            );
-            const uploadingBytes = Array.from(newFiles.values()).reduce((sum, f) => sum + (f.status === 'uploading' ? (f.uploadLoaded ?? 0) : 0), 0);
-            const uploadBytesLoaded = completedBytes + uploadingBytes;
-
-            return {
-                ...state,
-                files: newFiles,
-                uploadBytesLoaded,
-            };
+            return { ...state, files: newFiles };
         }
 
         case 'FILE_UPLOAD_SUCCESS': {
@@ -429,8 +412,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 dispatch({ type: 'JOB_EVENT', event });
             });
 
-            const totalBytes = queuedFiles.reduce((sum, f) => sum + f.file.size, 0);
-            dispatch({ type: 'START_UPLOAD', totalBytes });
+            dispatch({ type: 'START_UPLOAD', fileIds: queuedFiles.map((f) => f.id) });
 
             // Mark all as uploading and start all uploads in parallel
             for (const queuedFile of queuedFiles) {
@@ -499,6 +481,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         }
     }, [files]);
 
+    const batchBytes = useMemo(() => toBatchBytes(state.files, state.batchFileIds), [state.files, state.batchFileIds]);
+
     const stats = useMemo(() => {
         const counts = {
             total: files.length,
@@ -531,8 +515,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         startUpload,
         reset,
         stats,
-        uploadBytesLoaded: state.uploadBytesLoaded,
-        uploadBytesTotal: state.uploadBytesTotal,
+        ...batchBytes,
         recentlyCompletedDocumentIds,
         recordCompletedDocumentIds,
         markPulseComplete,

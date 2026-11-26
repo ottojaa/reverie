@@ -10,7 +10,7 @@ import { DocumentCard } from './DocumentCard/DocumentCard';
 import { DocumentRow } from './DocumentRow';
 import { DocumentTile } from './DocumentTile';
 
-const state = vi.hoisted(() => ({ isMobile: false, selectOnly: vi.fn() }));
+const state = vi.hoisted(() => ({ isMobile: false, selectOnly: vi.fn(), toggle: vi.fn() }));
 
 vi.mock('@tanstack/react-router', () => ({
     useNavigate: () => () => {},
@@ -20,9 +20,12 @@ vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => state.isMobile })
 vi.mock('@/lib/hooks/useConfirmedDelete', () => ({ useConfirmedDelete: () => () => {} }));
 vi.mock('@/lib/hooks/usePrefetchDocument', () => ({ usePrefetchDocument: () => () => {} }));
 vi.mock('@/lib/selection', () => ({
-    useSelectionOptional: () => ({ isSelected: () => false, selectedIds: new Set(), selectOnly: state.selectOnly }),
+    useSelectionOptional: () => ({ isSelected: () => false, selectedIds: new Set(), selectOnly: state.selectOnly, toggle: state.toggle }),
 }));
-vi.mock('./DocumentCard/DocumentActionsMenu', () => ({ DocumentActionsMenu: ({ children }: { children?: ReactNode }) => children }));
+vi.mock('./DocumentCard/DocumentActionsMenu', () => ({
+    DocumentActionsMenu: ({ children }: { children?: ReactNode }) => children,
+    DocumentActionsButton: () => null,
+}));
 vi.mock('./DocumentCard/DocumentCardVisual', () => ({ DocumentCardVisual: () => null }));
 vi.mock('./DocumentCard/DocumentThumbnail', () => ({ DocumentThumbnail: () => null }));
 
@@ -59,6 +62,7 @@ function mountItem(item: ReactNode) {
 beforeEach(() => {
     state.isMobile = false;
     state.selectOnly.mockClear();
+    state.toggle.mockClear();
     onDragStart.mockClear();
 });
 
@@ -98,7 +102,7 @@ describe.each(items)('a single document %s', (_name, item) => {
         await fire(link, new TouchEvent('touchstart', { bubbles: true, touches: [{ clientX: 0, clientY: 0 } as Touch] }));
         await settle(500);
 
-        expect(state.selectOnly).toHaveBeenCalledWith('doc-1');
+        expect(state.toggle).toHaveBeenCalledWith('doc-1');
         expect(onDragStart).not.toHaveBeenCalled();
     });
 });

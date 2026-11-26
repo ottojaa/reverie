@@ -63,13 +63,18 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
 
     const handleLongPress = useCallback(() => {
         longPressFiredRef.current = true;
-        selection?.selectOnly(document.id);
+        selection?.toggle(document.id);
     }, [document.id, selection]);
 
     const longPressHandlers = useLongPress(handleLongPress, {
         threshold: LONG_PRESS_MS,
         enabled: isMobile,
     });
+
+    /** A long press ends without a click, so the next press must not be taken for its release. */
+    const forgetLongPress = () => {
+        longPressFiredRef.current = false;
+    };
 
     // --- Drag ---
 
@@ -151,6 +156,30 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         navigateToDocument();
     };
 
+    // --- Keyboard ---
+
+    /** Enter opens and Space selects. Neither goes further up, where the drag sensor would start a keyboard drag. */
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+
+        e.stopPropagation();
+
+        // A modified key is left to the browser, whose click then acts like the same modified mouse click.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+        e.preventDefault();
+
+        if (e.repeat) return;
+
+        if (e.key === ' ') {
+            selection?.toggle(document.id);
+
+            return;
+        }
+
+        navigateToDocument();
+    };
+
     // --- Delete ---
 
     const handleDelete = () => deleteWithConfirm(documentIds);
@@ -177,6 +206,7 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         // Handlers
         handleClick,
         handleDoubleClick,
+        handleKeyDown,
         handleOpen: navigateToDocument,
         handleDelete,
         handleDownload,
@@ -187,6 +217,6 @@ export function useDocumentInteraction({ document, orderedIds = [] }: UseDocumen
         dragAttributes: attributes,
         // A press is a long press (select) on touch screens and the start of a drag elsewhere. Both claim
         // `onMouseDown` and `onTouchStart`, so an element can only be given one set.
-        gestureHandlers: isMobile ? longPressHandlers : listeners,
+        gestureHandlers: isMobile ? { ...longPressHandlers, onPointerDown: forgetLongPress } : listeners,
     };
 }

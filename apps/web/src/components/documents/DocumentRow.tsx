@@ -8,7 +8,7 @@ import type { Document } from '@reverie/shared';
 import { Link } from '@tanstack/react-router';
 import { memo } from 'react';
 
-import { DocumentActionsMenu } from './DocumentCard/DocumentActionsMenu';
+import { DocumentActionsButton, DocumentActionsMenu } from './DocumentCard/DocumentActionsMenu';
 import { RowThumb } from './RowThumb';
 
 interface DocumentRowProps {
@@ -28,7 +28,20 @@ interface DocumentRowProps {
     member?: boolean;
 }
 
-/** One row of the Files table. Selects, drags and opens like a card in the grid, with the same context menu. */
+/** A touch screen's way to a row's actions, at the visible end of the row. Presses on it and in its menu are not the row's. */
+function RowActions({ background }: { background: string }) {
+    const keepFromRow = (e: React.SyntheticEvent) => e.stopPropagation();
+
+    return (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-end" onMouseDown={keepFromRow} onTouchStart={keepFromRow}>
+            <div className="pointer-events-auto sticky right-1 rounded-md bg-card">
+                <DocumentActionsButton className={background} />
+            </div>
+        </div>
+    );
+}
+
+/** One row of the Files table. Selects, drags and opens like a card in the grid, with the same actions. */
 export const DocumentRow = memo(function DocumentRow({
     document,
     orderedIds,
@@ -39,19 +52,20 @@ export const DocumentRow = memo(function DocumentRow({
     member = false,
 }: DocumentRowProps) {
     const interaction = useDocumentInteraction({ document, orderedIds });
-    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, dragRef, dragAttributes, gestureHandlers } = interaction;
+    const { isSelected, isDragging, isMobile, handleClick, handleDoubleClick, handleKeyDown, dragRef, gestureHandlers } = interaction;
     const config = getFileTypeConfig(document.mime_type, document.original_filename);
     const label = fileTypeLabel(document.mime_type, document.original_filename);
     const showFolder = folderName !== undefined;
+    // The menu button covers the row's text, so it shows the same background as the row, over the table's.
+    const background = cn(member && 'bg-background/50', isSelected && 'bg-primary/12 dark:bg-primary/15');
 
     return (
-        <DocumentActionsMenu document={document} interaction={interaction}>
+        <DocumentActionsMenu document={document} interaction={interaction} isButtonOnly={isMobile}>
             <div
                 ref={dragRef}
                 data-document-card
                 className={cn('absolute left-0 right-0', isDragging && 'opacity-50')}
                 style={{ ...style, touchAction: isMobile ? 'pan-y' : 'none' }}
-                {...dragAttributes}
                 {...gestureHandlers}
                 onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
             >
@@ -61,12 +75,14 @@ export const DocumentRow = memo(function DocumentRow({
                     preload="intent"
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
+                    onKeyDown={handleKeyDown}
                     draggable={false}
                     className={cn(
                         'grid h-full items-center gap-4 border-t border-border/60 px-4 text-sm transition-colors hover:bg-muted/50',
-                        member && 'bg-background/50 pl-6',
+                        member && 'pl-6',
+                        background,
                         'focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
-                        isSelected && 'bg-primary/12 hover:bg-primary/15 dark:bg-primary/15',
+                        isSelected && 'hover:bg-primary/15 focus-visible:bg-primary/15',
                     )}
                     style={{ gridTemplateColumns: columns }}
                 >
@@ -98,6 +114,7 @@ export const DocumentRow = memo(function DocumentRow({
                     <span className="text-right font-mono text-[13px] text-muted-foreground">{formatFileSize(document.size_bytes)}</span>
                     <span className="truncate text-muted-foreground">{formatAddedDate(document.created_at)}</span>
                 </Link>
+                {isMobile && <RowActions background={background} />}
             </div>
         </DocumentActionsMenu>
     );
