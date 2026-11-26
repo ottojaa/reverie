@@ -60,7 +60,9 @@ class DiskPrivateDataPurger @Inject constructor(
     }
 
     override suspend fun purgeOutsideFolders(publicFolderIds: Collection<String>) = withContext(io) {
-        purgeRows(documentDao.idsOutsideFolders(publicFolderIds.toList()))
+        // Subtracted here: a NOT IN over every public folder binds more than one statement may, and cannot be chunked.
+        val outside = documentDao.folderIdsInUse() - publicFolderIds.toSet()
+        purgeRows(outside.chunked(QUERY_CHUNK).flatMap { documentDao.idsInFolders(it) })
     }
 
     override suspend fun forgetMoved(ids: Collection<String>) = withContext(io) {

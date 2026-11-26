@@ -28,16 +28,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** What may be written to disk, with folders nested three levels deep. */
 @RunWith(RobolectricTestRunner::class)
@@ -46,7 +49,11 @@ class PrivateDocumentGateTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-    private val database = Room.inMemoryDatabaseBuilder(context, ReverieDatabase::class.java).build()
+    /** How many values each statement has bound. */
+    private val boundPerStatement = CopyOnWriteArrayList<Int>()
+    private val database = Room.inMemoryDatabaseBuilder(context, ReverieDatabase::class.java)
+        .setQueryCallback({ _, values -> boundPerStatement += values.size }, { it.run() })
+        .build()
     private val store = PrivateDocumentStore()
 
     /** What the server answers the next tree request with. */
@@ -144,6 +151,22 @@ class PrivateDocumentGateTest {
         assertEquals(true, row.isPrivate)
         assertEquals(true, row.locked)
         assertEquals("f", row.lockId)
+    }
+
+    /** SQLite on Android 8 to 10 refuses a statement binding more than 999 values; the test's SQLite does not. */
+    @Test fun `a library of more folders than one statement can bind still purges and reconciles`() = runBlocking {
+        val many = (1..1200).map { folder("f$it") }
+        tree = many + folder("later-hidden")
+        folders.refresh()
+        cache(doc("kept", folderId = "f1"), doc("secret", folderId = "later-hidden"))
+        boundPerStatement.clear()
+
+        tree = many.dropLast(1) + folder("later-hidden", isPrivate = true)
+        folders.refresh()
+
+        assertEquals(listOf("kept"), cachedIds())
+        assertEquals(1200, database.folderDao().observeAll().first().size)
+        assertTrue("a statement bound ${boundPerStatement.max()} values", boundPerStatement.max() <= 999)
     }
 
     @Test fun `a folder going private purges what was cached anywhere beneath it`() = runBlocking {

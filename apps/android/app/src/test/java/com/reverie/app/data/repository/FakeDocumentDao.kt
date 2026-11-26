@@ -44,8 +44,7 @@ internal class FakeDocumentDao : DocumentDao {
         rows.value.filter { it.id in ids && it.takenAt != null }.map { DocumentTakenAt(it.id, it.takenAt!!) }
     override suspend fun existingIds(ids: List<String>): List<String> =
         rows.value.map { it.id }.filter { it in ids }
-    override suspend fun idsOutsideFolders(publicFolderIds: List<String>): List<String> =
-        rows.value.filter { it.folderId != null && it.folderId !in publicFolderIds }.map { it.id }
+    override suspend fun folderIdsInUse(): List<String> = rows.value.mapNotNull { it.folderId }.distinct()
     override suspend fun touchLastAccessed(id: String, timestamp: Long) {}
     override suspend fun clear() { rows.value = emptyList() }
 }

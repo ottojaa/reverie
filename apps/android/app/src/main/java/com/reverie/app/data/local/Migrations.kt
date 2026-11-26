@@ -114,12 +114,19 @@ object Migration6To7 : Migration(6, 7) {
  * `folders` is only a copy of the server's tree, so it is dropped and made again empty: a row carried
  * over would have no lock id and read as public. The next tree refresh fills it. `upload_tasks` is
  * rebuilt so an upload can have no folder; its rows are kept, because queued uploads point at them.
+ * The files of batches that are over are forgotten: version 7 never cleared them, and the upload card
+ * counts every file listed.
  */
 object Migration7To8 : Migration(7, 8) {
 
     override fun migrate(db: SupportSQLiteDatabase) {
         replaceFolders(db)
         allowUploadsWithoutFolder(db)
+        forgetFinishedUploads(db)
+    }
+
+    private fun forgetFinishedUploads(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM upload_items WHERE sessionId NOT IN (SELECT sessionId FROM upload_tasks WHERE status = 'uploading')")
     }
 
     private fun replaceFolders(db: SupportSQLiteDatabase) {

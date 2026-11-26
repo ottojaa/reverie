@@ -44,7 +44,7 @@ class Migration7To8Test {
 
     @Test fun `queued uploads and the backup ledger survive, and the folder cache starts empty`() = runBlocking {
         createVersion7(
-            "INSERT INTO upload_tasks VALUES ('s1', 'folder-1', 'replace', 'QUEUED', 7)",
+            "INSERT INTO upload_tasks VALUES ('s1', 'folder-1', 'replace', 'uploading', 7)",
             "INSERT INTO backup_ledger VALUES (42, 'abc', 'doc-1', 'UPLOADED', 7)",
             "INSERT INTO folders VALUES ('folder-1', NULL, 'Old', '/Old', NULL, NULL, 0, 'folder', 1, 0, 3, 'c', 'u', 7)",
         )
@@ -52,11 +52,27 @@ class Migration7To8Test {
         val migrated = open()
 
         val task = migrated.uploadDao().getTask("s1")!!
-        assertEquals(listOf("folder-1", "replace", "QUEUED"), listOf(task.folderId, task.conflictStrategy, task.status))
+        assertEquals(listOf("folder-1", "replace", "uploading"), listOf(task.folderId, task.conflictStrategy, task.status))
         assertEquals(emptyList<Any>(), migrated.folderDao().observeAll().first())
         migrated.openHelper.readableDatabase.query("SELECT mediaId FROM backup_ledger").use { cursor ->
             assertEquals(1, cursor.count)
         }
+    }
+
+    @Test fun `files of finished batches are forgotten, and those of a running one stay`() = runBlocking {
+        createVersion7(
+            "INSERT INTO upload_tasks VALUES ('done', 'folder-1', NULL, 'complete', 5)",
+            "INSERT INTO upload_tasks VALUES ('broke', 'folder-1', NULL, 'failed', 6)",
+            "INSERT INTO upload_tasks VALUES ('running', 'folder-1', NULL, 'uploading', 7)",
+            item("old", "done", "complete"),
+            item("lost", "broke", "failed"),
+            item("sent", "running", "complete"),
+            item("waiting", "running", "queued"),
+        )
+
+        val kept = open().uploadDao().observeAllItems().first()
+
+        assertEquals(listOf("sent", "waiting"), kept.map { it.id }.sorted())
     }
 
     @Test fun `an upload to the top level can be queued afterwards`() = runBlocking {
@@ -67,6 +83,9 @@ class Migration7To8Test {
 
         assertEquals(null, dao.getTask("s2")!!.folderId)
     }
+
+    private fun item(id: String, session: String, status: String) =
+        "INSERT INTO upload_items VALUES ('$id', '$session', '/staged/$id', '$id.pdf', 'application/pdf', 1, '$status', 0, NULL, NULL)"
 
     private companion object {
         const val NAME = "migration-test.db"

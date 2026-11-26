@@ -16,7 +16,7 @@ internal class FakeFolderDao : FolderDao {
         rows.value = byId.values.toList()
     }
     override suspend fun deleteByIds(ids: List<String>) { rows.value = rows.value.filterNot { it.id in ids } }
-    override suspend fun deleteNotIn(keepIds: List<String>) { rows.value = rows.value.filter { it.id in keepIds } }
+    override suspend fun allIds(): List<String> = rows.value.map { it.id }
     override suspend fun clear() { rows.value = emptyList() }
 }
 

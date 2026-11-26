@@ -41,7 +41,7 @@ import javax.inject.Singleton
 private const val DELETE_REQUEST_LIMIT = 100
 
 /** Most ids one delete statement takes (SQLite's variable limit is 999 on older Android). */
-private const val DELETE_CHUNK = 500
+internal const val DELETE_CHUNK = 500
 
 /** The signed URLs a video needs: the original, and its HLS master playlist when renditions exist. */
 data class SignedUrls(val fileUrl: String, val hlsUrl: String?)

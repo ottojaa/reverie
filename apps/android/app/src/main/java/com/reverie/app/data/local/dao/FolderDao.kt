@@ -21,9 +21,8 @@ interface FolderDao {
     @Query("DELETE FROM folders WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 
-    /** Reconcile the full tree fetch: drop cached folders the server no longer returns. */
-    @Query("DELETE FROM folders WHERE id NOT IN (:keepIds)")
-    suspend fun deleteNotIn(keepIds: List<String>)
+    @Query("SELECT id FROM folders")
+    suspend fun allIds(): List<String>
 
     @Query("DELETE FROM folders")
     suspend fun clear()

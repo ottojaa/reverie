@@ -26,7 +26,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,6 +50,13 @@ class FolderRepository @Inject constructor(
      */
     val covers: StateFlow<Map<String, FolderCoverDto>> = _covers.asStateFlow()
 
+    /** Held while the tree is fetched and stored, so an older answer cannot land on a newer one. */
+    private val refreshing = Mutex()
+    private val refreshesAsked = AtomicLong()
+
+    /** The latest [refresh] call a stored tree answers; guarded by [refreshing]. */
+    private var refreshesAnswered = 0L
+
     fun clearCovers() {
         _covers.value = emptyMap()
     }
@@ -64,14 +74,32 @@ class FolderRepository @Inject constructor(
     fun observeFolder(id: String): Flow<FolderDto?> =
         folderDao.observeAll().map { rows -> rows.firstOrNull { it.id == id }?.toDto() }
 
+    /**
+     * Brings the cached tree up to date. One fetch runs at a time, and it answers every call made
+     * before it started, so a crowd of callers costs one request more than the one under way.
+     */
     suspend fun refresh() = withContext(io) {
+        val call = refreshesAsked.incrementAndGet()
+        refreshing.withLock {
+            if (refreshesAnswered >= call) return@withLock
+            val answers = refreshesAsked.get()
+            fetchTree()
+            refreshesAnswered = answers
+        }
+    }
+
+    private suspend fun fetchTree() {
         val tree = foldersApi.tree()
         _covers.value = tree.toCoverMap()
         val entities = tree.flattenToEntities(System.currentTimeMillis())
         folderDao.upsertAll(entities)
-        folderDao.deleteNotIn(entities.map { it.id })
         // A folder, or one above it, may have gone private since its documents were cached.
         purger.purgeOutsideFolders(entities.toPublicFolderIds())
+        dropFolders(folderDao.allIds() - entities.map { it.id }.toSet())
+    }
+
+    private suspend fun dropFolders(ids: Collection<String>) {
+        ids.chunked(DELETE_CHUNK).forEach { folderDao.deleteByIds(it) }
     }
 
     suspend fun create(request: CreateFolderRequest): FolderDto = withContext(io) {
@@ -91,7 +119,7 @@ class FolderRepository @Inject constructor(
     suspend fun delete(id: String) = withContext(io) {
         foldersApi.delete(id)
         val gone = FolderTree(folderDao.observeAll().first().toTree()).subtreeIds(id)
-        folderDao.deleteByIds(gone.toList())
+        dropFolders(gone)
         _covers.update { it - gone }
         purger.forgetInFolders(gone)
         // The folders above it count less now; offline, the next refresh catches up.
