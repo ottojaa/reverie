@@ -5,17 +5,16 @@ import com.reverie.app.data.local.dao.FolderDao
 import com.reverie.app.data.local.entity.FolderEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
 internal class FakeFolderDao : FolderDao {
     val rows = MutableStateFlow<List<FolderEntity>>(emptyList())
     override fun observeAll(): Flow<List<FolderEntity>> = rows
     override suspend fun getById(id: String): FolderEntity? = rows.value.firstOrNull { it.id == id }
     override suspend fun upsertAll(folders: List<FolderEntity>) {
-        val byId = rows.value.associateBy { it.id }.toMutableMap()
-        folders.forEach { byId[it.id] = it }
-        rows.value = byId.values.toList()
+        rows.update { current -> (current.associateBy { it.id } + folders.associateBy { it.id }).values.toList() }
     }
-    override suspend fun deleteByIds(ids: List<String>) { rows.value = rows.value.filterNot { it.id in ids } }
+    override suspend fun deleteByIds(ids: List<String>) { rows.update { current -> current.filterNot { it.id in ids } } }
     override suspend fun allIds(): List<String> = rows.value.map { it.id }
     override suspend fun clear() { rows.value = emptyList() }
 }

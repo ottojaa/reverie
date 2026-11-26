@@ -7,8 +7,10 @@ import com.reverie.app.data.local.entity.DocumentEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** Writes are atomic, as Room's are: a listing's requests store their rows from several threads at once. */
 internal class FakeDocumentDao : DocumentDao {
     val rows = MutableStateFlow<List<DocumentEntity>>(emptyList())
     override fun observeAll(): Flow<List<DocumentEntity>> =
@@ -27,11 +29,9 @@ internal class FakeDocumentDao : DocumentDao {
     }
     override suspend fun getById(id: String): DocumentEntity? = rows.value.firstOrNull { it.id == id }
     override suspend fun upsertAll(documents: List<DocumentEntity>) {
-        val map = rows.value.associateBy { it.id }.toMutableMap()
-        documents.forEach { map[it.id] = it }
-        rows.value = map.values.toList()
+        rows.update { current -> (current.associateBy { it.id } + documents.associateBy { it.id }).values.toList() }
     }
-    override suspend fun deleteByIds(ids: List<String>) { rows.value = rows.value.filterNot { it.id in ids } }
+    override suspend fun deleteByIds(ids: List<String>) { rows.update { current -> current.filterNot { it.id in ids } } }
     override suspend fun allMimeTypes(): List<DocumentMimeType> =
         rows.value.map { DocumentMimeType(it.id, it.mimeType) }
     override suspend fun mimeTypesInFolder(folderId: String): List<DocumentMimeType> =
