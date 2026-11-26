@@ -91,7 +91,7 @@ function FolderLink({ folder, isCurrent, onClose, onUnlock }: Pick<FolderTreeRow
             aria-current={isCurrent ? 'page' : undefined}
             title={folder.name}
             onClick={(e) => {
-                // A locked folder asks for the password instead of opening.
+                // A locked folder asks to be unlocked instead of opening.
                 if (folder.locked) {
                     e.preventDefault();
                     onUnlock();

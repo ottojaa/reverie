@@ -1,0 +1,6 @@
+{
+    "unlocked": true,
+    "has_password": true,
+    "secret_kind": "pin",
+    "ask": "pin"
+}

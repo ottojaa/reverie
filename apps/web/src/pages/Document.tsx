@@ -82,7 +82,7 @@ export function DocumentPage() {
         );
     }
 
-    // Its folder is locked: the password prompt is already open, this is the fallback after a cancel
+    // Its folder is locked: the unlock prompt is already open, this is the fallback after a cancel
     if (isLocked) {
         return (
             <div className="flex h-full w-full items-center justify-center bg-background">

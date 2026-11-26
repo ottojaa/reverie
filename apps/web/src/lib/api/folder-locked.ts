@@ -1,3 +1,4 @@
+import { VaultRefusalSchema, type LockAsk, type VaultRefusal, type VaultStatus } from '@reverie/shared';
 import axios from 'axios';
 
 /**
@@ -25,13 +26,45 @@ export function isFolderLockedError(error: unknown): boolean {
     return getLockedFolderId(error) !== null;
 }
 
-/** Message for a failed `POST /vault/unlock`, keyed off the API's `error` code. */
-export function toUnlockErrorMessage(error: unknown): string {
-    const code = axios.isAxiosError(error) && typeof error.response?.data === 'object' ? (error.response.data as { error?: unknown } | null)?.error : undefined;
+export interface UnlockFailure {
+    /** What the answer says about the lock, to merge into the cached vault status. */
+    status: Partial<Pick<VaultStatus, 'ask' | 'secret_kind'>>;
+    /** The line to show with the prompt; null when its new description says it all. */
+    message: string | null;
+}
 
-    if (code === 'invalid_credentials') return 'Incorrect password. Try again.';
+const WRONG_ACCOUNT_PASSWORD = 'Incorrect password. Try again.';
 
-    if (code === 'no_password') return 'Your account has no password yet. Set one in Settings to lock and unlock private folders.';
+/** A refusal once a lock secret is set: it names what to ask for now, and the tries left at it. */
+function toRefusalFailure({ ask, tries_left }: VaultRefusal['details'], askedFor: LockAsk): UnlockFailure {
+    // Stopped. Whoever was already asked for the account password typed it wrong.
+    if (ask === 'account_password') return { status: { ask }, message: askedFor === ask ? WRONG_ACCOUNT_PASSWORD : null };
 
-    return 'Could not unlock this folder. Try again.';
+    const name = ask === 'pin' ? 'PIN' : 'password';
+    const tries = tries_left === 1 ? '1 try' : `${tries_left} tries`;
+
+    return { status: { ask, secret_kind: ask }, message: `Incorrect ${name}. ${tries} left.` };
+}
+
+function toErrorCode(data: unknown): unknown {
+    return typeof data === 'object' && data !== null && 'error' in data ? data.error : undefined;
+}
+
+/** What a failed `POST /vault/unlock` means for a prompt that asked for `askedFor`. */
+export function toUnlockFailure(error: unknown, askedFor: LockAsk): UnlockFailure {
+    const data: unknown = axios.isAxiosError(error) ? error.response?.data : undefined;
+    const refusal = VaultRefusalSchema.safeParse(data);
+
+    if (refusal.success) return toRefusalFailure(refusal.data.details, askedFor);
+
+    // Without a lock secret, a wrong account password is answered with the code alone.
+    if (toErrorCode(data) === 'invalid_credentials') {
+        return { status: { ask: 'account_password', secret_kind: null }, message: askedFor === 'account_password' ? WRONG_ACCOUNT_PASSWORD : null };
+    }
+
+    if (toErrorCode(data) === 'no_password') {
+        return { status: {}, message: 'Your account has no password yet. Set one in Settings to lock and unlock private folders.' };
+    }
+
+    return { status: {}, message: 'Could not unlock this folder. Try again.' };
 }

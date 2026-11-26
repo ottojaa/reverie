@@ -29,7 +29,7 @@ export const FolderSchema = z.object({
     lock_id: UuidSchema.nullable(),
     // True when this folder is effectively private AND its lock is closed (the caller has an
     // account password and has not unlocked it in this session). Clients show a padlock and ask
-    // for the password before opening it. See vault.ts.
+    // for what the vault status' `ask` names before opening it. See vault.ts.
     locked: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),

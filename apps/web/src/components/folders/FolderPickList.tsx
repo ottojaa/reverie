@@ -69,7 +69,7 @@ interface FolderPickListProps {
     emptyText: string;
 }
 
-/** Folders of any depth as one indented list to pick from. A locked folder asks for the password before it is picked. */
+/** Folders of any depth as one indented list to pick from. A locked folder asks to be unlocked before it is picked. */
 export function FolderPickList({ rows, selected, onPick, hasTopLevel = false, hasCounts = false, emptyText }: FolderPickListProps) {
     const { requestUnlock } = useVault();
 
