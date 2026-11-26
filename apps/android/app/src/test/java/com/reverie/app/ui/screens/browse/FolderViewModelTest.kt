@@ -80,7 +80,7 @@ class FolderViewModelTest {
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = documentRowActions(viewModel, state.selectedIds, starredIds = emptySet(), openDocument = {}),
                 focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
-                slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = {}),
+                slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = {}, onUpload = {}),
             )
         }
     }

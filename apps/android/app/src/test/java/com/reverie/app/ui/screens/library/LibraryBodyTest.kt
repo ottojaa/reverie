@@ -1,6 +1,7 @@
 package com.reverie.app.ui.screens.library
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,6 +27,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.KindCountsDto
 import com.reverie.app.data.api.model.KindTotalsDto
@@ -41,6 +44,7 @@ import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.theme.ReverieTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,6 +73,7 @@ class LibraryBodyTest {
         ),
     )
     private var focus by mutableStateOf(LibraryFocus())
+    private var slotModifier: Modifier = Modifier
     private val calls = mutableListOf<String>()
 
     private fun rowActions(section: String) = RowActions(
@@ -85,6 +90,7 @@ class LibraryBodyTest {
                 links = LibraryLinks(
                     onOpenFolder = { calls += "folder:$it" },
                     onOpenList = { calls += "list:$it" },
+                    onOpenMyFiles = { calls += "my files" },
                     onOpenFavourites = { calls += "favourites" },
                     onSearch = { calls += "search:$it" },
                     onOpenTrash = { calls += "trash" },
@@ -98,7 +104,7 @@ class LibraryBodyTest {
                     folders = RowSelection(state.selectedIds) { calls += "select folder:$it" },
                 ),
                 day = LibraryDay(LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
-                slot = ChromeSlot(Modifier, PaddingValues(0.dp), onHeading = {}, onUpload = { calls += "upload" }),
+                slot = ChromeSlot(slotModifier, PaddingValues(0.dp), onTopDate = {}, onUpload = { calls += "upload" }),
                 focus = focus,
             )
         }
@@ -107,6 +113,10 @@ class LibraryBodyTest {
     private fun reveal(text: String) {
         compose.onAllNodes(hasScrollToNodeAction()).onFirst().performScrollToNode(hasText(text))
     }
+
+    private fun top(text: String) = compose.onNodeWithText(text).getUnclippedBoundsInRoot().top
+
+    private fun height(text: String) = compose.onNodeWithText(text).getUnclippedBoundsInRoot().height
 
     private fun tap(text: String) {
         compose.onNodeWithText(text).performClick()
@@ -140,31 +150,52 @@ class LibraryBodyTest {
         assertEquals(listOf("favourites", "search:category:receipt", "trash"), calls)
     }
 
-    @Test fun `both sections have a way to the rest of their documents`() {
+    @Test fun `Recently added leads to its list`() {
         show()
 
         tap("See all")
-        reveal("loose-3.pdf")
-        tap("See all 7")
 
-        assertEquals(listOf(FeedSource.RECENT, FeedSource.UNFILED).map { "list:$it" }, calls)
+        assertEquals(listOf("list:${FeedSource.RECENT}"), calls)
+    }
+
+    @Test fun `My files lists the folders, then the first few files, then the way to all of it`() {
+        show()
+        reveal("See all 8 in My files")
+
+        compose.onNodeWithText("My files").assertIsDisplayed()
+        compose.onNodeWithText("Folders").assertDoesNotExist()
+        compose.onNodeWithText("loose-3.pdf").assertIsDisplayed()
         compose.onNodeWithText("loose-4.pdf").assertDoesNotExist()
+        assertTrue(top("My files") < top("Travel"))
+        assertTrue(top("Travel") < top("loose-1.pdf"))
+        assertTrue(top("loose-3.pdf") < top("See all 8 in My files"))
+        tap("See all 8 in My files")
+
+        assertEquals(listOf("my files"), calls)
     }
 
-    @Test fun `three or fewer outside folders need no way to more`() {
-        state = state.copy(unfiled = FeedDocuments(loose.take(3), total = 3, fetched = true))
+    @Test fun `a file row in My files is as tall as a folder row`() {
         show()
-        reveal("loose-3.pdf")
+        reveal("loose-1.pdf")
 
-        compose.onNodeWithText("See all 3").assertDoesNotExist()
-        compose.onNodeWithText("Not in a folder").assertIsDisplayed()
+        assertEquals(height("Travel"), height("loose-1.pdf"))
     }
 
-    @Test fun `with nothing outside folders the section is not there`() {
-        state = state.copy(unfiled = FeedDocuments(fetched = true))
+    @Test fun `the way to My files is there however little it holds`() {
+        state = state.copy(unfiled = FeedDocuments(loose.take(2), total = 2, fetched = true))
+        show()
+        reveal("See all 3 in My files")
+
+        compose.onNodeWithText("See all 3 in My files").assertIsDisplayed()
+    }
+
+    @Test fun `with nothing in My files there is its heading and nothing to see all of`() {
+        state = state.copy(folders = emptyList(), unfiled = FeedDocuments(fetched = true))
         show()
 
-        compose.onNodeWithText("Not in a folder").assertDoesNotExist()
+        compose.onNodeWithText("My files").assertIsDisplayed()
+        compose.onNodeWithText("New folder").assertIsDisplayed()
+        compose.onNode(hasText("in My files", substring = true)).assertDoesNotExist()
     }
 
     @Test fun `a folder row opens the folder, and New folder asks for one`() {
@@ -233,7 +264,7 @@ class LibraryBodyTest {
 
         assertEquals(listOf("upload"), calls)
         compose.onNodeWithText("Recently added").assertDoesNotExist()
-        compose.onNodeWithText("Folders").assertIsDisplayed()
+        compose.onNodeWithText("My files").assertIsDisplayed()
     }
 
     @Test fun `coming back from the viewer brings its document into view and is then done with`() {
@@ -245,5 +276,22 @@ class LibraryBodyTest {
 
         compose.onNodeWithText("recent-25.jpg").assertIsDisplayed()
         assertNull(focus.recent)
+    }
+
+    @Test fun `coming back from a file in My files brings it into view below all the folders`() {
+        state = state.copy(folders = (1..20).map { node("Folder $it") })
+        slotModifier = Modifier.height(150.dp)
+        show()
+
+        focus = LibraryFocus(unfiled = "loose1")
+
+        compose.onNodeWithText("loose-1.pdf").assertIsDisplayed()
+        assertNull(focus.unfiled)
+    }
+
+    @Test fun `each folder row wears the folder badge`() {
+        show()
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

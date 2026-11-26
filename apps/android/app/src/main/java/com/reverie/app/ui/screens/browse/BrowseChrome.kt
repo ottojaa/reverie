@@ -62,8 +62,8 @@ class ChromeSlot(
     /** Places the body under the header and lets it follow the header as it slides away. */
     val modifier: Modifier,
     val contentPadding: PaddingValues,
-    /** Tells the date chip which group is at the top of the list (a kind screen); the other screens never call it. */
-    val onHeading: (FeedItem.Header?) -> Unit,
+    /** Tells the date chip what is at the top of the list; the Library, which has no dates, never calls it. */
+    val onTopDate: (TopDate?) -> Unit,
     /** Opens the upload sheet (the empty state's button). */
     val onUpload: () -> Unit,
 )
@@ -122,12 +122,13 @@ fun BrowseChrome(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     BottomBarFollowsHeader(scrollBehavior)
 
-    var heading by remember { mutableStateOf<FeedItem.Header?>(null) }
+    var topDate by remember { mutableStateOf<TopDate?>(null) }
     var headerPx by remember { mutableIntStateOf(0) }
     LaunchedEffect(headerPx) { scrollBehavior.state.heightOffsetLimit = -headerPx.toFloat() }
     val density = LocalDensity.current
+    val statusPx = WindowInsets.statusBars.getTop(density)
     // The banner never rises above the chips' row.
-    val chipsPx = WindowInsets.statusBars.getTop(density) + with(density) { (CHIP_HEIGHT + CHIP_GAP * 2).roundToPx() }
+    val chipsPx = statusPx + with(density) { (CHIP_HEIGHT + CHIP_GAP * 2).roundToPx() }
     val inSelection = !selection.picked.isEmpty
 
     // Pull-to-refresh wraps the whole Scaffold so its indicator floats over the header.
@@ -141,13 +142,18 @@ fun BrowseChrome(
                 val slot = ChromeSlot(
                     modifier = Modifier.belowHeader(headerPx = { headerPx }, heightOffset = { scrollBehavior.state.heightOffset }),
                     contentPadding = PaddingValues(bottom = bottomBarInset() + 12.dp),
-                    onHeading = { heading = it },
+                    onTopDate = { topDate = it },
                     onUpload = { showUploadActions = true },
                 )
                 BodyOrState(ui, isEmpty, unlocker, onRetry, slot, body)
                 // Under the header: it is revealed as the header slides up and fades in with it.
+                val headerBelowStatusBar = {
+                    max(0, headerPx + scrollBehavior.state.heightOffset.roundToInt() - statusPx)
+                }
                 ScrollChips(
-                    heading = heading,
+                    topDate = topDate,
+                    // The offline banner sits where a date over photos would, so then the date waits its turn.
+                    dateBelow = headerBelowStatusBar.takeUnless { ui.isOffline },
                     processingCount = ui.processingCount,
                     onProcessingClick = { showProcessing = true },
                     visibility = { scrollBehavior.state.collapsedFraction },
@@ -247,7 +253,7 @@ private fun BodyOrState(
         )
         ui.error != null && ui.replacesList(isEmpty) -> ErrorState(message = ui.error, onRetry = onRetry)
         // The body sits where the chrome put it already: it must not be placed under the header twice.
-        else -> body(ChromeSlot(Modifier, slot.contentPadding, slot.onHeading, slot.onUpload))
+        else -> body(ChromeSlot(Modifier, slot.contentPadding, slot.onTopDate, slot.onUpload))
     }
 }
 

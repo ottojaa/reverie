@@ -21,6 +21,7 @@ import com.reverie.app.data.api.model.MediaDatesDto
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.BLURHASHES
+import com.reverie.app.ui.components.ROOT_NAME
 import com.reverie.app.ui.photoCover
 import com.reverie.app.ui.screens.destination.node
 import com.reverie.app.ui.screens.manage.PickedTopBar
@@ -116,7 +117,7 @@ class FolderScreenshotTest {
 
     @Composable
     private fun Page(state: FolderState, description: String?) = Box(Modifier.fillMaxSize()) {
-        val name = state.node?.name.orEmpty()
+        val name = if (state.isRoot) ROOT_NAME else state.node?.name.orEmpty()
         val selectedIds = state.selectedIds
         val starred = setOf(boardingPass.id, trip.first().id)
         val actions = RowActions(selected = { it.id in selectedIds }, onClick = {}, onLongClick = {}, starred = { it.id in starred })
@@ -134,12 +135,12 @@ class FolderScreenshotTest {
                         selection = RowSelection(selectedIds),
                     ),
                     layout = layout, actions = actions, focusedId = null, onFocusConsumed = {}, onLoadMore = {},
-                    error = null, slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onHeading = {}, onUpload = {}),
+                    error = null, slot = ChromeSlot(Modifier, PaddingValues(bottom = 24.dp), onTopDate = {}, onUpload = {}),
                 )
             }
         }
         val listed = state.media.documents + state.files?.documents.orEmpty()
-        val picked = pickFrom(selectedIds, listed, state.node?.children.orEmpty())
+        val picked = pickFrom(selectedIds, listed, state.children)
         if (!picked.isEmpty) PickedTopBar(picked, isStarred = false, canDownload = true, onClose = {}, onPick = {})
     }
 
@@ -154,6 +155,12 @@ class FolderScreenshotTest {
     @Test fun photos() = shoot("photos", folder("Portugal – 2025", media = trip))
 
     @Test fun mixed() = shoot("mixed", folder("Portugal – 2025", media = trip.take(6), files = files), "The August trip")
+
+    /** The root, "My files": the top-level folders, then the files that sit beside them. */
+    @Test fun myFiles() {
+        val state = folder("root", files = files, children = subfolders, above = emptyList())
+        paparazzi.snapshotThemes("myFiles") { Page(state.copy(node = null, path = emptyList(), isRoot = true), null) }
+    }
 
     @Test fun filesOnly() = shoot("filesOnly", folder("Bookings", files = files, above = listOf("Trips", "Portugal – 2025")))
 

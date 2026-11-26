@@ -70,7 +70,7 @@ private fun HeadingRow(header: FeedItem.Header) {
     }
 }
 
-/** Names one of a folder's two sections, above that section's first day. */
+/** Names one of a folder's two sections, above its photos or its first day of files. */
 @Composable
 private fun SectionRow(title: String) {
     Text(

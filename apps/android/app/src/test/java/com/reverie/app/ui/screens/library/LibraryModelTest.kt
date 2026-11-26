@@ -185,6 +185,14 @@ class LibraryModelTest {
         assertEquals(listOf("f3", "f2"), covers.files.map(DocumentDto::id))
     }
 
+    @Test fun `the files card takes the four newest files, with a picture or without`() {
+        val files = (1..5).map { doc("new$it", "application/pdf") }
+        val pictured = files.map { if (it.id == "new5") it.copy(thumbnail_blurhash = "LKO2?U%2Tw=w") else it }
+        val covers = kindCovers(pictured, mapOf(DocumentKind.FILE to pictured.map(DocumentDto::id)))
+
+        assertEquals(listOf("new1", "new2", "new3", "new4"), covers.files.map(DocumentDto::id))
+    }
+
     @Test fun `a kind the server has no picks for has no cover`() {
         val covers = kindCovers(documents, mapOf(DocumentKind.IMAGE to emptyList()))
 

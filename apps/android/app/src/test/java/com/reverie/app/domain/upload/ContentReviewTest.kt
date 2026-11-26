@@ -41,9 +41,9 @@ class ContentReviewTest {
     }
 
     @Test
-    fun `does not repeat an identical filename and handles a file outside any folder`() {
+    fun `does not repeat an identical filename and handles a file directly in My files`() {
         assertNull(describeContent(FolderContent(listOf("Work"), "a.pdf"), "a.pdf").detail)
-        assertEquals("Already in your library, not in a folder", describeContent(FolderContent(null, "a.pdf"), "a.pdf").label)
+        assertEquals("Already in My files", describeContent(FolderContent(null, "a.pdf"), "a.pdf").label)
     }
 
     @Test

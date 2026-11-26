@@ -13,11 +13,16 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
@@ -29,6 +34,7 @@ import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.backup.BackupStatus
 import com.reverie.app.domain.folderMeta
 import com.reverie.app.ui.components.FolderRow
+import com.reverie.app.ui.components.ROOT_NAME
 import com.reverie.app.ui.navigation.DiveSection
 import com.reverie.app.ui.screens.browse.ChromeSlot
 import com.reverie.app.ui.screens.browse.FeedSource
@@ -40,13 +46,14 @@ import com.reverie.app.ui.screens.manage.RowSelection
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Names the "Not in a folder" rows as a list of their own to the dive transition. */
+/** Names the "My files" file rows as a list of their own to the dive transition. */
 internal const val UNFILED_SECTION = "unfiled"
 
 /** The Library's ways out. */
 class LibraryLinks(
     val onOpenFolder: (folderId: String) -> Unit,
     val onOpenList: (FeedSource) -> Unit,
+    val onOpenMyFiles: () -> Unit,
     val onOpenFavourites: () -> Unit,
     /** Opens search over the whole library with [query] filled in. */
     val onSearch: (query: String) -> Unit,
@@ -60,6 +67,11 @@ data class LibraryMarks(
     /** Null until the favourites have been read. */
     val favouriteCount: Int? = null,
     val backup: BackupStatus = BackupStatus.Unknown,
+    /**
+     * The order the shortcut chips were last put in (see [orderedShortcuts]), empty if they never were.
+     * Null while it is being read.
+     */
+    val shortcutOrder: List<String>? = emptyList(),
 )
 
 /** What touching the Library's documents and buttons does. */
@@ -71,6 +83,8 @@ class LibraryActions(
     val onFocusConsumed: () -> Unit,
     /** The folder rows' part in the Library's selection. */
     val folders: RowSelection = RowSelection(),
+    /** The shortcut chips on show were moved into this order. */
+    val onReorderShortcuts: (shown: List<String>) -> Unit = {},
 )
 
 /** The document the viewer was last on, in the section that opened it, until it has been brought into view. */
@@ -79,12 +93,12 @@ data class LibraryFocus(val recent: String? = null, val unfiled: String? = null)
 /** The day the page is read on, for its "Yesterday" labels. */
 data class LibraryDay(val today: LocalDate, val zone: ZoneId)
 
-// Where Recently added sits in the page's list. Between it and the first "Not in a folder" row come the
-// folders' heading, the folder rows and the second heading.
+// Where Recently added sits in the page's list. Between it and the first file row of "My files" come that
+// section's heading and its folder rows.
 private const val RECENT_ITEM = 4
-private const val UNFILED_ITEM_AFTER_FOLDERS = RECENT_ITEM + 3
+private const val UNFILED_ITEM_AFTER_FOLDERS = RECENT_ITEM + 2
 
-/** The Library page: kinds, ready-made searches, what was added last, the folders and what is in none. */
+/** The Library page: kinds, ready-made searches, what was added last, and the top of "My files". */
 @Composable
 fun LibraryBody(
     state: LibraryState,
@@ -97,6 +111,8 @@ fun LibraryBody(
     listState: LazyListState = rememberLazyListState(),
 ) {
     val recentRowState = rememberLazyListState()
+    val shortcuts = libraryShortcuts(state.smartViews, marks, links)
+    var isReordering by rememberSaveable { mutableStateOf(false) }
     ReturnScroll(state, focus, listState, recentRowState, actions.onFocusConsumed)
     LazyColumn(state = listState, contentPadding = slot.contentPadding, modifier = slot.modifier.fillMaxSize()) {
         // Every item up to Recently added is always there, if empty, so the places below it stay put.
@@ -104,7 +120,7 @@ fun LibraryBody(
         item(key = "kinds") {
             LibraryBento(state.summary, state.covers, onOpen = { links.onOpenList(FeedSource.of(it)) })
         }
-        item(key = "chips") { LibraryChips(state.smartViews, marks.favouriteCount, links) }
+        item(key = "chips") { LibraryChips(shortcuts, onReorder = { isReordering = true }) }
         item(key = "recent-heading") {
             if (state.recent.documents.documents.isEmpty()) return@item
             SectionHeading("Recently added", "See all") { links.onOpenList(FeedSource.RECENT) }
@@ -113,18 +129,22 @@ fun LibraryBody(
             if (state.hasNoDocuments) return@item NothingUploaded(slot.onUpload)
             RecentlyAdded(state.recent, actions.recent, day, recentRowState, actions.onLoadMore)
         }
-        folderSection(state, marks, links, actions)
-        unfiledSection(state, links, actions.unfiled, day)
+        item(key = "my-files-heading") { SectionHeading(ROOT_NAME, "New folder", actions.onNewFolder) }
+        folderRows(state, marks, links, actions)
+        fileRows(state, actions.unfiled, day)
+        seeAllMyFiles(state, links.onOpenMyFiles)
+    }
+    if (isReordering) {
+        ReorderShortcutsSheet(shortcuts, actions.onReorderShortcuts, onDismiss = { isReordering = false })
     }
 }
 
-private fun LazyListScope.folderSection(
+private fun LazyListScope.folderRows(
     state: LibraryState,
     marks: LibraryMarks,
     links: LibraryLinks,
     actions: LibraryActions,
 ) {
-    item(key = "folders-heading") { SectionHeading("Folders", "New folder", actions.onNewFolder) }
     items(state.folders, key = { "folder:" + it.id }) { folder ->
         FolderRow(
             folder = folder,
@@ -138,20 +158,30 @@ private fun LazyListScope.folderSection(
     }
 }
 
-/** The first documents that are in no folder, with the way to all of them; nothing while there are none. */
-private fun LazyListScope.unfiledSection(state: LibraryState, links: LibraryLinks, actions: RowActions, day: LibraryDay) {
-    val rows = state.unfiledRows
-    if (rows.isEmpty()) return
-    // The server's total, or what is cached when it has not answered.
-    val count = maxOf(state.unfiled.total, state.unfiled.documents.size)
-    item(key = "unfiled-heading") {
-        SectionHeading("Not in a folder", "See all $count".takeIf { count > rows.size }) {
-            links.onOpenList(FeedSource.UNFILED)
-        }
-    }
-    items(rows, key = { "unfiled:" + it.id }) { document ->
+/** The first of the files that are directly in "My files". */
+private fun LazyListScope.fileRows(state: LibraryState, actions: RowActions, day: LibraryDay) {
+    items(state.unfiledRows, key = { "unfiled:" + it.id }) { document ->
         DiveSection(UNFILED_SECTION) {
             RecentEntryView(RecentEntry.Row(RecentRow.Single(document)), actions, day.today, day.zone)
+        }
+    }
+}
+
+/** The way to the whole of "My files", saying how much is directly in it; nothing while it holds nothing. */
+private fun LazyListScope.seeAllMyFiles(state: LibraryState, onOpen: () -> Unit) {
+    // The server's total of files, or what is cached when it has not answered.
+    val count = state.folders.size + maxOf(state.unfiled.total, state.unfiled.documents.size)
+    if (count == 0) return
+    item(key = "my-files-all") {
+        Button(
+            onClick = onOpen,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 6.dp, end = 20.dp).heightIn(min = 48.dp),
+        ) {
+            Text("See all $count in $ROOT_NAME")
         }
     }
 }

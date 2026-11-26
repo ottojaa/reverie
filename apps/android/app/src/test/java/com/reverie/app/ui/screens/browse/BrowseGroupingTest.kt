@@ -13,8 +13,6 @@ class BrowseGroupingTest {
     private val utc: ZoneId = ZoneOffset.UTC
     private val helsinki: ZoneId = ZoneId.of("Europe/Helsinki")
 
-    private fun headers(feed: List<FeedItem>) = feed.filterIsInstance<FeedItem.Header>().map { it.title }
-
     private fun grids(feed: List<FeedItem>) = feed.filterIsInstance<FeedItem.Media>().map { item -> item.docs.map { it.id } }
 
     @Test fun `day labels`() {
@@ -35,45 +33,35 @@ class BrowseGroupingTest {
         assertEquals(LocalDate.of(2026, 11, 23), dayAddedOf(taken, utc))
     }
 
-    @Test fun `photos and videos share one grid under the day they were taken`() {
+    @Test fun `photos and videos share one grid, with no heading between the days they were taken`() {
         val docs = listOf(
             doc("p1", taken = "2026-11-23T10:00:00.000Z"),
             doc("v1", "video/mp4", taken = "2026-11-23T09:00:00.000Z"),
             doc("p2", taken = "2026-11-22T10:00:00.000Z"),
         )
-        assertEquals(
-            listOf(
-                FeedItem.Header("day:2026-11-23", "Today"), FeedItem.Media(docs.take(2)),
-                FeedItem.Header("day:2026-11-22", "Yesterday"), FeedItem.Media(docs.drop(2)),
-            ),
-            buildFeed(DocumentFilter.MEDIA, docs, today, utc),
-        )
+        assertEquals(listOf(FeedItem.Media(docs)), buildFeed(DocumentFilter.MEDIA, docs, today, utc))
     }
 
-    @Test fun `a folder uploaded in one batch gets its headers from the days the photos were taken`() {
+    @Test fun `a folder uploaded in one batch is ordered by the days the photos were taken`() {
         val uploaded = "2026-11-23T08:00:00Z"
         val docs = listOf(
-            doc("c", taken = "2025-08-25T18:00:00.000Z", created = uploaded),
             doc("b", taken = "2025-08-23T12:00:00.000Z", created = uploaded),
+            doc("c", taken = "2025-08-25T18:00:00.000Z", created = uploaded),
             doc("a", taken = "2025-08-21T09:00:00.000Z", created = uploaded),
         )
-        val feed = buildFeed(DocumentFilter.MEDIA, docs, today, utc)
-        assertEquals(listOf("Mon 25 Aug 2025", "Sat 23 Aug 2025", "Thu 21 Aug 2025"), headers(feed))
-        assertEquals(listOf(listOf("c"), listOf("b"), listOf("a")), grids(feed))
+        assertEquals(listOf(listOf("c", "b", "a")), grids(buildFeed(DocumentFilter.MEDIA, docs, today, utc)))
     }
 
-    @Test fun `a photo taken long ago sits under that day however recently it was uploaded`() {
+    @Test fun `a photo taken long ago comes after newer ones however recently it was uploaded`() {
         // The order a cache read gives: newest upload first.
         val docs = listOf(
             doc("old", taken = "2019-06-01T12:00:00.000Z", created = "2026-11-23T09:00:00Z"),
             doc("new", taken = "2026-11-22T12:00:00.000Z", created = "2026-11-22T13:00:00Z"),
         )
-        val feed = buildFeed(DocumentFilter.MEDIA, docs, today, utc)
-        assertEquals(listOf("Yesterday", "Sat 1 Jun 2019"), headers(feed))
-        assertEquals(listOf(listOf("new"), listOf("old")), grids(feed))
+        assertEquals(listOf(listOf("new", "old")), grids(buildFeed(DocumentFilter.MEDIA, docs, today, utc)))
     }
 
-    @Test fun `no day appears twice when dates taken and upload times interleave around midnight`() {
+    @Test fun `a day stays together when dates taken and upload times interleave around midnight`() {
         // The server lists by instant: the photo (23:30 on the 25th, as written) before the screenshot (22:30Z),
         // which in Helsinki is already 00:30 on the 26th. Between them sits a second photo of the 25th.
         val docs = listOf(
@@ -81,10 +69,12 @@ class BrowseGroupingTest {
             doc("screenshot", "image/png", created = "2026-11-25T22:30:00Z"),
             doc("earlier", taken = "2026-11-25T20:00:00.000Z"),
         )
-        val day = LocalDate.of(2026, 11, 26)
-        val feed = buildFeed(DocumentFilter.MEDIA, docs, day, helsinki)
-        assertEquals(listOf("Today", "Yesterday"), headers(feed))
-        assertEquals(listOf(listOf("screenshot"), listOf("photo", "earlier")), grids(feed))
+        val feed = buildFeed(DocumentFilter.MEDIA, docs, LocalDate.of(2026, 11, 26), helsinki)
+        assertEquals(listOf(listOf("screenshot", "photo", "earlier")), grids(feed))
+    }
+
+    @Test fun `an empty list of photos has nothing in it`() {
+        assertEquals(emptyList<FeedItem>(), buildFeed(DocumentFilter.IMAGES, emptyList(), today, utc))
     }
 
     @Test fun `the viewer swipes through photos in the order the grid shows them`() {
@@ -97,9 +87,7 @@ class BrowseGroupingTest {
 
     @Test fun `documents with no readable date come last`() {
         val docs = listOf(doc("broken", created = "soon"), doc("dated", created = "2026-11-23T10:00:00Z"))
-        val feed = buildFeed(DocumentFilter.MEDIA, docs, today, utc)
-        assertEquals(listOf("Today", "Undated"), headers(feed))
-        assertEquals(listOf(listOf("dated"), listOf("broken")), grids(feed))
+        assertEquals(listOf(listOf("dated", "broken")), grids(buildFeed(DocumentFilter.MEDIA, docs, today, utc)))
     }
 
     @Test fun `files list as rows grouped by upload day`() {
@@ -116,13 +104,9 @@ class BrowseGroupingTest {
         )
     }
 
-    @Test fun `a day's photos carry on across a page boundary instead of starting a new group`() {
+    @Test fun `a next page of photos carries on the same grid`() {
         val first = listOf(doc("p1", taken = "2026-11-23T12:00:00.000Z"), doc("p2", taken = "2026-11-23T11:00:00.000Z"))
-        val more = first + doc("p3", taken = "2026-11-23T10:00:00.000Z")
-        assertEquals(2, buildFeed(DocumentFilter.IMAGES, first, today, utc).size)
-        assertEquals(
-            listOf(FeedItem.Header("day:2026-11-23", "Today"), FeedItem.Media(more)),
-            buildFeed(DocumentFilter.IMAGES, more, today, utc),
-        )
+        val more = first + doc("p3", taken = "2026-11-21T10:00:00.000Z")
+        assertEquals(listOf(FeedItem.Media(more)), buildFeed(DocumentFilter.IMAGES, more, today, utc))
     }
 }

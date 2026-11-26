@@ -5,6 +5,7 @@ import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.MosaicSection
 import com.reverie.app.ui.components.bandKey
 import com.reverie.app.ui.components.computeSections
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** One entry of a document list's lazy list. */
@@ -57,7 +58,7 @@ sealed interface FeedRow {
 /** Fetch the next page once the last visible row is this close to the end of what is loaded. */
 private const val LOAD_AHEAD_ROWS = 3
 
-/** Flattens [feed] into lazy-list rows for a [width]-dp-wide screen, packing each day's photos by the grid setting. */
+/** Flattens [feed] into lazy-list rows for a [width]-dp-wide screen, packing the photos by the grid setting. */
 fun toRows(feed: List<FeedItem>, width: Float, layoutMode: GridLayoutMode, featureEvery: Int): List<FeedRow> =
     feed.flatMap { item ->
         when (item) {
@@ -78,7 +79,6 @@ fun feedRows(
     FeedStyle.DAYS -> toRows(
         buildFeed(source.filter, documents, layout.today, layout.zone), width, layout.mode, layout.featureEvery,
     )
-    FeedStyle.ROWS -> documents.map { FeedRow.Added(RecentEntry.Row(RecentRow.Single(it))) }
     FeedStyle.FOLDS -> recentEntries(recentRows(documents), expanded).map { FeedRow.Added(it) }
 }
 
@@ -89,7 +89,6 @@ fun feedRows(
 fun shownIds(source: FeedSource, documents: List<DocumentDto>, expanded: Set<String>, zone: ZoneId): List<String> =
     when (source.style) {
         FeedStyle.DAYS -> dayOrderedIds(source.filter, documents, zone)
-        FeedStyle.ROWS -> documents.map { it.id }
         FeedStyle.FOLDS -> viewerIds(recentRows(documents), expanded)
     }
 
@@ -100,8 +99,25 @@ fun rowIndexOf(rows: List<FeedRow>, docId: String): Int = rows.indexOfFirst { do
 fun isNearEnd(lastVisibleIndex: Int, rowCount: Int, hasMore: Boolean): Boolean =
     hasMore && lastVisibleIndex >= rowCount - LOAD_AHEAD_ROWS
 
-/** The group heading the row at [index] sits under: the nearest heading at or above it. */
-fun headingAt(rows: List<FeedRow>, index: Int): FeedItem.Header? =
-    (index.coerceIn(0, (rows.size - 1).coerceAtLeast(0)) downTo 0)
-        .firstNotNullOfOrNull { rows.getOrNull(it) as? FeedRow.Heading }
-        ?.header
+/**
+ * What the floating date chip names. [position] is the index of the row it was read from: a later one means the
+ * list was scrolled down. [isOverPhotos] says the row is photos, where the chip is the only date on screen.
+ */
+data class TopDate(val title: String, val position: Int, val isOverPhotos: Boolean)
+
+/**
+ * The date of what is at the top of the list when the row at [index] is first: the day of a band's first photo,
+ * or the heading a file row sits under. Null above the first row, and in a list without days.
+ */
+fun topDateAt(rows: List<FeedRow>, index: Int, today: LocalDate, zone: ZoneId): TopDate? =
+    when (val row = rows.getOrNull(index)) {
+        null, is FeedRow.Added -> null
+        is FeedRow.Band -> TopDate(dayTitle(dayTakenOf(row.section.tiles.first().doc, zone), today), index, true)
+        // A section's title belongs to what comes under it.
+        is FeedRow.Section -> topDateAt(rows, index + 1, today, zone)
+        is FeedRow.Heading, is FeedRow.File -> headingAt(rows, index)?.let { TopDate(it.title, index, false) }
+    }
+
+/** The nearest heading at or above the row at [index]. */
+private fun headingAt(rows: List<FeedRow>, index: Int): FeedItem.Header? =
+    (index downTo 0).firstNotNullOfOrNull { rows[it] as? FeedRow.Heading }?.header

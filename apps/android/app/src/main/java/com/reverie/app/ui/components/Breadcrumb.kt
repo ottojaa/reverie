@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.FolderWithChildren
 
 /**
- * "Library › Travel › Portugal": [path] runs from the top level down. Every step opens that folder (null:
- * the Library itself), except the folder being shown, which is the last step unless [endsAtCurrent] is off.
+ * "My files › Travel › Portugal": [path] runs from the top level down. Every step opens that folder (null:
+ * the root), except the folder being shown, which is the last step unless [endsAtCurrent] is off.
  * A long path scrolls to its end.
  */
 @Composable
@@ -44,7 +44,7 @@ fun Breadcrumb(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Crumb(LIBRARY_NAME, style, isCurrent = endsAtCurrent && path.isEmpty(), isRoot = true) { onOpen(null) }
+        Crumb(ROOT_NAME, style, isCurrent = endsAtCurrent && path.isEmpty(), isRoot = true) { onOpen(null) }
         path.forEachIndexed { index, folder ->
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,

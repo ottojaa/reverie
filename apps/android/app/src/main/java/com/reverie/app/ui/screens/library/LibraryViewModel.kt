@@ -26,13 +26,16 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** The Library: its contents and selection, backup status, a new top-level folder, and the viewer hand-off. */
+/** The Library: its contents and selection, backup status, the order of its shortcuts, a new top-level folder,
+ * and the viewer hand-off. */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val deps: BrowseDeps,
@@ -80,7 +83,13 @@ class LibraryViewModel @Inject constructor(
     val backup: StateFlow<BackupStatus> = backupSource.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BackupStatus.Unknown)
 
-    /** Recently added and "Not in a folder" share one selection; each swipes through its own list. */
+    /** The order the shortcut chips were last put in, as saved on this device; null until it has been read. */
+    val shortcutOrder: StateFlow<List<String>?> = deps.settings.settings
+        .map { it.shortcutOrder }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Recently added and the file rows of "My files" share one selection; each swipes through its own list. */
     val recentList: DocumentListHandler = handlerOf(LibrarySection.RECENT)
     val unfiledList: DocumentListHandler = handlerOf(LibrarySection.UNFILED)
 
@@ -108,6 +117,13 @@ class LibraryViewModel @Inject constructor(
     fun createFolder(form: FolderFormData) {
         viewModelScope.launch {
             deps.folders.createFolder(form, parentId = null)?.let { messages.send(it) }
+        }
+    }
+
+    /** Saves the order the chips on show were moved into. */
+    fun reorderShortcuts(shown: List<String>) {
+        viewModelScope.launch {
+            deps.settings.updateShortcutOrder { saved -> reorderedShortcuts(orderedShortcuts(saved), shown) }
         }
     }
 

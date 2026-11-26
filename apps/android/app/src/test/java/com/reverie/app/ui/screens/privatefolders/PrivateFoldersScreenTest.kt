@@ -1,5 +1,7 @@
 package com.reverie.app.ui.screens.privatefolders
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import android.os.Looper
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -125,5 +127,14 @@ class PrivateFoldersScreenTest {
         open()
 
         awaitText("No private folders. To make one, hold a folder, then choose Make private from ⋮.")
+    }
+
+
+    @Test fun `each private folder wears the folder badge, a locked one with its lock`() {
+        open()
+        awaitText("Diary")
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(2)
+        compose.onAllNodesWithContentDescription("Locked folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
+import com.reverie.app.ui.screens.browse.dayLabel
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import org.junit.After
@@ -17,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 
 /** The Photos tab, built from the real screen and view model on the route the app registers for it. */
 @RunWith(RobolectricTestRunner::class)
@@ -64,6 +66,12 @@ class PhotosTabTest {
         compose.onNode(named("photo.jpg")).performClick()
         compose.waitForIdle()
         assertEquals(Routes.DOCUMENT, compose.runOnUiThread { app.nav.currentBackStackEntry?.destination?.route })
+    }
+
+    @Test fun `the date of the photos is named once, by the chip, and by no heading row`() {
+        showPhotos()
+        val title = dayLabel(LocalDate.of(2026, 11, 20), LocalDate.now())
+        assertEquals(1, count(hasText(title)))
     }
 
     private companion object {

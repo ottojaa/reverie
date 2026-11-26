@@ -6,6 +6,7 @@ import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.repository.PageResult
+import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.domain.isInPrivateTree
@@ -27,27 +28,33 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 
-/** What a folder page draws: the folder, where it sits, and its two lists. */
+/** What a folder page draws: the folder (or the root), where it sits, and its two lists. */
 data class FolderState(
     /** The folder in the cached tree; null until the tree holds it. */
     val node: FolderWithChildren? = null,
     /** The folders from the top level down to the one shown, which comes last. */
     val path: List<FolderWithChildren> = emptyList(),
-    /** The folder's own photos and videos. */
+    /** Its own photos and videos. */
     val media: FeedDocuments = FeedDocuments(),
     /** Its other documents; null until the photos and videos have been read. */
     val files: FeedDocuments? = null,
-    /** The server's figures for the folder's own documents; null until it has answered. */
+    /** The server's figures for its own documents; null until it has answered. */
     val summary: DocumentSummaryDto? = null,
     val selectedIds: Set<String> = emptySet(),
     val isRefreshing: Boolean = false,
+    /** Whether the page is the root, "My files", which is no folder: it has no [node]. */
+    val isRoot: Boolean = false,
+    /** The folders directly inside. */
+    val children: List<FolderWithChildren> = node?.children.orEmpty(),
 ) {
     val isEmptyOfDocuments: Boolean get() = media.documents.isEmpty() && files?.documents.isNullOrEmpty()
 
     val hasMore: Boolean get() = media.hasMore || files?.hasMore == true
 
     /** Search never returns private documents, so there is nothing to search for inside a private folder. */
-    val isSearchable: Boolean get() = node?.isInPrivateTree == false
+    val searchScope: SearchScope?
+        get() = if (isRoot) SearchScope.Library
+        else node?.takeUnless { it.isInPrivateTree }?.let { SearchScope.Folder(it.id) }
 }
 
 /** What the page may show: nothing about what a locked folder holds, whatever was read of it before it locked. */
@@ -55,20 +62,20 @@ fun FolderState.unlessLocked(isLocked: Boolean): FolderState =
     if (isLocked) FolderState(node = node, path = path) else this
 
 /**
- * A folder page's data: its place in the tree, the server's figures, and one feed per section over one cache
+ * A folder page's data, for the folder [folderId] names or for the root (null): its place in the tree, the server's figures, and one feed per section over one cache
  * observer. The photos and videos come first on the page, so the other files are asked for only once those
  * have been read to the end (or could not be read at all). One selection spans both sections. Plain Kotlin
  * so it can be tested on the JVM.
  *
  * @param fetchPage one page of [filter] from [offset] into the cache the [cache] flow reads.
- * @param summary the folder's last summary read in this process, from the repository's memory.
+ * @param summary the last summary read in this process, from the repository's memory.
  * @param fetchSummary reads a fresh summary (the repository keeps it for [summary]).
  * @param reconcile told what a section's whole list holds once it has been read from the server.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FolderModel(
     private val scope: CoroutineScope,
-    folderId: String,
+    folderId: String?,
     tree: Flow<List<FolderWithChildren>>,
     private val cache: Flow<List<DocumentDto>>,
     summary: Flow<DocumentSummaryDto?>,
@@ -89,22 +96,28 @@ class FolderModel(
         if (!isLockRefusal(error)) startFiles()
     }
 
-    private val path: Flow<List<FolderWithChildren>> = tree.map { FolderTree(it).pathTo(folderId) }
+    private val isRoot = folderId == null
+
+    /** The folders from the top level down to the one shown, and the folders directly inside it. */
+    private val place: Flow<Pair<List<FolderWithChildren>, List<FolderWithChildren>>> =
+        tree.map { FolderTree(it) }.map { it.pathTo(folderId) to it.childrenOf(folderId) }
 
     private val sections: Flow<Pair<FeedState, FeedState?>> =
         combine(media.state, others.flatMapLatest { it?.state ?: flowOf(null) }, ::Pair)
 
-    val state: StateFlow<FolderState> = combine(path, sections, summary, selection.ids) { folders, (photos, files), figures, ids ->
+    val state: StateFlow<FolderState> = combine(place, sections, summary, selection.ids) { (path, children), (photos, files), figures, ids ->
         FolderState(
-            node = folders.lastOrNull(),
-            path = folders,
+            node = path.lastOrNull(),
+            path = path,
             media = photos.documents,
             files = files?.documents,
             summary = figures,
             selectedIds = ids,
             isRefreshing = photos.isRefreshing || files?.isRefreshing == true,
+            isRoot = isRoot,
+            children = children,
         )
-    }.stateIn(scope, sharing, FolderState())
+    }.stateIn(scope, sharing, FolderState(isRoot = isRoot))
 
     init {
         refreshSummary()

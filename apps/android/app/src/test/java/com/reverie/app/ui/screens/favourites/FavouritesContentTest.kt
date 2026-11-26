@@ -1,5 +1,7 @@
 package com.reverie.app.ui.screens.favourites
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -190,5 +192,13 @@ class FavouritesContentTest {
         show()
 
         compose.onNodeWithText("Couldn't load favourites. Pull down to try again.").assertIsDisplayed()
+    }
+
+
+    @Test fun `a favourite folder wears the folder badge`() {
+        state = FavouriteFixtures.state(FavouriteFixtures.portugal)
+        show()
+
+        compose.onAllNodesWithContentDescription("Folder", useUnmergedTree = true).assertCountEquals(1)
     }
 }

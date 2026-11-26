@@ -2,6 +2,7 @@ package com.reverie.app.domain
 
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.KindCountsDto
 
 /** The cached folders and their covers by folder id: what a list needs to draw a row for a folder it only names. */
 data class CachedFolders(
@@ -38,19 +39,21 @@ val FolderWithChildren.isInPrivateTree: Boolean get() = is_private || lock_id !=
 
 /**
  * The line under a folder's name, the same wherever the folder is shown: what is directly inside it as
- * folders, and its documents including those further down ("5 folders · 27 photos"). A mix that holds
- * anything but photos and videos is counted as files.
+ * folders, and its documents including those further down ("5 folders · 27 photos").
  */
-fun folderMeta(folder: FolderWithChildren): String {
-    if (folder.locked) return "Locked"
-    val (images, videos, files) = folder.kind_counts
-    val documents = if (files > 0) {
+fun folderMeta(folder: FolderWithChildren): String =
+    if (folder.locked) "Locked" else contentsMeta(folder.children.size, folder.kind_counts)
+
+/** What a place holds, in words. A mix that holds anything but photos and videos is counted as files. */
+fun contentsMeta(folderCount: Int, documents: KindCountsDto): String {
+    val (images, videos, files) = documents
+    val counts = if (files > 0) {
         listOf(counted(images + videos + files, "file"))
     } else {
         listOfNotNull(counted(images, "photo").takeIf { images > 0 }, counted(videos, "video").takeIf { videos > 0 })
     }
-    val folders = listOfNotNull(counted(folder.children.size, "folder").takeIf { folder.children.isNotEmpty() })
-    return (folders + documents).joinToString(" · ").ifEmpty { "Empty" }
+    val folders = listOfNotNull(counted(folderCount, "folder").takeIf { folderCount > 0 })
+    return (folders + counts).joinToString(" · ").ifEmpty { "Empty" }
 }
 
 /** "1 file", "4 files". */

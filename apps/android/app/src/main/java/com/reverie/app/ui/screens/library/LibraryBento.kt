@@ -10,32 +10,35 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
+import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.theme.ReverieTheme
 
 private val SMALL_CARD_HEIGHT = 124.dp
 private val CARD_GAP = 10.dp
+private val BLOCK_GAP = 2.dp
 
 /** The three kinds of document as cover cards: Photos tall, Videos over Files beside it. */
 @Composable
@@ -85,16 +88,54 @@ private fun PictureCard(
     }
 }
 
-/** The Files card: up to two of the newest files as sheets of paper lying on it. */
+/** The Files card: the types of the newest files as four blocks, the name on a scrim over their foot. */
 @Composable
 private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKind) -> Unit, modifier: Modifier) {
     CardFrame(onClick = { onOpen(DocumentKind.FILE) }, modifier) {
-        // Drawn in this order, so the second sheet lies over the first.
-        files.getOrNull(0)?.let { Sheet(it, Modifier.offset(x = 24.dp, y = 14.dp).rotate(8f)) }
-        files.getOrNull(1)?.let { Sheet(it, Modifier.offset(x = (-14).dp, y = 18.dp).rotate(-6f)) }
-        // Solid by the label's height, so the name never competes with the sheets under it.
-        Scrim(from = 0.15f, to = ReverieTheme.cardColor, reachedAt = 0.65f)
-        CardLabel(DocumentKind.FILE, count, isLarge = false, MaterialTheme.colorScheme.onSurface)
+        FileBlocks(files, Modifier.matchParentSize())
+        Scrim(from = 0.3f, to = Color.Black.copy(alpha = 0.78f))
+        CardLabel(DocumentKind.FILE, count, isLarge = false, Color.White)
+    }
+}
+
+/** Two rows of two, filled left to right; a place with no file for it stays plain. */
+@Composable
+private fun FileBlocks(files: List<DocumentDto>, modifier: Modifier) {
+    Column(modifier.background(MaterialTheme.colorScheme.background), verticalArrangement = Arrangement.spacedBy(BLOCK_GAP)) {
+        repeat(2) { row ->
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(BLOCK_GAP)) {
+                repeat(2) { column -> FileBlock(files.getOrNull(row * 2 + column), Modifier.weight(1f).fillMaxHeight()) }
+            }
+        }
+    }
+}
+
+/** A file's extension on a block tinted by its type. Decoration: the card is read by its name and count. */
+@Composable
+private fun FileBlock(file: DocumentDto?, modifier: Modifier) {
+    val base = MaterialTheme.colorScheme.surfaceContainerHighest
+    if (file == null) {
+        Box(modifier.background(base).clearAndSetSemantics { testTag = "file-block:plain" })
+        return
+    }
+    val label = fileTypeLabel(file.mime_type, file.original_filename)
+    val tint = fileTint(file.mime_type, file.original_filename)
+    Box(
+        modifier.background(tint.copy(alpha = 0.3f).compositeOver(base))
+            .clearAndSetSemantics { testTag = "file-block:$label" },
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Text(
+            label,
+            // Drawn towards the text colour, so it stands out from its own tint in either theme.
+            color = lerp(tint, MaterialTheme.colorScheme.onSurface, 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.08.em,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 
@@ -106,20 +147,10 @@ private fun CardFrame(onClick: () -> Unit, modifier: Modifier, content: @Composa
     )
 }
 
+/** Fades the card into [to], from [from] of its height down to the foot. */
 @Composable
-private fun BoxScope.Sheet(document: DocumentDto, placement: Modifier) {
-    val shape = MaterialTheme.shapes.small
-    TilePicture(
-        document,
-        Modifier.align(Alignment.TopCenter).then(placement).size(width = 64.dp, height = 84.dp)
-            .shadow(3.dp, shape).clip(shape),
-    )
-}
-
-/** Fades the card into [to], from [from] of its height; [to] is reached at [reachedAt] and held to the foot. */
-@Composable
-private fun BoxScope.Scrim(from: Float, to: Color, reachedAt: Float = 1f) {
-    val brush = Brush.verticalGradient(from to to.copy(alpha = 0f), reachedAt to to)
+private fun BoxScope.Scrim(from: Float, to: Color) {
+    val brush = Brush.verticalGradient(from to to.copy(alpha = 0f), 1f to to)
     Box(Modifier.matchParentSize().background(brush))
 }
 

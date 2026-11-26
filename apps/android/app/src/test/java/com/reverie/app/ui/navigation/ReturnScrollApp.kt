@@ -154,6 +154,7 @@ internal class ReturnScrollApp(private val context: Context, private val world: 
             links = LibraryLinks(
                 onOpenFolder = { nav.showFolder(it) },
                 onOpenList = { nav.navigate(Routes.feed(it)) },
+                onOpenMyFiles = { nav.navigate(Routes.MY_FILES) },
                 onOpenFavourites = { nav.navigate(Routes.FAVOURITES) },
                 onSearch = {},
                 onOpenTrash = {},

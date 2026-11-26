@@ -36,6 +36,10 @@ internal fun browseDeps(context: Context, database: ReverieDatabase, scope: Coro
     runCatching { WorkManager.initialize(context, Configuration.Builder().build()) }
     val settings = SettingsRepository(context)
     val uploadsApi = DocumentsApi(HttpClient(MockEngine { respondOk() }))
+    // Opened here, on the test's thread, before anything queries it. A query that opens it from a background
+    // thread can wait for the main thread while holding the lock close() takes: a test closing the database
+    // just then never finishes.
+    database.openHelper.writableDatabase
     val uploadDao = database.uploadDao()
     return BrowseDeps(
         documents = world.documents,

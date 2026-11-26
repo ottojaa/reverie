@@ -27,14 +27,14 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
-/** How many candidates a kind card's cover is picked from. */
+/** How many candidates a kind card's cover is picked from, and how many files the Files card shows. */
 const val PREVIEW_COUNT = 4
 
 /** How many of the documents in no folder the Library lists; the rest are behind "See all". */
 const val UNFILED_ROWS = 3
 
 /** The ready-made searches the Library offers, in the order it shows them. */
-private val SMART_VIEW_IDS = listOf("screenshots", "receipts", "statements", "large-files")
+internal val SMART_VIEW_IDS = listOf("screenshots", "receipts", "statements", "large-files")
 
 /** The two lists of documents on the Library. */
 enum class LibrarySection { RECENT, UNFILED }
@@ -65,7 +65,7 @@ interface LibraryReads {
 data class KindCovers(
     val photo: DocumentDto? = null,
     val video: DocumentDto? = null,
-    /** Up to two, shown as sheets of paper. */
+    /** Up to four, newest first: the card shows a block for each one's type. */
     val files: List<DocumentDto> = emptyList(),
 )
 
@@ -191,11 +191,12 @@ private fun candidates(cache: List<DocumentDto>, kind: DocumentKind, ids: List<S
 }
 
 internal fun kindCovers(cache: List<DocumentDto>, previews: Map<DocumentKind, List<String>>): KindCovers {
-    // Those with a picture come first; the order is otherwise the candidates' own.
-    fun picks(kind: DocumentKind) = candidates(cache, kind, previews[kind]).sortedByDescending { it.hasRenderedThumbnail }
+    fun picks(kind: DocumentKind) = candidates(cache, kind, previews[kind])
+    // A card filled by one picture takes the first candidate that has one.
+    fun cover(kind: DocumentKind) = picks(kind).sortedByDescending { it.hasRenderedThumbnail }.firstOrNull()
     return KindCovers(
-        photo = picks(DocumentKind.IMAGE).firstOrNull(),
-        video = picks(DocumentKind.VIDEO).firstOrNull(),
-        files = picks(DocumentKind.FILE).take(2),
+        photo = cover(DocumentKind.IMAGE),
+        video = cover(DocumentKind.VIDEO),
+        files = picks(DocumentKind.FILE).take(PREVIEW_COUNT),
     )
 }

@@ -23,13 +23,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.components.ComingSoonSheet
 import com.reverie.app.ui.components.CreateEditFolderSheet
+import com.reverie.app.ui.components.ROOT_NAME
 import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.screens.manage.pickFrom
 import com.reverie.app.ui.screens.upload.UploadViewModel
 import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
-/** A folder's page: the folders inside it, then its own documents. Uploads and new folders land in it. */
+/**
+ * A folder's page, or the root's: the folders inside it, then its own documents. Uploads and new folders land
+ * in it.
+ */
 @Composable
 fun FolderScreen(
     onDocumentClick: (documentId: String, aspect: Float?) -> Unit,
@@ -54,12 +58,12 @@ fun FolderScreen(
     var isNamingFolder by rememberSaveable { mutableStateOf(false) }
     var isCanvasSoon by rememberSaveable { mutableStateOf(false) }
     val shown = state.unlessLocked(ui.lockedFolderId != null)
-    val name = shown.node?.name ?: ui.folder?.name ?: "Folder"
-    val isEmpty = shown.isEmptyOfDocuments && shown.node?.children.isNullOrEmpty()
+    val name = if (viewModel.folderId == null) ROOT_NAME else shown.node?.name ?: ui.folder?.name ?: "Folder"
+    val isEmpty = shown.isEmptyOfDocuments && shown.children.isEmpty()
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
     val picked = remember(shown) {
         val documents = shown.media.documents + shown.files?.documents.orEmpty()
-        pickFrom(shown.selectedIds, documents, shown.node?.children.orEmpty())
+        pickFrom(shown.selectedIds, documents, shown.children)
     }
     val selectedIds = picked.ids
     val starredIds = favourites.starredDocumentIds
@@ -87,7 +91,7 @@ fun FolderScreen(
         headerActions = { openUpload ->
             FolderActions(
                 name = name,
-                onSearch = { onSearch(SearchScope.Folder(viewModel.folderId)) }.takeIf { shown.isSearchable },
+                onSearch = shown.searchScope?.let { scope -> { onSearch(scope) } },
                 onAdd = openUpload,
                 onCanvas = { isCanvasSoon = true },
             )

@@ -149,6 +149,6 @@ fun FeedBody(
         onLoadMore = onLoadMore,
         modifier = slot.modifier,
         expanded = expanded,
-        onHeading = slot.onHeading,
+        onTopDate = slot.onTopDate,
     )
 }

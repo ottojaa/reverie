@@ -20,16 +20,19 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** One folder's page: its lists and selection, a folder made inside it, and the viewer hand-off. */
+/**
+ * One folder's page, or the root's ("My files", with no folder id): its lists and selection, a folder made
+ * inside it, and the viewer hand-off.
+ */
 @HiltViewModel
 class FolderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val deps: BrowseDeps,
 ) : ViewModel(), DocumentListHandler {
 
-    val folderId: String = checkNotNull(savedStateHandle["folderId"]) { "A folder page needs a folder id" }
+    val folderId: String? = savedStateHandle["folderId"]
 
-    private val folder = DocumentScope.Folder(folderId)
+    private val folder = DocumentScope.of(folderId)
 
     private val cache = deps.documents.observeDocuments(folder)
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
@@ -38,6 +41,7 @@ class FolderViewModel @Inject constructor(
         scope = viewModelScope,
         folderId = folderId,
         deps = deps,
+        showsFolders = true,
         refresh = { model.refresh() },
         onContentChanged = { model.contentChanged() },
     )
