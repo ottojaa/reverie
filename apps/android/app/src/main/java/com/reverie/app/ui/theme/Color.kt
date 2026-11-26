@@ -172,7 +172,7 @@ val ReverieDarkColorScheme: ColorScheme = darkColorScheme(
 )
 
 /**
- * Colors Material 3 has no role for: success / warning / info, plus the "card" alias whose
+ * Colors Material 3 has no role for: success / warning, plus the "card" alias whose
  * container level differs between light and dark. Provided via [LocalReverieColors].
  */
 @Immutable
@@ -185,23 +185,9 @@ data class ReverieExtendedColors(
     val onWarning: Color,
     val warningContainer: Color,
     val onWarningContainer: Color,
-    val info: Color,
-    val onInfo: Color,
-    val infoContainer: Color,
-    val onInfoContainer: Color,
     /** The semantic "card" surface — resolves to a different container level per theme. */
     val card: Color,
-    /** The favourite star on a themed surface. */
-    val star: Color,
-    /** The favourite star on a dark scrim over a picture: the same in both themes. */
-    val starOnScrim: Color,
-    /** The wash behind a lit star button. */
-    val starContainer: Color,
 )
-
-private val StarAmber = Color(0xFFFBBF24)
-private val StarAmberDeep = Color(0xFFD97706) // keeps its contrast on a light surface
-private val StarWash = Color(0x26FBBF24)
 
 val LightExtendedColors = ReverieExtendedColors(
     success = Color(0xFF16A34A),
@@ -212,14 +198,7 @@ val LightExtendedColors = ReverieExtendedColors(
     onWarning = Color(0xFFFFFFFF),
     warningContainer = Color(0xFFFBEEDC),
     onWarningContainer = Color(0xFF5A3206),
-    info = Color(0xFF2563EB),
-    onInfo = Color(0xFFFFFFFF),
-    infoContainer = Color(0xFFDEE9FC),
-    onInfoContainer = Color(0xFF11296B),
     card = LightSurfaceContainerLowest,
-    star = StarAmberDeep,
-    starOnScrim = StarAmber,
-    starContainer = StarWash,
 )
 
 val DarkExtendedColors = ReverieExtendedColors(
@@ -231,14 +210,7 @@ val DarkExtendedColors = ReverieExtendedColors(
     onWarning = Color(0xFF2A1705),
     warningContainer = Color(0xFF42301A),
     onWarningContainer = Color(0xFFFBDCB8),
-    info = Color(0xFF4299E1),
-    onInfo = Color(0xFF07223B),
-    infoContainer = Color(0xFF16324A),
-    onInfoContainer = Color(0xFFC9E1F7),
     card = DarkSurfaceContainer,
-    star = StarAmber,
-    starOnScrim = StarAmber,
-    starContainer = StarWash,
 )
 
 val LocalReverieColors = staticCompositionLocalOf { LightExtendedColors }

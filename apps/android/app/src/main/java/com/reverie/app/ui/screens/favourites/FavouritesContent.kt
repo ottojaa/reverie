@@ -70,7 +70,7 @@ fun FavouritesContent(
     ReverieRefreshBox(isRefreshing = isPulling, onRefresh = actions.onRefresh, modifier = modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             BrowseHeader(
-                title = BrowseTitle("Favourites", sections.countLine(), compact = true),
+                title = BrowseTitle("Favourites", sections.countLine()),
                 processingCount = 0,
                 onProcessingClick = {},
                 onBack = actions.onBack,

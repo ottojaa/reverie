@@ -36,7 +36,7 @@ import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.data.image.thumbnailMemoryCacheKey
 import com.reverie.app.domain.model.ThumbnailRef
 import com.reverie.app.domain.model.ThumbnailSize
-import com.reverie.app.ui.components.fileTypeVisual
+import com.reverie.app.ui.components.fileTypeIcon
 import com.reverie.app.util.formatBytes
 
 /**
@@ -93,16 +93,15 @@ internal fun FallbackCard(
                     .clip(RoundedCornerShape(12.dp)),
             )
         } else {
-            val visual = fileTypeVisual(document.mime_type, document.original_filename)
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 modifier = Modifier.size(80.dp),
             ) {
                 Icon(
-                    visual.icon,
+                    fileTypeIcon(document.mime_type, document.original_filename),
                     contentDescription = null,
-                    tint = visual.tint,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(20.dp)
                         .size(40.dp),

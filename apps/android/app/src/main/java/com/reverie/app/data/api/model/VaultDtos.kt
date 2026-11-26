@@ -2,7 +2,7 @@ package com.reverie.app.data.api.model
 
 import kotlinx.serialization.Serializable
 
-/** Unlock one private folder (or private collection) with the account password. */
+/** Unlock one private folder with the account password. */
 @Serializable
 data class VaultUnlockRequest(
     val password: String,

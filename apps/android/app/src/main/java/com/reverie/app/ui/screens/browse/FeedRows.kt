@@ -38,14 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.ui.components.FavouriteMenuItem
+import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
 import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
-import com.reverie.app.ui.components.fileTypeLabel
-import com.reverie.app.ui.components.fileTypeVisual
 import com.reverie.app.ui.navigation.documentSharedBounds
-import com.reverie.app.ui.theme.GeistMonoFontFamily
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
 import java.time.LocalDate
@@ -145,22 +143,10 @@ private fun FileRow(doc: DocumentDto, actions: RowActions) {
 fun fileMeta(doc: DocumentDto): String =
     listOfNotNull(formatBytes(doc.size_bytes), formatTimeOfDay(doc.created_at)).joinToString(" · ")
 
+/** A file's extension on a small block, in the place a photo's thumbnail would take. */
 @Composable
 fun TypeBadge(doc: DocumentDto, size: Dp = 36.dp) {
-    val tint = fileTypeVisual(doc.mime_type, doc.original_filename).tint
-    Box(
-        modifier = Modifier.size(size).clip(RoundedCornerShape(9.dp)).background(tint.copy(alpha = 0.16f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = fileTypeLabel(doc.mime_type, doc.original_filename),
-            color = tint,
-            fontFamily = GeistMonoFontFamily,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
+    FileKindBlock(doc.mime_type, doc.original_filename, Modifier.size(size).clip(RoundedCornerShape(9.dp)))
 }
 
 /** A row's ⋮ button and its menu. */

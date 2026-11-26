@@ -74,7 +74,7 @@ fun TrashContent(
         Column(Modifier.fillMaxSize()) {
             val kept = state.listing?.let { "Kept for ${counted(it.retention_days, "day")}, then deleted for good" }
             BrowseHeader(
-                title = BrowseTitle("Trash", kept.orEmpty(), compact = true),
+                title = BrowseTitle("Trash", kept.orEmpty()),
                 processingCount = 0,
                 onProcessingClick = {},
                 onBack = actions.onBack,

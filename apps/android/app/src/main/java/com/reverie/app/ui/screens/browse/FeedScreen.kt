@@ -63,7 +63,6 @@ fun FeedScreen(
         title = BrowseTitle(
             text = source.title,
             subtitle = documents.total.takeIf { documents.fetched }?.let(source::subtitle).orEmpty(),
-            compact = true,
         ),
         ui = ui,
         folderId = null,

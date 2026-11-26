@@ -31,7 +31,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.reverie.app.data.api.model.TrashDocumentDto
 import com.reverie.app.ui.components.CoverIconBlock
-import com.reverie.app.ui.components.fileTypeVisual
+import com.reverie.app.ui.components.fileTypeIcon
 import com.reverie.app.ui.components.rememberBlurhashPainter
 import java.time.Instant
 
@@ -92,7 +92,7 @@ private fun TrashPicture(item: TrashItem) {
 @Composable
 private fun DocumentPicture(document: TrashDocumentDto) {
     val url = document.thumbnail_urls?.sm
-        ?: return IconPicture(fileTypeVisual(document.mime_type, document.original_filename).icon)
+        ?: return IconPicture(fileTypeIcon(document.mime_type, document.original_filename))
     val placeholder = rememberBlurhashPainter(document.thumbnail_blurhash)
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current).data(url).diskCachePolicy(CachePolicy.DISABLED).build(),

@@ -67,7 +67,7 @@ fun LibraryScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
 
     BrowseChrome(
-        title = BrowseTitle(LIBRARY_NAME, subtitle = "", compact = true),
+        title = BrowseTitle(LIBRARY_NAME, subtitle = ""),
         ui = ui,
         folderId = null,
         isRefreshing = state.recent.isRefreshing,
@@ -88,7 +88,6 @@ fun LibraryScreen(
         },
         onNewFolder = { isNamingFolder = true },
         notices = viewModel.notices,
-        hasUploadButton = false,
     ) { slot ->
         LibraryBody(
             state = state,

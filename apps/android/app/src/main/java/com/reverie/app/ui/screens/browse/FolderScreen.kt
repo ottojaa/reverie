@@ -62,7 +62,7 @@ fun FolderScreen(
 
     BrowseChrome(
         // The page carries its own title, unless something else takes its place.
-        title = BrowseTitle(name, subtitle = "", compact = true).takeIf { ui.replacesList(isEmpty) },
+        title = BrowseTitle(name, subtitle = "").takeIf { ui.replacesList(isEmpty) },
         ui = ui,
         folderId = viewModel.folderId,
         isRefreshing = shown.isRefreshing,
@@ -87,7 +87,6 @@ fun FolderScreen(
         },
         onNewFolder = { isNamingFolder = true },
         notices = viewModel.notices,
-        hasUploadButton = false,
     ) { slot ->
         FolderBody(
             state = shown,

@@ -39,7 +39,7 @@ fun EmptyList(title: String, contentPadding: PaddingValues, onUpload: () -> Unit
         EmptyState(
             icon = Icons.Outlined.FolderOpen,
             title = title,
-            description = "Tap + to upload or scan a document.",
+            description = "Upload photos and files, or scan one with the camera.",
             actionLabel = "Upload",
             onAction = onUpload,
         )

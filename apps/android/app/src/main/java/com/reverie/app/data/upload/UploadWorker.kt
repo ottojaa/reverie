@@ -91,7 +91,7 @@ class UploadWorker @AssistedInject constructor(
         stager.cleanup(sessionId)
 
         // Pull the newly-uploaded documents into the Room cache so the browse grid (both the folder
-        // and the all-documents view) and the collection counts update without a manual refresh.
+        // and the whole-library lists) and the folder counts update without a manual refresh.
         // Swallowed so a refresh hiccup can never flip a successful upload to a retry/failure.
         runCatching { documentRepository.refresh(DocumentScope.of(task.folderId), limit = 30, offset = 0) }
         runCatching { folderRepository.refresh() }

@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -40,7 +39,6 @@ import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.NameWithStar
 import com.reverie.app.ui.components.SelectedCheck
 import com.reverie.app.ui.components.fileTypeLabel
-import com.reverie.app.ui.components.fileTypeVisual
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatDuration
@@ -188,19 +186,20 @@ private fun ThumbnailPile(docs: List<DocumentDto>) {
 /** The type badge with two sheets peeking out behind it: the same file, several versions. */
 @Composable
 private fun StackedBadge(doc: DocumentDto) {
-    val tint = fileTypeVisual(doc.mime_type, doc.original_filename).tint
     val ring = MaterialTheme.colorScheme.background
+    // Back to front, each a surface step lighter in weight than the badge.
+    val sheets = listOf(
+        2 to MaterialTheme.colorScheme.surfaceContainer,
+        1 to MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
     Box(Modifier.size(THUMB).semantics { contentDescription = "Stacked versions" }) {
-        listOf(2, 1).forEach { depth ->
+        sheets.forEach { (depth, sheet) ->
             Box(
                 Modifier.size(42.dp).offset(x = (depth * 4).dp, y = (10 - depth * 4).dp).clip(PILE_SHAPE)
-                    .background(tint.copy(alpha = 0.16f * (3 - depth)).compositeOverBackground(ring))
+                    .background(sheet)
                     .border(1.5.dp, ring, PILE_SHAPE),
             )
         }
         Box(Modifier.offset(y = 10.dp)) { TypeBadge(doc, 42.dp) }
     }
 }
-
-private fun Color.compositeOverBackground(background: Color): Color =
-    this.compositeOver(background)

@@ -38,8 +38,8 @@ class VaultRepository @Inject constructor(
     val unlocks: SharedFlow<Unit> = unlockFlow.asSharedFlow()
 
     /**
-     * Open the lock around [folderId] (a private folder, or a private collection covering its
-     * folders). The server remembers it in the session cookie; callers refetch the tree/list after.
+     * Open the lock around [folderId], a private folder covering everything under it. The server
+     * remembers it in the session cookie; callers refetch the tree/list after.
      */
     suspend fun unlock(folderId: String, password: String): UnlockOutcome = withContext(io) {
         try {

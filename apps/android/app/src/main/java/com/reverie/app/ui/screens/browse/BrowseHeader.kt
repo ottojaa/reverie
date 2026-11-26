@@ -21,13 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.ui.components.ProcessingStatusBadge
 
-/** What the title block says: "My Files" or a list, and the line under it (blank: none). */
-data class BrowseTitle(
-    val text: String,
-    val subtitle: String,
-    /** The smaller title block (28/14sp) of a list; My Files keeps 32/15sp. */
-    val compact: Boolean = false,
-)
+/** What the title block says, and the line under it (blank: none). */
+data class BrowseTitle(val text: String, val subtitle: String)
 
 /**
  * The part of Browse that slides away on scroll: back arrow (where there is somewhere to go back to), title,
@@ -46,7 +41,7 @@ fun BrowseHeader(
     actions: @Composable () -> Unit = {},
 ) {
     Row(
-        verticalAlignment = if (title?.compact != false) Alignment.CenterVertically else Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
@@ -68,8 +63,8 @@ fun BrowseHeader(
 private fun TitleBlock(title: BrowseTitle) {
     Text(
         text = title.text,
-        fontSize = if (title.compact) 28.sp else 32.sp,
-        lineHeight = if (title.compact) 34.sp else 40.sp,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -77,8 +72,8 @@ private fun TitleBlock(title: BrowseTitle) {
     if (title.subtitle.isBlank()) return
     Text(
         text = title.subtitle,
-        fontSize = if (title.compact) 14.sp else 15.sp,
-        lineHeight = if (title.compact) 20.sp else 22.sp,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

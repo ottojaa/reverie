@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.R
 
 /*
- * The brand face is Geist (sans) + Geist Mono — the OFL typefaces (see assets/GEIST_OFL.txt),
- * shipped as single variable .ttf files under res/font. Each design weight binds to the font's
+ * The brand face is Geist, an OFL typeface (see assets/GEIST_OFL.txt), shipped as a single
+ * variable .ttf file under res/font. Each design weight binds to the font's
  * `wght` axis via FontVariation (minSdk 26 supports variable fonts on every target), so the type
  * scale below renders in the real brand face instead of the platform default.
  */
@@ -27,11 +27,6 @@ val GeistFontFamily = FontFamily(
     geist(R.font.geist, FontWeight.Medium),
     geist(R.font.geist, FontWeight.SemiBold),
     geist(R.font.geist, FontWeight.Bold),
-)
-
-val GeistMonoFontFamily = FontFamily(
-    geist(R.font.geist_mono, FontWeight.Normal),
-    geist(R.font.geist_mono, FontWeight.Medium),
 )
 
 val Typography = Typography(

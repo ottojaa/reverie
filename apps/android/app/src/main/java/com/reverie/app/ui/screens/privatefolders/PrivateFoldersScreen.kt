@@ -85,7 +85,7 @@ fun PrivateFoldersContent(state: PrivateFoldersState, actions: PrivateFoldersAct
         Column(Modifier.fillMaxSize()) {
             val count = state.folders?.size?.takeIf { it > 0 }?.let { counted(it, "folder") }
             BrowseHeader(
-                title = BrowseTitle("Private folders", count.orEmpty(), compact = true),
+                title = BrowseTitle("Private folders", count.orEmpty()),
                 processingCount = 0,
                 onProcessingClick = {},
                 onBack = actions.onBack,

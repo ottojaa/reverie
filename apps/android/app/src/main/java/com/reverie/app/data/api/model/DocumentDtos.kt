@@ -192,7 +192,7 @@ data class CheckContentFile(
 )
 
 /**
- * Where the same content already is. A match inside a private folder or collection is only ever
+ * Where the same content already is. A match inside a private folder is only ever
  * [PrivateContent] (no id, name or path); one that is only in the trash is [TrashContent].
  */
 @OptIn(ExperimentalSerializationApi::class)
@@ -203,7 +203,7 @@ sealed interface ContentLocation
 @Serializable
 @SerialName("folder")
 data class FolderContent(
-    /** Names from the collection down, e.g. `["Work", "Invoices"]`; null for a document that isn't in a folder. */
+    /** Names from the top level down, e.g. `["Work", "Invoices"]`; null for a document that isn't in a folder. */
     val folder_path: List<String>? = null,
     val filename: String,
 ) : ContentLocation

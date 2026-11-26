@@ -67,7 +67,7 @@ class BrowseScreenshotTest {
     }
 
     private val noRowActions = RowActions(selected = { false }, onClick = {}, onLongClick = {})
-    // What a list header with a subtitle measures (status bar + compact title block); only the half-hidden shot needs the number.
+    // What a list header with a subtitle measures (status bar + title block); only the half-hidden shot needs the number.
     private val headerHeight = 96.dp
 
     private val photoLibrary = (1..23).map { photo("p$it", "2026-11-%02dT%02d:00:00.000Z".format(23 - it / 6, 23 - it % 12), portrait = it % 5 == 0) } +
@@ -107,7 +107,7 @@ class BrowseScreenshotTest {
                 }
                 Column(Modifier.fillMaxSize()) {
                     BrowseHeader(
-                        title = BrowseTitle(source.title, subtitle, compact = true), processingCount = 2, onProcessingClick = {},
+                        title = BrowseTitle(source.title, subtitle), processingCount = 2, onProcessingClick = {},
                         onBack = {},
                     )
                     Box(Modifier.weight(1f)) { body() }
@@ -137,7 +137,7 @@ class BrowseScreenshotTest {
                         visibility = { 0.5f }, modifier = Modifier.align(Alignment.TopCenter),
                     )
                     BrowseHeader(
-                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty(), compact = true),
+                        title = BrowseTitle("Photos", FeedSource.PHOTOS.subtitle(38).orEmpty()),
                         processingCount = 2, onProcessingClick = {}, onBack = {},
                         modifier = Modifier.align(Alignment.TopCenter).graphicsLayer { translationY = offset },
                     )

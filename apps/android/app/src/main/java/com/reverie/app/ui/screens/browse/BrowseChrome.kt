@@ -40,7 +40,6 @@ import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.ErrorState
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.components.OfflineBanner
-import com.reverie.app.ui.components.ReverieFab
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.components.SelectionTopBar
 import com.reverie.app.ui.navigation.bottomBarInset
@@ -91,7 +90,6 @@ class ChromeSelection(
  * @param headerActions the header's own buttons; they are handed what opens the upload sheet.
  * @param onNewFolder adds "New folder" to the upload sheet.
  * @param notices messages of the screen's own for the snackbar.
- * @param hasUploadButton whether a floating upload button sits over the list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,7 +112,6 @@ fun BrowseChrome(
     headerActions: @Composable (openUpload: () -> Unit) -> Unit = {},
     onNewFolder: (() -> Unit)? = null,
     notices: Flow<String> = emptyFlow(),
-    hasUploadButton: Boolean = true,
     body: @Composable (ChromeSlot) -> Unit,
 ) {
     val context = LocalContext.current
@@ -143,15 +140,6 @@ fun BrowseChrome(
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            floatingActionButton = {
-                if (hasUploadButton) {
-                    ReverieFab(
-                        onClick = { showUploadActions = true },
-                        visible = !inSelection,
-                        modifier = Modifier.padding(bottom = bottomBarInset()),
-                    )
-                }
-            },
             snackbarHost = { ReverieSnackbarHost(snackbarHostState) },
         ) {
             Box(Modifier.fillMaxSize()) {

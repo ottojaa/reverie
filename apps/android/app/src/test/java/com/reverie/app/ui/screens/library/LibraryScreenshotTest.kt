@@ -112,7 +112,7 @@ class LibraryScreenshotTest {
         val covers = listOf("Coding", "Videos", "App Releases", "Other", "Photos").associateWith { photoCover(it) }
         Column(Modifier.fillMaxSize()) {
             BrowseHeader(
-                title = BrowseTitle(LIBRARY_NAME, subtitle = "", compact = true),
+                title = BrowseTitle(LIBRARY_NAME, subtitle = ""),
                 processingCount = 0, onProcessingClick = {}, onBack = null,
                 actions = {
                     IconButton(onClick = {}) { Icon(Icons.Outlined.Add, contentDescription = null) }

@@ -82,21 +82,18 @@ fun DocumentThumbnail(
         return
     }
 
-    // No picture: a type-colored icon + the filename, on a faint wash of the same accent — mirrors
-    // the web preview page, which tints common types so documents don't all read as blank cards.
-    val visual = fileTypeVisual(mimeType, filename)
+    // No picture: the file type's icon over the filename.
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .background(visual.tint.copy(alpha = 0.12f))
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = visual.icon,
+            imageVector = fileTypeIcon(mimeType, filename),
             contentDescription = null,
-            tint = visual.tint,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(34.dp),
         )
         Spacer(Modifier.height(6.dp))

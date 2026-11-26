@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -127,13 +128,13 @@ internal fun PrivateLockBadge(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(24.dp)
-            .background(MaterialTheme.colorScheme.tertiary, CircleShape),
+            .background(ON_PICTURE_SCRIM, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             Icons.Outlined.Lock,
             contentDescription = "Private",
-            tint = MaterialTheme.colorScheme.onTertiary,
+            tint = Color.White,
             modifier = Modifier.size(14.dp),
         )
     }

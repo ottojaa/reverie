@@ -23,7 +23,7 @@ enum class ThemeMode { LIGHT, DARK, SYSTEM }
 /**
  * Reverie's Material 3 theme. Brand palette is the default; when [dynamicColor] is enabled
  * (Android 12+) the app adopts the wallpaper-derived scheme wholesale. Extended colors
- * (success/warning/info) stay brand-fixed in every mode.
+ * (success/warning) stay brand-fixed in every mode.
  */
 @Composable
 fun ReverieTheme(
