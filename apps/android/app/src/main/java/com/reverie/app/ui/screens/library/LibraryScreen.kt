@@ -112,7 +112,10 @@ fun LibraryScreen(
         CreateEditFolderSheet(
             title = "New folder",
             initial = null,
-            onSubmit = viewModel::createFolder,
+            onSubmit = {
+                isNamingFolder = false
+                viewModel.createFolder(it)
+            },
             onDismiss = { isNamingFolder = false },
         )
     }
