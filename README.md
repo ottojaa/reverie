@@ -265,6 +265,10 @@ docker exec -it reverie-backend /opt/paddleocr-env/bin/python3 apps/backend/ocr_
 `--check` confirms CUDA is compiled in and the GPU is visible; `--compare` runs CPU vs GPU on a sample
 image and prints the speedup.
 
+**Background documents** (a phone's photo backup) are read by the same process with faster settings, so a manual
+upload waits less behind one: `OCR_BACKGROUND_DOC_UNWARPING`, `OCR_BACKGROUND_DOC_ORIENTATION` and
+`OCR_BACKGROUND_DET_MAX_SIDE` in [.env.example](.env.example).
+
 ### In-app agent: one-time Claude sign-in
 
 The admin-only agent is the stock Claude Code binary in the `reverie-agent` container, signed in with

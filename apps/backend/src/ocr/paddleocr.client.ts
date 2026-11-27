@@ -3,15 +3,18 @@
  *
  * Manages a persistent PaddleOCR Python child process.
  * Models are loaded once on first use; subsequent calls reuse the warm process.
- * Communicates via newline-delimited JSON over stdin/stdout.
+ * Communicates via newline-delimited JSON over stdin/stdout. The process takes one request at a time, for every
+ * processing lane; each answer carries its request's id.
  */
 
+import type { ProcessingLane } from '@reverie/shared';
 import { type ChildProcess, execFileSync, spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createInterface, type Interface as ReadlineInterface } from 'readline';
 import { env } from '../config/env.js';
+import { toPredictSettings } from './lane-settings.js';
 import type { OcrOutput } from './types';
 
 /** Python executable */
@@ -34,14 +37,22 @@ let ready = false;
 let startingUp: Promise<void> | null = null;
 let sharedTempDirPromise: Promise<string> | null = null;
 
-/** Queue of pending response handlers (FIFO — one response per request) */
-const pendingResponses: Array<{
-    resolve: (value: PaddleOcrResponse) => void;
-    reject: (error: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-}> = [];
+/** The startup wait's id. The runner's lines about its own start carry none. */
+const STARTUP_ID = 0;
 
-type PaddleOcrResponse = { ready: true } | { pong: true } | { error: string } | PaddleOcrResult;
+let lastRequestId = STARTUP_ID;
+
+/** Pending response handlers by request id */
+const pendingResponses = new Map<
+    number,
+    {
+        resolve: (value: PaddleOcrResponse) => void;
+        reject: (error: Error) => void;
+        timer: ReturnType<typeof setTimeout>;
+    }
+>();
+
+type PaddleOcrResponse = { id?: number } & ({ ready: true } | { pong: true } | { error: string } | PaddleOcrResult);
 
 /** Shape of a successful OCR result from ocr_runner.py */
 interface PaddleOcrResult {
@@ -103,13 +114,7 @@ function spawnProcess(): void {
             return;
         }
 
-        // Resolve the oldest pending request
-        const pending = pendingResponses.shift();
-
-        if (pending) {
-            clearTimeout(pending.timer);
-            pending.resolve(parsed);
-        }
+        resolvePending(parsed);
     });
 
     // Log stderr but don't kill the process — PaddleOCR is noisy
@@ -126,11 +131,29 @@ function spawnProcess(): void {
         cleanup();
 
         // Reject all pending requests
-        for (const pending of pendingResponses.splice(0)) {
+        for (const pending of pendingResponses.values()) {
             clearTimeout(pending.timer);
             pending.reject(new Error(`PaddleOCR process exited unexpectedly (code=${code})`));
         }
+
+        pendingResponses.clear();
     });
+}
+
+/** Hands a response to the request it answers. A request that timed out no longer waits, so its late answer is dropped. */
+function resolvePending(response: PaddleOcrResponse): void {
+    const id = response.id ?? STARTUP_ID;
+    const pending = pendingResponses.get(id);
+
+    if (!pending) {
+        console.error('[PaddleOCR] Dropped a response nothing is waiting for, request id: ' + id);
+
+        return;
+    }
+
+    pendingResponses.delete(id);
+    clearTimeout(pending.timer);
+    pending.resolve(response);
 }
 
 function cleanup(): void {
@@ -187,23 +210,21 @@ async function ensureReady(): Promise<void> {
 }
 
 /**
- * Send a raw line and wait for the next JSON response.
+ * Send a request and wait for its response. Without a request, wait for the startup response.
  */
-function sendRaw(timeoutMs: number, message?: string): Promise<PaddleOcrResponse> {
+function sendRaw(timeoutMs: number, request?: Record<string, unknown>): Promise<PaddleOcrResponse> {
+    const id = request ? ++lastRequestId : STARTUP_ID;
+
     return new Promise<PaddleOcrResponse>((resolve, reject) => {
         const timer = setTimeout(() => {
-            // Remove from queue
-            const idx = pendingResponses.findIndex((p) => p.resolve === resolve);
-
-            if (idx !== -1) pendingResponses.splice(idx, 1);
-
+            pendingResponses.delete(id);
             reject(new Error(`PaddleOCR request timed out after ${timeoutMs}ms`));
         }, timeoutMs);
 
-        pendingResponses.push({ resolve, reject, timer });
+        pendingResponses.set(id, { resolve, reject, timer });
 
-        if (message !== undefined) {
-            childProcess!.stdin!.write(message + '\n');
+        if (request) {
+            childProcess!.stdin!.write(JSON.stringify({ ...request, id }) + '\n');
         }
     });
 }
@@ -214,7 +235,7 @@ function sendRaw(timeoutMs: number, message?: string): Promise<PaddleOcrResponse
 async function sendRequest(request: Record<string, unknown>): Promise<PaddleOcrResponse> {
     await ensureReady();
 
-    return sendRaw(REQUEST_TIMEOUT_MS, JSON.stringify(request));
+    return sendRaw(REQUEST_TIMEOUT_MS, request);
 }
 
 // ── Public API ──────────────────────────────────────────────────
@@ -232,8 +253,9 @@ export async function startPaddleOcr(): Promise<void> {
  * Recognize text from a file path (image or PDF).
  * Caller is responsible for the file existing; used when file is already on disk (e.g. temp PDF).
  */
-export async function recognizeFromFilePath(filePath: string): Promise<OcrOutput> {
-    const response = await sendRequest({ image_path: filePath });
+export async function recognizeFromFilePath(filePath: string, lane: ProcessingLane = 'normal'): Promise<OcrOutput> {
+    const settings = toPredictSettings(lane);
+    const response = await sendRequest({ image_path: filePath, ...(settings && { settings }) });
 
     if ('error' in response) {
         throw new Error(`PaddleOCR error: ${response.error}`);
@@ -251,13 +273,13 @@ export async function recognizeFromFilePath(filePath: string): Promise<OcrOutput
 /**
  * Recognize text in an image buffer using PaddleOCR
  */
-export async function recognizeText(imageBuffer: Buffer): Promise<OcrOutput> {
+export async function recognizeText(imageBuffer: Buffer, lane: ProcessingLane = 'normal'): Promise<OcrOutput> {
     const tempDir = await getSharedTempDir();
     const tempImagePath = join(tempDir, `input-${Date.now()}-${Math.random().toString(36).slice(2)}.png`);
     await writeFile(tempImagePath, imageBuffer);
 
     try {
-        return await recognizeFromFilePath(tempImagePath);
+        return await recognizeFromFilePath(tempImagePath, lane);
     } finally {
         await rm(tempImagePath, { force: true }).catch(() => {
             /* ignore cleanup errors */

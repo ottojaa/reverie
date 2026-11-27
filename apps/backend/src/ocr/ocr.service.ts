@@ -1,3 +1,4 @@
+import type { ProcessingLane } from '@reverie/shared';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -33,6 +34,8 @@ export interface ProcessDocumentOptions {
     forceReprocess?: boolean | undefined;
     /** Optional preloaded document from worker */
     document?: Document | undefined;
+    /** The lane whose queue runs this OCR; it picks PaddleOCR's settings. Defaults to normal. */
+    lane?: ProcessingLane | undefined;
 }
 
 function shouldLogTimings(): boolean {
@@ -42,9 +45,9 @@ function shouldLogTimings(): boolean {
 /**
  * Run OCR on an image buffer using the configured engine
  */
-async function runOcr(imageBuffer: Buffer): Promise<OcrOutput> {
+async function runOcr(imageBuffer: Buffer, lane: ProcessingLane | undefined): Promise<OcrOutput> {
     if (env.OCR_ENGINE === 'paddleocr') {
-        return recognizeWithPaddleOcr(imageBuffer);
+        return recognizeWithPaddleOcr(imageBuffer, lane);
     }
 
     return recognizeWithTesseract(imageBuffer);
@@ -86,7 +89,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 2. Check if file type is processable
     if (!isProcessableImage(document.mime_type)) {
-        return handleNonImageFile(documentId, document);
+        return handleNonImageFile(documentId, document, options.lane);
     }
 
     // 3. Load image from storage
@@ -121,7 +124,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 
     // 7. Run OCR
     const ocrStart = Date.now();
-    const ocrOutput = await runOcr(processedImage);
+    const ocrOutput = await runOcr(processedImage, options.lane);
     timings.ocrEngineMs = Date.now() - ocrStart;
 
     // 8. Detect if meaningful text exists
@@ -172,7 +175,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
 /**
  * Handle non-image files: PDF (via PaddleOCR) or TXT/MD/CSV (direct extraction)
  */
-async function handleNonImageFile(documentId: string, document: Document): Promise<OcrProcessingResult> {
+async function handleNonImageFile(documentId: string, document: Document, lane: ProcessingLane | undefined): Promise<OcrProcessingResult> {
     const category = document.mime_type.startsWith('video/') ? 'video' : 'other';
     const baseResult: OcrProcessingResult = {
         rawText: '',
@@ -213,7 +216,7 @@ async function handleNonImageFile(documentId: string, document: Document): Promi
         await writeFile(tempPath, buffer);
 
         try {
-            const ocrOutput = await recognizeFromFilePath(tempPath);
+            const ocrOutput = await recognizeFromFilePath(tempPath, lane);
             const result: OcrProcessingResult = {
                 ...baseResult,
                 rawText: ocrOutput.text,
