@@ -116,6 +116,35 @@ class BackupStatusTest {
             assertEquals(BackupStatus.Complete, phone.status)
         }
 
+    @Test fun `albums that appeared on the phone need attention until the user has answered`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val phone = watch { settings.value = ready.copy(knownAlbums = setOf(1L)) }
+            assertEquals(BackupStatus.Complete, phone.status)
+
+            phone.photos = listOf(photo(3, bucket = 3L), photo(2, bucket = 2L), photo(1))
+            phone.checks.value = 1
+            assertEquals(BackupStatus.NewAlbums(2), phone.status)
+
+            phone.settings.value = ready.copy(knownAlbums = setOf(1L, 2L))
+            assertEquals(BackupStatus.NewAlbums(1), phone.status)
+
+            phone.settings.value = ready.copy(knownAlbums = setOf(1L, 2L, 3L))
+            assertEquals(BackupStatus.Complete, phone.status)
+        }
+
+    @Test fun `a new album is said ahead of files waiting, and a failed run ahead of both`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val seen = ready.copy(knownAlbums = setOf(1L))
+            val phone = watch {
+                settings.value = seen
+                photos = listOf(photo(3, bucket = 2L), photo(2), photo(1))
+            }
+            assertEquals(BackupStatus.NewAlbums(1), phone.status)
+
+            phone.settings.value = seen.copy(lastError = "refused")
+            assertEquals(BackupStatus.NeedsAttention, phone.status)
+        }
+
     @Test fun `photos that cannot be read are not called backed up`() = runTest(UnconfinedTestDispatcher()) {
         val phone = watch { isUnreadable = true }
 

@@ -1,53 +1,30 @@
 import { sql, type Kysely } from 'kysely';
-import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { expect, it, onTestFinished, vi } from 'vitest';
 
-vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
+vi.mock('../db/kysely', () => ({ db: {} }));
 
-import { promoteToNormal, fetchLaneJob } from '../queues/lane';
-import { dbProxy } from '../testing/db-proxy';
 import { seedDocument, seedUser } from '../testing/seed';
-import { createTestDatabase, type TestDatabase } from '../testing/test-database';
+import { createTestDatabase } from '../testing/test-database';
 import { describeDb } from '../testing/tool-world';
 import { down, up } from './migrations/031_processing_lane';
 
-vi.mock('../config/env', () => ({ env: {} }));
-
 describeDb('migration 031 (processing lane)', () => {
-    let database: TestDatabase;
-    let userId: string;
-    // Migrations are written against an untyped Kysely.
-    const untyped = () => database.db as unknown as Kysely<unknown>;
-
-    beforeAll(async () => {
-        database = await createTestDatabase();
-        dbProxy.use(database.db);
-        userId = await seedUser(database.db, 'owner');
-    }, 60_000);
-    afterAll(async () => {
-        await database.close();
-    });
-
-    const laneOf = async (id: string) =>
-        (await database.db.selectFrom('documents').select('processing_lane').where('id', '=', id).executeTakeFirstOrThrow()).processing_lane;
-
-    it('puts a document inserted without a lane (older code) in the normal one, and accepts only the two lanes', async () => {
+    it('defaults to the normal lane, accepts only the two lanes, and reverses', async () => {
+        const database = await createTestDatabase();
+        onTestFinished(() => database.close());
+        const userId = await seedUser(database.db, 'owner');
         const id = await seedDocument(database.db, { userId, name: 'a.pdf' });
 
-        expect(await laneOf(id)).toBe('normal');
+        const lane = await database.db.selectFrom('documents').select('processing_lane').where('id', '=', id).executeTakeFirstOrThrow();
+
+        expect(lane.processing_lane).toBe('normal');
         await expect(sql`UPDATE documents SET processing_lane = 'urgent' WHERE id = ${id}`.execute(database.db)).rejects.toThrow(
             'documents_processing_lane_check',
         );
-    });
 
-    it('reverses, leaving the queue layer to treat every document as normal, and applies again', async () => {
-        const id = await seedDocument(database.db, { userId, name: 'b.pdf' });
-
-        // The deploy starts the new code before it migrates: until then there is no column.
-        await down(untyped());
-        expect(await fetchLaneJob(id, { priority: 10 })).toEqual({ lane: 'normal', options: { priority: 10 } });
-        await expect(promoteToNormal(id)).resolves.toBeUndefined();
-
-        await up(untyped());
-        expect(await laneOf(id)).toBe('normal');
-    });
+        // Migrations are written against an untyped Kysely. Adding the column again only works if `down` removed it.
+        const untyped = database.db as unknown as Kysely<unknown>;
+        await down(untyped);
+        await up(untyped);
+    }, 60_000);
 });

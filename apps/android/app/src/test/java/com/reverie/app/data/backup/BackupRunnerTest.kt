@@ -254,13 +254,15 @@ class BackupRunnerTest {
         val source = FakeSource(listOf(media(1)))
         val runner = runner(source)
         runner.run(request())
-        transport.server.delete(settings.current().folderId!!)
+        val first = settings.current().folderId!!
+        transport.server.delete(first)
         source.items = listOf(media(2), media(1))
 
         val result = runner.run(request())
 
         assertEquals(PassEnd.Completed, result.end)
         assertEquals("Phone backup/Camera", transport.uploadedTo[2])
+        assertNotEquals(first, settings.current().folderId)
         assertEquals("The “Phone backup” folder was gone, so it was made again.", settings.current().folderNotice)
     }
 

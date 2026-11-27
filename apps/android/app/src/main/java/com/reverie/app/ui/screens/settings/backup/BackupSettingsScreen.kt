@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -137,13 +136,7 @@ fun BackupSettingsContent(state: BackupUiState, actions: BackupActions) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PermissionNotice(state, onAllow = actions.onAllow)
-            state.newAlbums.forEach { album ->
-                NewAlbumNotice(
-                    album,
-                    onBackUp = { actions.onBackUpNewAlbum(album.bucketId) },
-                    onDismiss = { actions.onDismissNewAlbum(album.bucketId) },
-                )
-            }
+            BackupNotices(state, actions)
             StatusCard(state, actions)
             BackupOptionsCard(state, actions)
             AlbumsCard(state, actions)
@@ -198,7 +191,6 @@ private fun StatusCard(state: BackupUiState, actions: BackupActions) {
     val settings = state.settings
     BackupCard("Status") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            settings.folderNotice?.let { FolderNotice(it, onDismiss = actions.onDismissNotice) }
             StatusLine("Last backup", settings.lastSuccessAt?.let(::relativeTime) ?: "Never")
             StatusLine("Waiting to back up", state.pending.toString())
             if (state.parkedVideos > 0) {
@@ -229,23 +221,6 @@ private fun readinessHint(state: BackupUiState): String = when {
     state.selectedBuckets.isEmpty() -> "Not set up yet: choose at least one album."
     state.access == MediaAccess.None -> "Not set up yet: allow access to your photos and videos to start."
     else -> "Not set up yet: choose what to back up."
-}
-
-@Composable
-private fun FolderNotice(text: String, onDismiss: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f).padding(vertical = 12.dp),
-            )
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Outlined.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-        }
-    }
 }
 
 @Composable

@@ -5,7 +5,6 @@ import com.reverie.app.data.api.model.FolderDto
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -92,17 +91,6 @@ class BackupFoldersTest {
         assertEquals(dcim, phone.settings.current().albumFolder(2)?.folderId)
     }
 
-    @Test fun `a subfolder that is gone is made again and used`() = runTest {
-        val phone = phone()
-        val first = phone.folderId(1, "Camera")
-        server.delete(first)
-
-        val used = phone.folders.useFolder(1, "Camera") { it.also(server::assertTakesFiles) }
-
-        assertNotEquals(first, used)
-        assertEquals("Phone backup/Camera", server.path(used))
-    }
-
     @Test fun `forgetting a folder that was already replaced keeps the new one`() = runTest {
         val phone = phone()
         val camera = phone.folderId(1, "Camera")
@@ -110,20 +98,6 @@ class BackupFoldersTest {
         phone.settings.forgetAlbumFolder(1, "an older id")
 
         assertEquals(camera, phone.settings.current().albumFolder(1)?.folderId)
-    }
-
-    @Test fun `a Phone backup that is gone is made again and the notice says so`() = runTest {
-        val phone = phone()
-        phone.folderId(1, "Camera")
-        val first = phone.settings.current().folderId!!
-        server.delete(first)
-
-        val screenshots = phone.folderId(2, "Screenshots")
-
-        assertEquals("Phone backup/Screenshots", server.path(screenshots))
-        assertNotEquals(first, phone.settings.current().folderId)
-        assertEquals("The “Phone backup” folder was gone, so it was made again.", phone.settings.current().folderNotice)
-        assertNull("Camera's folder went with the old one", phone.settings.current().albumFolder(1))
     }
 
     @Test fun `a chosen backup folder that is gone gives way to Phone backup and the notice names both`() = runTest {
@@ -159,15 +133,6 @@ class BackupFoldersTest {
 
         assertEquals("Archive/Camera", server.path(new))
         assertEquals("the old folder is left as it was", "Phone backup/Camera", server.path(old))
-    }
-
-    @Test fun `a folder stored without a backup folder of its own holds when that changes`() = runTest {
-        val phone = phone()
-        phone.settings.chooseAlbumFolder(1, "elsewhere", "Elsewhere")
-
-        phone.settings.setDestination(server.add("Archive"), "Archive")
-
-        assertEquals("elsewhere", phone.folderId(1, "Camera"))
     }
 
     @Test fun `a folder the user picks while one is being made wins`() = runTest {

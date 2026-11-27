@@ -4,8 +4,7 @@ import { db } from '../db/kysely';
 import { getJobService } from '../jobs/job.service';
 import { probeVideoFile } from '../media/video-probe';
 import { delayBackfillJob } from '../queues/backfill-gate';
-import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
-import { getRedisConnectionOptions } from '../queues/redis';
+import { QUEUE_NAMES } from '../queues/queue.config';
 import { addTranscodeBackfillJob, TRANSCODE_JOBS, type TranscodeBackfillData, type TranscodeJobData } from '../queues/transcode.queue';
 import { getStorageService } from '../services/storage.service';
 import { isTranscodePipelineBusy, runTranscodeBackfillPage, type TranscodeBackfillStep } from '../transcode/backfill';
@@ -15,6 +14,7 @@ import { setTranscodeStatus } from '../transcode/repository';
 import { createFfmpegRunner, runFfmpeg } from '../transcode/ffmpeg-run';
 import { toBackgroundNvencSessions } from '../transcode/nvenc-sessions';
 import { transcodeDocument, type TranscodeDeps } from '../transcode/service';
+import { startWorker } from './start-worker';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('Transcode');
@@ -142,26 +142,19 @@ export async function markFailedWhenFinal(job: Job<TranscodeJobData> | undefined
     });
 }
 
-function startWorker(queueName: TranscodeQueueName, processor: Processor<TranscodeJobData | TranscodeBackfillData>) {
-    const concurrency = QUEUE_CONCURRENCY[queueName];
-    const worker = new Worker(queueName, processor, { connection: getRedisConnectionOptions(), concurrency });
+function startTranscodeWorker(queueName: TranscodeQueueName, processor: Processor<TranscodeJobData | TranscodeBackfillData>) {
+    const worker = startWorker(queueName, processor, { label: 'Transcode', logger });
 
     worker.on('failed', (job, error) => {
         logger.error('Transcode job failed', error, { jobId: job?.id, name: job?.name });
         void markFailedWhenFinal(job as Job<TranscodeJobData> | undefined, error);
     });
 
-    worker.on('error', (error) => {
-        logger.error('Worker error', error);
-    });
-
-    logger.info('Transcode worker started', { queue: queueName, concurrency });
-
     return worker;
 }
 
 export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBackfillData> {
-    const worker = startWorker(QUEUE_NAMES.TRANSCODE, (job, token) =>
+    const worker = startTranscodeWorker(QUEUE_NAMES.TRANSCODE, (job, token) =>
         job.name === TRANSCODE_JOBS.BACKFILL
             ? processBackfill(job as Job<TranscodeBackfillData>, token)
             : processTranscodeJob(job as Job<TranscodeJobData>, toDeps()),
@@ -179,5 +172,5 @@ export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBack
 
 /** The background lane's own slot: it runs beside the normal worker, so a long background encode holds no normal video up. */
 export function createBackgroundTranscodeWorker(): Worker<TranscodeJobData | TranscodeBackfillData> {
-    return startWorker(QUEUE_NAMES.TRANSCODE_BACKGROUND, (job) => processTranscodeJob(job as Job<TranscodeJobData>, toBackgroundDeps()));
+    return startTranscodeWorker(QUEUE_NAMES.TRANSCODE_BACKGROUND, (job) => processTranscodeJob(job as Job<TranscodeJobData>, toBackgroundDeps()));
 }

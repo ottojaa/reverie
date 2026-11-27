@@ -23,6 +23,7 @@ internal fun backupLine(status: BackupStatus, total: Int?): String? {
         BackupStatus.Running -> "Backing up…"
         is BackupStatus.Waiting -> counted(status.count, "file") + " waiting to back up"
         BackupStatus.NeedsAttention -> "Backup needs attention"
+        is BackupStatus.NewAlbums -> counted(status.count, "new album") + " not backed up"
         BackupStatus.Complete -> listOfNotNull("Backup complete", files).joinToString(" · ")
     }
 }
@@ -31,6 +32,6 @@ internal fun backupIcon(status: BackupStatus): ImageVector = when (status) {
     BackupStatus.Complete -> Icons.Outlined.CloudDone
     BackupStatus.Running, is BackupStatus.Waiting -> Icons.Outlined.CloudUpload
     BackupStatus.Off, BackupStatus.NotSetUp -> Icons.Outlined.CloudOff
-    BackupStatus.NeedsAttention -> Icons.Outlined.ErrorOutline
+    BackupStatus.NeedsAttention, is BackupStatus.NewAlbums -> Icons.Outlined.ErrorOutline
     BackupStatus.Unknown -> Icons.Outlined.CloudQueue
 }

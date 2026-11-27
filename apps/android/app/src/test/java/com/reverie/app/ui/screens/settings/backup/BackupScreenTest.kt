@@ -5,6 +5,7 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import com.reverie.app.data.backup.AlbumFolder
@@ -34,7 +35,8 @@ class BackupScreenTest {
         onPickAlbumFolder = { asked += "folder $it" },
         onResetAlbumFolder = { asked += "reset $it" },
         onBackUpNewAlbum = { asked += "back up $it" },
-        onDismissNewAlbum = { asked += "not now $it" },
+        onDismissNewAlbum = { asked += "dismiss $it" },
+        onDismissNotice = { asked += "dismiss folder notice" },
     )
 
     private val settings = BackupSettings(
@@ -58,8 +60,8 @@ class BackupScreenTest {
         destinations = BackupDestinations(albums = mapOf(1L to "Photos", 2L to "Phone backup › Screenshots")),
     )
 
-    private fun show() = compose.setContent {
-        ReverieTheme { BackupSettingsContent(state, actions) }
+    private fun show(shown: BackupUiState = state) = compose.setContent {
+        ReverieTheme { BackupSettingsContent(shown, actions) }
     }
 
     private fun SemanticsNodeInteraction.click() = performSemanticsAction(SemanticsActions.OnClick)
@@ -102,10 +104,20 @@ class BackupScreenTest {
         show()
 
         compose.onNodeWithText("New album: Instagram, 12 photos — back it up?").assertExists()
-        compose.onNodeWithText("Not now").click()
+        compose.onNodeWithContentDescription("Dismiss").click()
         // "Back up" is also the unticked rows' click label, but only the notice shows it as text.
         compose.onNodeWithText("Back up").click()
 
-        assertEquals(listOf("not now 4", "back up 4"), asked)
+        assertEquals(listOf("dismiss 4", "back up 4"), asked)
+    }
+
+    @Test fun `the folder notice can only be dismissed`() {
+        show(state.copy(settings = settings.copy(folderNotice = "The folder was made again."), albums = state.albums.take(3)))
+
+        compose.onNodeWithText("The folder was made again.").assertExists()
+        assertEquals(0, compose.onAllNodes(hasText("Back up")).fetchSemanticsNodes().size)
+        compose.onNodeWithContentDescription("Dismiss").click()
+
+        assertEquals(listOf("dismiss folder notice"), asked)
     }
 }

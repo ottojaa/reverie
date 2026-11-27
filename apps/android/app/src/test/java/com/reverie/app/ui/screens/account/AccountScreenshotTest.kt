@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import com.reverie.app.data.backup.BackupStatus
 import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
@@ -20,14 +21,19 @@ class AccountScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5)
 
-    @Test fun accountSheet() {
-        paparazzi.snapshotThemes("accountSheet") {
+    @Test fun accountSheet() = sheet("accountSheet", signedIn)
+
+    @Test fun accountSheetWithNewAlbums() =
+        sheet("accountSheetNewAlbums", signedIn.copy(backup = BackupStatus.NewAlbums(2)))
+
+    private fun sheet(name: String, state: AccountState) {
+        paparazzi.snapshotThemes(name) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), Alignment.BottomCenter) {
                 Box(
                     Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                         .padding(top = 24.dp),
                 ) {
-                    AccountSheetContent(signedIn, AccountLinks({}, {}, {}), onSignOut = {})
+                    AccountSheetContent(state, AccountLinks({}, {}, {}), onSignOut = {})
                 }
             }
         }

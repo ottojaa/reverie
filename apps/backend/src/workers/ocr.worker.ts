@@ -11,10 +11,10 @@ import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import type { OcrProcessingResult } from '../ocr/types';
 import { addLlmJob } from '../queues/llm.queue';
 import { getBackgroundOcrQueue, getOcrQueue, type OcrJobData, type OcrJobResult } from '../queues/ocr.queue';
-import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
-import { getRedisConnectionOptions } from '../queues/redis';
+import { QUEUE_NAMES } from '../queues/queue.config';
 import { rebuildSearchVector } from '../search/search-indexer';
-import { holdWhileNormalBusy } from './background-hold';
+import { heldWhileNormalBusy } from './background-hold';
+import { logJobOutcomes, startWorker } from './start-worker';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('OCR');
@@ -191,8 +191,6 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     }
 }
 
-type OcrQueueName = typeof QUEUE_NAMES.OCR | typeof QUEUE_NAMES.OCR_BACKGROUND;
-
 async function runTrackedOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     return processJobWithTracking(job, processOcrJob, {
         storeDuration: async (documentId, durationMs) => {
@@ -201,30 +199,18 @@ async function runTrackedOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     });
 }
 
-function startWorker(queueName: OcrQueueName, processor: Processor<OcrJobData, OcrJobResult>): Worker<OcrJobData, OcrJobResult> {
-    const concurrency = QUEUE_CONCURRENCY[queueName];
-    const worker = new Worker<OcrJobData, OcrJobResult>(queueName, processor, {
-        connection: getRedisConnectionOptions(),
-        concurrency,
+type OcrQueueName = typeof QUEUE_NAMES.OCR | typeof QUEUE_NAMES.OCR_BACKGROUND;
+
+function startOcrWorker(queueName: OcrQueueName, processor: Processor<OcrJobData, OcrJobResult>): Worker<OcrJobData, OcrJobResult> {
+    const worker = startWorker(queueName, processor, {
+        label: 'OCR',
+        logger,
         // PaddleOCR model loading on first request can take 20s+;
         // default stalledInterval (30s) is too tight and causes false stalls.
-        stalledInterval: 120_000,
-        lockDuration: 120_000,
+        options: { stalledInterval: 120_000, lockDuration: 120_000 },
     });
 
-    worker.on('completed', (job) => {
-        logger.info('Job completed', { jobId: job.id });
-    });
-
-    worker.on('failed', (job, error) => {
-        logger.error('Job failed', error, { jobId: job?.id });
-    });
-
-    worker.on('error', (error) => {
-        logger.error('Worker error', error);
-    });
-
-    logger.info('OCR worker started', { queue: queueName, concurrency });
+    logJobOutcomes(worker, logger);
 
     return worker;
 }
@@ -233,16 +219,12 @@ function startWorker(queueName: OcrQueueName, processor: Processor<OcrJobData, O
  * Create and start the OCR worker
  */
 export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
-    return startWorker(QUEUE_NAMES.OCR, runTrackedOcrJob);
+    return startOcrWorker(QUEUE_NAMES.OCR, runTrackedOcrJob);
 }
 
 /** Runs background documents' OCR, and starts none while a normal document's OCR is waiting or running. */
 export function createBackgroundOcrWorker(): Worker<OcrJobData, OcrJobResult> {
-    return startWorker(QUEUE_NAMES.OCR_BACKGROUND, async (job) => {
-        await holdWhileNormalBusy(getOcrQueue(), getBackgroundOcrQueue());
-
-        return runTrackedOcrJob(job);
-    });
+    return startOcrWorker(QUEUE_NAMES.OCR_BACKGROUND, heldWhileNormalBusy(getOcrQueue, getBackgroundOcrQueue, runTrackedOcrJob));
 }
 
 // Run as standalone if executed directly
