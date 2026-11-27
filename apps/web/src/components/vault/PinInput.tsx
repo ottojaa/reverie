@@ -1,10 +1,10 @@
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { ComponentProps } from 'react';
+import { LockSecretInput } from './LockSecretInput';
 
 export const PIN_LENGTH = 4;
 
-type PinInputProps = Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'onChange' | 'className'> & {
+type PinInputProps = Omit<ComponentProps<typeof LockSecretInput>, 'value' | 'onChange' | 'className'> & {
     value: string;
     onValueChange: (value: string) => void;
 };
@@ -18,11 +18,9 @@ export function PinInput({ value, onValueChange, ...props }: PinInputProps) {
                 'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px] has-aria-invalid:border-destructive',
             )}
         >
-            <Input
+            <LockSecretInput
                 {...props}
-                type="password"
                 inputMode="numeric"
-                autoComplete="off"
                 value={value}
                 onChange={(event) => onValueChange(event.target.value.replace(/\D/g, '').slice(0, PIN_LENGTH))}
                 className="absolute inset-0 h-full opacity-0"

@@ -1,5 +1,5 @@
 import type { LockSecretKind } from '@reverie/shared';
-import { Input } from '../ui/input';
+import { LockSecretInput } from '../vault/LockSecretInput';
 import { PinInput } from '../vault/PinInput';
 import { MAX_PASSWORD_LENGTH, type LockSecretDraft } from './lock-secret-draft';
 
@@ -34,10 +34,8 @@ export function LockSecretFields({ kind, draft, disabled, onChange }: LockSecret
             {kind === 'pin' ? (
                 <PinInput id={id} value={draft[key]} onValueChange={(value) => onChange({ [key]: value })} disabled={disabled} />
             ) : (
-                <Input
+                <LockSecretInput
                     id={id}
-                    type="password"
-                    autoComplete="new-password"
                     maxLength={MAX_PASSWORD_LENGTH}
                     value={draft[key]}
                     onChange={(event) => onChange({ [key]: event.target.value })}
