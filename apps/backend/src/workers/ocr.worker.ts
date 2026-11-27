@@ -3,9 +3,10 @@ import { sql } from 'kysely';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
 import { NonRetryableJobError } from '../jobs/job.types';
-import { enqueueImageKind, enqueueTextEmbedding } from '../embeddings/enqueue';
+import { enqueueTextEmbedding } from '../embeddings/enqueue';
 import { getMlClient } from '../embeddings/ml.client';
-import { decideLlmHandoff, isKindFlipActive } from '../image-kind/service';
+import { settleKindAfterOcr } from '../image-kind/after-ocr';
+import { decideLlmHandoff, isKindFlipActive, type KindDeps } from '../image-kind/service';
 import { isProcessableImage, isTextExtractable, processDocument, shouldQueueLlmJob } from '../ocr';
 import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import type { OcrProcessingResult } from '../ocr/types';
@@ -49,6 +50,13 @@ async function queueLlmFromOcr(document: Document, result: OcrProcessingResult, 
 
     await addLlmJob({ documentId, userId: document.user_id, sessionId }, createdJob.id);
     logger.info('Queued LLM job', { documentId, llmJobId: createdJob.id });
+}
+
+/** What settling an image's kind needs; null without reverie-ml. */
+function toKindDeps(): KindDeps | null {
+    const ml = getMlClient();
+
+    return ml && { db, ml, flip: isKindFlipActive(), addLlmJob };
 }
 
 async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
@@ -157,13 +165,13 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
 
         if (handoff === 'ocr') await queueLlmFromOcr(document, result, job.data.sessionId);
 
-        // Classify again with the camera facts just stored: an earlier verdict may have been made without them.
-        if (isImage) await enqueueImageKind(documentId);
-
         // Rebuild unified search vector with OCR text + EXIF metadata.
         // Will be rebuilt again after LLM processing if queued.
         await rebuildSearchVector(db, documentId);
         await enqueueTextEmbedding(documentId);
+
+        // After the rebuild, so the search text does not pick up the category the kind is about to set.
+        if (isImage) await settleKindAfterOcr(documentId, toKindDeps());
 
         await publishJobProgress(job.id!, 100, documentId, job.data.sessionId, job.data.userId);
 

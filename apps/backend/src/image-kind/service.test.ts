@@ -1,11 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
+vi.mock('../embeddings/enqueue', () => ({ enqueueImageKind: vi.fn() }));
 
 import type { Kysely } from 'kysely';
 import { env } from '../config/env';
 import type { Database, Document } from '../db/schema';
 import { upsertImageEmbedding } from '../embeddings/embedding.repository';
+import { enqueueImageKind } from '../embeddings/enqueue';
 import { MlUnavailableError } from '../embeddings/ml.client';
 import { decideImageLook } from '../llm/image-look';
 import { isHeldBackFromVision, loadKindVerdict } from '../llm/photo-gate';
@@ -14,6 +16,7 @@ import { createFakeMl, IMAGE_DIMENSIONS, IMAGE_MODEL, type FakeMl } from '../tes
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
+import { settleKindAfterOcr } from './after-ocr';
 import { listPrompts } from './classifier-config';
 import { IMAGE_KINDS, type ImageKind } from './kinds';
 import { clearPromptCache } from './prompt-cache';
@@ -598,6 +601,91 @@ describeDb('image kind', () => {
             await settleImageKind(deps, id);
 
             expect(await held(id, true)).toBe(true);
+        });
+    });
+
+    describe('settling right after OCR', () => {
+        const seedScreenshot = (weights: SeedImage['weights'] = { screenshot: 0.5 }) => seedImage({ weights, text: true, ocrDone: true });
+
+        beforeEach(() => {
+            vi.mocked(enqueueImageKind).mockClear();
+            FLIP_ON();
+        });
+
+        it('classifies an embedded image there and then and queues its summary, with no classify job', async () => {
+            const id = await seedScreenshot();
+
+            await settleKindAfterOcr(id, deps);
+
+            expect(await kindOf(id)).toBe('screenshot');
+            expect(queued.map((job) => job.documentId)).toEqual([id]);
+            expect(enqueueImageKind).not.toHaveBeenCalled();
+        });
+
+        it('queues a classify job for an image that has no embedding yet', async () => {
+            const id = await seedScreenshot(null);
+
+            await settleKindAfterOcr(id, deps);
+
+            expect(queued).toHaveLength(0);
+            expect(enqueueImageKind).toHaveBeenCalledExactlyOnceWith(id);
+        });
+
+        it('queues a classify job instead of throwing when settling fails', async () => {
+            const id = await seedScreenshot();
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            ml.setDown(true);
+
+            await expect(settleKindAfterOcr(id, deps)).resolves.toBeUndefined();
+
+            expect(enqueueImageKind).toHaveBeenCalledExactlyOnceWith(id);
+            expect(warn).toHaveBeenCalledOnce();
+            warn.mockRestore();
+        });
+
+        it('does nothing without reverie-ml', async () => {
+            const id = await seedScreenshot();
+
+            await settleKindAfterOcr(id, null);
+
+            expect(await loadStoredKind(db, id)).toBeNull();
+            expect(enqueueImageKind).not.toHaveBeenCalled();
+        });
+
+        it('keeps the later verdict when a settle that read the image before the camera facts is still running', async () => {
+            const id = await seedImage({ weights: { photo: 0.3, screenshot: 0.34 }, ocrDone: false });
+
+            let release = () => {};
+
+            const released = new Promise<void>((resolve) => (release = resolve));
+
+            let asked = () => {};
+
+            const isAsking = new Promise<void>((resolve) => (asked = resolve));
+            const slow: FakeMl = {
+                ...ml,
+                embedImageTexts: async (texts) => {
+                    asked();
+                    await released;
+
+                    return ml.embedImageTexts(texts);
+                },
+            };
+
+            // The embed side has read the image, without camera facts, and is waiting for reverie-ml.
+            const earlier = settleImageKind({ ...deps, ml: slow }, id);
+            await isAsking;
+            clearPromptCache();
+            await addCameraFacts(id, { takenAt: new Date('2025-06-01'), make: 'Apple', model: 'iPhone 15' });
+            await db.updateTable('documents').set({ ocr_facts_at: new Date() }).where('id', '=', id).execute();
+
+            const later = settleKindAfterOcr(id, deps);
+            // Time enough for the later settle to finish first, were it not made to wait.
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            release();
+            await Promise.all([earlier, later]);
+
+            expect(await kindOf(id)).toBe('photo');
         });
     });
 

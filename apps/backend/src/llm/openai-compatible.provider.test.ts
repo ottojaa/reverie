@@ -285,6 +285,81 @@ describe('images', () => {
     });
 });
 
+describe('one call at a time', () => {
+    const REPLIES: Record<string, unknown> = { text: ANALYSIS, image: IMAGE_ANSWER };
+    const IMAGE_PROMPT = { system: 's', user: 'u', maxTokens: 500 };
+    /** Replies the test sends one by one, so it sees which calls reached the server meanwhile. */
+    let held: (() => void)[];
+
+    beforeEach(() => {
+        held = [];
+
+        handler = (entry, res) => {
+            const kind = typeof entry.body.messages[1]?.content === 'string' ? 'text' : 'image';
+
+            held.push(() => reply(res, 200, chat(JSON.stringify(REPLIES[kind]))));
+        };
+    });
+
+    /** Long enough for a call that is not waiting to reach the local server. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+
+    async function answerNext(): Promise<void> {
+        await vi.waitFor(() => expect(held.length).toBeGreaterThan(0));
+        held.shift()!();
+        await settle();
+    }
+
+    it('holds an image call back while a summary runs, even for another address', async () => {
+        const summary = makeProvider().summarize(PROMPT);
+        const image = makeProvider({ baseUrl: baseUrl.replace('127.0.0.1', 'localhost') }).understand(IMAGE, IMAGE_PROMPT);
+        await settle();
+
+        expect(seen).toHaveLength(1);
+        await answerNext();
+        expect(seen).toHaveLength(2);
+        await answerNext();
+
+        await expect(Promise.all([summary, image])).resolves.toHaveLength(2);
+    });
+
+    it('takes a normal call before a background one that has waited longer', async () => {
+        const call = (model: string, lane: 'normal' | 'background') => makeProvider().summarize(PROMPT, { model, lane });
+        const calls = [call('running', 'background'), call('background', 'background'), call('normal', 'normal')];
+        await settle();
+
+        await answerNext();
+        await answerNext();
+        await answerNext();
+        await Promise.all(calls);
+
+        expect(seen.map((entry) => entry.body.model)).toEqual(['running', 'normal', 'background']);
+    });
+
+    it('goes on to the next call after one fails', async () => {
+        handler = (_s, res, count) => reply(res, count === 1 ? 503 : 200, chat(JSON.stringify(ANALYSIS)));
+
+        const [first, second] = await Promise.allSettled([makeProvider().summarize(PROMPT), makeProvider().summarize(PROMPT)]);
+
+        expect([first.status, second.status]).toEqual(['rejected', 'fulfilled']);
+    });
+
+    it('does not make Test connection wait', async () => {
+        handler = (entry, res) => {
+            if (entry.body.max_tokens === 64) return reply(res, 200, chat('pong'));
+
+            held.push(() => reply(res, 200, chat(JSON.stringify(ANALYSIS))));
+        };
+
+        const summary = makeProvider().summarize(PROMPT);
+        await settle();
+
+        expect(await makeProvider().ping({ text: 'ping' })).toBe('pong');
+        await answerNext();
+        await summary;
+    });
+});
+
 describe('errors end as the failed or retry state', () => {
     it('times out as a plain Error the queue retries', async () => {
         handler = () => undefined;

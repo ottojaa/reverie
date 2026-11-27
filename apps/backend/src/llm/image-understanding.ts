@@ -101,7 +101,7 @@ export async function processImageUnderstanding(document: Document, ocrResult: O
 
     const image = await prepareImageForModel(await getStorageService().getFile(document.file_path));
     const prompt = buildImagePrompt({ filename: document.original_filename, kind: look, ocrResult: ocrResult ?? null });
-    const { result, tokenCount } = await understandImage(image, prompt);
+    const { result, tokenCount } = await understandImage(image, prompt, { lane: document.processing_lane });
     const { entities: checked, fix } = checkAgainstOcr(result.entities, ocrResult);
     const appOrSource = toAppOrSource(result.app_or_source);
     const withApp = addAppOrSource(appOrSource, checked, result.tags.map(fix));

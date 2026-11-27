@@ -81,8 +81,8 @@ export async function preprocessImage(buffer: Buffer, options: PreprocessingOpti
         pipeline = pipeline.median(3);
     }
 
-    // Output as PNG for lossless processing
-    pipeline = pipeline.png();
+    // PNG is lossless at every compression level, and this one is only handed to the OCR engine: the fastest to write.
+    pipeline = pipeline.png({ compressionLevel: 1 });
 
     return pipeline.toBuffer();
 }

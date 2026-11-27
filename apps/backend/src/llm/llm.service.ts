@@ -202,7 +202,7 @@ async function processTextSummary(
         tokenCount,
         preparePromptMs,
         llmMs,
-    } = await analyzeOcrText(document, ocrResult);
+    } = await analyzeOcrText(document, ocrResult, { lane: document.processing_lane });
 
     // Build enhanced metadata
     const enhancedMetadata: EnhancedMetadata = {

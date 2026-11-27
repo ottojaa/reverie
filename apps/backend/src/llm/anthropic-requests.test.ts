@@ -102,3 +102,18 @@ describe('Anthropic request bodies with default settings', () => {
         expect(bodies).toEqual(JSON.parse(readFileSync(FIXTURE, 'utf8')));
     });
 });
+
+describe('calls to Claude', () => {
+    it('run side by side, whatever their lane', async () => {
+        const answers: (() => void)[] = [];
+        h.parse.mockImplementation(
+            () => new Promise((resolve) => answers.push(() => resolve({ parsed_output: ANALYSIS, stop_reason: 'end_turn', usage: USAGE }))),
+        );
+        const calls = (['normal', 'background', 'background'] as const).map((lane) => analyzeOcrText({ original_filename: 'statement.pdf' }, OCR, { lane }));
+
+        await vi.waitFor(() => expect(answers).toHaveLength(3));
+        answers.forEach((answer) => answer());
+
+        await expect(Promise.all(calls)).resolves.toHaveLength(3);
+    });
+});
