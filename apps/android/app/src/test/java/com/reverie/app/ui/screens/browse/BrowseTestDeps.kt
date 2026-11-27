@@ -31,7 +31,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 
 /** What a Browse screen reads from, for a test: [world]'s server and repositories, with no job events. */
-internal fun browseDeps(context: Context, database: ReverieDatabase, scope: CoroutineScope, world: FavouriteWorld): BrowseDeps {
+internal fun browseDeps(
+    context: Context,
+    database: ReverieDatabase,
+    scope: CoroutineScope,
+    world: FavouriteWorld,
+    processing: ProcessingTracker = ProcessingTracker(NothingProcessing, NoJobEvents, flowOf(false), scope),
+): BrowseDeps {
     // One per process: a test class that ran earlier in it may have set it up already.
     runCatching { WorkManager.initialize(context, Configuration.Builder().build()) }
     val settings = SettingsRepository(context)
@@ -45,7 +51,7 @@ internal fun browseDeps(context: Context, database: ReverieDatabase, scope: Coro
         documents = world.documents,
         folders = world.folders,
         vault = world.vault,
-        processing = ProcessingTracker(NothingProcessing, NoJobEvents, flowOf(false), scope),
+        processing = processing,
         connectivity = ConnectivityMonitor(context, scope),
         serverUrl = ServerUrlProvider(settings, scope),
         sequenceHolder = world.sequences,

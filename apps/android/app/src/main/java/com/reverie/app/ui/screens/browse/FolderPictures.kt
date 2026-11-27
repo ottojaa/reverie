@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.browse
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +25,7 @@ import com.reverie.app.ui.components.CornerBadge
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.FileTypeTile
 import com.reverie.app.ui.components.ON_PICTURE_SCRIM
+import com.reverie.app.ui.components.PrivateLockBadge
 import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.StarredBadge
 import com.reverie.app.ui.components.TilePicture
@@ -35,22 +37,31 @@ import com.reverie.app.ui.components.showsPreview
 
 /**
  * The picture of a document's row on a folder page: its preview, with a play mark on a video and a badge of
- * its type on anything else, or its type alone where there is no preview to show.
+ * its type on anything else, or its type alone where there is no preview to show. A private photo or video
+ * carries the lock it has on every grid.
  */
 @Composable
 internal fun DocumentRowPicture(doc: DocumentDto) {
-    val picture = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium)
-    if (!doc.showsPreview) {
-        FileTypeTile(doc.mime_type, doc.original_filename, picture)
-        return
-    }
     Box(Modifier.size(ROW_PICTURE)) {
-        Preview(doc, ThumbnailSize.MD, picture)
-        if (doc.kind == DocumentKind.VIDEO) {
-            PlayMark(Modifier.align(Alignment.BottomStart).padding(3.dp))
+        val picture = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium)
+        if (doc.showsPreview) {
+            MarkedPreview(doc, picture)
         } else {
-            TypeMark(doc, overhangingCorner())
+            FileTypeTile(doc.mime_type, doc.original_filename, picture)
         }
+        if (doc.is_private && doc.kind != DocumentKind.FILE) {
+            PrivateLockBadge(Modifier.align(Alignment.TopStart).padding(3.dp).size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.MarkedPreview(doc: DocumentDto, picture: Modifier) {
+    Preview(doc, ThumbnailSize.MD, picture)
+    if (doc.kind == DocumentKind.VIDEO) {
+        PlayMark(Modifier.align(Alignment.BottomStart).padding(3.dp))
+    } else {
+        TypeMark(doc, overhangingCorner())
     }
 }
 

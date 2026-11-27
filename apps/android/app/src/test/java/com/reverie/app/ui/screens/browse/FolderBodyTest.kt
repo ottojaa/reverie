@@ -1,12 +1,18 @@
 package com.reverie.app.ui.screens.browse
 
 import android.view.KeyEvent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -27,6 +33,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentSort
@@ -66,12 +74,14 @@ class FolderBodyTest {
     private var focusedId by mutableStateOf<String?>(null)
     private val calls = mutableListOf<String>()
     private var topDate: TopDate? = null
+    /** What the page is drawn inside, where a test needs something around it. */
+    private var around: @Composable (page: @Composable () -> Unit) -> Unit = { it() }
 
     private fun show() = compose.setContent {
         val trips = node("trips")
         val shown = node("Portugal", parent = "trips", children = folders)
         ReverieTheme {
-            FolderBody(
+            around { FolderBody(
                 state = FolderState(
                     node = shown.takeUnless { isRoot },
                     path = if (isRoot) emptyList() else listOf(trips, shown),
@@ -100,7 +110,7 @@ class FolderBodyTest {
                 focusedId = focusedId, onFocusConsumed = { focusedId = null }, onLoadMore = { pagesAsked++ }, error = null,
                 onSort = { calls += "sort:$it" }, onShowAs = { calls += "show:$it" },
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = { topDate = it }, onUpload = { calls += "upload" }),
-            )
+            ) }
         }
     }
 
@@ -420,6 +430,40 @@ class FolderBodyTest {
 
         compose.onNodeWithText("Lisbon").assertIsDisplayed()
         compose.onNodeWithText("This folder is empty").assertDoesNotExist()
+    }
+
+    @Test fun `a private photo or video keeps its lock mark on its row`() {
+        documents = listOf(
+            doc("p1", name = "beach.jpg").copy(is_private = true),
+            doc("v1", "video/mp4", name = "tram.mp4").copy(is_private = true),
+            doc("f1", "application/pdf", name = "report.pdf").copy(is_private = true),
+            doc("p2", name = "public.jpg"),
+        )
+        show()
+
+        compose.onAllNodesWithContentDescription("Private", useUnmergedTree = true).assertCountEquals(2)
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun `scrolling the page slides the header away and a scroll back returns it, as a list and as a grid`() {
+        val header = TopAppBarState(initialHeightOffsetLimit = -200f, initialHeightOffset = 0f, initialContentOffset = 0f)
+        around = { page ->
+            val behavior = TopAppBarDefaults.enterAlwaysScrollBehavior(header)
+            Box(Modifier.nestedScroll(behavior.nestedScrollConnection)) { page() }
+        }
+        documents = (1..90).map { doc("p$it", name = "photo-$it.jpg") }
+        show()
+
+        listOf(FolderView.LIST, FolderView.GRID).forEach { shownAs ->
+            view = shownAs
+            compose.onNode(hasScrollToIndexAction()).performTouchInput { swipeUp() }
+            compose.waitForIdle()
+            assertEquals(shownAs.name, -200f, header.heightOffset)
+
+            compose.onNode(hasScrollToIndexAction()).performTouchInput { swipeDown() }
+            compose.waitForIdle()
+            assertEquals(shownAs.name, 0f, header.heightOffset)
+        }
     }
 
     @Test fun `each folder inside wears the folder badge, a locked one with its lock`() {

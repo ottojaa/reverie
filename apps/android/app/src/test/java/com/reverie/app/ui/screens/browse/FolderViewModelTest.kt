@@ -17,9 +17,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentSort
+import com.reverie.app.data.api.model.JobEventDto
+import com.reverie.app.data.api.model.JobStatus
+import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.local.toCacheableEntities
+import com.reverie.app.data.processing.ProcessingTracker
+import com.reverie.app.data.realtime.DocumentJobEvents
+import com.reverie.app.data.repository.ProcessingDocuments
 import com.reverie.app.data.settings.FolderView
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
@@ -29,7 +36,11 @@ import com.reverie.app.ui.theme.ReverieTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -43,6 +54,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.milliseconds
 
 /** A folder's real view model: what its page's tiles and rows do through to the server. */
 @RunWith(RobolectricTestRunner::class)
@@ -117,6 +129,24 @@ class FolderViewModelTest {
         await { viewModel.state.value.selectedIds == setOf("one", "two") }
     }
 
+    private object EmptyBacklog : ProcessingDocuments {
+        override suspend fun fetchProcessing(limit: Int, offset: Int) =
+            Paginated<DocumentDto>(items = emptyList(), total = 0, limit = limit, offset = offset)
+
+        override suspend fun fetchDocument(id: String): DocumentDto = awaitCancellation()
+    }
+
+    private class JoinedRooms : DocumentJobEvents {
+        val joined = mutableSetOf<String>()
+        override val events = MutableSharedFlow<JobEventDto>()
+        override val connected = MutableStateFlow(false)
+        override val foregrounded = MutableStateFlow(false)
+        override suspend fun subscribeDocument(documentId: String): AutoCloseable {
+            joined += documentId
+            return AutoCloseable { joined -= documentId }
+        }
+    }
+
     private fun picked() = pickFrom(viewModel.selection.ids.value, viewModel.state.value.documents.documents)
 
     @Test fun `deleting a selection of rows deletes those documents`() {
@@ -143,6 +173,18 @@ class FolderViewModelTest {
         await { targets.isNotEmpty() }
         assertEquals(listOf("one.pdf", "two.pdf"), targets.map { it.filename }.sorted())
         assertEquals(true, targets.all { it.url.endsWith("/files/" + it.filename.removeSuffix(".pdf")) })
+    }
+
+    @Test fun `the page keeps its unfinished documents live, so their thumbnails appear as they finish`() {
+        val rooms = JoinedRooms()
+        deps = browseDeps(context, database, scope, world, ProcessingTracker(EmptyBacklog, rooms, flowOf(false), scope, 1.milliseconds))
+        val unfinished = doc("scan", "application/pdf").copy(folder_id = "live", thumbnail_status = JobStatus.PENDING)
+        world.listed = listOf(unfinished)
+        runBlocking { world.documentDao.upsertAll(listOf(unfinished).toCacheableEntities(now = 0)) }
+
+        open("live")
+
+        await { "scan" in rooms.joined }
     }
 
     // The settings outlive a test within one process, so these folders are no other test's.
