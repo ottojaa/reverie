@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.reverie.app.ui.components.LocalOpenLockSettings
 
 /** The authenticated app shell: the nav graph with the bottom pill floating over its browsing screens. */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -37,6 +38,8 @@ fun MainShell(
     val scrollVisible = remember { mutableStateOf(true) }
     // The last screen that had the pill, so it keeps its look while it slides away from one that hasn't.
     var pillRoute by remember { mutableStateOf(Routes.LIBRARY) }
+    // Remembered: a new lambda each time would recompose everything below the provider.
+    val openLockSettings = remember(navController) { { navController.openLockSettings() } }
     LaunchedEffect(route) {
         scrollVisible.value = true
         if (route != null && route in Routes.pillRoutes) pillRoute = route
@@ -55,6 +58,7 @@ fun MainShell(
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this,
             LocalBottomBarScrollState provides scrollVisible,
+            LocalOpenLockSettings provides openLockSettings,
         ) {
             Box(Modifier.fillMaxSize()) {
                 graph(Modifier.fillMaxSize())

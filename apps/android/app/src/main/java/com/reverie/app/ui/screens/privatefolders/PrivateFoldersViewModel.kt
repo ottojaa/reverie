@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.privatefolders
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.VaultStatus
 import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteDeps
@@ -37,6 +38,12 @@ class PrivateFoldersViewModel @Inject constructor(private val deps: FavouriteDep
     /** Changing what is selected. */
     val manage = ManageController(deps.folders, deps.documents, deps.vault, favourites, viewModelScope)
 
+    /** The PIN or lock password that opens them. */
+    val lock = LockSettings(deps.vault, viewModelScope)
+
+    /** How private folders open, as last heard. */
+    val lockStatus: StateFlow<VaultStatus?> = deps.vault.status
+
     /** The private folders as cached; null until the cache has been read. */
     val folders: StateFlow<List<FolderWithChildren>?> = deps.folders.observeTree()
         .map { privateFolders(it) }
@@ -60,8 +67,9 @@ class PrivateFoldersViewModel @Inject constructor(private val deps: FavouriteDep
         }
     }
 
-    /** The folder tree, and the favourites that mark its rows. Offline, what is cached stays. */
+    /** The folder tree, the favourites that mark its rows and how the lock opens. Offline, what is cached stays. */
     private suspend fun fetch(): Unit = coroutineScope {
+        lock.refresh()
         launch { runCatching { deps.folders.refresh() } }
         favourites.refresh()
     }

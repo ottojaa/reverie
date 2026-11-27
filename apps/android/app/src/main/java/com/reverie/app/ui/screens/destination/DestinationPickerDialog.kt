@@ -8,13 +8,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.ui.components.CreateEditFolderSheet
 import com.reverie.app.ui.components.FullScreenDialog
-import com.reverie.app.ui.components.VaultUnlockSheet
+import com.reverie.app.ui.components.UnlockSheetHost
 
 /** The destination browser over the current screen, whenever [browser] is open. */
 @Composable
 fun DestinationPickerDialog(browser: DestinationBrowser, onSelect: (Destination) -> Unit) {
     val state by browser.state.collectAsStateWithLifecycle()
-    val prompt by browser.unlocker.prompt.collectAsStateWithLifecycle()
     var isCreating by remember { mutableStateOf(false) }
     val shown = state ?: return
 
@@ -42,6 +41,6 @@ fun DestinationPickerDialog(browser: DestinationBrowser, onSelect: (Destination)
                 allowPrivate = shown.rules.allowPrivate,
             )
         }
-        prompt?.let { VaultUnlockSheet(it, browser.unlocker::submit, browser.unlocker::dismiss) }
+        UnlockSheetHost(browser.unlocker)
     }
 }

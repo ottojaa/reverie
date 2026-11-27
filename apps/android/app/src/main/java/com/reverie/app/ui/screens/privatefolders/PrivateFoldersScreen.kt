@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.domain.counted
 import com.reverie.app.domain.folderMeta
 import com.reverie.app.ui.components.FolderRow
+import com.reverie.app.ui.components.LockCheck
 import com.reverie.app.ui.components.ReverieRefreshBox
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.browse.BrowseHeader
@@ -35,6 +38,7 @@ import com.reverie.app.ui.screens.manage.PickingPage
 import com.reverie.app.ui.screens.manage.RowSelection
 import com.reverie.app.ui.screens.manage.pickFrom
 
+private const val LOCK_ROW_KEY = "lock"
 private const val NO_PRIVATE_FOLDERS = "No private folders. To make one, hold a folder, then choose Make private from ⋮."
 
 data class PrivateFoldersState(
@@ -42,21 +46,30 @@ data class PrivateFoldersState(
     val folders: List<FolderWithChildren>? = null,
     val starredIds: Set<String> = emptySet(),
     val isPulling: Boolean = false,
+    /** What they open with. */
+    val lock: LockCheck = LockCheck.Checking,
 )
 
 data class PrivateFoldersActions(
     val onBack: () -> Unit,
     val onOpenFolder: (String) -> Unit,
     val onRefresh: () -> Unit,
+    val onOpenLockSettings: () -> Unit = {},
+    val onRetryLock: () -> Unit = {},
     /** The folder rows' part in the screen's selection. */
     val selection: RowSelection = RowSelection(),
 )
 
-/** The private folders, opened from the account sheet. A locked one asks for the password where it opens. */
+/**
+ * The private folders, opened from the account sheet, and what opens them. A locked one asks to be unlocked where
+ * it opens. With [openLockSettings] the lock settings open as soon as they can, and [onLockSettingsOpened] hears it.
+ */
 @Composable
 fun PrivateFoldersScreen(
     onBack: () -> Unit,
     onOpenFolder: (String) -> Unit,
+    openLockSettings: Boolean = false,
+    onLockSettingsOpened: () -> Unit = {},
     viewModel: PrivateFoldersViewModel = hiltViewModel(),
 ) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
@@ -65,7 +78,17 @@ fun PrivateFoldersScreen(
     val selectedIds by viewModel.selection.ids.collectAsStateWithLifecycle()
     val picked = remember(folders, selectedIds) { pickFrom(selectedIds, folders = folders.orEmpty()) }
 
+    val lockStatus by viewModel.lockStatus.collectAsStateWithLifecycle()
+    val lockSettings by viewModel.lock.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.load() }
+    LaunchedEffect(openLockSettings, lockStatus == null) {
+        // Waits for the status: the settings cannot open before it is known that the account has a password.
+        if (!openLockSettings || lockStatus == null) return@LaunchedEffect
+        viewModel.lock.open()
+        onLockSettingsOpened()
+    }
 
     val starredIds = folders.orEmpty()
         .filter { favourites.isStarred(FavouriteKey(FavouriteType.FOLDER, it.id)) }
@@ -75,11 +98,15 @@ fun PrivateFoldersScreen(
         onOpenFolder = onOpenFolder,
         onRefresh = viewModel::pullToRefresh,
         selection = RowSelection(picked.ids, viewModel.selection::toggle),
+        onOpenLockSettings = viewModel.lock::open,
+        onRetryLock = viewModel.lock::refresh,
     )
+    val lock = toLockCheck(lockStatus, lockSettings.hasFailed)
 
-    PickingPage(picked, viewModel.selection, viewModel.manage, viewModel.favourites) {
-        PrivateFoldersContent(PrivateFoldersState(folders, starredIds, isPulling), actions)
+    PickingPage(picked, viewModel.selection, viewModel.manage, viewModel.favourites, snackbarHostState = snackbarHostState) {
+        PrivateFoldersContent(PrivateFoldersState(folders, starredIds, isPulling, lock), actions)
     }
+    LockSettingsHost(viewModel.lock, lockStatus, lockSettings, snackbarHostState)
 }
 
 @Composable
@@ -97,6 +124,7 @@ fun PrivateFoldersContent(state: PrivateFoldersState, actions: PrivateFoldersAct
                 contentPadding = PaddingValues(bottom = bottomBarInset() + 16.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
+                item(key = LOCK_ROW_KEY) { LockSectionRow(state.lock, actions.onOpenLockSettings, actions.onRetryLock) }
                 // A list item rather than a screen of its own, so an empty screen can still be pulled.
                 if (state.folders?.isEmpty() == true) item { NoFolders() }
                 items(state.folders.orEmpty(), key = { it.id }) { folder ->

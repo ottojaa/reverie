@@ -3,7 +3,10 @@ package com.reverie.app.ui.navigation
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
@@ -19,6 +22,7 @@ import com.reverie.app.ui.screens.favourites.FavouritesScreen
 import com.reverie.app.ui.screens.library.LibraryLinks
 import com.reverie.app.ui.screens.library.LibraryScreen
 import com.reverie.app.ui.screens.privatefolders.PrivateFoldersScreen
+import com.reverie.app.ui.screens.privatefolders.PrivateFoldersViewModel
 import com.reverie.app.ui.screens.search.SearchScreen
 import com.reverie.app.ui.screens.settings.ChangePasswordScreen
 import com.reverie.app.ui.screens.settings.SettingsScreen
@@ -110,12 +114,7 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
         )
     }
 
-    composable(Routes.PRIVATE_FOLDERS) {
-        PrivateFoldersScreen(
-            onBack = { navController.popBackStack() },
-            onOpenFolder = { navController.showFolder(it) },
-        )
-    }
+    privateFolders(navController)
 
     composable(Routes.TRASH) {
         TrashScreen(onBack = { navController.popBackStack() })
@@ -126,6 +125,23 @@ private fun NavGraphBuilder.lists(navController: NavHostController) {
             onBack = { navController.popBackStack() },
             onDocumentClick = { navController.openDocument(entry, it) },
             onOpenFolder = { navController.showFolder(it) },
+        )
+    }
+}
+
+/** The Private folders screen, which opens the lock settings when [openLockSettings] has asked it to. */
+internal fun NavGraphBuilder.privateFolders(
+    navController: NavHostController,
+    screenModel: @Composable () -> PrivateFoldersViewModel = { hiltViewModel() },
+) {
+    composable(Routes.PRIVATE_FOLDERS) { entry ->
+        val openLockSettings by entry.savedStateHandle.getStateFlow(OPEN_LOCK_SETTINGS, false).collectAsStateWithLifecycle()
+        PrivateFoldersScreen(
+            onBack = { navController.popBackStack() },
+            onOpenFolder = { navController.showFolder(it) },
+            openLockSettings = openLockSettings,
+            onLockSettingsOpened = { entry.savedStateHandle[OPEN_LOCK_SETTINGS] = false },
+            viewModel = screenModel(),
         )
     }
 }
@@ -166,6 +182,15 @@ private fun NavGraphBuilder.settings(navController: NavHostController) {
     composable(Routes.SETTINGS_PASSWORD) {
         ChangePasswordScreen(onBack = { navController.popBackStack() })
     }
+}
+
+/** Set on the Private folders entry to have it open the lock settings once. */
+private const val OPEN_LOCK_SETTINGS = "openLockSettings"
+
+/** Goes to where the PIN or lock password is set: the Private folders screen, with the lock settings open. */
+internal fun NavHostController.openLockSettings() {
+    navigate(Routes.PRIVATE_FOLDERS) { launchSingleTop = true }
+    getBackStackEntry(Routes.PRIVATE_FOLDERS).savedStateHandle[OPEN_LOCK_SETTINGS] = true
 }
 
 /**

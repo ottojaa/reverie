@@ -4,6 +4,7 @@ import com.reverie.app.BuildConfig
 import com.reverie.app.data.auth.AuthSessionManager
 import dagger.Lazy
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.HttpTimeout
@@ -33,8 +34,8 @@ class ReverieClientFactory @Inject constructor(
     private val authSessionManager: Lazy<AuthSessionManager>,
     private val cookieStorage: SessionCookieStorage,
 ) {
-    fun create(): HttpClient {
-        val client = HttpClient(OkHttp) {
+    fun create(engine: HttpClientEngine = OkHttp.create()): HttpClient {
+        val client = HttpClient(engine) {
             expectSuccess = false
 
             install(ContentNegotiation) { json(ApiJson) }

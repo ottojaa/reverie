@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.manage
 import com.reverie.app.data.api.model.ConflictStrategy
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.ui.components.FolderFormData
+import com.reverie.app.ui.components.awaitForm
 import com.reverie.app.ui.screens.browse.doc
 import com.reverie.app.ui.screens.destination.Destination
 import com.reverie.app.ui.screens.destination.node
@@ -105,11 +106,11 @@ class ManageControllerTest {
         )
     }
 
-    @Test fun `a refused move asks for that folder's password and is then made`() = runBlocking {
+    @Test fun `a refused move asks to unlock that folder and is then made`() = runBlocking {
         world.writeAnswers += locked("Vaulted")
 
         move(file("a", "Trips"))
-        val prompt = withTimeout(5_000) { manage.unlocker.prompt.filterNotNull().first() }
+        val prompt = withTimeout(5_000) { manage.unlocker.awaitForm() }
 
         assertEquals("Vaulted" to "Vaulted", prompt.folderId to prompt.folderName)
         assertEquals(emptyList<Set<String>>(), gone)
@@ -125,7 +126,7 @@ class ManageControllerTest {
         world.writeAnswers += locked("Vaulted")
 
         move(*Array(150) { file("d$it", "Trips") })
-        withTimeout(5_000) { manage.unlocker.prompt.filterNotNull().first() }
+        withTimeout(5_000) { manage.unlocker.awaitForm() }
         manage.unlocker.submit("password")
         awaitDone(150)
 
