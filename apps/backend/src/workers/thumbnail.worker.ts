@@ -1,6 +1,6 @@
 import { THUMBNAIL_SIZES, VIDEO_POSTER_FRAME_SECONDS } from '@reverie/shared';
 import { encode } from 'blurhash';
-import { Job, Worker } from 'bullmq';
+import { Job, Worker, type Processor } from 'bullmq';
 import { spawn } from 'child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -15,9 +15,10 @@ import { queueTranscode } from '../transcode/queue-transcode';
 import { decodeTextForPreview } from '../ocr/text-extractor';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
-import type { ThumbnailJobData, ThumbnailJobResult } from '../queues/thumbnail.queue';
+import { getBackgroundThumbnailQueue, getThumbnailQueue, type ThumbnailJobData, type ThumbnailJobResult } from '../queues/thumbnail.queue';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { getThumbnailStrategy } from '../services/thumbnail-strategy';
+import { holdWhileNormalBusy } from './background-hold';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('Thumbnail');
@@ -396,14 +397,11 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     return result;
 }
 
-/**
- * Create and start the thumbnail worker
- */
-export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobResult> {
-    const worker = new Worker<ThumbnailJobData, ThumbnailJobResult>(QUEUE_NAMES.THUMBNAIL, async (job) => processJobWithTracking(job, processThumbnailJob), {
-        connection: getRedisConnectionOptions(),
-        concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.THUMBNAIL],
-    });
+type ThumbnailQueueName = typeof QUEUE_NAMES.THUMBNAIL | typeof QUEUE_NAMES.THUMBNAIL_BACKGROUND;
+
+function startWorker(queueName: ThumbnailQueueName, processor: Processor<ThumbnailJobData, ThumbnailJobResult>): Worker<ThumbnailJobData, ThumbnailJobResult> {
+    const concurrency = QUEUE_CONCURRENCY[queueName];
+    const worker = new Worker<ThumbnailJobData, ThumbnailJobResult>(queueName, processor, { connection: getRedisConnectionOptions(), concurrency });
 
     worker.on('completed', (job) => {
         logger.info('Job completed', { jobId: job.id });
@@ -435,12 +433,29 @@ export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobRe
         logger.error('Worker error', error);
     });
 
-    logger.info('Thumbnail worker started', { concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.THUMBNAIL] });
+    logger.info('Thumbnail worker started', { queue: queueName, concurrency });
 
     return worker;
+}
+
+/**
+ * Create and start the thumbnail worker
+ */
+export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobResult> {
+    return startWorker(QUEUE_NAMES.THUMBNAIL, async (job) => processJobWithTracking(job, processThumbnailJob));
+}
+
+/** Runs background documents' thumbnails, and starts none while a normal document's thumbnail is waiting or running. */
+export function createBackgroundThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobResult> {
+    return startWorker(QUEUE_NAMES.THUMBNAIL_BACKGROUND, async (job) => {
+        await holdWhileNormalBusy(getThumbnailQueue(), getBackgroundThumbnailQueue());
+
+        return processJobWithTracking(job, processThumbnailJob);
+    });
 }
 
 // Run as standalone if executed directly
 if (require.main === module) {
     createThumbnailWorker();
+    createBackgroundThumbnailWorker();
 }

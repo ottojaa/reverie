@@ -3,7 +3,9 @@ import { env } from '../config/env';
 // Queue names
 export const QUEUE_NAMES = {
     OCR: 'ocr-queue',
+    OCR_BACKGROUND: 'ocr-background',
     THUMBNAIL: 'thumbnail-queue',
+    THUMBNAIL_BACKGROUND: 'thumbnail-background',
     LLM: 'llm-queue',
     TRIM: 'trim-queue',
     TRASH: 'trash-queue',
@@ -33,7 +35,9 @@ export const DEFAULT_JOB_OPTIONS = {
 // Queue-specific concurrency
 export const QUEUE_CONCURRENCY = {
     [QUEUE_NAMES.OCR]: env.JOB_CONCURRENCY_OCR,
+    [QUEUE_NAMES.OCR_BACKGROUND]: env.JOB_CONCURRENCY_OCR_BACKGROUND,
     [QUEUE_NAMES.THUMBNAIL]: env.JOB_CONCURRENCY_THUMBNAIL,
+    [QUEUE_NAMES.THUMBNAIL_BACKGROUND]: env.JOB_CONCURRENCY_THUMBNAIL_BACKGROUND,
     [QUEUE_NAMES.LLM]: env.JOB_CONCURRENCY_LLM,
     [QUEUE_NAMES.TRIM]: env.JOB_CONCURRENCY_TRIM,
     [QUEUE_NAMES.EMBED]: env.JOB_CONCURRENCY_EMBED,

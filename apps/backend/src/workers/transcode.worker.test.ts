@@ -1,21 +1,23 @@
 import { DelayedError, type Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const counts = vi.hoisted(
-    () =>
-        ({ ocr: {}, thumbnail: {}, llm: {}, transcode: {}, backgroundTranscode: {} }) as Record<
-            'ocr' | 'thumbnail' | 'llm' | 'transcode' | 'backgroundTranscode',
-            Record<string, number>
-        >,
-);
+type CountedQueue = 'ocr' | 'backgroundOcr' | 'thumbnail' | 'backgroundThumbnail' | 'llm' | 'transcode' | 'backgroundTranscode';
+
+const counts = vi.hoisted(() => ({}) as Record<CountedQueue, Record<string, number>>);
 const setStatus = vi.hoisted(() => vi.fn());
 const markJobFailed = vi.hoisted(() => vi.fn());
 
 vi.mock('../db/kysely', () => ({ db: {} }));
 vi.mock('../jobs/job.service', () => ({ getJobService: () => ({ markJobFailed }) }));
 vi.mock('../services/storage.service', () => ({ getStorageService: () => ({}) }));
-vi.mock('../queues/ocr.queue', () => ({ getOcrQueue: () => ({ getJobCounts: async () => counts.ocr }) }));
-vi.mock('../queues/thumbnail.queue', () => ({ getThumbnailQueue: () => ({ getJobCounts: async () => counts.thumbnail }) }));
+vi.mock('../queues/ocr.queue', () => ({
+    getOcrQueue: () => ({ getJobCounts: async () => counts.ocr }),
+    getBackgroundOcrQueue: () => ({ getJobCounts: async () => counts.backgroundOcr }),
+}));
+vi.mock('../queues/thumbnail.queue', () => ({
+    getThumbnailQueue: () => ({ getJobCounts: async () => counts.thumbnail }),
+    getBackgroundThumbnailQueue: () => ({ getJobCounts: async () => counts.backgroundThumbnail }),
+}));
 vi.mock('../queues/llm.queue', () => ({ getLlmQueue: () => ({ getJobCounts: async () => counts.llm }) }));
 vi.mock('../queues/transcode.queue', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../queues/transcode.queue')>()),
@@ -33,7 +35,9 @@ import { isLastAttempt, markFailedWhenFinal, rescheduleTranscodeBackfill } from 
 describe('isTranscodePipelineBusy', () => {
     beforeEach(() => {
         counts.ocr = { waiting: 0, prioritized: 0, active: 0 };
+        counts.backgroundOcr = { waiting: 0, prioritized: 0, active: 0 };
         counts.thumbnail = { waiting: 0, prioritized: 0, active: 0 };
+        counts.backgroundThumbnail = { waiting: 0, prioritized: 0, active: 0 };
         counts.llm = { waiting: 0, prioritized: 0, active: 0 };
         counts.backgroundTranscode = { waiting: 0, prioritized: 0, active: 0 };
         // The backfill job is itself the one active job in the transcode queue.
@@ -44,7 +48,9 @@ describe('isTranscodePipelineBusy', () => {
         expect(await isTranscodePipelineBusy()).toBe(false);
     });
 
-    it.each(['ocr', 'thumbnail', 'llm', 'backgroundTranscode'] as const)('holds the backfill back for %s work in any live state', async (queue) => {
+    const AHEAD = ['ocr', 'backgroundOcr', 'thumbnail', 'backgroundThumbnail', 'llm', 'backgroundTranscode'] as const;
+
+    it.each(AHEAD)('holds the backfill back for %s work in any live state', async (queue) => {
         for (const state of ['waiting', 'prioritized', 'active']) {
             counts[queue] = { waiting: 0, prioritized: 0, active: 0, [state]: 1 };
 

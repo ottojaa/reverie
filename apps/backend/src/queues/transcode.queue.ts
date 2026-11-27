@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { toLaneJob } from './lane';
+import { fetchLaneJob } from './lane';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES, type QueueName } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
@@ -51,7 +51,7 @@ export function getBackgroundTranscodeQueue(): Queue {
 
 /** `jobId` is the processing_jobs row's id: the worker's tracking updates that row by the BullMQ job id. */
 export async function addTranscodeJob(data: TranscodeJobData, jobId: string, priority?: number): Promise<void> {
-    const { lane, options } = await toLaneJob(data.documentId, { jobId, ...(priority !== undefined && { priority }) });
+    const { lane, options } = await fetchLaneJob(data.documentId, { jobId, ...(priority !== undefined && { priority }) });
     const queue = lane === 'background' ? getBackgroundTranscodeQueue() : getTranscodeQueue();
 
     await queue.add(TRANSCODE_JOBS.TRANSCODE, data, options);

@@ -1,16 +1,27 @@
 import { DelayedError, type Job, type Queue } from 'bullmq';
 
+const LIVE_STATES = ['waiting', 'prioritized', 'active'] as const;
+
+/** BullMQ keeps prioritised jobs out of the "waiting" count, so the three live states are added up. */
+async function countLiveJobs(queue: Queue): Promise<number> {
+    const counts = await queue.getJobCounts(...LIVE_STATES);
+
+    return LIVE_STATES.reduce((sum, state) => sum + (counts[state] ?? 0), 0);
+}
+
+/** True while the queue has a job waiting or running. */
+export async function hasLiveJobs(queue: Queue): Promise<boolean> {
+    return (await countLiveJobs(queue)) > 0;
+}
+
 /**
- * True while any of the queues has work in a live state. BullMQ keeps prioritised jobs out of the "waiting" count, so
- * the three states are added up. `self` is the queue the backfill job itself runs in: that job is active there, so one
- * active job is not work.
+ * True while any of the queues has work in a live state. `self` is the queue the backfill job itself runs in: that job
+ * is active there, so one live job is not work.
  */
 export async function isQueuesBusy(others: Queue[], self: Queue): Promise<boolean> {
-    const states = ['waiting', 'prioritized', 'active'] as const;
-    const [selfCounts, ...otherCounts] = await Promise.all([self, ...others].map((queue) => queue.getJobCounts(...states)));
-    const live = (counts: Record<string, number> | undefined) => states.reduce((sum, state) => sum + (counts?.[state] ?? 0), 0);
+    const [selfLive, otherLive] = await Promise.all([countLiveJobs(self), Promise.all(others.map(hasLiveJobs))]);
 
-    return otherCounts.some((counts) => live(counts) > 0) || live(selfCounts) - 1 > 0;
+    return otherLive.some(Boolean) || selfLive > 1;
 }
 
 /**

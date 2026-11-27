@@ -35,6 +35,8 @@ import {
     addTrimJob,
     closeAllQueues,
     EMBED_JOBS,
+    getBackgroundOcrQueue,
+    getBackgroundThumbnailQueue,
     getBackgroundTranscodeQueue,
     getEmbedQueue,
     getLlmQueue,
@@ -59,11 +61,18 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-    { step: 'OCR', add: (documentId, userId) => addOcrJob({ documentId, userId, filePath: 'a' }, randomUUID()), queue: getOcrQueue, normal: 0 },
+    {
+        step: 'OCR',
+        add: (documentId, userId) => addOcrJob({ documentId, userId, filePath: 'a' }, randomUUID()),
+        queue: getOcrQueue,
+        backgroundQueue: getBackgroundOcrQueue,
+        normal: 0,
+    },
     {
         step: 'thumbnail',
         add: (documentId, userId) => addThumbnailJob({ documentId, userId, filePath: 'a' }, randomUUID()),
         queue: getThumbnailQueue,
+        backgroundQueue: getBackgroundThumbnailQueue,
         normal: 10,
     },
     { step: 'LLM', add: (documentId, userId) => addLlmJob({ documentId, userId }, randomUUID()), queue: getLlmQueue, normal: 0 },
@@ -175,8 +184,10 @@ describeDb('processing lanes in the queues', () => {
         const normal = await upload();
 
         expect([await laneOf(background), await laneOf(normal)]).toEqual(['background', 'normal']);
-        expect(await queuedPriorities(getOcrQueue(), background)).toEqual([BEHIND]);
-        expect(await queuedPriorities(getThumbnailQueue(), background)).toEqual([BEHIND]);
+        expect(await queuedPriorities(getBackgroundOcrQueue(), background)).toEqual([BEHIND]);
+        expect(await queuedPriorities(getBackgroundThumbnailQueue(), background)).toEqual([BEHIND]);
+        expect(await queuedPriorities(getOcrQueue(), background)).toEqual([]);
+        expect(await queuedPriorities(getThumbnailQueue(), background)).toEqual([]);
         expect(await queuedPriorities(getOcrQueue(), normal)).toEqual([0]);
         expect(await queuedPriorities(getThumbnailQueue(), normal)).toEqual([10]);
     });
@@ -209,8 +220,6 @@ describeDb('processing lanes in the queues', () => {
     it('promotes a backed-up photo that is saved over, so the new content is processed ahead of the backlog', async () => {
         const id = await upload('background');
 
-        await getOcrQueue().obliterate({ force: true });
-        await getThumbnailQueue().obliterate({ force: true });
         await getUploadService().replaceDocumentFile(id, userId, await newPhoto());
 
         expect(await laneOf(id)).toBe('normal');

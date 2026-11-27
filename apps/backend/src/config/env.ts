@@ -160,6 +160,9 @@ const envSchema = z.object({
     // Job Queue
     JOB_CONCURRENCY_OCR: z.coerce.number().default(2),
     JOB_CONCURRENCY_THUMBNAIL: z.coerce.number().default(4),
+    /** OCR and thumbnails of background uploads run in their own lanes, which hold back while the normal lane has work. */
+    JOB_CONCURRENCY_OCR_BACKGROUND: z.coerce.number().int().positive().default(1),
+    JOB_CONCURRENCY_THUMBNAIL_BACKGROUND: z.coerce.number().int().positive().default(1),
     JOB_CONCURRENCY_LLM: z.coerce.number().default(1),
     JOB_CONCURRENCY_TRIM: z.coerce.number().default(2),
     JOB_CONCURRENCY_EMBED: z.coerce.number().int().positive().default(1),

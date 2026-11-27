@@ -1,5 +1,5 @@
-export { createOcrWorker } from './ocr.worker';
-export { createThumbnailWorker } from './thumbnail.worker';
+export { createBackgroundOcrWorker, createOcrWorker } from './ocr.worker';
+export { createBackgroundThumbnailWorker, createThumbnailWorker } from './thumbnail.worker';
 export { createLlmWorker } from './llm.worker';
 export { createTrimWorker } from './trim.worker';
 export { createTrashWorker } from './trash.worker';
@@ -7,8 +7,8 @@ export { createEmbedWorker, startEmbedWorker } from './embed.worker';
 export { createBackgroundTranscodeWorker, createTranscodeWorker } from './transcode.worker';
 export * from './worker.utils';
 
-import { createOcrWorker } from './ocr.worker';
-import { createThumbnailWorker } from './thumbnail.worker';
+import { createBackgroundOcrWorker, createOcrWorker } from './ocr.worker';
+import { createBackgroundThumbnailWorker, createThumbnailWorker } from './thumbnail.worker';
 import { createLlmWorker } from './llm.worker';
 import { createTrimWorker } from './trim.worker';
 import { createTrashWorker } from './trash.worker';
@@ -26,7 +26,9 @@ export function startAllWorkers() {
     logger.info('Starting all workers...');
 
     const ocrWorker = createOcrWorker();
+    const backgroundOcrWorker = createBackgroundOcrWorker();
     const thumbnailWorker = createThumbnailWorker();
+    const backgroundThumbnailWorker = createBackgroundThumbnailWorker();
     const llmWorker = createLlmWorker();
     const trimWorker = createTrimWorker();
     const trashWorker = createTrashWorker();
@@ -39,7 +41,9 @@ export function startAllWorkers() {
         logger.info('Shutting down workers...');
         await Promise.all([
             ocrWorker.close(),
+            backgroundOcrWorker.close(),
             thumbnailWorker.close(),
+            backgroundThumbnailWorker.close(),
             llmWorker.close(),
             trimWorker.close(),
             trashWorker.close(),

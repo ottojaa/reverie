@@ -1,7 +1,7 @@
 import { Entity } from '@reverie/shared';
 import { Queue } from 'bullmq';
 import type { LlmSkipReason, StoredLlmProcessingType } from '../llm/types';
-import { toLaneJob } from './lane';
+import { fetchLaneJob } from './lane';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
@@ -48,7 +48,7 @@ export function getLlmQueue(): Queue {
 
 export async function addLlmJob(data: LlmJobData, jobId: string): Promise<void> {
     const queue = getLlmQueue();
-    const { options } = await toLaneJob(data.documentId, { jobId, priority: 0 });
+    const { options } = await fetchLaneJob(data.documentId, { jobId, priority: 0 });
     await queue.add('process-llm', data, options);
 }
 

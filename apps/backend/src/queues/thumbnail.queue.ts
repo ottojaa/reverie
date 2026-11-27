@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
-import { toLaneJob } from './lane';
+import { fetchLaneJob } from './lane';
 import { getRedisConnectionOptions } from './redis';
-import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
+import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES, type QueueName } from './queue.config';
 
 export interface ThumbnailJobData {
     documentId: string;
@@ -25,27 +25,34 @@ export interface ThumbnailJobResult {
 }
 
 let thumbnailQueueInstance: Queue | null = null;
+let backgroundQueueInstance: Queue | null = null;
+
+function createQueue(name: QueueName): Queue {
+    return new Queue(name, { connection: getRedisConnectionOptions(), defaultJobOptions: DEFAULT_JOB_OPTIONS });
+}
 
 export function getThumbnailQueue(): Queue {
-    if (!thumbnailQueueInstance) {
-        thumbnailQueueInstance = new Queue(QUEUE_NAMES.THUMBNAIL, {
-            connection: getRedisConnectionOptions(),
-            defaultJobOptions: DEFAULT_JOB_OPTIONS,
-        });
-    }
+    thumbnailQueueInstance ??= createQueue(QUEUE_NAMES.THUMBNAIL);
 
     return thumbnailQueueInstance;
 }
 
+/** Background documents' thumbnails have their own queue, so that a normal document's never waits for a backlog's worker slot. */
+export function getBackgroundThumbnailQueue(): Queue {
+    backgroundQueueInstance ??= createQueue(QUEUE_NAMES.THUMBNAIL_BACKGROUND);
+
+    return backgroundQueueInstance;
+}
+
 export async function addThumbnailJob(data: ThumbnailJobData, jobId: string): Promise<void> {
-    const queue = getThumbnailQueue();
-    const { options } = await toLaneJob(data.documentId, { jobId, priority: 10 });
+    const { lane, options } = await fetchLaneJob(data.documentId, { jobId, priority: 10 });
+    const queue = lane === 'background' ? getBackgroundThumbnailQueue() : getThumbnailQueue();
+
     await queue.add('generate-thumbnail', data, options);
 }
 
 export async function closeThumbnailQueue(): Promise<void> {
-    if (thumbnailQueueInstance) {
-        await thumbnailQueueInstance.close();
-        thumbnailQueueInstance = null;
-    }
+    await Promise.all([thumbnailQueueInstance?.close(), backgroundQueueInstance?.close()]);
+    thumbnailQueueInstance = null;
+    backgroundQueueInstance = null;
 }

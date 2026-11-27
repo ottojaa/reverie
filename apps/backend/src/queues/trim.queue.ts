@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { toLaneJob } from './lane';
+import { fetchLaneJob } from './lane';
 import { getRedisConnectionOptions } from './redis';
 import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
 
@@ -31,7 +31,7 @@ export function getTrimQueue(): Queue {
 
 export async function addTrimJob(data: TrimJobData, jobId: string): Promise<void> {
     const queue = getTrimQueue();
-    const { options } = await toLaneJob(data.documentId, { jobId, priority: 5 });
+    const { options } = await fetchLaneJob(data.documentId, { jobId, priority: 5 });
     await queue.add('trim-video', data, options);
 }
 

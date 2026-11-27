@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
-import { promoteToNormal, toLaneJob } from '../queues/lane';
+import { promoteToNormal, fetchLaneJob } from '../queues/lane';
 import { dbProxy } from '../testing/db-proxy';
 import { seedDocument, seedUser } from '../testing/seed';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database';
@@ -44,7 +44,7 @@ describeDb('migration 031 (processing lane)', () => {
 
         // The deploy starts the new code before it migrates: until then there is no column.
         await down(untyped());
-        expect(await toLaneJob(id, { priority: 10 })).toEqual({ lane: 'normal', options: { priority: 10 } });
+        expect(await fetchLaneJob(id, { priority: 10 })).toEqual({ lane: 'normal', options: { priority: 10 } });
         await expect(promoteToNormal(id)).resolves.toBeUndefined();
 
         await up(untyped());

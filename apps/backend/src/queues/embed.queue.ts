@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { toLaneJob } from './lane';
+import { fetchLaneJob } from './lane';
 import { QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 
@@ -59,7 +59,7 @@ export function getEmbedQueue(): Queue {
 }
 
 export async function addEmbedJob(kind: EmbedJobKind, documentId: string, priority?: number): Promise<void> {
-    const { options } = await toLaneJob(documentId, priority === undefined ? {} : { priority });
+    const { options } = await fetchLaneJob(documentId, priority === undefined ? {} : { priority });
     await getEmbedQueue().add(kind, { documentId } satisfies EmbedJobData, options);
 }
 

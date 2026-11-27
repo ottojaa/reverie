@@ -18,7 +18,7 @@ async function fetchLane(documentId: string): Promise<ProcessingLane> {
 }
 
 /** The lane of a document's next job, and the BullMQ options to add it with: `options` untouched for a normal document. */
-export async function toLaneJob(documentId: string, options: JobsOptions): Promise<{ lane: ProcessingLane; options: JobsOptions }> {
+export async function fetchLaneJob(documentId: string, options: JobsOptions): Promise<{ lane: ProcessingLane; options: JobsOptions }> {
     const lane = await fetchLane(documentId);
 
     if (lane === 'normal') return { lane, options };

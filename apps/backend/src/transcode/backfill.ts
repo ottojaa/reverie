@@ -1,8 +1,8 @@
 import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import { getLlmQueue } from '../queues/llm.queue';
-import { getOcrQueue } from '../queues/ocr.queue';
-import { getThumbnailQueue } from '../queues/thumbnail.queue';
+import { getBackgroundOcrQueue, getOcrQueue } from '../queues/ocr.queue';
+import { getBackgroundThumbnailQueue, getThumbnailQueue } from '../queues/thumbnail.queue';
 import { LIVE_JOB_STATUSES, toLiveJobCutoff } from './queue-transcode';
 import { isQueuesBusy } from '../queues/backfill-gate';
 import { getBackgroundTranscodeQueue, getTranscodeQueue } from '../queues/transcode.queue';
@@ -63,5 +63,7 @@ export async function runTranscodeBackfillPage(deps: TranscodeBackfillDeps, afte
 
 /** Thumbnails, OCR, summaries and other transcodes come first: the backfill waits while any has work. */
 export async function isTranscodePipelineBusy(): Promise<boolean> {
-    return isQueuesBusy([getOcrQueue(), getThumbnailQueue(), getLlmQueue(), getBackgroundTranscodeQueue()], getTranscodeQueue());
+    const ahead = [getOcrQueue(), getBackgroundOcrQueue(), getThumbnailQueue(), getBackgroundThumbnailQueue(), getLlmQueue(), getBackgroundTranscodeQueue()];
+
+    return isQueuesBusy(ahead, getTranscodeQueue());
 }
