@@ -60,6 +60,10 @@ private val SortArrow: ImageVector by lazy {
     ).build()
 }
 
+/** The controls' text and icons: a step brighter than a caption, quieter than a name. */
+private val controlColor: Color
+    @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+
 /** Above a folder's content: what its documents are ordered by, and the button that draws it the other way. */
 @Composable
 internal fun FolderControls(
@@ -80,7 +84,7 @@ internal fun FolderControls(
             Icon(
                 if (isGrid) Icons.AutoMirrored.Outlined.FormatListBulleted else Icons.Outlined.GridView,
                 contentDescription = if (isGrid) "Show as list" else "Show as grid",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = controlColor,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -96,8 +100,8 @@ private fun SortButton(sort: DocumentSort, onSort: (DocumentSort) -> Unit) {
             onClick = { isOpen = true },
             modifier = Modifier.height(36.dp),
             shape = CircleShape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = controlColor),
             contentPadding = PaddingValues(horizontal = 12.dp),
         ) {
             Icon(SortArrow, contentDescription = null, modifier = Modifier.size(15.dp))
