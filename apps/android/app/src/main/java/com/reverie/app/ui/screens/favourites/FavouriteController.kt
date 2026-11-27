@@ -53,7 +53,7 @@ class FavouriteDeps @Inject constructor(
 
 /**
  * Starring and opening favourites, the same for every screen that does either: one per view model.
- * It owns the password prompt for the locks those actions run into, and reports through [events].
+ * It owns the unlock prompt for the locks those actions run into, and reports through [events].
  */
 class FavouriteController(
     private val deps: FavouriteDeps,
@@ -90,7 +90,7 @@ class FavouriteController(
         setStarred(keys.filter { state.value.isStarred(it) != isStarred }, isStarred, confirm = true)
     }
 
-    /** Open a favourite; one behind a closed lock asks for the password first. */
+    /** Open a favourite; one behind a closed lock asks to be unlocked first. */
     fun open(item: FavouriteDto) {
         val lockId = item.lockId
         if (!item.locked || lockId == null) {
@@ -110,8 +110,8 @@ class FavouriteController(
     }
 
     /**
-     * One request per item, as there is no batch one; each shows at once. Behind a closed lock the password is
-     * asked once for it, and what was refused is tried again.
+     * One request per item, as there is no batch one; each shows at once. Behind a closed lock it asks to be
+     * unlocked once, and what was refused is tried again.
      */
     private fun setStarred(keys: List<FavouriteKey>, isStarred: Boolean, confirm: Boolean) {
         if (keys.isEmpty()) return

@@ -106,7 +106,7 @@ fun PickedSelection(
 
 /**
  * A page whose list can be selected from: [content] under the selection bar, with what acting on a selection
- * needs. Messages show [bottomSpace] above the bottom edge.
+ * needs. Messages, and any the page itself puts in [snackbarHostState], show [bottomSpace] above the bottom edge.
  */
 @Composable
 fun PickingPage(
@@ -117,9 +117,9 @@ fun PickingPage(
     modifier: Modifier = Modifier,
     bottomSpace: Dp = bottomBarInset(),
     onGo: (FavouriteDestination) -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     content: @Composable () -> Unit,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
     Box(modifier.fillMaxSize()) {
         content()
         PickedSelection(picked, selection, manage, Modifier.align(Alignment.TopCenter))

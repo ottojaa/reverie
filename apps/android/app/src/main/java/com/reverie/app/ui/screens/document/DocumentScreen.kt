@@ -49,7 +49,7 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.mediaAspectOrNull
 import com.reverie.app.domain.model.InsightPhase
 import com.reverie.app.domain.model.toInsightPhase
-import com.reverie.app.ui.components.VaultUnlockSheet
+import com.reverie.app.ui.components.UnlockSheetHost
 import com.reverie.app.ui.navigation.aboveSharedElements
 import com.reverie.app.ui.navigation.animateViewerChrome
 import com.reverie.app.ui.screens.favourites.FavouriteHost
@@ -113,14 +113,7 @@ fun DocumentScreen(
 
     val currentId = ids.getOrNull(pagerState.currentPage) ?: documentId
     val document by viewModel.observeDocument(currentId).collectAsStateWithLifecycle(initialValue = null)
-    val unlockPrompt by viewModel.unlocker.prompt.collectAsStateWithLifecycle()
-    unlockPrompt?.let { prompt ->
-        VaultUnlockSheet(
-            prompt = prompt,
-            onSubmit = viewModel.unlocker::submit,
-            onDismiss = viewModel.unlocker::dismiss,
-        )
-    }
+    UnlockSheetHost(viewModel.unlocker)
     val currentFileUrl by produceState<String?>(initialValue = null, currentId) { value = viewModel.fileUrl(currentId) }
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val videoBackground by viewModel.videoBackground.collectAsStateWithLifecycle()

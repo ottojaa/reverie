@@ -196,7 +196,7 @@ class TrashScreenTest {
         assertTrue("the last row ends at $bottom", bottom <= 360.dp)
     }
 
-    @Test fun `a locked folder asks for its password and is then named`() {
+    @Test fun `a locked folder asks to be unlocked and is then named`() {
         open()
         awaitText("Locked folder")
 

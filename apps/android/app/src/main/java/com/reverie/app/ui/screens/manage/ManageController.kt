@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 
 private const val CHANGE_FAILED = "Couldn't save the change."
-private const val NO_PASSWORD_NOTICE = "Private folders only lock once your account has a password."
+internal const val NO_PASSWORD_NOTICE = "Private folders only lock once your account has a password."
 
 /** What the user is being asked about a folder or a selection. */
 sealed interface ManageDialog {
@@ -44,8 +44,8 @@ private data class Picking(val picked: Picked, val onGone: (Set<String>) -> Unit
 
 /**
  * Changing what is selected (favourites, move, trash) and a folder's name and privacy: the dialogs that
- * ask first, and the destination browser. A change a closed lock refuses asks for that folder's password and
- * is then made again.
+ * ask first, and the destination browser. A change a closed lock refuses opens that folder's lock
+ * prompt and is then made again.
  */
 class ManageController(
     private val folders: FolderRepository,
@@ -71,7 +71,7 @@ class ManageController(
         onFailure = { messages.send(it) },
     )
 
-    /** The password prompt for a change a closed lock refused. */
+    /** The unlock prompt for a change a closed lock refused. */
     val unlocker get() = locked.unlocker
 
     val favouriteState: StateFlow<FavouritesState> get() = favourites.state
@@ -98,7 +98,7 @@ class ManageController(
         changeFolder {
             folders.update(folderId, UpdateFolderRequest(is_private = isPrivate))
             // A private folder only locks for an account that has a password.
-            if (isPrivate && vault.hasPassword() == false) messages.send(NO_PASSWORD_NOTICE)
+            if (isPrivate && vault.fetchStatus()?.has_password == false) messages.send(NO_PASSWORD_NOTICE)
         }
     }
 

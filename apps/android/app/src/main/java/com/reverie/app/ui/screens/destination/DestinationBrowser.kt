@@ -36,7 +36,7 @@ class DestinationBrowser(
 
     private val session = MutableStateFlow<Session?>(null)
 
-    /** Asks for the password when a locked folder is opened, then goes into it. */
+    /** Asks to unlock a locked folder that is opened, then goes into it. */
     val unlocker = FolderUnlocker(vault, scope) { id ->
         runCatching { folders.refresh() }
         goTo(id)

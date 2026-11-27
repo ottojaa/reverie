@@ -80,7 +80,7 @@ class TrashViewModel @Inject constructor(
         load()
     }
 
-    /** A tap on an item: a locked folder asks for its password, anything else offers what can be done. */
+    /** A tap on an item: a locked folder asks to be unlocked, anything else offers what can be done. */
     fun open(item: TrashItem) {
         if (item is TrashItem.Folder && item.folder.locked) return locked.unlock(item.id)
         _dialog.value = TrashDialog.Menu(item)

@@ -16,13 +16,13 @@ import com.reverie.app.data.api.model.FolderWithChildren
 import com.reverie.app.ui.components.ConfirmDialog
 import com.reverie.app.ui.components.CreateEditFolderSheet
 import com.reverie.app.ui.components.FolderFormData
-import com.reverie.app.ui.screens.browse.UnlockSheetHost
+import com.reverie.app.ui.components.UnlockSheetHost
 import com.reverie.app.ui.screens.destination.DestinationPickerDialog
 
 /** How many of the clashing names the question spells out. */
 private const val NAMES_SHOWN = 3
 
-/** Everything [controller] has to ask or show: its dialogs, the destination browser and the password prompt. */
+/** Everything [controller] has to ask or show: its dialogs, the destination browser and the unlock prompt. */
 @Composable
 fun ManageHost(controller: ManageController, snackbarHostState: SnackbarHostState) {
     val dialog by controller.dialog.collectAsStateWithLifecycle()

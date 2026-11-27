@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.favourites
 import app.cash.turbine.test
 import com.reverie.app.data.api.model.FavouriteType
 import com.reverie.app.data.repository.FavouritesState
+import com.reverie.app.ui.components.awaitForm
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
@@ -98,7 +99,7 @@ class FavouriteStoreTest {
         assertTrue(store.state.value.confirmed.isEmpty())
     }
 
-    @Test fun `a locked item asks for the password and then writes again`() = run {
+    @Test fun `a locked item asks to be unlocked and then writes again`() = run {
         store.refresh()
         world.putFailures += HttpStatusCode.Forbidden to
             """{"statusCode":403,"error":"FOLDER_LOCKED","message":"Folder is locked","details":{"folder_id":"lock-1"}}"""
@@ -106,7 +107,7 @@ class FavouriteStoreTest {
 
         controller.events.test {
             controller.toggle(invoice.key, confirm = true)
-            val prompt = controller.unlocker.prompt.first { it != null }!!
+            val prompt = controller.unlocker.awaitForm()
             assertEquals("lock-1", prompt.folderId)
             assertFalse(store.state.value.isStarred(invoice.key))
 
@@ -119,7 +120,7 @@ class FavouriteStoreTest {
         assertEquals(listOf("PUT", "POST", "PUT"), writes)
     }
 
-    @Test fun `dismissing the password prompt drops the retry`() = run {
+    @Test fun `dismissing the unlock prompt drops the retry`() = run {
         store.refresh()
         world.putFailures += HttpStatusCode.Forbidden to
             """{"statusCode":403,"error":"FOLDER_LOCKED","message":"x","details":{"folder_id":"lock-1"}}"""

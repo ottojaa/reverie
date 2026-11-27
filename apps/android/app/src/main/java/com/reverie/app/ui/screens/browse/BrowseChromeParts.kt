@@ -4,13 +4,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.ui.components.FolderUnlocker
-import com.reverie.app.ui.components.VaultUnlockSheet
 import com.reverie.app.ui.navigation.LocalBottomBarScrollState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
@@ -45,10 +41,3 @@ internal fun BottomBarFollowsHeader(scrollBehavior: TopAppBarScrollBehavior) {
 
 /** Whether the list gives way to the lock prompt, or (with nothing to show) to the load error. */
 internal fun SessionUi.replacesList(isEmpty: Boolean): Boolean = lockedFolderId != null || (error != null && isEmpty)
-
-/** The password prompt for a locked folder, while there is one. */
-@Composable
-internal fun UnlockSheetHost(unlocker: FolderUnlocker) {
-    val prompt by unlocker.prompt.collectAsStateWithLifecycle()
-    prompt?.let { VaultUnlockSheet(prompt = it, onSubmit = unlocker::submit, onDismiss = unlocker::dismiss) }
-}

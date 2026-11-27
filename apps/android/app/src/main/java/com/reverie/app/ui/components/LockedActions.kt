@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Runs actions that a closed folder lock may refuse: the refusal asks for that folder's password, and the
+ * Runs actions that a closed folder lock may refuse: the refusal asks to unlock that folder, and the
  * action is made again once the lock is open. Any other failure is reported to [onFailure], in the server's
  * words or else as [fallbackMessage].
  */
@@ -20,7 +20,7 @@ class LockedActions(
 ) {
     private var refused: (suspend () -> Unit)? = null
 
-    /** The password prompt; the screen shows it. */
+    /** The unlock prompt; the screen shows it. */
     val unlocker = FolderUnlocker(vault, scope) { refused?.let(::attempt) }
 
     fun attempt(action: suspend () -> Unit) {
@@ -41,7 +41,7 @@ class LockedActions(
         }
     }
 
-    /** Asks for the password of [folderId] with nothing to make again afterwards. */
+    /** Asks to unlock [folderId] with nothing to make again afterwards. */
     fun unlock(folderId: String) {
         refused = null
         unlocker.request(folderId)
