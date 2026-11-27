@@ -7,12 +7,15 @@ import com.reverie.app.data.local.dao.BackupDao
 import com.reverie.app.data.local.entity.BackupLedgerEntity
 import com.reverie.app.data.local.entity.BackupRetryEntity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** How many files are hashed and checked against the library together. */
 const val BACKUP_GROUP_SIZE = 25
@@ -25,9 +28,9 @@ private class StopPass(val reason: String) : Exception(reason)
 
 /**
  * Runs backup passes: finds device files the ledger hasn't handled, skips what the library already
- * holds, uploads the rest into their album's folder, and writes the ledger after every file so a pass
- * can be cut off at any moment and the next one resumes where it stopped. An album whose folder takes
- * no uploads is left out of the rest of the pass; its files wait, and don't count as failures.
+ * holds, uploads the rest into their album's folder a few at a time, and writes the ledger after every
+ * file so a pass can be cut off at any moment and the next one resumes where it stopped. An album whose
+ * folder takes no uploads is left out of the rest of the pass; its files wait, and don't count as failures.
  *
  * Only one pass runs at a time in the process: the periodic job, the new-media trigger and "Back up
  * now" are separate works that can start together, and two passes would upload the same file twice.
@@ -39,6 +42,10 @@ class BackupRunner internal constructor(
     private val dao: BackupDao,
     private val folders: BackupFolders,
     private val settings: BackupSettingsRepository,
+    private val manualUploads: ManualUploads = ManualUploads { false },
+    private val budget: UploadBudget = UploadBudget(),
+    /** Must run one thing at a time: a pass keeps its sets and counts without locks while uploads overlap. */
+    private val passContext: CoroutineContext = EmptyCoroutineContext,
     private val now: () -> Long,
 ) {
     @Inject
@@ -48,14 +55,19 @@ class BackupRunner internal constructor(
         dao: BackupDao,
         folders: BackupFolders,
         settings: BackupSettingsRepository,
-    ) : this(source, transport, dao, folders, settings, System::currentTimeMillis)
+        manualUploads: ManualUploads,
+    ) : this(
+        source, transport, dao, folders, settings, manualUploads,
+        passContext = Dispatchers.Default.limitedParallelism(1),
+        now = System::currentTimeMillis,
+    )
 
     private val lock = Mutex()
 
     suspend fun run(request: BackupRequest): PassResult {
         if (!acquire(request)) return PassResult(PassEnd.Busy)
         try {
-            return Pass(request).run()
+            return withContext(passContext) { Pass(request).run() }
         } finally {
             lock.unlock()
         }
@@ -78,6 +90,8 @@ class BackupRunner internal constructor(
         private var failed = 0
         private var firstFailure: String? = null
         private var uploadsStarted = 0
+        private var ranOutOfTime = false
+        private val uploads = SideBySideUploads(request.parallelUploads, manualUploads)
 
         suspend fun run(): PassResult {
             val end = try {
@@ -174,12 +188,36 @@ class BackupRunner internal constructor(
                 if (known) ledger(media, hash, documentId = null, BackupLedgerEntity.OUTCOME_SKIPPED)
                 !known
             }
-            for ((media, hash) in toUpload) {
+            // Identical files share one turn, so the same bytes never go up twice side by side.
+            val turns = toUpload.groupBy { (_, hash) -> hash }.values.toList()
+            uploads.run(turns, awaitRoom = ::awaitBudget, upload = ::uploadInTurn)
+            return inTime && !ranOutOfTime
+        }
+
+        private suspend fun uploadInTurn(files: List<Pair<BackupMedia, String>>) {
+            for ((media, hash) in files) {
                 if (isBlocked(media)) continue
-                if (isTimeUp()) return false
+                if (!mayStart()) return
                 upload(media, hash)
             }
-            return inTime
+        }
+
+        /** Whether another file may start: no upload has ended the pass, and there is time left. */
+        private fun mayStart(): Boolean {
+            if (uploads.isHalted) return false
+            if (!isTimeUp()) return true
+            ranOutOfTime = true
+            return false
+        }
+
+        /** Waits for room in the server's request budget, no longer than the pass has; false if no file may start. */
+        private suspend fun awaitBudget(): Boolean {
+            while (mayStart()) {
+                val wait = budget.take(now())
+                if (wait == 0L) return true
+                uploads.pause(minOf(wait, deadline - now()))
+            }
+            return false
         }
 
         private suspend fun checkContent(hashed: List<Pair<BackupMedia, String>>): List<CheckContentResult> {
