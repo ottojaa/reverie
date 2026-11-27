@@ -120,4 +120,28 @@ class SearchScreenshotTest {
 
         paparazzi.snapshotThemes("selectedList") { Selected(state, setOf("alfama", "hit1")) }
     }
+
+    private val everyKind: List<DocumentSearchResult> = listOf(
+        hit(1, "Lisbon – view from Miradouro da Senhora do Monte.jpg"),
+        hit(2, "VID_20250823_1015.mp4", "video/mp4"),
+        hit(3, "Lisbon apartment booking confirmation.pdf", "application/pdf").copy(blurhash = BLURHASHES[0]),
+        hit(4, "lisbon-offline-maps.apk", "application/vnd.android.package-archive").copy(blurhash = null),
+        hit(5, "lisbon-originals.zip", "application/zip").copy(blurhash = null),
+        hit(6, "lisbon-packing-list.md", "text/markdown").copy(blurhash = null),
+        hit(7, "lisbon-trip-budget.xlsx", "application/vnd.ms-excel").copy(blurhash = BLURHASHES[1]),
+        // Rendered by the server, but a text file is drawn as its type.
+        hit(8, "lisbon-expenses.csv", "text/csv"),
+    )
+
+    @Test fun typesList() {
+        val state = page.copy(results = everyKind, total = everyKind.size, viewMode = ViewMode.LIST)
+
+        paparazzi.snapshotThemes("typesList") { SearchBody(state, SearchActions()) }
+    }
+
+    @Test fun typesGrid() {
+        val state = page.copy(results = everyKind, total = everyKind.size, viewMode = ViewMode.GRID)
+
+        paparazzi.snapshotThemes("typesGrid") { SearchBody(state, SearchActions()) }
+    }
 }

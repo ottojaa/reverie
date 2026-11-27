@@ -146,7 +146,7 @@ private fun LazyListScope.documentItems(state: FolderState, rows: List<FeedRow>,
     items(rows, key = { it.key }, contentType = { it.contentType }) { row ->
         when (row) {
             is FeedRow.File -> FolderDocumentRow(row.doc, state.filter, actions, layout)
-            else -> FeedRowView(row, actions, layout.today, layout.zone, folderTilePicture)
+            else -> FeedRowView(row, actions, layout.today, layout.zone)
         }
     }
 }

@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import coil.request.CachePolicy
-import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
@@ -25,7 +24,7 @@ import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.CachedFolders
 import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.DocumentThumbnail
-import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.FileRowPicture
 import com.reverie.app.ui.components.FolderRow
 import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.SelectableTile
@@ -85,7 +84,10 @@ internal fun MediaFavourite(item: FavouriteDto, cell: Float, actions: Favourites
 internal fun FileFavourite(item: FavouriteDto, actions: FavouritesActions) {
     if (item.isPrivate) return PrivateFavourite(item, actions)
     val document = item.document ?: return
-    FavouriteLine(item, fileLine(document, item), actions) { FilePicture(document) }
+    FavouriteLine(item, fileLine(document, item), actions) {
+        // As in the grid above: favourites read cached thumbnails but never write one.
+        FileRowPicture(document, diskCachePolicy = CachePolicy.READ_ONLY)
+    }
 }
 
 /** A private favourite, folder or file: a padlock, and nothing that says which one it is. */
@@ -100,11 +102,6 @@ private fun PadlockPicture() {
     Box(tile.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
         Icon(Icons.Outlined.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
-}
-
-@Composable
-private fun FilePicture(document: DocumentDto) {
-    FileKindBlock(document.mime_type, document.original_filename, Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
 }
 
 @Composable

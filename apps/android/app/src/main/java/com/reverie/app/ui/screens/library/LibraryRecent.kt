@@ -34,6 +34,7 @@ import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
+import com.reverie.app.ui.components.FileGridTile
 import com.reverie.app.ui.components.SelectedCheck
 import com.reverie.app.ui.components.StarredBadge
 import com.reverie.app.ui.components.VideoBadge
@@ -117,9 +118,30 @@ private fun SelectionCover() {
     }
 }
 
-/** A document's picture, or its extension on a plain surface when it has none. */
+/**
+ * A document's tile picture: a file as its [FileGridTile]; a photo or video as its thumbnail, or its
+ * extension on a plain surface while it has none.
+ */
 @Composable
 internal fun TilePicture(document: DocumentDto, modifier: Modifier = Modifier, size: ThumbnailSize = ThumbnailSize.MD) {
+    val thumbnail: @Composable (Modifier) -> Unit = { picture ->
+        DocumentThumbnail(
+            documentId = document.id,
+            mimeType = document.mime_type,
+            filename = document.original_filename,
+            blurhash = document.thumbnail_blurhash,
+            hasThumbnail = true,
+            modifier = picture,
+            size = size,
+        )
+    }
+    if (document.kind == DocumentKind.FILE) {
+        FileGridTile(
+            document.mime_type, document.original_filename, document.hasRenderedThumbnail, modifier,
+            preview = thumbnail,
+        )
+        return
+    }
     if (!document.hasRenderedThumbnail) {
         Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
             Text(
@@ -131,13 +153,5 @@ internal fun TilePicture(document: DocumentDto, modifier: Modifier = Modifier, s
         }
         return
     }
-    DocumentThumbnail(
-        documentId = document.id,
-        mimeType = document.mime_type,
-        filename = document.original_filename,
-        blurhash = document.thumbnail_blurhash,
-        hasThumbnail = true,
-        modifier = modifier,
-        size = size,
-    )
+    thumbnail(modifier)
 }

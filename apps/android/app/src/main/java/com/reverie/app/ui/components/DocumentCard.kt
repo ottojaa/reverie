@@ -7,7 +7,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,24 +28,6 @@ import com.reverie.app.data.image.GRID_THUMBNAIL_SIZE
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
 
-/** What fills a grid tile for a document, loaded at the given size, with its star if it has one. */
-typealias TilePicture = @Composable BoxScope.(document: DocumentDto, size: ThumbnailSize, isStarred: Boolean) -> Unit
-
-/** The picture of a tile everywhere but on a folder's page: the [GalleryThumbnail]. */
-val galleryPicture: TilePicture = { document, size, isStarred ->
-    GalleryThumbnail(
-        documentId = document.id,
-        mimeType = document.mime_type,
-        filename = document.original_filename,
-        blurhash = document.thumbnail_blurhash,
-        hasThumbnail = document.hasRenderedThumbnail,
-        size = size,
-        durationSeconds = document.duration_seconds,
-        isStarred = isStarred,
-        modifier = Modifier.matchParentSize(),
-    )
-}
-
 /**
  * A Google-Photos-style gallery tile: an edge-to-edge cropped thumbnail with no caption and no
  * corner radius. Non-media files carry a file-type icon + name so they read as documents; media
@@ -65,7 +46,6 @@ fun DocumentCard(
     // Larger mosaic tiles (2×2, 3×2, …) need a bigger source or the MD thumbnail visibly upscales.
     thumbnailSize: ThumbnailSize = GRID_THUMBNAIL_SIZE,
     isStarred: Boolean = false,
-    picture: TilePicture = galleryPicture,
 ) {
     SelectableTile(
         selected = selected,
@@ -85,7 +65,17 @@ fun DocumentCard(
             }
         },
     ) {
-        picture(document, thumbnailSize, isStarred)
+        GalleryThumbnail(
+            documentId = document.id,
+            mimeType = document.mime_type,
+            filename = document.original_filename,
+            blurhash = document.thumbnail_blurhash,
+            hasThumbnail = document.hasRenderedThumbnail,
+            size = thumbnailSize,
+            durationSeconds = document.duration_seconds,
+            isStarred = isStarred,
+            modifier = Modifier.matchParentSize(),
+        )
     }
 }
 

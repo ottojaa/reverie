@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
-import com.reverie.app.data.api.model.kind
 
 /**
  * A family of file types: the colour and glyph its files wear. [isPictured] says a document of it is shown as
@@ -100,10 +99,15 @@ internal fun fileTypeOf(mime: String, filename: String): FileType {
     return TYPE_BY_EXTENSION.getValue(like)
 }
 
-/** Whether a document is drawn as the picture the server rendered of it, rather than as its type. */
+/**
+ * Whether a file is drawn as the picture the server rendered of it, rather than as its type. [hasRendered]
+ * says there is such a picture.
+ */
+internal fun showsPreview(mimeType: String, filename: String, hasRendered: Boolean): Boolean =
+    hasRendered && (DocumentKind.of(mimeType) != DocumentKind.FILE || fileTypeOf(mimeType, filename).isPictured)
+
 internal val DocumentDto.showsPreview: Boolean
-    get() = hasRenderedThumbnail &&
-        (kind != DocumentKind.FILE || fileTypeOf(mime_type, original_filename).isPictured)
+    get() = showsPreview(mime_type, original_filename, hasRenderedThumbnail)
 
 /**
  * A document with no picture to show: its family's glyph over its extension, on the family's tint.

@@ -214,4 +214,21 @@ class FavouritesScreenshotTest {
             DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 2600, fontScale = 1.3f),
         )
     }
+
+    @Test fun screenTypes() {
+        fun entry(id: String, name: String, mime: String, bytes: Long, hash: String? = null) =
+            fixtures.file(fixtures.document(id, name, mime, bytes, hash), "Other", "Misc")
+        val xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        val kinds = listOf(
+            entry("t-pdf", "Lease agreement – Kalevankatu 12.pdf", "application/pdf", 1_800_000, BLURHASHES[0]),
+            entry("t-apk", "reverie-1.0.32-release.apk", "application/vnd.android.package-archive", 6_600_000),
+            entry("t-xlsx", "household-budget-2026.xlsx", xlsx, 90_000, BLURHASHES[1]),
+            entry("t-zip", "holiday-originals.zip", "application/zip", 412_000_000),
+            entry("t-md", "bcdr-tabletop-prep.md", "text/markdown", 12_300),
+        )
+        screen(
+            "screenTypes", FavouritesState(items = shots.take(2) + recording + kinds + fixtures.secret),
+            DeviceConfig.PIXEL_5.copy(screenHeight = 2600),
+        )
+    }
 }

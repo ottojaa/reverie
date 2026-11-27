@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.navigation.documentSharedBounds
@@ -36,17 +37,28 @@ fun SearchResultRow(
         onLongClick = onLongClick,
         modifier = modifier,
         selected = selected,
-    ) {
+    ) { HitPicture(hit) }
+}
+
+@Composable
+private fun HitPicture(hit: DocumentSearchResult) {
+    val isRendered = !hit.blurhash.isNullOrBlank()
+    val thumbnail: @Composable (Modifier) -> Unit = { picture ->
         DocumentThumbnail(
             documentId = hit.document_id,
             mimeType = hit.mime_type,
             filename = hit.filename,
             blurhash = hit.blurhash,
-            hasThumbnail = !hit.blurhash.isNullOrBlank(),
+            hasThumbnail = isRendered,
             size = ThumbnailSize.SM,
-            modifier = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium),
+            modifier = picture,
         )
     }
+    if (DocumentKind.of(hit.mime_type) == DocumentKind.FILE) {
+        FileRowPicture(hit.mime_type, hit.filename, isRendered, preview = thumbnail)
+        return
+    }
+    thumbnail(Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
 }
 
 @Composable

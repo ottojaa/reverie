@@ -223,9 +223,8 @@ fun MosaicSectionView(
     onClick: (DocumentDto) -> Unit,
     onLongClick: (DocumentDto) -> Unit,
     starred: (DocumentDto) -> Boolean = { false },
-    picture: TilePicture = galleryPicture,
 ) {
-    val card: @Composable (MosaicTile) -> Unit = { MosaicCard(it, selected, starred, onClick, onLongClick, picture) }
+    val card: @Composable (MosaicTile) -> Unit = { MosaicCard(it, selected, starred, onClick, onLongClick) }
     when (section) {
         is MosaicRow -> Row(horizontalArrangement = Arrangement.spacedBy(MOSAIC_GAP.dp)) {
             section.tiles.forEach { tile -> card(tile) }
@@ -257,7 +256,6 @@ private fun MosaicCard(
     starred: (DocumentDto) -> Boolean,
     onClick: (DocumentDto) -> Unit,
     onLongClick: (DocumentDto) -> Unit,
-    picture: TilePicture,
 ) {
     // Tiles bigger than one cell would upscale the MD thumbnail visibly — pull the LG source instead.
     val thumbnailSize = if (maxOf(tile.width, tile.height) > LARGE_TILE_DP) ThumbnailSize.LG else GRID_THUMBNAIL_SIZE
@@ -268,7 +266,6 @@ private fun MosaicCard(
         onLongClick = { onLongClick(tile.doc) },
         thumbnailSize = thumbnailSize,
         isStarred = starred(tile.doc),
-        picture = picture,
         modifier = Modifier.width(tile.width.dp).height(tile.height.dp),
     )
 }
