@@ -1,12 +1,14 @@
 package com.reverie.app.data.backup
 
 import androidx.datastore.core.DataMigration
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /** How the backup settings are laid out in their preferences file. */
@@ -17,6 +19,8 @@ internal object BackupKeys {
     val folderName = stringPreferencesKey("folder_name")
     val addedAfter = longPreferencesKey("added_after")
     val albumFolders = stringPreferencesKey("album_folders")
+    val albumProblems = stringPreferencesKey("album_problems")
+    val knownAlbums = stringSetPreferencesKey("known_albums")
     val folderNotice = stringPreferencesKey("folder_notice")
     val wifiOnly = booleanPreferencesKey("wifi_only")
     val lastSuccessAt = longPreferencesKey("last_success_at")
@@ -27,11 +31,13 @@ internal object BackupKeys {
 
 internal fun toBackupSettings(prefs: Preferences) = BackupSettings(
     enabled = prefs[BackupKeys.enabled] ?: false,
-    bucketIds = prefs[BackupKeys.bucketIds]?.mapNotNull { it.toLongOrNull() }?.toSet(),
+    bucketIds = prefs.ids(BackupKeys.bucketIds),
     folderId = prefs[BackupKeys.folderId],
     folderName = prefs[BackupKeys.folderName],
     addedAfter = prefs[BackupKeys.addedAfter],
     albumFolders = prefs.albumFolders(),
+    albumProblems = prefs.albumProblems(),
+    knownAlbums = prefs.ids(BackupKeys.knownAlbums),
     folderNotice = prefs[BackupKeys.folderNotice],
     wifiOnly = prefs[BackupKeys.wifiOnly] ?: true,
     lastSuccessAt = prefs[BackupKeys.lastSuccessAt],
@@ -39,8 +45,27 @@ internal fun toBackupSettings(prefs: Preferences) = BackupSettings(
     libraryKey = prefs[BackupKeys.libraryKey],
 )
 
+/** The bucket ids stored under [key]; null when nothing is. */
+internal fun Preferences.ids(key: Preferences.Key<Set<String>>): Set<Long>? =
+    this[key]?.mapNotNull { it.toLongOrNull() }?.toSet()
+
+internal fun MutablePreferences.putIds(key: Preferences.Key<Set<String>>, ids: Set<Long>) {
+    this[key] = ids.map(Long::toString).toSet()
+}
+
 internal fun Preferences.albumFolders(): Map<Long, AlbumFolder> =
     this[BackupKeys.albumFolders]?.let { Json.decodeFromString<Map<Long, AlbumFolder>>(it) }.orEmpty()
+
+internal fun MutablePreferences.putAlbumFolders(folders: Map<Long, AlbumFolder>) {
+    this[BackupKeys.albumFolders] = Json.encodeToString(folders)
+}
+
+internal fun Preferences.albumProblems(): Map<Long, AlbumBlock> =
+    this[BackupKeys.albumProblems]?.let { Json.decodeFromString<Map<Long, AlbumBlock>>(it) }.orEmpty()
+
+internal fun MutablePreferences.putAlbumProblems(problems: Map<Long, AlbumBlock>) {
+    this[BackupKeys.albumProblems] = Json.encodeToString(problems)
+}
 
 private const val SETTINGS_VERSION = 1
 

@@ -59,6 +59,10 @@ data class BackupActions(
     val onIncludeExisting: () -> Unit = {},
     val onWifiOnly: (Boolean) -> Unit = {},
     val onToggleAlbum: (Long) -> Unit = {},
+    val onPickAlbumFolder: (Long) -> Unit = {},
+    val onResetAlbumFolder: (Long) -> Unit = {},
+    val onBackUpNewAlbum: (Long) -> Unit = {},
+    val onDismissNewAlbum: (Long) -> Unit = {},
 )
 
 @Composable
@@ -86,6 +90,10 @@ fun BackupSettingsScreen(
             onIncludeExisting = { askingAgain = true },
             onWifiOnly = viewModel::setWifiOnly,
             onToggleAlbum = viewModel::toggleAlbum,
+            onPickAlbumFolder = viewModel::pickAlbumFolder,
+            onResetAlbumFolder = viewModel::resetAlbumFolder,
+            onBackUpNewAlbum = viewModel::backUpNewAlbum,
+            onDismissNewAlbum = viewModel::dismissNewAlbum,
         ),
     )
 
@@ -129,9 +137,16 @@ fun BackupSettingsContent(state: BackupUiState, actions: BackupActions) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PermissionNotice(state, onAllow = actions.onAllow)
+            state.newAlbums.forEach { album ->
+                NewAlbumNotice(
+                    album,
+                    onBackUp = { actions.onBackUpNewAlbum(album.bucketId) },
+                    onDismiss = { actions.onDismissNewAlbum(album.bucketId) },
+                )
+            }
             StatusCard(state, actions)
             BackupOptionsCard(state, actions)
-            AlbumsCard(state, actions.onToggleAlbum)
+            AlbumsCard(state, actions)
         }
     }
 }

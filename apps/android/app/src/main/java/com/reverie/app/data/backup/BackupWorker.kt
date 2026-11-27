@@ -83,6 +83,7 @@ class BackupWorker @AssistedInject constructor(
             userInitiated = userInitiated,
             includeParked = userInitiated && foreground,
             wasStoppedByTimeout = ::wasStoppedByTimeout,
+            seesAllMedia = applicationContext.mediaAccess() == MediaAccess.Full,
         )
         val result = try {
             runner.run(request)

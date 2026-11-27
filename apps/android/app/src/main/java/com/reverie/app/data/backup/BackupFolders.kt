@@ -9,20 +9,55 @@ const val DEFAULT_BACKUP_FOLDER = "Phone backup"
 
 private const val MAX_FOLDER_NAME = 255
 
+/** The folder of album [bucketId] takes no uploads, as its [AlbumBlock] records: the album waits, the others go on. */
+class AlbumBlocked(bucketId: Long) : Exception("Album folder refused uploads: $bucketId")
+
 /**
- * Where each album's files are uploaded: a subfolder of the backup folder named after the album. The
- * phone remembers it by id, so renaming it in Reverie doesn't lead to a second one. Folders are made
- * when first needed, and again when the server says they are gone.
+ * Where each album's files are uploaded: the folder the user chose for it, or else a subfolder of the
+ * backup folder named after the album. The phone remembers it by id, so renaming it in Reverie doesn't
+ * lead to a second one. Subfolders are made when first needed, and again when the server says they are
+ * gone; a chosen folder is never replaced.
  */
 @Singleton
 class BackupFolders @Inject constructor(
     private val settings: BackupSettingsRepository,
     private val transport: BackupTransport,
 ) {
-    /** The folder [bucketId]'s files go into. Throws [ReverieApiException] when it can't be made. */
-    suspend fun folderFor(bucketId: Long, albumName: String): String {
+    /**
+     * Calls [use] with the folder [bucketId]'s files go into. A folder that is locked, or a chosen one that is
+     * gone, is recorded against the album and throws [AlbumBlocked]; a subfolder that is gone is made again and
+     * [use] tried once more. Otherwise throws [ReverieApiException].
+     */
+    suspend fun <T> useFolder(bucketId: Long, albumName: String, use: suspend (folderId: String) -> T): T {
+        val folder = folderFor(bucketId, albumName)
+        return try {
+            blockingIfLocked(bucketId, folder.folderId) { use(folder.folderId) }
+        } catch (e: ReverieApiException.Http) {
+            if (e.statusCode != 404) throw e
+            if (folder.isChosen) block(bucketId, folder.folderId, AlbumProblem.Gone)
+            settings.forgetAlbumFolder(bucketId, folder.folderId)
+            val remade = folderFor(bucketId, albumName).folderId
+            blockingIfLocked(bucketId, remade) { use(remade) }
+        }
+    }
+
+    /**
+     * Makes sure [bucketId] has a folder. One the user chose, or one that refused uploads before, is also looked
+     * up on the server, so a problem shows without anything to upload and clears once it is over. Throws like [useFolder].
+     */
+    suspend fun check(bucketId: Long, albumName: String) = useFolder(bucketId, albumName) { folderId ->
         val current = settings.current()
-        current.albumFolder(bucketId)?.let { return it.folderId }
+        val inDoubt = current.albumFolder(bucketId)?.isChosen == true || bucketId in current.albumProblems
+        if (!inDoubt) return@useFolder
+        // The server describes a locked folder itself, rather than refusing the request.
+        if (transport.fetchFolder(folderId).locked) block(bucketId, folderId, AlbumProblem.Locked)
+        settings.clearAlbumProblem(bucketId)
+    }
+
+    /** The folder in force for [bucketId], made first if there is none. Throws like [useFolder]. */
+    suspend fun folderFor(bucketId: Long, albumName: String): AlbumFolder {
+        val current = settings.current()
+        current.albumFolder(bucketId)?.let { return it }
         val backupFolder = current.folderId ?: makeBackupFolder(replacing = null, notice = null)
         val name = toFolderName(albumName)
         return try {
@@ -35,18 +70,26 @@ class BackupFolders @Inject constructor(
         }
     }
 
-    /** Drops [folderId] as [bucketId]'s folder, because the server says it is gone. */
-    suspend fun forget(bucketId: Long, folderId: String) = settings.forgetAlbumFolder(bucketId, folderId)
-
     private suspend fun makeBackupFolder(replacing: String?, notice: String?): String {
         val id = findOrCreate(DEFAULT_BACKUP_FOLDER, parentId = null)
         return settings.adoptBackupFolder(id, DEFAULT_BACKUP_FOLDER, replacing, notice)
     }
 
-    private suspend fun makeAlbumFolder(bucketId: Long, name: String, backupFolder: String): String {
-        val id = findOrCreate(name, backupFolder)
-        settings.setAlbumFolder(bucketId, AlbumFolder(id, name, madeIn = backupFolder))
-        return id
+    private suspend fun makeAlbumFolder(bucketId: Long, name: String, backupFolder: String): AlbumFolder {
+        val id = blockingIfLocked(bucketId, backupFolder) { findOrCreate(name, backupFolder) }
+        return settings.adoptAlbumFolder(bucketId, AlbumFolder(id, name, madeIn = backupFolder))
+    }
+
+    private suspend fun <T> blockingIfLocked(bucketId: Long, folderId: String, call: suspend () -> T): T = try {
+        call()
+    } catch (e: ReverieApiException.Http) {
+        if (!isFolderLocked(e)) throw e
+        block(bucketId, folderId, AlbumProblem.Locked)
+    }
+
+    private suspend fun block(bucketId: Long, folderId: String, problem: AlbumProblem): Nothing {
+        settings.setAlbumProblem(bucketId, AlbumBlock(folderId, problem))
+        throw AlbumBlocked(bucketId)
     }
 
     /**

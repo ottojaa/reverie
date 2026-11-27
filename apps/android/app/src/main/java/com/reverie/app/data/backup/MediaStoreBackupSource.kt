@@ -128,6 +128,9 @@ class MediaStoreBackupTransport @Inject constructor(
     override suspend fun listFolders(parentId: String?): List<FolderDto> =
         reportingNetwork { foldersApi.children(parentId) }
 
+    override suspend fun fetchFolder(folderId: String): FolderDto =
+        reportingNetwork { foldersApi.get(folderId) }
+
     private suspend fun <T> reportingNetwork(call: suspend () -> T): T = try {
         call()
     } catch (e: IOException) {

@@ -12,10 +12,19 @@ data class AlbumFolder(
     val name: String,
     /**
      * The backup folder this subfolder was made in; the entry holds only while that is still the backup folder.
-     * Null holds whatever the backup folder is.
+     * Null is a folder the user chose for the album, which holds whatever the backup folder is.
      */
     val madeIn: String? = null,
-)
+) {
+    val isChosen: Boolean get() = madeIn == null
+}
+
+/** Why an album's folder takes no uploads. */
+enum class AlbumProblem { Gone, Locked }
+
+/** The folder [folderId] refused an album's uploads. */
+@Serializable
+data class AlbumBlock(val folderId: String, val problem: AlbumProblem)
 
 data class BackupSettings(
     val enabled: Boolean = false,
@@ -31,6 +40,13 @@ data class BackupSettings(
     val addedAfter: Long? = null,
     /** Each album's folder by bucket id; read it through [albumFolder]. */
     val albumFolders: Map<Long, AlbumFolder> = emptyMap(),
+    /** What each album's last refusal was, by bucket id; read it through [albumProblem]. */
+    val albumProblems: Map<Long, AlbumBlock> = emptyMap(),
+    /**
+     * The albums the user has had a chance to tick; any other is new to them. Null until the phone's albums
+     * have been looked at once.
+     */
+    val knownAlbums: Set<Long>? = null,
     /** Something backup did on its own that the user should know about, until they dismiss it. */
     val folderNotice: String? = null,
     val wifiOnly: Boolean = true,
@@ -49,5 +65,17 @@ data class BackupSettings(
 
     /** The folder stored for [bucketId], if it still holds. */
     fun albumFolder(bucketId: Long): AlbumFolder? =
-        albumFolders[bucketId]?.takeIf { it.madeIn == null || it.madeIn == folderId }
+        albumFolders[bucketId]?.takeIf { it.isChosen || it.madeIn == folderId }
+
+    /**
+     * What stands in the way of backing up [bucketId]. A refusal counts only while the album is backed up
+     * and would still upload into the folder that refused: its own, or else under the backup folder.
+     */
+    fun albumProblem(bucketId: Long): AlbumProblem? {
+        val block = albumProblems[bucketId] ?: return null
+        val target = albumFolder(bucketId)?.folderId ?: folderId
+        return block.problem.takeIf { bucketId in bucketIds.orEmpty() && block.folderId == target }
+    }
+
+    val hasAlbumProblem: Boolean get() = albumProblems.keys.any { albumProblem(it) != null }
 }

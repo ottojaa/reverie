@@ -103,6 +103,19 @@ class BackupStatusTest {
         assertEquals(BackupStatus.NeedsAttention, phone.status)
     }
 
+    @Test fun `an album whose folder takes no uploads needs attention for as long as it points there`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val blocked = ready.copy(folderId = "backup", albumProblems = mapOf(1L to AlbumBlock("backup", AlbumProblem.Locked)))
+            val phone = watch { settings.value = blocked }
+            assertEquals(BackupStatus.NeedsAttention, phone.status)
+
+            phone.settings.value = blocked.copy(folderId = "another")
+            assertEquals(BackupStatus.Complete, phone.status)
+
+            phone.settings.value = blocked.copy(bucketIds = setOf(9L))
+            assertEquals(BackupStatus.Complete, phone.status)
+        }
+
     @Test fun `photos that cannot be read are not called backed up`() = runTest(UnconfinedTestDispatcher()) {
         val phone = watch { isUnreadable = true }
 

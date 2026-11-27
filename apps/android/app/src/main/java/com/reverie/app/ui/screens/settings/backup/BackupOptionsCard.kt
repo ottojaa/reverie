@@ -28,7 +28,8 @@ internal fun BackupOptionsCard(state: BackupUiState, actions: BackupActions) {
         ActionRow(
             icon = Icons.Outlined.Folder,
             title = "Backup folder",
-            description = "${state.destinations.backupFolder}\nEach album gets its own folder in it. Changing it affects new uploads only.",
+            description = "${state.destinations.backupFolder}\n" +
+                "Each album gets its own folder in it, unless you choose one for it. Changing it affects new uploads only.",
             action = "Change",
             onClick = actions.onPickFolder,
         )
