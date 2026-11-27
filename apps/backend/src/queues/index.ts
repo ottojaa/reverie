@@ -22,6 +22,7 @@ export { getEmbedQueue, addEmbedJob, addEmbedBackfillJob, closeEmbedQueue, EMBED
 // Transcode Queue
 export {
     getTranscodeQueue,
+    getBackgroundTranscodeQueue,
     addTranscodeJob,
     addTranscodeBackfillJob,
     closeTranscodeQueue,
@@ -29,6 +30,9 @@ export {
     type TranscodeJobData,
     type TranscodeBackfillData,
 } from './transcode.queue';
+
+// A document's processing lane
+export { promoteToNormal } from './lane';
 
 // Trim Queue
 export { getTrimQueue, addTrimJob, closeTrimQueue, type TrimJobData, type TrimJobResult } from './trim.queue';

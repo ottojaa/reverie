@@ -1,4 +1,4 @@
-import { Job, Worker } from 'bullmq';
+import { Job, Worker, type Processor } from 'bullmq';
 import { env } from '../config/env';
 import { db } from '../db/kysely';
 import { getJobService } from '../jobs/job.service';
@@ -12,7 +12,7 @@ import { isTranscodePipelineBusy, runTranscodeBackfillPage, type TranscodeBackfi
 import { getCapabilities } from '../transcode/capabilities';
 import { queueTranscode } from '../transcode/queue-transcode';
 import { setTranscodeStatus } from '../transcode/repository';
-import { runFfmpeg } from '../transcode/ffmpeg-run';
+import { createFfmpegRunner, runFfmpeg } from '../transcode/ffmpeg-run';
 import { transcodeDocument, type TranscodeDeps } from '../transcode/service';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
@@ -20,6 +20,8 @@ const logger = createWorkerLogger('Transcode');
 
 /** After a pass over the library finds nothing left, look again this often: it catches a video whose job was lost. */
 const RECONCILE_MS = 60 * 60 * 1000;
+
+type TranscodeQueueName = typeof QUEUE_NAMES.TRANSCODE | typeof QUEUE_NAMES.TRANSCODE_BACKGROUND;
 
 function toDeps(): TranscodeDeps {
     return {
@@ -31,6 +33,11 @@ function toDeps(): TranscodeDeps {
     };
 }
 
+/** A background encode yields the CPU to everything else on the server and keeps to a few threads. */
+function toBackgroundDeps(): TranscodeDeps {
+    return { ...toDeps(), runFfmpeg: createFfmpegRunner(env.TRANSCODE_BACKGROUND_NICE), threads: env.TRANSCODE_BACKGROUND_THREADS };
+}
+
 /** True on the final try of a job that has more than one (`attemptsMade` counts the tries already used up). */
 export function isLastAttempt(job: Pick<Job, 'attemptsMade' | 'opts'>): boolean {
     const attempts = job.opts.attempts ?? 1;
@@ -38,7 +45,7 @@ export function isLastAttempt(job: Pick<Job, 'attemptsMade' | 'opts'>): boolean 
     return attempts > 1 && job.attemptsMade >= attempts - 1;
 }
 
-async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<unknown> {
+async function processTranscodeJob(job: Job<TranscodeJobData>, deps: TranscodeDeps): Promise<unknown> {
     const { documentId, userId } = job.data;
 
     // On the last of several attempts the encode takes the plain CPU path (see `TranscodeOptions.safeMode`).
@@ -47,7 +54,7 @@ async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<unknown>
     return processJobWithTracking(
         job,
         () =>
-            transcodeDocument(toDeps(), documentId, (percent) => publishJobProgress(job.id!, percent, documentId, undefined, userId, 'transcode'), {
+            transcodeDocument(deps, documentId, (percent) => publishJobProgress(job.id!, percent, documentId, undefined, userId, 'transcode'), {
                 safeMode,
             }),
         { jobType: 'transcode' },
@@ -125,15 +132,9 @@ export async function markFailedWhenFinal(job: Job<TranscodeJobData> | undefined
     });
 }
 
-export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBackfillData> {
-    const worker = new Worker<TranscodeJobData | TranscodeBackfillData>(
-        QUEUE_NAMES.TRANSCODE,
-        (job, token) =>
-            job.name === TRANSCODE_JOBS.BACKFILL
-                ? processBackfill(job as Job<TranscodeBackfillData>, token)
-                : processTranscodeJob(job as Job<TranscodeJobData>),
-        { connection: getRedisConnectionOptions(), concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.TRANSCODE] },
-    );
+function startWorker(queueName: TranscodeQueueName, processor: Processor<TranscodeJobData | TranscodeBackfillData>) {
+    const concurrency = QUEUE_CONCURRENCY[queueName];
+    const worker = new Worker(queueName, processor, { connection: getRedisConnectionOptions(), concurrency });
 
     worker.on('failed', (job, error) => {
         logger.error('Transcode job failed', error, { jobId: job?.id, name: job?.name });
@@ -144,6 +145,18 @@ export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBack
         logger.error('Worker error', error);
     });
 
+    logger.info('Transcode worker started', { queue: queueName, concurrency });
+
+    return worker;
+}
+
+export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBackfillData> {
+    const worker = startWorker(QUEUE_NAMES.TRANSCODE, (job, token) =>
+        job.name === TRANSCODE_JOBS.BACKFILL
+            ? processBackfill(job as Job<TranscodeBackfillData>, token)
+            : processTranscodeJob(job as Job<TranscodeJobData>, toDeps()),
+    );
+
     // Detected once and logged, before the first job needs it.
     void getCapabilities();
 
@@ -151,7 +164,10 @@ export function createTranscodeWorker(): Worker<TranscodeJobData | TranscodeBack
         logger.error('Failed to queue the transcode backfill', error instanceof Error ? error : new Error(String(error)));
     });
 
-    logger.info('Transcode worker started', { concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.TRANSCODE] });
-
     return worker;
+}
+
+/** The background lane's own slot: it runs beside the normal worker, so a long background encode holds no normal video up. */
+export function createBackgroundTranscodeWorker(): Worker<TranscodeJobData | TranscodeBackfillData> {
+    return startWorker(QUEUE_NAMES.TRANSCODE_BACKGROUND, (job) => processTranscodeJob(job as Job<TranscodeJobData>, toBackgroundDeps()));
 }

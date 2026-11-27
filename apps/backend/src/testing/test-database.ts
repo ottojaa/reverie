@@ -69,7 +69,7 @@ function findPostgresBinDir(): string | null {
     return candidates.sort().at(-1) ?? null;
 }
 
-async function findFreePort(): Promise<number> {
+export async function findFreePort(): Promise<number> {
     return new Promise((resolve, reject) => {
         const server = createServer();
 

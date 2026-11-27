@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
     TRASH: 'trash-queue',
     EMBED: 'embed-queue',
     TRANSCODE: 'transcode-queue',
+    TRANSCODE_BACKGROUND: 'transcode-background',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -37,4 +38,5 @@ export const QUEUE_CONCURRENCY = {
     [QUEUE_NAMES.TRIM]: env.JOB_CONCURRENCY_TRIM,
     [QUEUE_NAMES.EMBED]: env.JOB_CONCURRENCY_EMBED,
     [QUEUE_NAMES.TRANSCODE]: env.JOB_CONCURRENCY_TRANSCODE,
+    [QUEUE_NAMES.TRANSCODE_BACKGROUND]: env.JOB_CONCURRENCY_TRANSCODE_BACKGROUND,
 };

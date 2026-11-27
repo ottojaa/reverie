@@ -30,6 +30,7 @@ import { z } from 'zod';
 import { db } from '../../db/kysely';
 import { checkLlmEligibility } from '../../llm/eligibility';
 import { isVisionSwitchedOn } from '../../llm/provider-config';
+import { promoteToNormal } from '../../queues/lane';
 import { addLlmJob } from '../../queues/llm.queue';
 import { addOcrJob } from '../../queues/ocr.queue';
 import { addTrimJob } from '../../queues/trim.queue';
@@ -537,6 +538,7 @@ export default async function (fastify: FastifyInstance) {
                 priority: 5,
             });
 
+            await promoteToNormal(document.id);
             await addTrimJob(
                 {
                     documentId: document.id,
@@ -769,6 +771,7 @@ export default async function (fastify: FastifyInstance) {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            await promoteToNormal(request.params.id);
             await addOcrJob(
                 {
                     documentId: request.params.id,
@@ -858,6 +861,7 @@ export default async function (fastify: FastifyInstance) {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            await promoteToNormal(request.params.id);
             await addOcrJob(
                 {
                     documentId: request.params.id,
@@ -961,6 +965,7 @@ export default async function (fastify: FastifyInstance) {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            await promoteToNormal(request.params.id);
             await addLlmJob(
                 {
                     documentId: request.params.id,
@@ -1050,6 +1055,7 @@ export default async function (fastify: FastifyInstance) {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            await promoteToNormal(request.params.id);
             await addLlmJob(
                 {
                     documentId: request.params.id,
@@ -1144,6 +1150,7 @@ export default async function (fastify: FastifyInstance) {
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
+                await promoteToNormal(documentId);
                 await addLlmJob(
                     {
                         documentId,

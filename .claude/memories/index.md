@@ -124,3 +124,8 @@ Format each entry as a short dated bullet:
 ## Listing order
 
 - `2026-11-27` — **A document listing's order is a contract between backend and Android.** `GET /documents?sort=name|size` (`document-list-filters.ts`) and the phone's `FeedOrder.kt` must rank rows identically, because `BrowseFeedModel` holds cached rows back by comparing them with the last page's furthest key: a different order drops or misplaces rows across pages. Name order is `lower(original_filename COLLATE "C"), id` (only A–Z fold, compared by code point) so it does not depend on the server's locale. `libs/shared/src/fixtures/name-order.json` is read by both test suites; change the two sides together.
+
+## Processing lanes
+
+- `2026-11-27` — **A document's `processing_lane` decides how urgent its jobs are, and only the queue layer knows the numbers** (`queues/lane.ts`). (1) Add every document job through its `add*Job`: that is where a `background` document gets its priority (and, for transcode, its own queue), so an enqueuer never passes a lane, and a `queue.add` around it jumps the line. (2) A user's own action on a document (reprocess, trim, save-over) calls `promoteToNormal` before it queues. (3) A live priority number must stay below `BACKGROUND_PRIORITY`. (4) Anything that counts transcode work has to count both transcode queues. (5) The two transcode queues can encode identical content at once, so the store step runs one at a time per content hash.
+- `2026-11-27` — **A deploy serves the new code before it migrates** (`scripts/deploy.sh`), with the workers running. Code that reads a column added in the same change must cope with it being absent for those seconds: `selectAll` and a default, and no unconditional write to it.

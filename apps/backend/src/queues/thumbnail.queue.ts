@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq';
+import { toLaneJob } from './lane';
 import { getRedisConnectionOptions } from './redis';
 import { QUEUE_NAMES, DEFAULT_JOB_OPTIONS } from './queue.config';
 
@@ -38,10 +39,8 @@ export function getThumbnailQueue(): Queue {
 
 export async function addThumbnailJob(data: ThumbnailJobData, jobId: string): Promise<void> {
     const queue = getThumbnailQueue();
-    await queue.add('generate-thumbnail', data, {
-        jobId,
-        priority: 10, // Higher priority than OCR
-    });
+    const { options } = await toLaneJob(data.documentId, { jobId, priority: 10 });
+    await queue.add('generate-thumbnail', data, options);
 }
 
 export async function closeThumbnailQueue(): Promise<void> {

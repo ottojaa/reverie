@@ -179,6 +179,39 @@ describeDb('video transcoding', () => {
             expect(await statusOf(second)).toBe('complete');
         });
 
+        it('stores the set once when the same content encodes in both transcode lanes at the same time', async () => {
+            const first = await seedVideo({ hash: 'both-lanes' });
+            const second = await seedVideo({ hash: 'both-lanes', name: 'manual.mov' });
+            const written: string[] = [];
+            const { writeFile: write } = storage;
+            let started = 0;
+
+            let release = () => {};
+
+            const bothStarted = new Promise<void>((resolve) => (release = resolve));
+
+            // Neither encode finishes before the other has started, so neither finds a stored set at the start.
+            const runFfmpeg: TranscodeDeps['runFfmpeg'] = async (args, onSeconds) => {
+                if (++started === 2) release();
+
+                await bothStarted;
+                await ffmpeg.run(args, onSeconds);
+            };
+
+            storage.writeFile = async (path, buffer) => {
+                written.push(path);
+                await write(path, buffer);
+            };
+
+            const results = await Promise.all([first, second].map((id) => transcodeDocument({ ...deps, runFfmpeg }, id, async () => {})));
+
+            expect(ffmpeg.runs).toHaveLength(2);
+            expect(results.map((result) => result.shared).sort()).toEqual([false, true]);
+            expect(written).toHaveLength(FILES_PER_SET);
+            expect((await findTranscodeSet(db, 'both-lanes'))?.files).toHaveLength(FILES_PER_SET);
+            expect([await statusOf(first), await statusOf(second)]).toEqual(['complete', 'complete']);
+        });
+
         it('encodes again when the set row exists but its files are gone', async () => {
             const first = await seedVideo({ hash: 'lost-files' });
             const second = await seedVideo({ hash: 'lost-files', name: 'again.mov' });

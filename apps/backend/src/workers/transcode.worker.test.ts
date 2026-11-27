@@ -2,7 +2,11 @@ import { DelayedError, type Job } from 'bullmq';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const counts = vi.hoisted(
-    () => ({ ocr: {}, thumbnail: {}, llm: {}, transcode: {} }) as Record<'ocr' | 'thumbnail' | 'llm' | 'transcode', Record<string, number>>,
+    () =>
+        ({ ocr: {}, thumbnail: {}, llm: {}, transcode: {}, backgroundTranscode: {} }) as Record<
+            'ocr' | 'thumbnail' | 'llm' | 'transcode' | 'backgroundTranscode',
+            Record<string, number>
+        >,
 );
 const setStatus = vi.hoisted(() => vi.fn());
 const markJobFailed = vi.hoisted(() => vi.fn());
@@ -16,6 +20,7 @@ vi.mock('../queues/llm.queue', () => ({ getLlmQueue: () => ({ getJobCounts: asyn
 vi.mock('../queues/transcode.queue', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../queues/transcode.queue')>()),
     getTranscodeQueue: () => ({ getJobCounts: async () => counts.transcode }),
+    getBackgroundTranscodeQueue: () => ({ getJobCounts: async () => counts.backgroundTranscode }),
 }));
 vi.mock('../transcode/repository', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../transcode/repository')>()),
@@ -30,6 +35,7 @@ describe('isTranscodePipelineBusy', () => {
         counts.ocr = { waiting: 0, prioritized: 0, active: 0 };
         counts.thumbnail = { waiting: 0, prioritized: 0, active: 0 };
         counts.llm = { waiting: 0, prioritized: 0, active: 0 };
+        counts.backgroundTranscode = { waiting: 0, prioritized: 0, active: 0 };
         // The backfill job is itself the one active job in the transcode queue.
         counts.transcode = { waiting: 0, prioritized: 0, active: 1 };
     });
@@ -38,7 +44,7 @@ describe('isTranscodePipelineBusy', () => {
         expect(await isTranscodePipelineBusy()).toBe(false);
     });
 
-    it.each(['ocr', 'thumbnail', 'llm'] as const)('holds the backfill back for %s work in any live state', async (queue) => {
+    it.each(['ocr', 'thumbnail', 'llm', 'backgroundTranscode'] as const)('holds the backfill back for %s work in any live state', async (queue) => {
         for (const state of ['waiting', 'prioritized', 'active']) {
             counts[queue] = { waiting: 0, prioritized: 0, active: 0, [state]: 1 };
 

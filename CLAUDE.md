@@ -37,7 +37,7 @@ Self-hosted Google Drive-like app with OCR and LLM capabilities for organizing a
 - `yarn lint` — runs both **lint and typecheck** (`nx run-many -t lint typecheck`).
 - `yarn lint:fix` — eslint autofix.
 - `yarn format` / `yarn format:check` — Prettier via `nx format:write` / `nx format:check`.
-- Backend database tests need Postgres **with pgvector** (migration 017 runs `CREATE EXTENSION vector`): set `TEST_DATABASE_URL` to the compose postgres (`docker compose up -d postgres`, built from `docker/postgres`), or have an `initdb` whose Postgres has pgvector installed, and the harness starts a throwaway cluster. The harness checks `pg_available_extensions` first and fails with a message saying pgvector is missing. `SKIP_DB_TESTS=1` skips them on purpose; without any of these they fail.
+- Backend database tests need Postgres **with pgvector** (migration 017 runs `CREATE EXTENSION vector`): set `TEST_DATABASE_URL` to the compose postgres (`docker compose up -d postgres`, built from `docker/postgres`), or have an `initdb` whose Postgres has pgvector installed, and the harness starts a throwaway cluster. The harness checks `pg_available_extensions` first and fails with a message saying pgvector is missing. `SKIP_DB_TESTS=1` skips them on purpose; without any of these they fail. The queue tests also start their own `redis-server` (it must be on PATH; `SKIP_DB_TESTS=1` skips them too).
 - `reverie-ml` (Python) tests: `nx test reverie-ml` (CPU, stub models, no downloads); the model eval is `python -m eval.run_eval` inside `apps/reverie-ml` (downloads the models).
 - Only run tests/typecheck/lint when it's relevant to the change or the user asks — don't run them reflexively after every edit.
 

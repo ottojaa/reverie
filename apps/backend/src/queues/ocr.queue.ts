@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq';
+import { toLaneJob } from './lane';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 import { getRedisConnectionOptions } from './redis';
 import type { DocumentCategory } from '../ocr/types';
@@ -38,10 +39,8 @@ export function getOcrQueue(): Queue {
 
 export async function addOcrJob(data: OcrJobData, jobId: string): Promise<void> {
     const queue = getOcrQueue();
-    await queue.add('process-ocr', data, {
-        jobId,
-        priority: 0,
-    });
+    const { options } = await toLaneJob(data.documentId, { jobId, priority: 0 });
+    await queue.add('process-ocr', data, options);
 }
 
 export async function closeOcrQueue(): Promise<void> {

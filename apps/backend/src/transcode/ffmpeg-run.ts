@@ -18,10 +18,20 @@ export function toProgressSeconds(line: string): number | null {
 
 export type FfmpegRunner = (args: string[], onSeconds: (seconds: number) => void) => Promise<void>;
 
-/** Runs ffmpeg, reporting how far into the source it has got. Rejects with the end of ffmpeg's error output. */
-export const runFfmpeg: FfmpegRunner = (args, onSeconds) =>
-    new Promise((resolve, reject) => {
-        const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+/**
+ * What to spawn to run ffmpeg. With a nice level it starts under `nice`, so every thread it creates has the lowered
+ * priority (on Linux, renicing the process afterwards leaves its threads as they were). `nice` replaces itself with
+ * ffmpeg, so the process spawned is still the one to signal.
+ */
+export function toFfmpegCommand(args: string[], niceLevel?: number): { command: string; args: string[] } {
+    if (niceLevel === undefined) return { command: 'ffmpeg', args };
+
+    return { command: 'nice', args: ['-n', String(niceLevel), 'ffmpeg', ...args] };
+}
+
+function spawnAndWatch(command: string, args: string[], onSeconds: (seconds: number) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
         let stderr = '';
         let pending = '';
         let stalled = false;
@@ -67,3 +77,15 @@ export const runFfmpeg: FfmpegRunner = (args, onSeconds) =>
             reject(new Error((stalled ? 'ffmpeg stalled and was stopped: ' : 'ffmpeg failed: ') + stderr.trim()));
         });
     });
+}
+
+/** Runs ffmpeg, reporting how far into the source it has got. Rejects with the end of ffmpeg's error output. */
+export function createFfmpegRunner(niceLevel?: number): FfmpegRunner {
+    return (args, onSeconds) => {
+        const spawned = toFfmpegCommand(args, niceLevel);
+
+        return spawnAndWatch(spawned.command, spawned.args, onSeconds);
+    };
+}
+
+export const runFfmpeg = createFfmpegRunner();

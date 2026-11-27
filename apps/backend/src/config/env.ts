@@ -165,6 +165,12 @@ const envSchema = z.object({
     JOB_CONCURRENCY_EMBED: z.coerce.number().int().positive().default(1),
     // One encode at a time: it saturates the CPU or the card's encoder, and the 52-video library is a one-off.
     JOB_CONCURRENCY_TRANSCODE: z.coerce.number().int().positive().default(1),
+    /** Videos of background uploads (phone backup) encode in their own lane, beside the normal one. */
+    JOB_CONCURRENCY_TRANSCODE_BACKGROUND: z.coerce.number().int().positive().default(1),
+    /** `nice` level of a background encode's ffmpeg: higher yields more CPU to the rest of the server. */
+    TRANSCODE_BACKGROUND_NICE: z.coerce.number().int().min(0).max(19).default(10),
+    /** ffmpeg threads for a background encode: its decoder, its filters and each rung's encoder. */
+    TRANSCODE_BACKGROUND_THREADS: z.coerce.number().int().positive().default(2),
     // 'auto' uses NVENC when a test encode works, else libx264; 'cpu' never tries NVENC (the card may be busy, or its encoder unwanted).
     TRANSCODE_ENCODER: z.enum(['auto', 'cpu']).default('auto'),
     TRANSCODE_BACKFILL_BATCH: z.coerce.number().int().positive().default(2),

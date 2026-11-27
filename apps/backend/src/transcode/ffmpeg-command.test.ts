@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildFfmpegArgs, toFilterGraph, type CommandInput } from './ffmpeg-command';
 import { toSdrScaleArgs, toToneMap } from './hdr-filters';
-import { toProgressSeconds } from './ffmpeg-run';
+import { toFfmpegCommand, toProgressSeconds } from './ffmpeg-run';
 import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import { parseFfprobe } from '../media/video-probe';
@@ -101,6 +101,36 @@ describe('buildFfmpegArgs', () => {
         const args = buildFfmpegArgs(toInput({}, { width: 640, height: 360 }));
 
         expect(valueOf(args, '-var_stream_map')).toBe('v:0,a:0,name:v360');
+    });
+});
+
+describe('a background encode', () => {
+    it('caps the threads of the decoder, the filter graph and the encoders', () => {
+        const args = buildFfmpegArgs(toInput({ threads: 2 }));
+        const positions = args.flatMap((arg, index) => (arg === '-threads' ? [index] : []));
+
+        expect(positions.map((index) => args[index + 1])).toEqual(['2', '2']);
+        // `-threads` binds to what follows it: one for the input's decoder, one among the output options.
+        expect(positions[0]!).toBeLessThan(args.indexOf('-i'));
+        expect(positions[1]!).toBeGreaterThan(args.indexOf('-c:v'));
+        expect(positions[1]!).toBeLessThan(args.indexOf('-f'));
+        expect(valueOf(args, '-filter_complex_threads')).toBe('2');
+        expect(args.indexOf('-filter_complex_threads')).toBeLessThan(args.indexOf('-filter_complex'));
+    });
+
+    it('adds nothing but the thread caps to the arguments', () => {
+        const capped = buildFfmpegArgs(toInput({ threads: 2 }));
+        const added = capped.flatMap((arg, index) => (['-threads', '-filter_complex_threads'].includes(arg) ? [index, index + 1] : []));
+
+        expect(capped.filter((_, index) => !added.includes(index))).toEqual(buildFfmpegArgs(toInput()));
+    });
+
+    it('starts ffmpeg under nice', () => {
+        expect(toFfmpegCommand(['-i', 'a.mov'], 10)).toEqual({ command: 'nice', args: ['-n', '10', 'ffmpeg', '-i', 'a.mov'] });
+    });
+
+    it('starts a normal encode as ffmpeg itself', () => {
+        expect(toFfmpegCommand(['-i', 'a.mov'])).toEqual({ command: 'ffmpeg', args: ['-i', 'a.mov'] });
     });
 });
 

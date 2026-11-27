@@ -1,4 +1,4 @@
-import { NotFoundError, UploadResponseSchema, ValidationError, type UploadResponse } from '@reverie/shared';
+import { NotFoundError, ProcessingLaneSchema, UploadResponseSchema, ValidationError, type ProcessingLane, type UploadResponse } from '@reverie/shared';
 import { FastifyInstance } from 'fastify';
 import { assertDocumentsOpen } from '../../services/document-access';
 import { loadFolderLocks } from '../../services/folder-locks';
@@ -36,6 +36,7 @@ export default async function (fastify: FastifyInstance) {
                 let sessionId: string | undefined;
                 let conflictStrategy: ConflictStrategy | undefined;
                 let copyMetadataFromDocumentId: string | undefined;
+                let lane: ProcessingLane = 'normal';
 
                 for await (const part of parts) {
                     if (part.type === 'file') {
@@ -51,6 +52,8 @@ export default async function (fastify: FastifyInstance) {
                         if (v === 'replace' || v === 'keep_both') conflictStrategy = v;
                     } else if (part.fieldname === 'copy_metadata_from_document_id' && part.value) {
                         copyMetadataFromDocumentId = String(part.value);
+                    } else if (part.fieldname === 'lane') {
+                        lane = ProcessingLaneSchema.catch('normal').parse(part.value);
                     }
                 }
 
@@ -66,7 +69,7 @@ export default async function (fastify: FastifyInstance) {
 
                 if (copyMetadataFromDocumentId) await assertDocumentsOpen(locks, userId, [copyMetadataFromDocumentId]);
 
-                const result = await uploadService.uploadFiles(files, userId, folderId, sessionId, conflictStrategy, copyMetadataFromDocumentId);
+                const result = await uploadService.uploadFiles(files, userId, folderId, sessionId, conflictStrategy, copyMetadataFromDocumentId, lane);
 
                 return {
                     session_id: result.sessionId,

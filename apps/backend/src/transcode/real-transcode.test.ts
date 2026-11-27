@@ -13,7 +13,7 @@ import { dbProxy } from '../testing/db-proxy.js';
 import { seedDocument, seedUser } from '../testing/seed.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.js';
 import { describeDb } from '../testing/tool-world.js';
-import { runFfmpeg } from './ffmpeg-run';
+import { createFfmpegRunner, runFfmpeg } from './ffmpeg-run';
 import { transcodeDocument, type TranscodeDeps, type TranscodeResult } from './service';
 
 /**
@@ -167,7 +167,11 @@ describeDb('real transcode of synthetic clips', () => {
     });
 
     /** Transcodes a clip through the real pipeline, writes the stored files to disk, and returns where. */
-    async function transcodeClip(name: string, make: (path: string) => void): Promise<{ dir: string; result: TranscodeResult; hash: string }> {
+    async function transcodeClip(
+        name: string,
+        make: (path: string) => void,
+        overrides: Partial<TranscodeDeps> = {},
+    ): Promise<{ dir: string; result: TranscodeResult; hash: string }> {
         const clip = join(workDir, `${name}.mp4`);
         const hash = `hash-${name}`;
 
@@ -182,7 +186,7 @@ describeDb('real transcode of synthetic clips', () => {
             .where('id', '=', id)
             .execute();
 
-        const result = await transcodeDocument(deps(), id, async () => {});
+        const result = await transcodeDocument({ ...deps(), ...overrides }, id, async () => {});
         const dir = join(workDir, `out-${name}`);
 
         for (const [path, buffer] of stored) {
@@ -267,6 +271,17 @@ describeDb('real transcode of synthetic clips', () => {
             const { dir, result } = await transcodeClip('sdr1080', makeSdrClip);
 
             expect(result).toMatchObject({ encoder: 'cpu', toneMap: null, shared: false });
+
+            await expectWellFormedSet(dir, ['1920x1080', '1280x720', '852x480']);
+        },
+        300_000,
+    );
+
+    it.skipIf(!hasFfmpeg)(
+        'makes the same rungs niced and capped to two threads, as a background video is encoded',
+        async () => {
+            const background = { runFfmpeg: createFfmpegRunner(10), threads: 2 };
+            const { dir } = await transcodeClip('sdr1080-background', makeSdrClip, background);
 
             await expectWellFormedSet(dir, ['1920x1080', '1280x720', '852x480']);
         },

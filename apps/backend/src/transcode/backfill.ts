@@ -5,7 +5,7 @@ import { getOcrQueue } from '../queues/ocr.queue';
 import { getThumbnailQueue } from '../queues/thumbnail.queue';
 import { LIVE_JOB_STATUSES, toLiveJobCutoff } from './queue-transcode';
 import { isQueuesBusy } from '../queues/backfill-gate';
-import { getTranscodeQueue } from '../queues/transcode.queue';
+import { getBackgroundTranscodeQueue, getTranscodeQueue } from '../queues/transcode.queue';
 
 export type TranscodeBackfillStep = { kind: 'next'; after: string } | { kind: 'wait' } | { kind: 'done' };
 
@@ -63,5 +63,5 @@ export async function runTranscodeBackfillPage(deps: TranscodeBackfillDeps, afte
 
 /** Thumbnails, OCR, summaries and other transcodes come first: the backfill waits while any has work. */
 export async function isTranscodePipelineBusy(): Promise<boolean> {
-    return isQueuesBusy([getOcrQueue(), getThumbnailQueue(), getLlmQueue()], getTranscodeQueue());
+    return isQueuesBusy([getOcrQueue(), getThumbnailQueue(), getLlmQueue(), getBackgroundTranscodeQueue()], getTranscodeQueue());
 }

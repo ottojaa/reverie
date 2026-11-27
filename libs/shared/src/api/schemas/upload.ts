@@ -2,8 +2,18 @@ import { z } from 'zod';
 import { UuidSchema } from './common.js';
 import { JobSchema } from './jobs.js';
 
+/**
+ * How urgently the server processes a document: every job of a `background` one (a phone's photo backup) waits behind
+ * the jobs of every `normal` one.
+ */
+export const ProcessingLaneSchema = z.enum(['normal', 'background']);
+
+export type ProcessingLane = z.infer<typeof ProcessingLaneSchema>;
+
 export const UploadRequestSchema = z.object({
     folder_id: UuidSchema.optional(),
+    /** Left out, or any other value: `normal`. */
+    lane: ProcessingLaneSchema.optional(),
 });
 
 export type UploadRequest = z.infer<typeof UploadRequestSchema>;
