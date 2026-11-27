@@ -27,6 +27,10 @@ class FoldersApi @Inject constructor(
 
     suspend fun get(id: String): FolderDto = client.get("folders/$id").decode()
 
+    /** The live folders directly inside [parentId]; the top-level ones for null. */
+    suspend fun children(parentId: String?): List<FolderDto> =
+        client.get(if (parentId == null) "folders" else "folders/$parentId/children").decode()
+
     suspend fun create(request: CreateFolderRequest): FolderDto = client.post("folders") {
         contentType(ContentType.Application.Json)
         setBody(request)

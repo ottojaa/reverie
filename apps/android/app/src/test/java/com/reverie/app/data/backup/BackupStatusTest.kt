@@ -12,7 +12,7 @@ import org.junit.Test
 
 class BackupStatusTest {
 
-    private val ready = BackupSettings(enabled = true, bucketIds = setOf(1L), folderId = "camera", folderName = "Camera")
+    private val ready = BackupSettings(enabled = true, bucketIds = setOf(1L), addedAfter = INCLUDE_EXISTING)
 
     private fun photo(id: Long, bucket: Long = 1L) = BackupMedia(id, "$id.jpg", "image/jpeg", 1, bucket)
 
@@ -62,6 +62,15 @@ class BackupStatusTest {
         assertEquals(BackupStatus.Waiting(1), phone.status)
     }
 
+    @Test fun `photos left alone are not waiting`() = runTest(UnconfinedTestDispatcher()) {
+        val phone = watch {
+            settings.value = ready.copy(addedAfter = 100)
+            photos = listOf(photo(3).copy(addedAt = 100), photo(2).copy(addedAt = 99), photo(1))
+        }
+
+        assertEquals(BackupStatus.Waiting(1), phone.status)
+    }
+
     @Test fun `a run shows as running and its uploads as done`() = runTest(UnconfinedTestDispatcher()) {
         val phone = watch { photos = listOf(photo(2), photo(1)) }
 
@@ -77,7 +86,7 @@ class BackupStatusTest {
         val phone = watch { settings.value = ready.copy(enabled = false) }
         assertEquals(BackupStatus.Off, phone.status)
 
-        listOf(ready.copy(folderId = null), ready.copy(bucketIds = null), ready.copy(bucketIds = emptySet())).forEach {
+        listOf(ready.copy(addedAfter = null), ready.copy(bucketIds = null), ready.copy(bucketIds = emptySet())).forEach {
             phone.settings.value = it
             assertEquals(BackupStatus.NotSetUp, phone.status)
         }

@@ -16,16 +16,22 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class BackupRunnerTest {
+    @get:Rule
+    val files = TemporaryFolder()
 
     private val minute = 60_000L
     private var clock = 1_000_000L
@@ -49,9 +55,11 @@ class BackupRunnerTest {
     }
 
     /** The library's answer per hash, plus hooks for the upload and check calls. */
-    private inner class FakeTransport : BackupTransport {
+    private inner class FakeTransport : FakeFolderTransport() {
         val known = mutableMapOf<String, ContentLocation>()
         val uploaded = mutableListOf<Long>()
+        /** The folder each uploaded file went into, as the server names it. */
+        val uploadedTo = mutableMapOf<Long, String?>()
         val checked = mutableListOf<List<CheckContentFile>>()
         var uploadCost = 0L
         var onUpload: suspend (BackupMedia) -> Unit = {}
@@ -69,7 +77,9 @@ class BackupRunnerTest {
 
         override suspend fun upload(media: BackupMedia, folderId: String): String? {
             onUpload(media)
+            if (!server.isLive(folderId)) throw notFound()
             uploaded += media.id
+            uploadedTo[media.id] = server.path(folderId)
             clock += uploadCost
             return "doc-${media.id}"
         }
@@ -78,22 +88,35 @@ class BackupRunnerTest {
     private val dao = FakeDao()
     private val transport = FakeTransport()
 
-    private fun media(id: Long, bucket: Long = 1) = BackupMedia(id, "IMG_$id.jpg", "image/jpeg", 1_000, bucket)
+    private fun media(id: Long, bucket: Long = 1, addedAt: Long = 0) = BackupMedia(
+        id, "IMG_$id.jpg", "image/jpeg", 1_000, bucket,
+        bucketName = if (bucket == 1L) "Camera" else "Album $bucket", addedAt = addedAt,
+    )
 
-    private fun runner(vararg items: BackupMedia) = BackupRunner(FakeSource(items.toList()), transport, dao) { clock }
+    private lateinit var settings: BackupSettingsRepository
+
+    private fun TestScope.runner(vararg items: BackupMedia) = runner(FakeSource(items.toList()))
+
+    private fun TestScope.runner(source: BackupMediaSource, over: BackupTransport = transport): BackupRunner {
+        settings = settingsRepository(files)
+        return BackupRunner(source, over, dao, BackupFolders(settings, over)) { clock }
+    }
 
     private fun request(
         budgetMs: Long = 8 * minute,
         userInitiated: Boolean = false,
         includeParked: Boolean = false,
         timedOut: Boolean = false,
-    ) = BackupRequest(BackupConfig(setOf(1), "dest"), budgetMs, userInitiated, includeParked) { timedOut }
+        buckets: Set<Long> = setOf(1),
+        addedAfter: Long = INCLUDE_EXISTING,
+    ) = BackupRequest(BackupConfig(buckets, addedAfter), budgetMs, userInitiated, includeParked) { timedOut }
 
-    @Test fun `a new file is uploaded to the destination and ledgered`() = runTest {
+    @Test fun `a new file is uploaded into its album's folder and ledgered`() = runTest {
         val result = runner(media(1)).run(request())
 
         assertEquals(PassEnd.Completed, result.end)
         assertEquals(listOf(1L), transport.uploaded)
+        assertEquals("Phone backup/Camera", transport.uploadedTo[1])
         val row = dao.ledger.value.getValue(1)
         assertEquals(BackupLedgerEntity.OUTCOME_UPLOADED, row.outcome)
         assertEquals("doc-1", row.documentId)
@@ -202,7 +225,7 @@ class BackupRunnerTest {
             override suspend fun hash(media: BackupMedia): String? = "same"
         }
 
-        val result = BackupRunner(FakeSource(listOf(media(1), media(2))), twin, dao) { clock }.run(request())
+        val result = runner(FakeSource(listOf(media(1), media(2))), twin).run(request())
 
         assertEquals(listOf(1L), transport.uploaded)
         assertEquals(1, result.uploaded)
@@ -238,6 +261,114 @@ class BackupRunnerTest {
         assertTrue(end.error.contains("signed out"))
         assertEquals(0, result.failed)
         assertTrue(dao.retryRows.value.isEmpty())
+    }
+
+    @Test fun `each album uploads into a folder of its own`() = runTest {
+        runner(media(1, bucket = 1), media(2, bucket = 2), media(3, bucket = 1)).run(request(buckets = setOf(1, 2)))
+
+        assertEquals(
+            mapOf(1L to "Phone backup/Camera", 2L to "Phone backup/Album 2", 3L to "Phone backup/Camera"),
+            transport.uploadedTo,
+        )
+        assertEquals("the backup folder and one per album", 3, transport.server.creates)
+    }
+
+    @Test fun `only new leaves what was there alone, unledgered, until existing media is included`() = runTest {
+        val runner = runner(media(1, addedAt = 99), media(2, addedAt = 100))
+
+        runner.run(request(addedAfter = 100))
+
+        assertEquals(listOf(2L), transport.uploaded)
+        assertTrue(1L !in dao.ledger.value)
+
+        runner.run(request(addedAfter = INCLUDE_EXISTING))
+
+        assertEquals(listOf(2L, 1L), transport.uploaded)
+    }
+
+    @Test fun `a ticked album gets its folder before it has anything to upload, an unticked one none`() = runTest {
+        runner(media(1, addedAt = 1), media(2, bucket = 9, addedAt = 1)).run(request(addedAfter = 100))
+
+        val backup = transport.server.children(null).single()
+        assertEquals("Phone backup", backup.name)
+        assertEquals(listOf("Camera"), transport.server.children(backup.id).map { it.name })
+        assertEquals(emptyList<Long>(), transport.uploaded)
+    }
+
+    @Test fun `an album folder that is gone is made again and the file goes into the new one`() = runTest {
+        val source = FakeSource(listOf(media(1)))
+        val runner = runner(source)
+        runner.run(request())
+        val first = settings.current().albumFolder(1)!!.folderId
+        transport.server.delete(first)
+        source.items = listOf(media(2), media(1))
+
+        val result = runner.run(request())
+
+        assertEquals(PassEnd.Completed, result.end)
+        assertEquals("Phone backup/Camera", transport.uploadedTo[2])
+        assertNotEquals(first, settings.current().albumFolder(1)!!.folderId)
+        assertNull(settings.current().folderNotice)
+    }
+
+    @Test fun `a backup folder that is gone is made again and the status says so`() = runTest {
+        val source = FakeSource(listOf(media(1)))
+        val runner = runner(source)
+        runner.run(request())
+        transport.server.delete(settings.current().folderId!!)
+        source.items = listOf(media(2), media(1))
+
+        val result = runner.run(request())
+
+        assertEquals(PassEnd.Completed, result.end)
+        assertEquals("Phone backup/Camera", transport.uploadedTo[2])
+        assertEquals("The “Phone backup” folder was gone, so it was made again.", settings.current().folderNotice)
+    }
+
+    @Test fun `a folder that is still not found after being made again ends the pass`() = runTest {
+        var attempts = 0
+        transport.onUpload = {
+            attempts++
+            throw notFound()
+        }
+
+        val result = runner(media(1), media(2)).run(request())
+
+        assertEquals(2, attempts)
+        assertTrue((result.end as PassEnd.Stopped).error.contains("couldn't be found"))
+        assertTrue(dao.retryRows.value.isEmpty())
+    }
+
+    @Test fun `a folder name the server refuses fails that album's files and the others go up`() = runTest {
+        transport.beforeCreate = { if (it == "Camera") throw ReverieApiException.Http(400, "bad", "Bad name") }
+
+        val result = runner(media(1), media(2, bucket = 2)).run(request(buckets = setOf(1, 2)))
+
+        assertEquals(PassEnd.Completed, result.end)
+        assertEquals(listOf(2L), transport.uploaded)
+        assertEquals(1, result.failed)
+        assertEquals("Bad name", result.firstFailure)
+    }
+
+    @Test fun `losing the network while making folders ends the pass before anything is checked`() = runTest {
+        transport.beforeCreate = { throw ReverieApiException.Network(RuntimeException("offline")) }
+
+        val result = runner(media(1)).run(request())
+
+        assertTrue(result.end is PassEnd.Stopped)
+        assertTrue(transport.checked.isEmpty())
+        assertTrue(dao.retryRows.value.isEmpty())
+    }
+
+    @Test fun `a backup folder locked before its subfolders exist stops the pass`() = runTest {
+        val runner = runner(media(1))
+        val vault = transport.server.add("Vault")
+        transport.server.locked += vault
+        settings.setDestination(vault, "Vault")
+
+        val end = runner.run(request()).end
+
+        assertTrue((end as PassEnd.Stopped).error.contains("private and locked"))
     }
 
     @Test fun `a locked destination folder stops the pass with a plain explanation`() = runTest {

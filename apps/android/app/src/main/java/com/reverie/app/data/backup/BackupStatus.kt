@@ -24,7 +24,7 @@ sealed interface BackupStatus {
 
     data object Off : BackupStatus
 
-    /** Switched on, with no destination folder or no album chosen. */
+    /** Switched on, with no album chosen or no answer yet on what to back up. */
     data object NotSetUp : BackupStatus
 
     data object Running : BackupStatus
@@ -52,21 +52,22 @@ internal fun backupStatus(
 ): Flow<BackupStatus> = combine(settings, isRunning, ledgerIds, checks) { current, running, uploaded, _ ->
     Triple(current, running, uploaded)
 }.mapLatest { (current, running, uploaded) ->
+    val config = current.toConfig()
     when {
         !current.enabled -> BackupStatus.Off
-        !current.isReady -> BackupStatus.NotSetUp
+        config == null -> BackupStatus.NotSetUp
         running -> BackupStatus.Running
         current.lastError != null || access() != MediaAccess.Full -> BackupStatus.NeedsAttention
-        else -> pendingStatus(current.bucketIds.orEmpty(), uploaded.toSet(), loadMedia)
+        else -> pendingStatus(config, uploaded.toSet(), loadMedia)
     }
 }.distinctUntilChanged()
 
 private suspend fun pendingStatus(
-    bucketIds: Set<Long>,
+    config: BackupConfig,
     uploaded: Set<Long>,
     loadMedia: suspend () -> List<BackupMedia>,
 ): BackupStatus = try {
-    val waiting = scanPending(loadMedia(), bucketIds, uploaded).size
+    val waiting = scanPending(loadMedia(), config.bucketIds, uploaded, config.addedAfter).size
     if (waiting == 0) BackupStatus.Complete else BackupStatus.Waiting(waiting)
 } catch (cancelled: CancellationException) {
     throw cancelled

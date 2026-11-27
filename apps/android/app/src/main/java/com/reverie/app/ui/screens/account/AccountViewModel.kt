@@ -32,7 +32,7 @@ data class AccountState(
 /** "Camera · Wi-Fi only". [album] names the one chosen album, where there is only one and it could be read. */
 internal fun backupDetail(settings: BackupSettings, album: String?): String {
     if (!settings.enabled) return "Photos aren’t backed up automatically"
-    if (!settings.isReady) return "Choose a destination and albums"
+    if (!settings.isReady) return "Finish setting up backup"
     val albums = album ?: counted(settings.bucketIds.orEmpty().size, "album")
     val network = if (settings.wifiOnly) "Wi-Fi only" else "Any network"
     return "$albums · $network"

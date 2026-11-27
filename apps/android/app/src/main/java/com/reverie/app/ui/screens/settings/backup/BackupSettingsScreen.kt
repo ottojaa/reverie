@@ -6,7 +6,6 @@ import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,9 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,11 +28,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,13 +43,24 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.MediaAccess
 import com.reverie.app.data.backup.backupPermissionsToRequest
 import com.reverie.app.ui.screens.destination.DestinationPickerDialog
 import com.reverie.app.ui.theme.ReverieTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** What can be done on the backup screen. */
+data class BackupActions(
+    val onBack: () -> Unit = {},
+    val onAllow: () -> Unit = {},
+    val onBackUpNow: () -> Unit = {},
+    val onDismissNotice: () -> Unit = {},
+    val onEnabled: (Boolean) -> Unit = {},
+    val onPickFolder: () -> Unit = {},
+    val onIncludeExisting: () -> Unit = {},
+    val onWifiOnly: (Boolean) -> Unit = {},
+    val onToggleAlbum: (Long) -> Unit = {},
+)
+
 @Composable
 fun BackupSettingsScreen(
     onBack: () -> Unit,
@@ -61,14 +72,49 @@ fun BackupSettingsScreen(
     }
     // The person may have changed permissions in the system settings and come back.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    var askingAgain by rememberSaveable { mutableStateOf(false) }
 
+    BackupSettingsContent(
+        state,
+        BackupActions(
+            onBack = onBack,
+            onAllow = { askPermissions.launch(backupPermissionsToRequest()) },
+            onBackUpNow = viewModel::backUpNow,
+            onDismissNotice = viewModel::dismissFolderNotice,
+            onEnabled = viewModel::setEnabled,
+            onPickFolder = viewModel::pickDestination,
+            onIncludeExisting = { askingAgain = true },
+            onWifiOnly = viewModel::setWifiOnly,
+            onToggleAlbum = viewModel::toggleAlbum,
+        ),
+    )
+
+    // The first time, cancelling means "not yet": backup goes off again. Asked again, it changes nothing.
+    if (state.needsChoice || askingAgain) {
+        BackupChoiceDialog(
+            existing = state.leftAlone,
+            onOnlyNew = { if (askingAgain) askingAgain = false else viewModel.backUpOnlyNew() },
+            onIncludeExisting = {
+                askingAgain = false
+                viewModel.includeExisting()
+            },
+            onCancel = { if (askingAgain) askingAgain = false else viewModel.setEnabled(false) },
+        )
+    }
+
+    DestinationPickerDialog(viewModel.destinations, onSelect = viewModel::setDestination)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupSettingsContent(state: BackupUiState, actions: BackupActions) {
     Scaffold(
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = { Text("Photo backup") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = actions.onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
             )
         },
@@ -82,18 +128,12 @@ fun BackupSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PermissionNotice(state, onAllow = { askPermissions.launch(backupPermissionsToRequest()) })
-            StatusCard(state, onBackUpNow = viewModel::backUpNow)
-            BackupCard("Backup") {
-                SwitchRow("Back up automatically", "New photos and videos upload on their own, even with the app closed.", state.settings.enabled, viewModel::setEnabled)
-                DestinationRow(state.settings.folderName, onClick = viewModel::pickDestination)
-                SwitchRow("Wi-Fi only", "Only back up on an unmetered network.", state.settings.wifiOnly, viewModel::setWifiOnly)
-            }
-            AlbumsCard(state.albums, state.selectedBuckets, viewModel::toggleAlbum)
+            PermissionNotice(state, onAllow = actions.onAllow)
+            StatusCard(state, actions)
+            BackupOptionsCard(state, actions)
+            AlbumsCard(state, actions.onToggleAlbum)
         }
     }
-
-    DestinationPickerDialog(viewModel.destinations, onSelect = viewModel::setDestination)
 }
 
 @Composable
@@ -139,10 +179,11 @@ private fun NoticeCard(title: String, body: String, action: String, onAction: ()
 }
 
 @Composable
-private fun StatusCard(state: BackupUiState, onBackUpNow: () -> Unit) {
+private fun StatusCard(state: BackupUiState, actions: BackupActions) {
     val settings = state.settings
     BackupCard("Status") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            settings.folderNotice?.let { FolderNotice(it, onDismiss = actions.onDismissNotice) }
             StatusLine("Last backup", settings.lastSuccessAt?.let(::relativeTime) ?: "Never")
             StatusLine("Waiting to back up", state.pending.toString())
             if (state.parkedVideos > 0) {
@@ -156,7 +197,7 @@ private fun StatusCard(state: BackupUiState, onBackUpNow: () -> Unit) {
             settings.lastError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
             if (!settings.isReady) Text(readinessHint(state), style = MaterialTheme.typography.bodyMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onBackUpNow, enabled = settings.isReady && !state.running && state.access != MediaAccess.None) {
+                Button(onClick = actions.onBackUpNow, enabled = settings.isReady && !state.running && state.access != MediaAccess.None) {
                     Text("Back up now")
                 }
                 if (state.running) {
@@ -169,9 +210,27 @@ private fun StatusCard(state: BackupUiState, onBackUpNow: () -> Unit) {
 }
 
 private fun readinessHint(state: BackupUiState): String = when {
-    state.settings.folderId == null -> "Not set up yet: choose a destination folder to start."
+    !state.settings.enabled -> "Backup is off."
     state.selectedBuckets.isEmpty() -> "Not set up yet: choose at least one album."
-    else -> "Backup is off."
+    state.access == MediaAccess.None -> "Not set up yet: allow access to your photos and videos to start."
+    else -> "Not set up yet: choose what to back up."
+}
+
+@Composable
+private fun FolderNotice(text: String, onDismiss: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+            )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Outlined.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+    }
 }
 
 @Composable
@@ -183,52 +242,7 @@ private fun StatusLine(label: String, value: String) {
 }
 
 @Composable
-private fun DestinationRow(folderName: String?, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text("Destination folder", style = MaterialTheme.typography.titleSmall)
-            Text(folderName ?: "Choose a folder", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text("Change", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
-@Composable
-private fun AlbumsCard(albums: List<BackupAlbum>, selected: Set<Long>, onToggle: (Long) -> Unit) {
-    BackupCard("Albums") {
-        if (albums.isEmpty()) {
-            Text("No photos or videos found yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        albums.forEach { album ->
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { onToggle(album.bucketId) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = album.bucketId in selected, onCheckedChange = { onToggle(album.bucketId) })
-                Text(album.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Text(album.count.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwitchRow(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun BackupCard(title: String, content: @Composable () -> Unit) {
+internal fun BackupCard(title: String, content: @Composable () -> Unit) {
     Column {
         Text(
             title,
