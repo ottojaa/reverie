@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import type { VaultStatus } from '@reverie/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { findByText, mount, press, settle, typeInto } from '../../testing/render';
+import { ACCOUNT_PASSWORD_MARKUP, LOCK_SECRET_MARKUP, toSecretMarkup } from '../../testing/secret-fields';
 import { NO_SECRET, startVaultServer, STOPPED_PIN, toRefusal, WITH_PASSWORD, WITH_PIN } from '../../testing/vault-server';
 import { LockSecretCard } from './LockSecretCard';
 
@@ -73,7 +74,7 @@ describe('the private folders lock card', () => {
         await press(radio('pin'));
 
         expect(card()?.textContent).toContain('Don’t reuse a PIN that guards something else.');
-        expect([input('lock-new').type, input('lock-new').inputMode]).toEqual(['password', 'numeric']);
+        expect(input('lock-new').inputMode).toBe('numeric');
 
         await fill({ 'lock-new': '4821', 'lock-repeat': '4821' });
 
@@ -86,6 +87,37 @@ describe('the private folders lock card', () => {
         expect(card()?.textContent).toContain('They open with your PIN now.');
         expect(input('lock-account-password').value).toBe('');
         expect(toast.success).toHaveBeenCalledWith('Private folders now open with your PIN');
+    });
+
+    it.each(['pin', 'password'])('keeps the new %s out of password managers, and the account password in them', async (kind) => {
+        await showCard(NO_SECRET);
+        await press(radio(kind));
+
+        expect(toSecretMarkup(input('lock-new'))).toEqual(LOCK_SECRET_MARKUP);
+        expect(toSecretMarkup(input('lock-repeat'))).toEqual(LOCK_SECRET_MARKUP);
+        expect(toSecretMarkup(input('lock-account-password'))).toEqual(ACCOUNT_PASSWORD_MARKUP);
+    });
+
+    // A browser takes the other text fields in a password field's form for user names, and offers to save them with it.
+    it('keeps the account password in another form than the lock fields, with Save belonging to theirs', async () => {
+        await showCard(WITH_PASSWORD);
+
+        const lockForm = input('lock-new').form;
+
+        expect(input('lock-repeat').form).toBe(lockForm);
+        expect((findByText('button', 'Save') as HTMLButtonElement).form).toBe(lockForm);
+        expect(input('lock-account-password').form).toBeInstanceOf(HTMLFormElement);
+        expect(input('lock-account-password').form).not.toBe(lockForm);
+    });
+
+    it('saves when the account password’s form is submitted, as Enter in that field does', async () => {
+        await showCard(NO_SECRET);
+        await press(radio('password'));
+        await fill({ 'lock-new': 'quiet-lantern', 'lock-repeat': 'quiet-lantern', 'lock-account-password': 'correct horse' });
+        await act(async () => input('lock-account-password').form!.requestSubmit());
+        await settle(10);
+
+        expect(saves()).toEqual([{ account_password: 'correct horse', secret: { kind: 'password', value: 'quiet-lantern' } }]);
     });
 
     it('changes a PIN and clears the form', async () => {
