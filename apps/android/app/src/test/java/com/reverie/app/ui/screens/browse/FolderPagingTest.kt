@@ -32,9 +32,12 @@ class FolderPagingTest {
         names.mapIndexed { at, name -> doc("d%02d".format(at), "application/pdf", name = name) }
     }
 
-    /** Largest first, ties by id from high to low, as the server lists them. */
+    /**
+     * Largest first, ties by id from high to low, as the server lists them. The ids don't otherwise follow
+     * the sizes, so no order of ids or dates passes for this one.
+     */
     private val bySize = listOf(
-        "s9" to 900L, "s8" to 500L, "s7" to 500L, "s6" to 500L, "s5" to 500L, "s4" to 100L, "s3" to 100L, "s2" to 7L, "s1" to 0L,
+        "s3" to 900L, "s8" to 500L, "s6" to 500L, "s5" to 500L, "s2" to 500L, "s9" to 100L, "s4" to 100L, "s7" to 7L, "s1" to 0L,
     ).map { (id, bytes) -> doc(id, "application/pdf", bytes = bytes) }
 
     private fun TestScope.readsThrough(listing: List<DocumentDto>, sort: DocumentSort) {
