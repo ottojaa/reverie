@@ -104,7 +104,9 @@ describe('Anthropic request bodies with default settings', () => {
 });
 
 describe('calls to Claude', () => {
-    it('run side by side, whatever their lane', async () => {
+    const recorded = (): Record<string, unknown[]> => JSON.parse(readFileSync(FIXTURE, 'utf8'));
+
+    it('run side by side, and send the same request whatever their lane', async () => {
         const answers: (() => void)[] = [];
         h.parse.mockImplementation(
             () => new Promise((resolve) => answers.push(() => resolve({ parsed_output: ANALYSIS, stop_reason: 'end_turn', usage: USAGE }))),
@@ -113,7 +115,16 @@ describe('calls to Claude', () => {
 
         await vi.waitFor(() => expect(answers).toHaveLength(3));
         answers.forEach((answer) => answer());
+        await Promise.all(calls);
 
-        await expect(Promise.all(calls)).resolves.toHaveLength(3);
+        expect(record()).toEqual(Array.from({ length: 3 }, () => recorded()['text default']![0]));
+    });
+
+    it('send the same image request for a background document', async () => {
+        const prompt = buildImagePrompt({ filename: 'shot.png', kind: 'screenshot', ocrResult: OCR as never });
+
+        await understandImage(IMAGE, prompt, { lane: 'background' });
+
+        expect(record()).toEqual(recorded()['image default']);
     });
 });
