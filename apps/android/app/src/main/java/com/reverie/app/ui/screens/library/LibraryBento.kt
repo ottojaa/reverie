@@ -87,7 +87,7 @@ private fun PictureCard(
     }
 }
 
-/** The Files card: the types of the newest files as four blocks, the name on a scrim over their foot. */
+/** The Files card: the types of the files [KindCovers] picked as four blocks, the name on a scrim over their foot. */
 @Composable
 private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKind) -> Unit, modifier: Modifier) {
     CardFrame(onClick = { onOpen(DocumentKind.FILE) }, modifier) {
