@@ -53,9 +53,11 @@ describeDb('GET /documents?sort', () => {
     /** Every page of a listing, `limit` at a time. */
     async function readAll(query: string, limit: number): Promise<Item[]> {
         const items: Item[] = [];
+
         for (let offset = 0; ; offset += limit) {
             const page = await get(`${query}&limit=${limit}&offset=${offset}`);
             items.push(...page.items);
+
             if (offset + limit >= page.total) return items;
         }
     }
