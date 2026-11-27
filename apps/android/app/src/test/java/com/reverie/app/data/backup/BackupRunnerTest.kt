@@ -48,7 +48,10 @@ class BackupRunnerTest {
         timedOut: Boolean = false,
         buckets: Set<Long> = setOf(1),
         addedAfter: Long = INCLUDE_EXISTING,
-    ) = BackupRequest(BackupConfig(buckets, addedAfter), budgetMs, userInitiated, includeParked) { timedOut }
+        parallelUploads: Int = MAX_PARALLEL_UPLOADS,
+    ) = BackupRequest(
+        BackupConfig(buckets, addedAfter), budgetMs, userInitiated, includeParked, parallelUploads = parallelUploads,
+    ) { timedOut }
 
     @Test fun `a new file is uploaded into its album's folder and ledgered`() = runTest {
         val result = runner(media(1)).run(request())
@@ -273,7 +276,7 @@ class BackupRunnerTest {
             throw notFound()
         }
 
-        val result = runner(media(1), media(2)).run(request())
+        val result = runner(media(1), media(2)).run(request(parallelUploads = 1))
 
         assertEquals(2, attempts)
         assertTrue((result.end as PassEnd.Stopped).error.contains("couldn't be found"))

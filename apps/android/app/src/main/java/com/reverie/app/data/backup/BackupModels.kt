@@ -33,6 +33,8 @@ data class BackupRequest(
     val includeParked: Boolean = false,
     /** The app may read every photo and video, so the albums it lists are all there are. */
     val seesAllMedia: Boolean = false,
+    /** How many files may upload at once, from 1 to [MAX_PARALLEL_UPLOADS]. */
+    val parallelUploads: Int = MAX_PARALLEL_UPLOADS,
     /** True when the run is being stopped because its time is up (as opposed to losing the network or battery). */
     val wasStoppedByTimeout: () -> Boolean = { false },
 )

@@ -30,8 +30,13 @@ class BackupAlbumFolderRunTest {
         return BackupRunner(source, over, dao, BackupFolders(settings, over), settings) { 0 }
     }
 
-    private suspend fun BackupRunner.pass(seesAllMedia: Boolean = true) = run(
-        BackupRequest(BackupConfig(setOf(1L, 2L), INCLUDE_EXISTING), budgetMs = 1_000, seesAllMedia = seesAllMedia),
+    private suspend fun BackupRunner.pass(seesAllMedia: Boolean = true, parallelUploads: Int = MAX_PARALLEL_UPLOADS) = run(
+        BackupRequest(
+            BackupConfig(setOf(1L, 2L), INCLUDE_EXISTING),
+            budgetMs = 1_000,
+            seesAllMedia = seesAllMedia,
+            parallelUploads = parallelUploads,
+        ),
     )
 
     private suspend fun choose(bucketId: Long, folderId: String) = settings.chooseAlbumFolder(bucketId, folderId, "Photos")
@@ -132,7 +137,7 @@ class BackupAlbumFolderRunTest {
             }
         }
 
-        assertOnlyCameraWaits(runner.pass())
+        assertOnlyCameraWaits(runner.pass(parallelUploads = 1))
 
         assertEquals("the second file isn't tried", 1, cameraAttempts)
         assertEquals(AlbumProblem.Gone, problem(1))
@@ -148,7 +153,7 @@ class BackupAlbumFolderRunTest {
             }
         }
 
-        assertOnlyCameraWaits(runner.pass())
+        assertOnlyCameraWaits(runner.pass(parallelUploads = 1))
 
         assertEquals(1, cameraAttempts)
         assertEquals(AlbumProblem.Locked, problem(1))
