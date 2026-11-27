@@ -9,6 +9,7 @@ import { isDocumentPrivate } from '../services/privacy';
 import type { LlmJobData, LlmJobResult } from '../queues/llm.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
+import { oneAtATime } from '../utils/one-at-a-time';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('LLM');
@@ -115,6 +116,14 @@ async function processLlmJob(job: Job<LlmJobData>): Promise<LlmJobResult> {
     return result;
 }
 
+/**
+ * Jobs run side by side, but one at a time for a document: two of one document (reprocess pressed twice, or while OCR
+ * hands it over) would merge their tags.
+ */
+function processLlmJobInTurn(job: Job<LlmJobData>): Promise<LlmJobResult> {
+    return oneAtATime('llm-document:' + job.data.documentId, () => processLlmJobWithStatus(job));
+}
+
 async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResult> {
     const { documentId } = job.data;
 
@@ -136,7 +145,7 @@ async function processLlmJobWithStatus(job: Job<LlmJobData>): Promise<LlmJobResu
  * Create and start the LLM worker
  */
 export function createLlmWorker(): Worker<LlmJobData, LlmJobResult> {
-    const worker = new Worker<LlmJobData, LlmJobResult>(QUEUE_NAMES.LLM, processLlmJobWithStatus, {
+    const worker = new Worker<LlmJobData, LlmJobResult>(QUEUE_NAMES.LLM, processLlmJobInTurn, {
         connection: getRedisConnectionOptions(),
         concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.LLM],
     });

@@ -6,6 +6,7 @@
 import * as z from 'zod/v4';
 import { env } from '../config/env';
 import { NonRetryableJobError } from '../jobs/job.types';
+import { oneAtATime } from '../utils/one-at-a-time';
 import { LlmAnalysisSchema, LlmImageUnderstandingSchema } from './llm-response.schema';
 import type { LlmUsage } from './llm-cost';
 import {
@@ -79,6 +80,14 @@ export function toOpenAiCompatibleConfig(baseUrl: string, model: string): OpenAi
     return { baseUrl, model, apiKey: env.LOCAL_LLM_API_KEY, timeoutMs: env.LOCAL_LLM_TIMEOUT_MS };
 }
 
+/**
+ * A local server gets one call at a time, whichever capability or address it is for: it is one machine running the
+ * models. A background document's call waits behind every normal one. Test connection does not wait.
+ */
+function inLocalTurn<T>({ lane }: LlmCallOptions, call: () => Promise<T>): Promise<T> {
+    return oneAtATime('local-llm', call, { yields: lane === 'background' });
+}
+
 export class OpenAiCompatibleProvider implements LlmProvider {
     constructor(private readonly config: OpenAiCompatibleConfig) {}
 
@@ -86,11 +95,13 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         const model = options.model ?? this.config.model;
         const maxTokens = Math.max(256, Math.min(prompt.maxTokens, env.LLM_MAX_OUTPUT_TOKENS));
         const user: ChatMessage = { role: 'user', content: prompt.user };
-        const { value, call } = await this.completeJson(
-            'text_summary',
-            LlmAnalysisSchema,
-            { system: prompt.system, user, model, maxTokens },
-            (finishReason) => new Error('Local LLM gave no usable answer: ' + (finishReason ?? 'unknown')),
+        const { value, call } = await inLocalTurn(options, () =>
+            this.completeJson(
+                'text_summary',
+                LlmAnalysisSchema,
+                { system: prompt.system, user, model, maxTokens },
+                (finishReason) => new Error('Local LLM gave no usable answer: ' + (finishReason ?? 'unknown')),
+            ),
         );
 
         return { result: value, tokenCount: toTokenCount(call.usage), call };
@@ -100,11 +111,13 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         const model = options.model ?? this.config.model;
         const maxTokens = Math.max(256, prompt.maxTokens);
         const user: ChatMessage = { role: 'user', content: [{ type: 'text', text: prompt.user }, toImagePart(image)] };
-        const { value, call } = await this.completeJson(
-            'image_understanding',
-            LlmImageUnderstandingSchema,
-            { system: prompt.system, user, model, maxTokens },
-            (finishReason) => new NonRetryableJobError('Image call gave no usable answer: ' + (finishReason ?? 'unknown')),
+        const { value, call } = await inLocalTurn(options, () =>
+            this.completeJson(
+                'image_understanding',
+                LlmImageUnderstandingSchema,
+                { system: prompt.system, user, model, maxTokens },
+                (finishReason) => new NonRetryableJobError('Image call gave no usable answer: ' + (finishReason ?? 'unknown')),
+            ),
         );
 
         return { result: value, tokenCount: toTokenCount(call.usage), call };

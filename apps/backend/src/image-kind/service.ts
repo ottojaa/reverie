@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import type { Database } from '../db/schema';
 import type { MlClient } from '../embeddings/ml.client';
 import { MlUnavailableError } from '../embeddings/ml.client';
+import { oneAtATime } from '../utils/one-at-a-time';
 import { classifyImageKind, type KindVerdict } from './classifier';
 import { KIND_CLASSIFIER, type KindClassifierConfig } from './classifier-config';
 import { IMAGE_KIND_DECIDES_CATEGORY, KIND_TO_CATEGORY, REPLACEABLE_CATEGORIES, type ImageKind } from './kinds';
@@ -84,8 +85,15 @@ export type SettleOutcome = ClassifyOutcome & { llm?: LlmTriggerOutcome };
  * Called when an image embedding is stored and after OCR has stored its EXIF: classify, and with the flip on also
  * set the category and queue the LLM job. Safe to repeat: a verdict is recomputed, the category is idempotent, and
  * the LLM trigger queues once per OCR run.
+ *
+ * One image settles once at a time. The OCR and embed workers (one process) both call this, and a settle that read the
+ * image before OCR stored its camera facts must not write its verdict over a later one that read them.
  */
-export async function settleImageKind(deps: KindDeps, documentId: string): Promise<SettleOutcome> {
+export function settleImageKind(deps: KindDeps, documentId: string): Promise<SettleOutcome> {
+    return oneAtATime('image-kind:' + documentId, () => classifyAndApply(deps, documentId));
+}
+
+async function classifyAndApply(deps: KindDeps, documentId: string): Promise<SettleOutcome> {
     const classified = await classifyDocumentImage(deps, documentId);
 
     if (classified.outcome !== 'classified' || !deps.flip) return classified;

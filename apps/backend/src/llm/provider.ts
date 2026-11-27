@@ -3,6 +3,7 @@
  * a provider; which one is a setting (see provider-config.ts). A provider only turns a prompt into the structured
  * result: privacy, the photo rules, entity checks and storage live in the callers, so they hold for every provider.
  */
+import type { ProcessingLane } from '@reverie/shared';
 import type { LlmUsage } from './llm-cost';
 import type { LlmAnalysis, LlmImageUnderstanding } from './llm-response.schema';
 import type { LlmPrompt } from './types';
@@ -14,6 +15,8 @@ export interface LlmCallOptions {
     model?: string;
     /** Overrides the configured thinking effort (Anthropic only). */
     effort?: LlmEffort;
+    /** The asking document's lane. A local server takes one call at a time, and a background one waits behind every normal one. */
+    lane?: ProcessingLane;
 }
 
 export interface LlmCallUsage {

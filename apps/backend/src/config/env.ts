@@ -169,7 +169,8 @@ const envSchema = z.object({
     /** OCR and thumbnails of background uploads run in their own lanes, which hold back while the normal lane has work. */
     JOB_CONCURRENCY_OCR_BACKGROUND: z.coerce.number().int().positive().default(1),
     JOB_CONCURRENCY_THUMBNAIL_BACKGROUND: z.coerce.number().int().positive().default(1),
-    JOB_CONCURRENCY_LLM: z.coerce.number().default(1),
+    /** Summaries and image calls running at once. Calls to a local LLM server still go one at a time. */
+    JOB_CONCURRENCY_LLM: z.coerce.number().default(3),
     JOB_CONCURRENCY_TRIM: z.coerce.number().default(2),
     JOB_CONCURRENCY_EMBED: z.coerce.number().int().positive().default(1),
     // One encode at a time: it saturates the CPU or the card's encoder, and the 52-video library is a one-off.

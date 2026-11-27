@@ -13,6 +13,7 @@ import { recognizeFromFilePath, recognizeText as recognizeWithPaddleOcr } from '
 import { recognizeText as recognizeWithTesseract, terminateWorker } from './tesseract.client';
 import { detectTextPresence, shouldFlagForReview, shouldSkipLlmProcessing } from './text-detector';
 import { extractTextFromBuffer, isTextExtractable } from './text-extractor';
+import { logOcrTimings } from './timings';
 import type { DocumentCategory, OcrOutput, OcrProcessingResult } from './types';
 
 /**
@@ -36,10 +37,6 @@ export interface ProcessDocumentOptions {
     document?: Document | undefined;
     /** The lane whose queue runs this OCR; it picks PaddleOCR's settings. Defaults to normal. */
     lane?: ProcessingLane | undefined;
-}
-
-function shouldLogTimings(): boolean {
-    return process.env.NODE_ENV !== 'production';
 }
 
 /**
@@ -165,9 +162,7 @@ export async function processDocument(documentId: string, options: ProcessDocume
     timings.dbWriteMs = Date.now() - dbWriteStart;
     timings.totalMs = Date.now() - totalStart;
 
-    if (shouldLogTimings()) {
-        console.info('[OCRService] process timings', JSON.stringify({ documentId, ...timings }));
-    }
+    logOcrTimings(documentId, timings);
 
     return result;
 }

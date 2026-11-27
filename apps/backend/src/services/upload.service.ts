@@ -1,14 +1,16 @@
 import type { ProcessingLane } from '@reverie/shared';
 import { randomUUID } from 'crypto';
+import { sql, type Kysely } from 'kysely';
 import { extname } from 'path';
 import { db } from '../db/kysely';
-import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
+import type { Database, Document, NewDocument, NewProcessingJob } from '../db/schema';
 import { promoteToNormal } from '../queues/lane';
 import { addOcrJob } from '../queues/ocr.queue';
 import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
 import { deleteTranscodeSetIfUnused } from '../transcode/cleanup';
-import { getDeduplicatedFilename } from '../utils/filename';
+import { getDeduplicatedFilename, toNumberedCopyPattern } from '../utils/filename';
+import { oneAtATime } from '../utils/one-at-a-time';
 import type { UploadedFile } from '../utils/upload-files';
 import { excludeTrashed } from './privacy';
 import { canGenerateThumbnail, getFileCategory, getStorageService, type UserStorageContext } from './storage.service';
@@ -120,31 +122,16 @@ export class UploadService {
             );
         }
 
-        let effectiveFilenames: string[] | undefined;
-
-        if (conflictStrategy === 'keep_both') {
-            const existing = await this.getFilenamesInFolder(userId, resolvedFolderId);
-            effectiveFilenames = [];
-            const taken = new Set(existing);
-
-            for (const file of files) {
-                const name = getDeduplicatedFilename([...taken], file.filename);
-                effectiveFilenames.push(name);
-                taken.add(name);
-            }
-        }
-
         const userContext = await this.storageService.getUserStorageContext(userId);
 
-        const promises = files.map(async (file, index) => {
-            const effectiveFilename = effectiveFilenames?.[index] ?? file.filename;
+        const promises = files.map(async (file) => {
             const result = await this.uploadSingleFile(
                 file,
                 userId,
                 userContext,
                 resolvedFolderId ?? undefined,
                 sessionId,
-                effectiveFilename,
+                conflictStrategy,
                 copyMetadataFromDocumentId,
                 lane,
             );
@@ -227,9 +214,48 @@ export class UploadService {
         ).execute();
     }
 
+    private insertDocument(executor: Kysely<Database>, document: NewDocument): Promise<Document> {
+        return executor.insertInto('documents').values(document).returningAll().executeTakeFirstOrThrow();
+    }
+
+    /**
+     * Inserts the document under its name, or under the first `name (n)` its folder does not have. Picking and inserting
+     * happen under one lock per user and folder, so concurrent uploads of a name each get their own. The in-process queue
+     * keeps the ones waiting from each holding a pool connection; the database lock is what makes the pick safe.
+     */
+    private insertUnderFreeName(document: NewDocument): Promise<Document> {
+        const key = 'upload-name:' + document.user_id + ':' + document.folder_id;
+
+        return oneAtATime(key, () =>
+            db.transaction().execute(async (trx) => {
+                await sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`.execute(trx);
+
+                const taken = await this.fetchTakenNames(trx, document.user_id, document.folder_id ?? null, document.original_filename);
+                const name = getDeduplicatedFilename(taken, document.original_filename);
+
+                return this.insertDocument(trx, { ...document, original_filename: name });
+            }),
+        );
+    }
+
+    /** Which of a name and its numbered copies a folder, or the top level, already has. */
+    private async fetchTakenNames(executor: Kysely<Database>, userId: string, folderId: string | null, filename: string): Promise<string[]> {
+        const rows = await excludeTrashed(
+            executor
+                .selectFrom('documents')
+                .select('original_filename')
+                .where('user_id', '=', userId)
+                .where('folder_id', folderId === null ? 'is' : '=', folderId)
+                .where((eb) => eb.or([eb('original_filename', '=', filename), eb('original_filename', 'like', toNumberedCopyPattern(filename))])),
+            '',
+        ).execute();
+
+        return rows.map((r) => r.original_filename);
+    }
+
     /**
      * Upload a single file
-     * @param effectiveFilename - Used for original_filename when doing keep_both (renamed with (n) suffix)
+     * @param conflictStrategy - 'keep_both' numbers the name if the folder has it; otherwise the file's own name is used.
      * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to the new document
      */
     private async uploadSingleFile(
@@ -238,12 +264,10 @@ export class UploadService {
         userContext: UserStorageContext,
         folderId: string | undefined,
         sessionId: string,
-        effectiveFilename?: string,
+        conflictStrategy?: ConflictStrategy,
         copyMetadataFromDocumentId?: string,
         lane: ProcessingLane = 'normal',
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
-        const displayName = effectiveFilename ?? file.filename;
-
         // Correct generic MIME types (e.g. application/octet-stream for .mov files)
         const mimeType = correctMimeType(file.filename, file.mimetype);
 
@@ -254,7 +278,7 @@ export class UploadService {
         const processed = await this.storageService.processAndStoreFile(file, mimeType, userContext);
 
         // Determine if we can generate thumbnails for this file type
-        const canThumbnail = canGenerateThumbnail(mimeType, displayName);
+        const canThumbnail = canGenerateThumbnail(mimeType, file.filename);
 
         // Create document record (with user_id)
         const newDocument: NewDocument = {
@@ -262,7 +286,7 @@ export class UploadService {
             folder_id: folderId ?? null,
             file_path: processed.storagePath,
             file_hash: processed.hash,
-            original_filename: displayName,
+            original_filename: file.filename,
             mime_type: mimeType,
             size_bytes: file.size,
             width: processed.width,
@@ -278,7 +302,7 @@ export class UploadService {
             processing_lane: lane,
         };
 
-        const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();
+        const document = conflictStrategy === 'keep_both' ? await this.insertUnderFreeName(newDocument) : await this.insertDocument(db, newDocument);
 
         // Copy photo_metadata from source document (for save-as-copy from image editor)
         if (copyMetadataFromDocumentId) {
