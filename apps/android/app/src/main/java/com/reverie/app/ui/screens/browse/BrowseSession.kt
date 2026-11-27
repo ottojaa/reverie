@@ -8,6 +8,7 @@ import com.reverie.app.data.api.ServerUrlProvider
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.FolderDto
+import com.reverie.app.data.api.model.LockAsk
 import com.reverie.app.data.api.model.isStillProcessing
 import com.reverie.app.data.connectivity.ConnectivityMonitor
 import com.reverie.app.data.processing.ProcessingTracker
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -51,6 +53,8 @@ data class SessionUi(
     val error: String? = null,
     /** Set when the server refused the list with FOLDER_LOCKED: the lock that must be opened first. */
     val lockedFolderId: String? = null,
+    /** What opening that lock asks for, as last heard from the server. */
+    val lockAsk: LockAsk? = null,
 )
 
 /** Everything a [BrowseSession] reads from, bundled so each Browse view model injects one thing. */
@@ -79,7 +83,7 @@ private data class SessionControl(val error: String? = null, val lockedFolderId:
  * anywhere, uploads finishing).
  *
  * [folderId] is the folder the screen shows, if it shows one; [showsFolders] that it draws folder rows from
- * the tree, which the root's page does without being a folder. The owner (a view model) passes [refresh] to re-read after a password unlock, and [onContentChanged] for
+ * the tree, which the root's page does without being a folder. The owner (a view model) passes [refresh] to re-read after an unlock, and [onContentChanged] for
  * what it re-reads when the library changes.
  */
 class BrowseSession(
@@ -94,13 +98,15 @@ class BrowseSession(
 
     private val folder: Flow<FolderDto?> = if (folderId != null) deps.folders.observeFolder(folderId) else flowOf(null)
 
+    private val lockAsk: Flow<LockAsk?> = deps.vault.status.map { it?.ask }
+
     val ui: StateFlow<SessionUi> = combine(
-        folder, deps.connectivity.isOnline, control, deps.processing.count,
-    ) { folder, online, ctrl, processing ->
-        SessionUi(folder, isOffline = !online, processingCount = processing, error = ctrl.error, lockedFolderId = ctrl.lockedFolderId)
+        folder, deps.connectivity.isOnline, control, deps.processing.count, lockAsk,
+    ) { folder, online, ctrl, processing, ask ->
+        SessionUi(folder, !online, processing, ctrl.error, ctrl.lockedFolderId, ask)
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SessionUi())
 
-    /** Password prompt for a locked folder; a successful unlock re-fetches the list and the tree. */
+    /** Unlock prompt for a locked folder; a successful unlock re-fetches the list and the tree. */
     val unlocker = FolderUnlocker(deps.vault, scope) {
         // The lock is open: stop showing it, and let the new read set it again if the server still refuses.
         beginRefresh()
@@ -169,10 +175,11 @@ class BrowseSession(
         scope.launch { runCatching { deps.folders.refresh() } }
     }
 
-    /** The first page (or a refresh) of a list failed. A closed lock asks for the password; offline is not an error. */
+    /** The first page (or a refresh) of a list failed. A closed lock asks to be unlocked; offline is not an error. */
     fun onRefreshFailed(throwable: Throwable) {
         val lockedId = (throwable as? ReverieApiException)?.lockedFolderId()
-        if (lockedId != null) unlocker.request(lockedId, ui.value.folder?.name)
+        // Read from the cache, not from [ui]: a first visit can be refused before the screen has read anything.
+        if (lockedId != null) scope.launch { unlocker.request(lockedId, folder.first()?.name) }
         control.update {
             SessionControl(
                 lockedFolderId = lockedId,

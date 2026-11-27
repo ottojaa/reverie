@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** The whole Favourites screen on a fake server: a locked private tile, its password prompt, and where it leads. */
+/** The whole Favourites screen on a fake server: a locked private tile, its unlock prompt, and where it leads. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
 class FavouritesScreenUnlockTest {
@@ -45,6 +45,7 @@ class FavouritesScreenUnlockTest {
         waitForText("Private")
         compose.onNodeWithText("Private").performClick()
         waitForText("Unlock private folder")
+        compose.waitUntil(5_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun waitForText(text: String) = compose.waitUntil(5_000) {

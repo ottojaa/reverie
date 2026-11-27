@@ -56,7 +56,7 @@ class DocumentViewModel @Inject constructor(
     favouriteDeps: FavouriteDeps,
 ) : ViewModel() {
 
-    /** The star in the toolbar, and the password prompt it may need. */
+    /** The star in the toolbar, and the unlock prompt it may need. */
     val favourites = FavouriteController(favouriteDeps, viewModelScope)
 
     private val initialId: String = checkNotNull(savedStateHandle["id"])
@@ -94,7 +94,7 @@ class DocumentViewModel @Inject constructor(
     private val _lockedDocuments = MutableStateFlow<Map<String, String>>(emptyMap())
     val lockedDocuments: StateFlow<Map<String, String>> = _lockedDocuments.asStateFlow()
 
-    /** Password prompt for a locked folder; a successful unlock re-fetches the refused documents. */
+    /** Unlock prompt for a locked folder; a successful unlock re-fetches the refused documents. */
     val unlocker = FolderUnlocker(vaultRepository, viewModelScope) { folderId -> retryLocked(folderId) }
 
     private var currentSub: AutoCloseable? = null
@@ -178,7 +178,7 @@ class DocumentViewModel @Inject constructor(
         fileCacheManager.clearPrivate()
     }
 
-    /** Ask for the password of the lock guarding [id], when the server has said it is locked. */
+    /** Ask to open the lock guarding [id], when the server has said it is locked. */
     fun requestUnlock(id: String) {
         val folderId = _lockedDocuments.value[id] ?: return
         unlocker.request(folderId)

@@ -21,9 +21,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.ui.components.StarIcon
-import com.reverie.app.ui.components.VaultUnlockSheet
+import com.reverie.app.ui.components.UnlockSheetHost
 import kotlinx.coroutines.launch
 
 /** A snackbar confirming that a star was added or removed. */
@@ -34,7 +33,7 @@ private class FavouriteConfirmation(override val message: String) : SnackbarVisu
 }
 
 /**
- * A screen's half of its [FavouriteController]: the password prompt, the messages (into
+ * A screen's half of its [FavouriteController]: the unlock prompt, the messages (into
  * [snackbarHostState]) and, through [onGo], where an opened favourite leads.
  */
 @Composable
@@ -43,7 +42,6 @@ fun FavouriteHost(
     snackbarHostState: SnackbarHostState,
     onGo: (FavouriteDestination) -> Unit = {},
 ) {
-    val prompt by controller.unlocker.prompt.collectAsStateWithLifecycle()
     val currentOnGo by rememberUpdatedState(onGo)
     LaunchedEffect(controller, snackbarHostState) {
         controller.events.collect { event ->
@@ -57,9 +55,7 @@ fun FavouriteHost(
             }
         }
     }
-    prompt?.let {
-        VaultUnlockSheet(prompt = it, onSubmit = controller.unlocker::submit, onDismiss = controller::dismissUnlock)
-    }
+    UnlockSheetHost(controller.unlocker, onDismiss = controller::dismissUnlock)
 }
 
 private suspend fun SnackbarHostState.show(message: FavouriteEvent.Message) {

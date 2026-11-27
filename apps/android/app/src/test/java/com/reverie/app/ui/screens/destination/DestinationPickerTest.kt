@@ -115,10 +115,11 @@ class DestinationPickerTest {
         awaitText("Select My files")
     }
 
-    @Test fun `a locked folder asks for the password, and opens once it is accepted`() {
+    @Test fun `a locked folder asks to be unlocked, and opens once the password is accepted`() {
         show()
         compose.onNodeWithText("Secret").performClick()
-        awaitText("Unlock Secret")
+        awaitText("Unlock \"Secret\"")
+        await { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
         assertNull(browser.state.value?.at)
         world.tree = listOf(node("Secret", children = listOf(node("Letters", "Secret", lockId = "Secret")), isPrivate = true))
 

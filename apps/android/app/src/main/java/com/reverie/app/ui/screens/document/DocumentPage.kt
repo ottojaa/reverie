@@ -333,7 +333,7 @@ private fun VideoBufferingSpinner(modifier: Modifier = Modifier) {
 
 /**
  * Shown when the server refused a document because its private folder's lock is closed (deep link
- * or a swipe onto it). Offers the password prompt instead of a blank page.
+ * or a swipe onto it). Offers the unlock prompt instead of a blank page.
  */
 @Composable
 private fun LockedDocumentPlaceholder(modifier: Modifier = Modifier, onUnlock: () -> Unit) {

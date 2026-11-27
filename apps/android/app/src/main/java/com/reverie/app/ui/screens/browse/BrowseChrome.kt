@@ -31,12 +31,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.LockAsk
 import com.reverie.app.domain.counted
 import com.reverie.app.ui.components.EmptyState
 import com.reverie.app.ui.components.ErrorState
 import com.reverie.app.ui.components.FolderUnlocker
 import com.reverie.app.ui.components.OfflineBanner
 import com.reverie.app.ui.components.ReverieRefreshBox
+import com.reverie.app.ui.components.UnlockSheetHost
 import com.reverie.app.ui.navigation.bottomBarInset
 import com.reverie.app.ui.screens.favourites.FavouriteController
 import com.reverie.app.ui.screens.favourites.FavouriteHost
@@ -78,7 +80,7 @@ class ChromeSelection(
 /**
  * Everything around a Browse list that the Library, a folder page and a list screen share: the header that slides
  * away, the floating date and processing chips, pull-to-refresh, the selection bar, the offline banner,
- * the upload sheets, what the selection bar asks and the password prompt for a locked folder.
+ * the upload sheets, what the selection bar asks and the unlock prompt for a locked folder.
  * Which list fills the middle is the caller's: [body] gets a [ChromeSlot].
  *
  * @param title null where the list carries its own title.
@@ -247,7 +249,7 @@ private fun BodyOrState(
         ui.lockedFolderId != null -> EmptyState(
             icon = Icons.Outlined.Lock,
             title = "This folder is private",
-            description = "Enter your account password to open it.",
+            description = toLockedDescription(ui.lockAsk),
             actionLabel = "Unlock",
             onAction = { unlocker.request(ui.lockedFolderId, ui.folder?.name) },
         )
@@ -255,6 +257,13 @@ private fun BodyOrState(
         // The body sits where the chrome put it already: it must not be placed under the header twice.
         else -> body(ChromeSlot(Modifier, slot.contentPadding, slot.onTopDate, slot.onUpload))
     }
+}
+
+internal fun toLockedDescription(ask: LockAsk?): String = when (ask) {
+    LockAsk.PIN -> "Enter your PIN to open it."
+    LockAsk.PASSWORD -> "Enter your lock password to open it."
+    LockAsk.ACCOUNT_PASSWORD -> "Enter your account password to open it."
+    null -> "Unlock it to see what is inside."
 }
 
 private fun downloadStartedMessage(n: Int): String = "Downloading ${counted(n, "file")}"

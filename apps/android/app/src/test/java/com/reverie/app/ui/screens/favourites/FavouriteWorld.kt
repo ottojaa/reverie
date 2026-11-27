@@ -16,6 +16,7 @@ import com.reverie.app.data.api.model.FavouriteDto
 import com.reverie.app.data.api.model.FavouriteListResponse
 import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.api.model.FolderWithChildren
+import com.reverie.app.data.api.model.LockSecretKind
 import com.reverie.app.data.api.model.Paginated
 import com.reverie.app.data.api.model.TrashListDto
 import com.reverie.app.data.api.model.kind
@@ -53,6 +54,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** A server answering the favourites, vault, folder, document and trash calls, with the real repositories on top. */
 internal class FavouriteWorld {
@@ -63,6 +67,9 @@ internal class FavouriteWorld {
 
     /** What GET /documents/{id} answers with. */
     @Volatile var served: List<DocumentDto> = emptyList()
+
+    /** While set, GET /documents/{id} is refused as inside this closed private folder; an unlock opens it. */
+    @Volatile var lockedFolder: String? = null
 
     /** What the document listing answers with: all of it on one page, narrowed to the folder and kinds asked for. */
     @Volatile var listed: List<DocumentDto> = emptyList()
@@ -87,8 +94,21 @@ internal class FavouriteWorld {
     /** The names POST /documents/check-duplicates reports as taken. */
     @Volatile var takenNames: List<String> = emptyList()
 
-    /** What GET /vault/status says about the account. */
+    /** What GET /vault/status says about the account and its lock; unlocking and saving answer with it too. */
     @Volatile var hasPassword = true
+    @Volatile var secretKind: LockSecretKind? = null
+
+    /** Set when the lock asks for something other than the secret that is set: too many wrong tries. */
+    @Volatile var isStopped = false
+
+    /** While set, GET /vault/status fails. */
+    @Volatile var isStatusDown = false
+
+    /** While set, a vault call waits for it before it is answered. */
+    @Volatile var vaultGate: CompletableDeferred<Unit>? = null
+
+    /** Refusals for the next unlocks and secret saves, in order; after they run out each succeeds. */
+    val vaultRefusals = ArrayDeque<Pair<HttpStatusCode, String>>()
 
     /** What GET /trash answers. */
     @Volatile var trash = TrashListDto(retention_days = 30)
@@ -127,11 +147,12 @@ internal class FavouriteWorld {
         requests += "${request.method.value} $path $body".trim()
         if (isOffline) throw IOException("offline")
         val document = served.firstOrNull { path == "documents/${it.id}" && request.method == HttpMethod.Get }
-        if (document != null) return reply(ApiJson.encodeToString(DocumentDto.serializer(), document))
+        if (document != null) return replyDocument(document)
         val figures = summary
         if (path == "documents/summary" && figures != null) {
             return reply(ApiJson.encodeToString(DocumentSummaryDto.serializer(), figures))
         }
+        if (path.startsWith("vault/")) vaultGate?.await()
         return when {
             path == "documents" && request.method == HttpMethod.Get && listed.isNotEmpty() -> replyListing(request)
             path == "favourites" -> {
@@ -145,10 +166,12 @@ internal class FavouriteWorld {
                 val failure = putFailures.removeFirstOrNull()
                 if (failure == null) reply("", HttpStatusCode.NoContent) else reply(failure.second, failure.first)
             }
-            path == "vault/unlock" -> reply("""{"unlocked":true,"has_password":true}""")
+            path == "vault/unlock" -> replyUnlock()
+            path == "vault/secret" -> replySecret(body)
             path == "folders" && request.method == HttpMethod.Post -> replyCreated(body)
             path == "folders/tree" -> reply(ApiJson.encodeToString(ListSerializer(FolderWithChildren.serializer()), tree))
-            path == "vault/status" -> reply("""{"unlocked":false,"has_password":$hasPassword}""")
+            path == "vault/status" && isStatusDown -> reply("", HttpStatusCode.ServiceUnavailable)
+            path == "vault/status" -> reply(vaultStatus(isUnlocked = false))
             path == "documents/check-duplicates" ->
                 reply(ApiJson.encodeToString(CheckDuplicatesResponse.serializer(), CheckDuplicatesResponse(takenNames)))
             path == "documents/move" || path.startsWith("folders/") -> replyWrite(path)
@@ -157,6 +180,45 @@ internal class FavouriteWorld {
             else -> reply("", HttpStatusCode.NoContent)
         }
     }
+
+    private fun MockRequestHandleScope.replyDocument(document: DocumentDto): HttpResponseData {
+        val folderId = lockedFolder ?: return reply(ApiJson.encodeToString(DocumentDto.serializer(), document))
+        val refusal = """{"statusCode":403,"error":"FOLDER_LOCKED","message":"Folder is locked",""" +
+            """"details":{"folder_id":"$folderId"}}"""
+        return reply(refusal, HttpStatusCode.Forbidden)
+    }
+
+    private fun MockRequestHandleScope.replyUnlock(): HttpResponseData {
+        if (vaultRefusals.isEmpty()) lockedFolder = null
+        return replyVault(isUnlocked = true)
+    }
+
+    private fun MockRequestHandleScope.replyVault(isUnlocked: Boolean): HttpResponseData {
+        val refusal = vaultRefusals.removeFirstOrNull() ?: return reply(vaultStatus(isUnlocked))
+        return reply(refusal.second, refusal.first)
+    }
+
+    /** A save that goes through changes what the lock asks for from then on. */
+    private fun MockRequestHandleScope.replySecret(body: String): HttpResponseData {
+        if (vaultRefusals.isEmpty()) {
+            val secret = ApiJson.parseToJsonElement(body).jsonObject["secret"] as? JsonObject
+            val kind = secret?.get("kind")?.jsonPrimitive?.content
+            secretKind = LockSecretKind.entries.firstOrNull { it.toWire() == kind }
+            isStopped = false
+        }
+        return replyVault(isUnlocked = false)
+    }
+
+    private fun vaultStatus(isUnlocked: Boolean): String {
+        val kind = secretKind?.toWire()
+        val asked = if (isStopped) "account_password" else kind ?: "account_password"
+        val ask = asked.takeIf { hasPassword }
+        return """{"unlocked":$isUnlocked,"has_password":$hasPassword,"secret_kind":${kind.quoted()},"ask":${ask.quoted()}}"""
+    }
+
+    private fun LockSecretKind.toWire(): String = name.lowercase()
+
+    private fun String?.quoted(): String = this?.let { "\"$it\"" } ?: "null"
 
     /** The next of [writeAnswers]; a write that succeeds on a folder answers with the folder. */
     private fun MockRequestHandleScope.replyWrite(path: String): HttpResponseData {
