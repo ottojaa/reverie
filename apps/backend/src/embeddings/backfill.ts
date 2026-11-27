@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 import { isQueuesBusy } from '../queues/backfill-gate';
 import { getLlmQueue } from '../queues/llm.queue';
-import { getOcrQueue } from '../queues/ocr.queue';
+import { getBackgroundOcrQueue, getOcrQueue } from '../queues/ocr.queue';
 import { findDocumentsMissingMediaRead } from '../media/media-read';
 import type { KindClassifierConfig } from '../image-kind/classifier-config';
 import { findDocumentsMissingKind } from '../image-kind/kind.repository';
@@ -98,5 +98,5 @@ export async function runBackfillPage(deps: BackfillDeps, cursor: EmbedBackfillC
 
 /** Waits for OCR and summaries: the backfill leaves the machine to them. */
 export async function isPipelineBusy(): Promise<boolean> {
-    return isQueuesBusy([getOcrQueue(), getLlmQueue()], getEmbedQueue());
+    return isQueuesBusy([getOcrQueue(), getBackgroundOcrQueue(), getLlmQueue()], getEmbedQueue());
 }

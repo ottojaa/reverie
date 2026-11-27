@@ -26,6 +26,8 @@ The **OCR worker chains into LLM** on success (`ocr.worker.ts` → `shouldQueueL
 | `thumbnail-queue`     | `generate-thumbnail` | `addThumbnailJob`        | `workers/thumbnail.worker.ts` | `{ documentId, ... }`                       |
 | `trim-queue`          | `trim-video`         | `addTrimJob`             | `workers/trim.worker.ts`      | `{ ... }`                                   |
 
+A document with `processing_lane = 'background'` (a phone's photo backup) uses `ocr-background`, `thumbnail-background` and `transcode-background` instead of the normal OCR, thumbnail and transcode queues (same job names and data).
+
 Two places record state:
 
 - **`processing_jobs` table** — one row per enqueued job. Columns: `job_type` (`ocr` \| `thumbnail` \| `llm_summary` \| `video_trim`), `target_type` (`document` \| `folder`), `target_id`, `status` (`pending` \| `processing` \| `complete` \| `failed` \| `skipped`), `attempts`, `error_message`, `result`, `started_at` / `completed_at` / `duration_ms`. **The BullMQ job id == the `processing_jobs.id`** (same UUID) — that's the link between the queue and the DB row. Workers move the row through the statuses (`worker.utils.ts`) and retry up to `attempts` (default 3) unless the error is non-retryable.
@@ -89,6 +91,8 @@ ssh reverie 'docker exec reverie-redis redis-cli LLEN "bull:ocr-queue:wait"'
 
 ## Gotchas
 
+- **A background-lane row stays `pending` while normal work of its kind exists**: `ocr-background` and `thumbnail-background` start nothing while the normal queue has a job waiting or running, and drain one at a time. That is not a stuck job. The app's own actions (the OCR and LLM routes above, trim, saving over a file) move the document to the normal lane. The `reprocess` script keeps the lane, so on a background document its job queues behind the whole backlog: use the app route when it can't wait.
+- **A background video can encode on the CPU while the card works**: it takes NVENC only if all its renditions fit in the sessions the normal lane leaves free under `TRANSCODE_NVENC_SESSION_LIMIT` (default 5, so 1080p and up goes to the CPU).
 - **Retrying OCR re-runs LLM** (the chain). To regenerate only tags/summary, use `--stage llm` / `reprocess-llm`.
 - **`process-llm` is idempotent-guarded**: it skips if an `llm_results` row exists. Use `reprocess-llm` (deletes first) or the script's `--stage llm` (also deletes) to force.
 - **`ocr_results.processed_at` is not bumped on reprocess** (`saveOcrResult`'s update branch doesn't set it), so trust `ocr_engine` / job timestamps over that column to tell whether a reprocess ran.

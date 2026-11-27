@@ -18,6 +18,8 @@ export interface CommandInput {
     encoder: EncoderKind;
     /** Extra `scale` options for an SDR source that is not BT.709 limited range (see `toSdrScaleArgs`). */
     sdrScaleArgs?: string;
+    /** Caps the threads of the decoder, the filter graph and each rung's encoder; left out, ffmpeg takes every core. */
+    threads?: number | undefined;
 }
 
 function toRateArg({ num, den }: FrameRate): string {
@@ -89,7 +91,10 @@ function toVariantMap(rungs: Rung[], hasAudio: boolean): string {
 
 /** The whole ffmpeg argument list: one process reads the source once and writes every rung. */
 export function buildFfmpegArgs(input: CommandInput): string[] {
-    const { inputPath, outDir, ladder, hasAudio, encoder } = input;
+    const { inputPath, outDir, ladder, hasAudio, encoder, threads } = input;
+    // `-threads` binds to what follows it: before `-i` the decoder, among the output options the encoders.
+    const threadArgs = threads === undefined ? [] : ['-threads', String(threads)];
+    const filterThreadArgs = threads === undefined ? [] : ['-filter_complex_threads', String(threads)];
     const videoMaps = ladder.rungs.flatMap((_, index) => ['-map', `[v${index}]`]);
     // Each rung's playlist carries its own audio, so the one source track is mapped once per rung.
     const audioMaps = hasAudio ? ladder.rungs.flatMap(() => ['-map', '0:a:0']) : [];
@@ -106,14 +111,17 @@ export function buildFfmpegArgs(input: CommandInput): string[] {
         '-nostats',
         // The card decodes the (usually HEVC) source; frames come back to system memory by themselves for the CPU filters.
         ...(encoder === 'nvenc' ? ['-hwaccel', 'cuda'] : []),
+        ...threadArgs,
         '-i',
         inputPath,
+        ...filterThreadArgs,
         '-filter_complex',
         toFilterGraph(input),
         ...videoMaps,
         ...audioMaps,
         ...toVideoEncoderArgs(encoder, ladder.rungs, ladder.frameRate),
         ...audioArgs,
+        ...threadArgs,
         '-f',
         'hls',
         '-hls_time',

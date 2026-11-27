@@ -5,6 +5,7 @@ import { join } from 'path';
 import type { Database, Document } from '../db/schema';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { toVideoExtension, type VideoProbe } from '../media/video-probe';
+import { oneAtATime } from '../utils/one-at-a-time';
 import { createWorkerLogger } from '../workers/worker.utils';
 import { deleteTranscodeSetIfUnused, type TranscodeFileRemover } from './cleanup';
 import type { FfmpegCapabilities } from './capabilities';
@@ -28,6 +29,10 @@ export interface TranscodeDeps {
     capabilities: () => Promise<FfmpegCapabilities>;
     runFfmpeg: FfmpegRunner;
     probe: (path: string) => Promise<VideoProbe>;
+    /** Caps ffmpeg's threads (see `CommandInput.threads`). */
+    threads?: number | undefined;
+    /** The most NVENC sessions this encode may open; a ladder with more rungs is encoded on the CPU. Left out, no cap. */
+    nvencSessions?: number | undefined;
 }
 
 export interface TranscodeResult {
@@ -100,19 +105,33 @@ async function encodeAndStore(
         const source = await loadSourceFacts(deps.db, document.id, () => deps.probe(original.path));
         const ladder = decideLadder(source);
         const capabilities = await deps.capabilities();
-        const encoder: EncoderKind = capabilities.nvenc && !options.safeMode ? 'nvenc' : 'cpu';
+        // Each rung is one NVENC session.
+        const fitsCard = ladder.rungs.length <= (deps.nvencSessions ?? Infinity);
+        const encoder: EncoderKind = capabilities.nvenc && fitsCard && !options.safeMode ? 'nvenc' : 'cpu';
         const toneMap = chooseToneMap(source.colorTransfer, capabilities.zscale && !options.safeMode);
         const sdrScaleArgs = toSdrScaleArgs(source.colorSpace, source.pixelFormat);
 
         await Promise.all(ladder.rungs.map((rung) => mkdir(join(workDir, `v${rung.name}`), { recursive: true })));
+        const { hasAudio } = source;
+        const { threads } = deps;
+
         await deps.runFfmpeg(
-            buildFfmpegArgs({ inputPath: original.path, outDir: workDir, ladder, encoder, toneMap, sdrScaleArgs, hasAudio: source.hasAudio }),
+            buildFfmpegArgs({ inputPath: original.path, outDir: workDir, ladder, encoder, toneMap, sdrScaleArgs, hasAudio, threads }),
             toProgressReporter(document.duration_seconds, report),
         );
 
-        const stored = await storeSet(deps.storage, workDir, document.file_hash, ladder.rungs);
+        const stored = await oneAtATime(document.file_hash, async () => {
+            // The same content may have been encoding in the other transcode lane, which stored it first.
+            if (await hasStoredSet(deps, document.file_hash)) return null;
 
-        await insertTranscodeSet(deps.db, document.file_hash, { ...stored, encoder, toneMap: toneMap?.name ?? null });
+            const set = await storeSet(deps.storage, workDir, document.file_hash, ladder.rungs);
+
+            await insertTranscodeSet(deps.db, document.file_hash, { ...set, encoder, toneMap: toneMap?.name ?? null });
+
+            return set;
+        });
+
+        if (!stored) return { shared: true };
 
         // A purge that ran during the encode found no row to remove: if nothing uses this content any more, the set is an orphan.
         if (await deleteTranscodeSetIfUnused(deps.db, deps.storage, document.file_hash))

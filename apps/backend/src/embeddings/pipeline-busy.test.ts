@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const counts = vi.hoisted(() => ({ ocr: {}, llm: {}, embed: {} }) as Record<'ocr' | 'llm' | 'embed', Record<string, number>>);
+const counts = vi.hoisted(
+    () => ({ ocr: {}, backgroundOcr: {}, llm: {}, embed: {} }) as Record<'ocr' | 'backgroundOcr' | 'llm' | 'embed', Record<string, number>>,
+);
 
-vi.mock('../queues/ocr.queue', () => ({ getOcrQueue: () => ({ getJobCounts: async () => counts.ocr }) }));
+vi.mock('../queues/ocr.queue', () => ({
+    getOcrQueue: () => ({ getJobCounts: async () => counts.ocr }),
+    getBackgroundOcrQueue: () => ({ getJobCounts: async () => counts.backgroundOcr }),
+}));
 vi.mock('../queues/llm.queue', () => ({ getLlmQueue: () => ({ getJobCounts: async () => counts.llm }) }));
 vi.mock('../queues/embed.queue', () => ({ getEmbedQueue: () => ({ getJobCounts: async () => counts.embed }) }));
 
@@ -11,6 +16,7 @@ import { isPipelineBusy } from './backfill';
 describe('isPipelineBusy', () => {
     beforeEach(() => {
         counts.ocr = { waiting: 0, prioritized: 0, active: 0 };
+        counts.backgroundOcr = { waiting: 0, prioritized: 0, active: 0 };
         counts.llm = { waiting: 0, prioritized: 0, active: 0 };
         // The backfill job is itself the one active job in the embed queue.
         counts.embed = { waiting: 0, prioritized: 0, active: 1 };
@@ -22,6 +28,12 @@ describe('isPipelineBusy', () => {
 
     it.each(['waiting', 'prioritized', 'active'])('holds the backfill back for an OCR job that is %s', async (state) => {
         counts.ocr = { ...counts.ocr, [state]: 1 };
+
+        expect(await isPipelineBusy()).toBe(true);
+    });
+
+    it('holds the backfill back for background OCR work', async () => {
+        counts.backgroundOcr = { waiting: 0, prioritized: 3, active: 0 };
 
         expect(await isPipelineBusy()).toBe(true);
     });

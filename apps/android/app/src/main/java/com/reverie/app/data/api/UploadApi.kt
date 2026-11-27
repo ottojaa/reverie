@@ -50,6 +50,7 @@ class UploadApi @Inject constructor(
      * Upload a file straight from a stream (a `content://` URI the caller opens), with no copy on
      * disk. [size] is the byte count when known; null sends the body without a declared length.
      * [openStream] is called once per attempt and the stream is closed when the body has been sent.
+     * [lane] `background` has the server process the file behind everything else; null means normally.
      */
     suspend fun uploadStream(
         sessionId: String,
@@ -58,6 +59,7 @@ class UploadApi @Inject constructor(
         mimeType: String,
         conflictStrategy: String?,
         size: Long?,
+        lane: String? = null,
         openStream: () -> InputStream,
     ): UploadResponse = submit(
         sessionId = sessionId,
@@ -68,6 +70,7 @@ class UploadApi @Inject constructor(
         size = size,
         body = { openStream().toByteReadChannel() },
         onProgress = { _, _ -> },
+        lane = lane,
         // A big video can take far longer than the client's 60 s request limit; the socket limit still catches a stalled transfer.
         unlimitedRequestTime = true,
     )
@@ -82,6 +85,7 @@ class UploadApi @Inject constructor(
         body: () -> ByteReadChannel,
         onProgress: suspend (sent: Long, total: Long) -> Unit,
         unlimitedRequestTime: Boolean = false,
+        lane: String? = null,
     ): UploadResponse {
         val response = client.submitFormWithBinaryData(
             url = "upload",
@@ -90,6 +94,7 @@ class UploadApi @Inject constructor(
                 folderId?.let { append("folder_id", it) }
                 append("session_id", sessionId)
                 conflictStrategy?.let { append("conflict_strategy", it) }
+                lane?.let { append("lane", it) }
                 append(
                     key = "files",
                     value = ChannelProvider(size = size, block = body),
