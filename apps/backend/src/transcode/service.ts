@@ -31,6 +31,8 @@ export interface TranscodeDeps {
     probe: (path: string) => Promise<VideoProbe>;
     /** Caps ffmpeg's threads (see `CommandInput.threads`). */
     threads?: number | undefined;
+    /** The most NVENC sessions this encode may open; a ladder with more rungs is encoded on the CPU. Left out, no cap. */
+    nvencSessions?: number | undefined;
 }
 
 export interface TranscodeResult {
@@ -103,7 +105,9 @@ async function encodeAndStore(
         const source = await loadSourceFacts(deps.db, document.id, () => deps.probe(original.path));
         const ladder = decideLadder(source);
         const capabilities = await deps.capabilities();
-        const encoder: EncoderKind = capabilities.nvenc && !options.safeMode ? 'nvenc' : 'cpu';
+        // Each rung is one NVENC session.
+        const fitsCard = ladder.rungs.length <= (deps.nvencSessions ?? Infinity);
+        const encoder: EncoderKind = capabilities.nvenc && fitsCard && !options.safeMode ? 'nvenc' : 'cpu';
         const toneMap = chooseToneMap(source.colorTransfer, capabilities.zscale && !options.safeMode);
         const sdrScaleArgs = toSdrScaleArgs(source.colorSpace, source.pixelFormat);
 

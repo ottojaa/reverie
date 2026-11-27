@@ -247,6 +247,24 @@ describeDb('video transcoding', () => {
             expect(await findTranscodeSet(db, await hashOf(id))).toMatchObject({ encoder: 'nvenc', toneMap: 'zscale-hable' });
         });
 
+        it.each([
+            ['1080p, three rungs', 1920, 1080, 2, 'cpu'],
+            ['720p, two rungs', 1280, 720, 2, 'nvenc'],
+            ['360p, one rung', 640, 360, 2, 'nvenc'],
+            ['360p with no session to spare', 640, 360, 0, 'cpu'],
+            ['1080p with room for all three', 1920, 1080, 3, 'nvenc'],
+        ])('uses the card only when every rung fits the session cap: %s', async (_label, width, height, nvencSessions, encoder) => {
+            const id = await seedVideo({ facts: { width, height } });
+
+            capabilities = { nvenc: true, zscale: true };
+
+            const result = await transcodeDocument({ ...deps, nvencSessions }, id, async () => {});
+
+            expect(result).toMatchObject({ encoder });
+            expect(ffmpeg.runs[0]!.includes('h264_nvenc')).toBe(encoder === 'nvenc');
+            expect(ffmpeg.runs[0]!.includes('-hwaccel')).toBe(encoder === 'nvenc');
+        });
+
         it('falls back to the filter chain for PQ when zscale is missing', async () => {
             const id = await seedVideo({ facts: { is_hdr: true, color_transfer: 'smpte2084' } });
 

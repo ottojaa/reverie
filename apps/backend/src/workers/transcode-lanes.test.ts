@@ -93,9 +93,11 @@ describeDb('transcode lanes', () => {
         await waitForStatus(normal, 'complete');
 
         expect(await jobStatus(background)).toBe('processing');
-        // Only the background encode is niced and capped.
+        // Only the background encode is niced and capped, in threads and in NVENC sessions (5, less 3 for the normal one).
         expect(deps.get(background)!.threads).toBe(2);
         expect(deps.get(normal)!.threads).toBeUndefined();
+        expect(deps.get(background)!.nvencSessions).toBe(2);
+        expect(deps.get(normal)!.nvencSessions).toBeUndefined();
         expect(vi.mocked(createFfmpegRunner).mock.calls).toEqual([[10]]);
 
         finishBackgroundEncode();

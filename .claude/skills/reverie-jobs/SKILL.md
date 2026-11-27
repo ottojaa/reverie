@@ -92,6 +92,7 @@ ssh reverie 'docker exec reverie-redis redis-cli LLEN "bull:ocr-queue:wait"'
 ## Gotchas
 
 - **A background-lane row stays `pending` while normal work of its kind exists**: `ocr-background` and `thumbnail-background` start nothing while the normal queue has a job waiting or running, and drain one at a time. That is not a stuck job. The app's own actions (the OCR and LLM routes above, trim, saving over a file) move the document to the normal lane. The `reprocess` script keeps the lane, so on a background document its job queues behind the whole backlog: use the app route when it can't wait.
+- **A background video can encode on the CPU while the card works**: it takes NVENC only if all its renditions fit in the sessions the normal lane leaves free under `TRANSCODE_NVENC_SESSION_LIMIT` (default 5, so 1080p and up goes to the CPU).
 - **Retrying OCR re-runs LLM** (the chain). To regenerate only tags/summary, use `--stage llm` / `reprocess-llm`.
 - **`process-llm` is idempotent-guarded**: it skips if an `llm_results` row exists. Use `reprocess-llm` (deletes first) or the script's `--stage llm` (also deletes) to force.
 - **`ocr_results.processed_at` is not bumped on reprocess** (`saveOcrResult`'s update branch doesn't set it), so trust `ocr_engine` / job timestamps over that column to tell whether a reprocess ran.

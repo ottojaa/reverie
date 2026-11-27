@@ -176,6 +176,11 @@ const envSchema = z.object({
     TRANSCODE_BACKGROUND_THREADS: z.coerce.number().int().positive().default(2),
     // 'auto' uses NVENC when a test encode works, else libx264; 'cpu' never tries NVENC (the card may be busy, or its encoder unwanted).
     TRANSCODE_ENCODER: z.enum(['auto', 'cpu']).default('auto'),
+    /**
+     * How many NVENC encodes the card runs at once (GeForce with driver 535: 5). A background video uses the card only
+     * within what the normal lane leaves free. Other programs on the card count too: lower this by what they use.
+     */
+    TRANSCODE_NVENC_SESSION_LIMIT: z.coerce.number().int().min(0).default(5),
     TRANSCODE_BACKFILL_BATCH: z.coerce.number().int().positive().default(2),
     TRANSCODE_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
     JOB_RETRY_ATTEMPTS: z.coerce.number().default(3),

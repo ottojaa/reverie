@@ -13,6 +13,7 @@ import { getCapabilities } from '../transcode/capabilities';
 import { queueTranscode } from '../transcode/queue-transcode';
 import { setTranscodeStatus } from '../transcode/repository';
 import { createFfmpegRunner, runFfmpeg } from '../transcode/ffmpeg-run';
+import { toBackgroundNvencSessions } from '../transcode/nvenc-sessions';
 import { transcodeDocument, type TranscodeDeps } from '../transcode/service';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
@@ -33,9 +34,18 @@ function toDeps(): TranscodeDeps {
     };
 }
 
-/** A background encode yields the CPU to everything else on the server and keeps to a few threads. */
+/**
+ * A background encode yields the CPU to everything else on the server, keeps to a few threads, and takes only the NVENC
+ * sessions the normal lane leaves free.
+ */
 function toBackgroundDeps(): TranscodeDeps {
-    return { ...toDeps(), runFfmpeg: createFfmpegRunner(env.TRANSCODE_BACKGROUND_NICE), threads: env.TRANSCODE_BACKGROUND_THREADS };
+    const nvencSessions = toBackgroundNvencSessions({
+        limit: env.TRANSCODE_NVENC_SESSION_LIMIT,
+        normalEncodes: env.JOB_CONCURRENCY_TRANSCODE,
+        backgroundEncodes: env.JOB_CONCURRENCY_TRANSCODE_BACKGROUND,
+    });
+
+    return { ...toDeps(), runFfmpeg: createFfmpegRunner(env.TRANSCODE_BACKGROUND_NICE), threads: env.TRANSCODE_BACKGROUND_THREADS, nvencSessions };
 }
 
 /** True on the final try of a job that has more than one (`attemptsMade` counts the tries already used up). */
