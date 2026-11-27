@@ -463,8 +463,9 @@ def _warmup(ocr):
     cuDNN autotune for the current arch) is paid here, inside the client's
     STARTUP_TIMEOUT_MS, instead of on the first real request.
 
-    MUST NOT write to stdout — the client expects {"ready": true} as the first
-    stdout line, so any stray output would desync the request/response FIFO.
+    MUST NOT write to stdout — it carries only the protocol's JSON lines. The
+    client takes a JSON line without an id as the answer about startup, so a
+    stray one here would fail the start.
     """
     try:
         from PIL import Image
