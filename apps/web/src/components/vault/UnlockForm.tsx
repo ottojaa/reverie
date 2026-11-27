@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import type { LockAsk } from '@reverie/shared';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { LockSecretInput } from './LockSecretInput';
 import { PIN_LENGTH, PinInput } from './PinInput';
 
 interface UnlockFormProps {
@@ -42,18 +43,36 @@ export function UnlockForm({ ask, error, isRetry, isPending, onEdit, onSubmit, o
     };
 
     return (
-        <motion.form animate={isRetry ? SHAKE : undefined} transition={{ duration: 0.4 }} onSubmit={handleSubmit} className="flex flex-col gap-3">
-            {isPin ? (
+        <motion.form
+            animate={isRetry ? SHAKE : undefined}
+            transition={{ duration: 0.4 }}
+            onSubmit={handleSubmit}
+            // A browser keeps what a text field held, for coming Back to, unless its form says not to.
+            autoComplete={ask === 'account_password' ? undefined : 'off'}
+            className="flex flex-col gap-3"
+        >
+            {ask === 'pin' && (
                 <div className="flex justify-center">
                     <PinInput ref={inputRef} aria-label="PIN" value={typed} onValueChange={edit} readOnly={isPending} aria-invalid={!!error} />
                 </div>
-            ) : (
+            )}
+            {ask === 'password' && (
+                <LockSecretInput
+                    ref={inputRef}
+                    placeholder="Lock password"
+                    aria-label="Lock password"
+                    value={typed}
+                    onChange={(event) => edit(event.target.value)}
+                    aria-invalid={!!error}
+                />
+            )}
+            {ask === 'account_password' && (
                 <Input
                     ref={inputRef}
                     type="password"
-                    autoComplete={ask === 'account_password' ? 'current-password' : 'off'}
-                    placeholder={ask === 'account_password' ? 'Account password' : 'Lock password'}
-                    aria-label={ask === 'account_password' ? 'Account password' : 'Lock password'}
+                    autoComplete="current-password"
+                    placeholder="Account password"
+                    aria-label="Account password"
                     value={typed}
                     onChange={(event) => edit(event.target.value)}
                     aria-invalid={!!error}

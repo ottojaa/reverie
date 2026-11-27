@@ -100,6 +100,8 @@ class MediaStoreBackupTransport @Inject constructor(
                 // Two files with the same name must never overwrite each other.
                 conflictStrategy = "keep_both",
                 size = media.sizeBytes.takeIf { it > 0 },
+                // A backup must not slow down what the user uploads by hand.
+                lane = "background",
                 // Same opener as the hash, so what is uploaded is what was checked (original, GPS included).
                 openStream = { openForUpload(uri, media.mimeType) },
             )

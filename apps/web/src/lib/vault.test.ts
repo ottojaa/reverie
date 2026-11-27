@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, useEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { findByText, keyDown, mount, press, settle, typeInto } from '../testing/render';
+import { ACCOUNT_PASSWORD_MARKUP, LOCK_SECRET_MARKUP, toSecretMarkup } from '../testing/secret-fields';
 import { NO_SECRET, startVaultServer, STOPPED_PIN, toRefusal, WITH_PASSWORD, WITH_PIN } from '../testing/vault-server';
 import { apiClient } from './api/client';
 import { vaultStatusQuery } from './api/vault';
@@ -84,6 +85,19 @@ describe('unlocking a private folder', () => {
         expect(dialog()).toBeNull();
     });
 
+    it('takes a lock password in a masked field that no password manager reads as a login', async () => {
+        await openPrompt(WITH_PASSWORD);
+
+        expect(field().getAttribute('aria-label')).toBe('Lock password');
+        expect(toSecretMarkup(field())).toEqual(LOCK_SECRET_MARKUP);
+    });
+
+    it.each([NO_SECRET, STOPPED_PIN])('takes the account password in a field that password managers fill', async (status) => {
+        await openPrompt(status);
+
+        expect(toSecretMarkup(field())).toEqual(ACCOUNT_PASSWORD_MARKUP);
+    });
+
     it('sends a wrong password once and shows one error', async () => {
         await openPrompt(NO_SECRET);
         server.refusals = [{ status: 401, data: { error: 'invalid_credentials', message: 'Incorrect password' } }];
@@ -101,7 +115,8 @@ describe('unlocking a private folder', () => {
         await openPrompt(WITH_PIN);
 
         expect(dialog()?.textContent).toContain('Enter your PIN.');
-        expect([field().type, field().inputMode, field().autocomplete]).toEqual(['password', 'numeric', 'off']);
+        expect(toSecretMarkup(field())).toEqual(LOCK_SECRET_MARKUP);
+        expect(field().inputMode).toBe('numeric');
         expect(findByText('button', 'Unlock')).toBeUndefined();
 
         await enter('4a8');

@@ -1,3 +1,4 @@
+import type { ProcessingLane } from '@reverie/shared';
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
 import type { LlmMetadata } from '../llm/types';
 
@@ -101,6 +102,8 @@ export interface DocumentsTable {
     ocr_status: JobStatus;
     thumbnail_status: JobStatus;
     llm_status: JobStatus;
+    /** Which jobs this document's processing waits behind; set at upload, back to 'normal' once the owner acts on it. */
+    processing_lane: ColumnType<ProcessingLane, ProcessingLane | undefined, ProcessingLane>;
     /** The HLS ladder's state. 'skipped' for anything that is not a video; videos start 'pending'. */
     transcode_status: ColumnType<JobStatus, JobStatus | undefined, JobStatus>;
     has_meaningful_text: ColumnType<boolean, boolean | undefined, boolean>; // Added in Plan 05

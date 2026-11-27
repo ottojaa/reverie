@@ -1,7 +1,9 @@
+import type { ProcessingLane } from '@reverie/shared';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { db } from '../db/kysely';
 import type { Document, NewDocument, NewProcessingJob } from '../db/schema';
+import { promoteToNormal } from '../queues/lane';
 import { addOcrJob } from '../queues/ocr.queue';
 import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import { addThumbnailJob } from '../queues/thumbnail.queue';
@@ -96,6 +98,7 @@ export class UploadService {
      * @param folderId - Left out: the top level.
      * @param conflictStrategy - When 'replace', delete existing docs in folder with same filename first. When 'keep_both', auto-rename with (n) suffix.
      * @param copyMetadataFromDocumentId - When set, copy photo_metadata from this document to each newly created document (for save-as-copy from image editor).
+     * @param lane - 'background' for uploads nobody is waiting on: their processing yields to everything else.
      */
     async uploadFiles(
         files: UploadedFile[],
@@ -104,6 +107,7 @@ export class UploadService {
         clientSessionId?: string,
         conflictStrategy?: ConflictStrategy,
         copyMetadataFromDocumentId?: string,
+        lane: ProcessingLane = 'normal',
     ): Promise<UploadResult> {
         const sessionId = clientSessionId ?? randomUUID();
         const resolvedFolderId = folderId ?? null;
@@ -142,6 +146,7 @@ export class UploadService {
                 sessionId,
                 effectiveFilename,
                 copyMetadataFromDocumentId,
+                lane,
             );
             userContext.storageUsedBytes += file.size;
 
@@ -235,6 +240,7 @@ export class UploadService {
         sessionId: string,
         effectiveFilename?: string,
         copyMetadataFromDocumentId?: string,
+        lane: ProcessingLane = 'normal',
     ): Promise<{ document: Document; jobs: Array<{ id: string; job_type: string; status: string; target_id: string }> }> {
         const displayName = effectiveFilename ?? file.filename;
 
@@ -269,6 +275,8 @@ export class UploadService {
             thumbnail_status: canThumbnail ? 'pending' : 'complete',
             // The thumbnail step queues the transcode; until then the video is 'pending', which is what the backfill looks for.
             transcode_status: getFileCategory(mimeType) === 'video' ? 'pending' : 'skipped',
+            // Left to the column default unless needed: a deploy runs this code before the migration adds the column.
+            ...(lane === 'background' && { processing_lane: lane }),
         };
 
         const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();
@@ -457,6 +465,9 @@ export class UploadService {
             .executeTakeFirstOrThrow();
 
         const sessionId = randomUUID();
+
+        // Saving over a file is something its owner did and is waiting on.
+        await promoteToNormal(documentId);
 
         // Create and enqueue OCR job
         const ocrJob = await db

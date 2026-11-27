@@ -54,6 +54,7 @@ const worker = new Worker<OcrJobData>(
 - `ocr-queue`: Text extraction from images (Tesseract)
 - `thumbnail-queue`: Image resizing + blurhash generation (Sharp)
 - `llm-queue`: Document summarization (OpenAI)
+- `ocr-background`, `thumbnail-background`, `transcode-background`: the same work for documents in the background lane (`queues/lane.ts`); the first two start a job only while the normal queue is empty (`workers/background-hold.ts`)
 
 ## Real-time Updates
 
@@ -82,6 +83,8 @@ Environment variables:
 ```
 JOB_CONCURRENCY_OCR=2
 JOB_CONCURRENCY_THUMBNAIL=4
+JOB_CONCURRENCY_OCR_BACKGROUND=1
+JOB_CONCURRENCY_THUMBNAIL_BACKGROUND=1
 JOB_CONCURRENCY_LLM=1
 JOB_RETRY_ATTEMPTS=3
 ```

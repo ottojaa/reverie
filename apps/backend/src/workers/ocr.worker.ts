@@ -1,4 +1,4 @@
-import { Job, Worker } from 'bullmq';
+import { Job, Worker, type Processor } from 'bullmq';
 import { sql } from 'kysely';
 import { db } from '../db/kysely';
 import type { Document } from '../db/schema';
@@ -10,10 +10,11 @@ import { isProcessableImage, isTextExtractable, processDocument, shouldQueueLlmJ
 import { toPhotoMetadataValues } from '../ocr/exif-extractor';
 import type { OcrProcessingResult } from '../ocr/types';
 import { addLlmJob } from '../queues/llm.queue';
-import type { OcrJobData, OcrJobResult } from '../queues/ocr.queue';
+import { getBackgroundOcrQueue, getOcrQueue, type OcrJobData, type OcrJobResult } from '../queues/ocr.queue';
 import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
 import { getRedisConnectionOptions } from '../queues/redis';
 import { rebuildSearchVector } from '../search/search-indexer';
+import { holdWhileNormalBusy } from './background-hold';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('OCR');
@@ -190,27 +191,26 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
     }
 }
 
-/**
- * Create and start the OCR worker
- */
-export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
-    const worker = new Worker<OcrJobData, OcrJobResult>(
-        QUEUE_NAMES.OCR,
-        async (job) =>
-            processJobWithTracking(job, processOcrJob, {
-                storeDuration: async (documentId, durationMs) => {
-                    await db.updateTable('ocr_results').set({ duration_ms: durationMs }).where('document_id', '=', documentId).execute();
-                },
-            }),
-        {
-            connection: getRedisConnectionOptions(),
-            concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.OCR],
-            // PaddleOCR model loading on first request can take 20s+;
-            // default stalledInterval (30s) is too tight and causes false stalls.
-            stalledInterval: 120_000,
-            lockDuration: 120_000,
+type OcrQueueName = typeof QUEUE_NAMES.OCR | typeof QUEUE_NAMES.OCR_BACKGROUND;
+
+async function runTrackedOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
+    return processJobWithTracking(job, processOcrJob, {
+        storeDuration: async (documentId, durationMs) => {
+            await db.updateTable('ocr_results').set({ duration_ms: durationMs }).where('document_id', '=', documentId).execute();
         },
-    );
+    });
+}
+
+function startWorker(queueName: OcrQueueName, processor: Processor<OcrJobData, OcrJobResult>): Worker<OcrJobData, OcrJobResult> {
+    const concurrency = QUEUE_CONCURRENCY[queueName];
+    const worker = new Worker<OcrJobData, OcrJobResult>(queueName, processor, {
+        connection: getRedisConnectionOptions(),
+        concurrency,
+        // PaddleOCR model loading on first request can take 20s+;
+        // default stalledInterval (30s) is too tight and causes false stalls.
+        stalledInterval: 120_000,
+        lockDuration: 120_000,
+    });
 
     worker.on('completed', (job) => {
         logger.info('Job completed', { jobId: job.id });
@@ -224,12 +224,29 @@ export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
         logger.error('Worker error', error);
     });
 
-    logger.info('OCR worker started', { concurrency: QUEUE_CONCURRENCY[QUEUE_NAMES.OCR] });
+    logger.info('OCR worker started', { queue: queueName, concurrency });
 
     return worker;
+}
+
+/**
+ * Create and start the OCR worker
+ */
+export function createOcrWorker(): Worker<OcrJobData, OcrJobResult> {
+    return startWorker(QUEUE_NAMES.OCR, runTrackedOcrJob);
+}
+
+/** Runs background documents' OCR, and starts none while a normal document's OCR is waiting or running. */
+export function createBackgroundOcrWorker(): Worker<OcrJobData, OcrJobResult> {
+    return startWorker(QUEUE_NAMES.OCR_BACKGROUND, async (job) => {
+        await holdWhileNormalBusy(getOcrQueue(), getBackgroundOcrQueue());
+
+        return runTrackedOcrJob(job);
+    });
 }
 
 // Run as standalone if executed directly
 if (require.main === module) {
     createOcrWorker();
+    createBackgroundOcrWorker();
 }

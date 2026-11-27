@@ -179,6 +179,39 @@ describeDb('video transcoding', () => {
             expect(await statusOf(second)).toBe('complete');
         });
 
+        it('stores the set once when the same content encodes in both transcode lanes at the same time', async () => {
+            const first = await seedVideo({ hash: 'both-lanes' });
+            const second = await seedVideo({ hash: 'both-lanes', name: 'manual.mov' });
+            const written: string[] = [];
+            const { writeFile: write } = storage;
+            let started = 0;
+
+            let release = () => {};
+
+            const bothStarted = new Promise<void>((resolve) => (release = resolve));
+
+            // Neither encode finishes before the other has started, so neither finds a stored set at the start.
+            const runFfmpeg: TranscodeDeps['runFfmpeg'] = async (args, onSeconds) => {
+                if (++started === 2) release();
+
+                await bothStarted;
+                await ffmpeg.run(args, onSeconds);
+            };
+
+            storage.writeFile = async (path, buffer) => {
+                written.push(path);
+                await write(path, buffer);
+            };
+
+            const results = await Promise.all([first, second].map((id) => transcodeDocument({ ...deps, runFfmpeg }, id, async () => {})));
+
+            expect(ffmpeg.runs).toHaveLength(2);
+            expect(results.map((result) => result.shared).sort()).toEqual([false, true]);
+            expect(written).toHaveLength(FILES_PER_SET);
+            expect((await findTranscodeSet(db, 'both-lanes'))?.files).toHaveLength(FILES_PER_SET);
+            expect([await statusOf(first), await statusOf(second)]).toEqual(['complete', 'complete']);
+        });
+
         it('encodes again when the set row exists but its files are gone', async () => {
             const first = await seedVideo({ hash: 'lost-files' });
             const second = await seedVideo({ hash: 'lost-files', name: 'again.mov' });
@@ -212,6 +245,24 @@ describeDb('video transcoding', () => {
             expect(result).toMatchObject({ encoder: 'nvenc', toneMap: 'zscale-hable' });
             expect(ffmpeg.runs[0]).toContain('h264_nvenc');
             expect(await findTranscodeSet(db, await hashOf(id))).toMatchObject({ encoder: 'nvenc', toneMap: 'zscale-hable' });
+        });
+
+        it.each([
+            ['1080p, three rungs', 1920, 1080, 2, 'cpu'],
+            ['720p, two rungs', 1280, 720, 2, 'nvenc'],
+            ['360p, one rung', 640, 360, 2, 'nvenc'],
+            ['360p with no session to spare', 640, 360, 0, 'cpu'],
+            ['1080p with room for all three', 1920, 1080, 3, 'nvenc'],
+        ])('uses the card only when every rung fits the session cap: %s', async (_label, width, height, nvencSessions, encoder) => {
+            const id = await seedVideo({ facts: { width, height } });
+
+            capabilities = { nvenc: true, zscale: true };
+
+            const result = await transcodeDocument({ ...deps, nvencSessions }, id, async () => {});
+
+            expect(result).toMatchObject({ encoder });
+            expect(ffmpeg.runs[0]!.includes('h264_nvenc')).toBe(encoder === 'nvenc');
+            expect(ffmpeg.runs[0]!.includes('-hwaccel')).toBe(encoder === 'nvenc');
         });
 
         it('falls back to the filter chain for PQ when zscale is missing', async () => {

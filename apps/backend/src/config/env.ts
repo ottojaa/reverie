@@ -160,13 +160,27 @@ const envSchema = z.object({
     // Job Queue
     JOB_CONCURRENCY_OCR: z.coerce.number().default(2),
     JOB_CONCURRENCY_THUMBNAIL: z.coerce.number().default(4),
+    /** OCR and thumbnails of background uploads run in their own lanes, which hold back while the normal lane has work. */
+    JOB_CONCURRENCY_OCR_BACKGROUND: z.coerce.number().int().positive().default(1),
+    JOB_CONCURRENCY_THUMBNAIL_BACKGROUND: z.coerce.number().int().positive().default(1),
     JOB_CONCURRENCY_LLM: z.coerce.number().default(1),
     JOB_CONCURRENCY_TRIM: z.coerce.number().default(2),
     JOB_CONCURRENCY_EMBED: z.coerce.number().int().positive().default(1),
     // One encode at a time: it saturates the CPU or the card's encoder, and the 52-video library is a one-off.
     JOB_CONCURRENCY_TRANSCODE: z.coerce.number().int().positive().default(1),
+    /** Videos of background uploads (phone backup) encode in their own lane, beside the normal one. */
+    JOB_CONCURRENCY_TRANSCODE_BACKGROUND: z.coerce.number().int().positive().default(1),
+    /** `nice` level of a background encode's ffmpeg: higher yields more CPU to the rest of the server. */
+    TRANSCODE_BACKGROUND_NICE: z.coerce.number().int().min(0).max(19).default(10),
+    /** ffmpeg threads for a background encode: its decoder, its filters and each rung's encoder. */
+    TRANSCODE_BACKGROUND_THREADS: z.coerce.number().int().positive().default(2),
     // 'auto' uses NVENC when a test encode works, else libx264; 'cpu' never tries NVENC (the card may be busy, or its encoder unwanted).
     TRANSCODE_ENCODER: z.enum(['auto', 'cpu']).default('auto'),
+    /**
+     * How many NVENC encodes the card runs at once (GeForce with driver 535: 5). A background video uses the card only
+     * within what the normal lane leaves free. Other programs on the card count too: lower this by what they use.
+     */
+    TRANSCODE_NVENC_SESSION_LIMIT: z.coerce.number().int().min(0).default(5),
     TRANSCODE_BACKFILL_BATCH: z.coerce.number().int().positive().default(2),
     TRANSCODE_BACKFILL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
     JOB_RETRY_ATTEMPTS: z.coerce.number().default(3),

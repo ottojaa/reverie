@@ -64,6 +64,9 @@ COPY --from=builder /app/apps/backend/ocr_service ./apps/backend/ocr_service
 
 ENV NODE_ENV=production
 ENV PYTHON_PATH=/opt/paddleocr-env/bin/python3
+# Threads shared by sharp and file writes. Thumbnail and OCR jobs keep up to 14 sharp tasks going, which on the default of
+# 4 makes an upload's writes wait for seconds. It has to be in the environment before node starts.
+ENV UV_THREADPOOL_SIZE=16
 
 EXPOSE 3000
 
