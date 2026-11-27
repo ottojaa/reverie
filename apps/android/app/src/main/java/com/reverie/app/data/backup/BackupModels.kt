@@ -8,6 +8,8 @@ data class BackupMedia(
     val sizeBytes: Long,
     val bucketId: Long,
     val bucketName: String = "",
+    /** When the phone's media library got the file, in epoch seconds. */
+    val addedAt: Long = 0,
 )
 
 /** A device album (MediaStore bucket) and how many photos and videos it holds. */
@@ -16,7 +18,8 @@ data class BackupAlbum(val bucketId: Long, val name: String, val count: Int)
 /** What a pass needs to know about the user's backup settings. */
 data class BackupConfig(
     val bucketIds: Set<Long>,
-    val folderId: String,
+    /** See [BackupSettings.addedAfter]. */
+    val addedAfter: Long,
 )
 
 /** How one pass is allowed to run. */
@@ -39,7 +42,7 @@ sealed interface PassEnd {
     /** The time ran out with files still waiting; the next pass resumes from the ledger. */
     data object OutOfTime : PassEnd
 
-    /** The pass could not go on (signed out, offline, server down, folder gone); [error] says why in plain words. */
+    /** The pass could not go on (signed out, offline, server down, folder locked); [error] says why in plain words. */
     data class Stopped(val error: String) : PassEnd
 
     /** Another pass already holds the lock, so this one did nothing. */

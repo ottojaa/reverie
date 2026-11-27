@@ -14,13 +14,20 @@ class BackupScanTest {
     @Test fun `scan picks only items in the selected albums that the ledger has not handled`() {
         val items = listOf(media(1, bucket = 10), media(2, bucket = 10), media(3, bucket = 20), media(4, bucket = 30))
 
-        val pending = scanPending(items, bucketIds = setOf(10, 30), ledgerIds = setOf(2))
+        val pending = scanPending(items, bucketIds = setOf(10, 30), ledgerIds = setOf(2), addedAfter = INCLUDE_EXISTING)
 
         assertEquals(listOf(1L, 4L), pending.map { it.id })
     }
 
     @Test fun `scan with no selected album finds nothing`() {
-        assertEquals(emptyList<BackupMedia>(), scanPending(listOf(media(1)), emptySet(), emptySet()))
+        assertEquals(emptyList<BackupMedia>(), scanPending(listOf(media(1)), emptySet(), emptySet(), INCLUDE_EXISTING))
+    }
+
+    @Test fun `scan leaves alone what was added before the cutoff`() {
+        val items = listOf(media(1).copy(addedAt = 99), media(2).copy(addedAt = 100), media(3).copy(addedAt = 101))
+
+        assertEquals(listOf(2L, 3L), scanPending(items, setOf(1), emptySet(), addedAfter = 100).map { it.id })
+        assertEquals(listOf(1L, 2L, 3L), scanPending(items, setOf(1), emptySet(), INCLUDE_EXISTING).map { it.id })
     }
 
     @Test fun `a file cut off before goes first and the rest keep their order`() {

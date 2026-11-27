@@ -9,9 +9,12 @@ const val CUT_OFF_PARKED = 2
 private const val RETRY_BASE_MS = 30 * 60_000L
 private const val RETRY_MAX_MS = 6 * 60 * 60_000L
 
-/** The device items in [bucketIds] that the ledger has not handled yet, in [items]' order. */
-fun scanPending(items: List<BackupMedia>, bucketIds: Set<Long>, ledgerIds: Set<Long>): List<BackupMedia> =
-    items.filter { it.bucketId in bucketIds && it.id !in ledgerIds }
+/**
+ * The device items in [bucketIds], added at [addedAfter] or later, that the ledger has not handled yet,
+ * in [items]' order.
+ */
+fun scanPending(items: List<BackupMedia>, bucketIds: Set<Long>, ledgerIds: Set<Long>, addedAfter: Long): List<BackupMedia> =
+    items.filter { it.bucketId in bucketIds && it.addedAt >= addedAfter && it.id !in ledgerIds }
 
 /**
  * The pending files a pass may work on now, in the order to work on them: anything that was cut off

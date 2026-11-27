@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.reverie.app.data.api.ApiJson
 import com.reverie.app.data.api.DocumentsApi
+import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.upload.ContentHasher
 import io.ktor.client.HttpClient
@@ -48,7 +49,7 @@ class BackupUploadTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val video = BackupMedia(1, "VID_1.mp4", "video/mp4", 5, bucketId = 1)
         shadowOf(context.contentResolver).registerInputStream(video.toUri(), "bytes".byteInputStream())
-        val transport = MediaStoreBackupTransport(context, ContentHasher(context, Dispatchers.IO), DocumentsApi(client), UploadApi(client))
+        val transport = MediaStoreBackupTransport(context, ContentHasher(context, Dispatchers.IO), DocumentsApi(client), UploadApi(client), FoldersApi(client))
 
         transport.upload(video, folderId = "folder")
 

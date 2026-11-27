@@ -2,6 +2,7 @@ package com.reverie.app.data.backup
 
 import com.reverie.app.data.api.model.CheckContentFile
 import com.reverie.app.data.api.model.CheckContentResult
+import com.reverie.app.data.api.model.FolderDto
 
 /** Everything a backup pass needs from the device and the server, so the runner can be tested without either. */
 interface BackupTransport {
@@ -13,6 +14,12 @@ interface BackupTransport {
 
     /** Uploads [media]'s original bytes into [folderId] and returns the new document's id. Throws like [checkContent]. */
     suspend fun upload(media: BackupMedia, folderId: String): String?
+
+    /** Makes a folder in [parentId] (null for the top level) and returns its id; a name taken there is a 409. Throws like [checkContent]. */
+    suspend fun createFolder(name: String, parentId: String?): String
+
+    /** The folders directly inside [parentId]. Throws like [checkContent]. */
+    suspend fun listFolders(parentId: String?): List<FolderDto>
 }
 
 /** What the runner needs to list the device's photos and videos, newest first. */

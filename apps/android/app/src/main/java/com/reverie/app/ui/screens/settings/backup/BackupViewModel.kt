@@ -10,6 +10,7 @@ import com.reverie.app.data.backup.BackupScheduler
 import com.reverie.app.data.backup.BackupSettings
 import com.reverie.app.data.backup.BackupSettingsRepository
 import com.reverie.app.data.backup.CUT_OFF_PARKED
+import com.reverie.app.data.backup.INCLUDE_EXISTING
 import com.reverie.app.data.backup.MediaAccess
 import com.reverie.app.data.backup.canReadLocation
 import com.reverie.app.data.backup.isCameraAlbum
@@ -17,8 +18,10 @@ import com.reverie.app.data.backup.mediaAccess
 import com.reverie.app.data.backup.scanPending
 import com.reverie.app.data.backup.toAlbums
 import com.reverie.app.data.local.dao.BackupDao
+import com.reverie.app.data.local.entity.BackupRetryEntity
 import com.reverie.app.data.repository.FolderRepository
 import com.reverie.app.data.repository.VaultRepository
+import com.reverie.app.domain.FolderTree
 import com.reverie.app.ui.screens.destination.Destination
 import com.reverie.app.ui.screens.destination.DestinationBrowser
 import com.reverie.app.ui.screens.destination.DestinationRules
@@ -41,11 +44,18 @@ data class BackupUiState(
     val canReadLocation: Boolean = true,
     /** Files in the chosen albums that are still to be handled. */
     val pending: Int = 0,
+    /** Files in the chosen albums that were on the phone before the cutoff, so wait to be included. */
+    val leftAlone: Int = 0,
     /** Of [pending], large videos that don't fit a background run and wait for the app to be open. */
     val parkedVideos: Int = 0,
     val running: Boolean = false,
+    val destinations: BackupDestinations = BackupDestinations(),
 ) {
     val selectedBuckets: Set<Long> get() = settings.bucketIds.orEmpty()
+
+    /** On, with something to back up, and no answer yet on whether that includes what is already there. */
+    val needsChoice: Boolean
+        get() = settings.enabled && settings.addedAfter == null && selectedBuckets.isNotEmpty() && access != MediaAccess.None
 }
 
 @HiltViewModel
@@ -61,26 +71,19 @@ class BackupViewModel @Inject constructor(
 
     private val device = MutableStateFlow(DeviceSnapshot())
 
-    /** Picks the folder backups go into. */
+    /** Picks the backup folder. */
     val destinations = DestinationBrowser(folderRepository, vault, viewModelScope)
 
     val state: StateFlow<BackupUiState> = combine(
-        settingsRepository.settings,
+        combine(settingsRepository.settings, folderRepository.observeTree(), ::Pair),
         device,
         dao.observeLedgerIds(),
         dao.observeRetries(),
         scheduler.observeRunning(),
-    ) { settings, snapshot, ledgerIds, retries, running ->
-        val pending = scanPending(snapshot.media, settings.bucketIds.orEmpty(), ledgerIds.toSet())
-        val parked = retries.filter { it.cutOffs >= CUT_OFF_PARKED }.map { it.mediaId }.toSet()
-        BackupUiState(
-            settings = settings,
-            albums = toAlbums(snapshot.media),
-            access = snapshot.access,
-            canReadLocation = snapshot.canReadLocation,
-            pending = pending.size,
-            parkedVideos = pending.count { it.id in parked },
+    ) { (settings, folders), snapshot, ledgerIds, retries, running ->
+        toUiState(settings, snapshot, ledgerIds.toSet(), retries).copy(
             running = running,
+            destinations = toBackupDestinations(settings, toAlbums(snapshot.media), FolderTree(folders)),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BackupUiState())
 
@@ -97,6 +100,28 @@ class BackupViewModel @Inject constructor(
             device.update { DeviceSnapshot(media, access, context.canReadLocation()) }
             preselectCamera(media)
         }
+    }
+
+    private fun toUiState(
+        settings: BackupSettings,
+        snapshot: DeviceSnapshot,
+        ledgerIds: Set<Long>,
+        retries: List<BackupRetryEntity>,
+    ): BackupUiState {
+        val buckets = settings.bucketIds.orEmpty()
+        val unhandled = scanPending(snapshot.media, buckets, ledgerIds, INCLUDE_EXISTING)
+        val pending = scanPending(snapshot.media, buckets, ledgerIds, settings.addedAfter ?: INCLUDE_EXISTING)
+        val parked = retries.filter { it.cutOffs >= CUT_OFF_PARKED }.map { it.mediaId }.toSet()
+        return BackupUiState(
+            settings = settings,
+            albums = toAlbums(snapshot.media),
+            access = snapshot.access,
+            canReadLocation = snapshot.canReadLocation,
+            pending = pending.size,
+            // Before the choice is made, including what is there would back up all of it.
+            leftAlone = if (settings.addedAfter == null) unhandled.size else unhandled.size - pending.size,
+            parkedVideos = pending.count { it.id in parked },
+        )
     }
 
     private suspend fun loadMedia(): List<BackupMedia> =
@@ -121,16 +146,19 @@ class BackupViewModel @Inject constructor(
 
     fun setWifiOnly(wifiOnly: Boolean) = change { settingsRepository.setWifiOnly(wifiOnly) }
 
-    fun toggleAlbum(bucketId: Long) {
-        viewModelScope.launch {
-            val before = settingsRepository.current()
-            val current = before.bucketIds.orEmpty()
-            settingsRepository.setBuckets(if (bucketId in current) current - bucketId else current + bucketId)
-            // With no album the works were cancelled, so ticking one has to arm them again. Otherwise they
-            // already match the settings (re-applying would restart a running pass); a run picks up the new album.
-            if (before.toConfig() == null) reapply()
-            scheduler.scheduleContinuation(settingsRepository.current())
-        }
+    fun toggleAlbum(bucketId: Long) = widen {
+        val current = settingsRepository.current().bucketIds.orEmpty()
+        settingsRepository.setBuckets(if (bucketId in current) current - bucketId else current + bucketId)
+    }
+
+    /** Leaves what is on the phone now alone and backs up what is added from here on. */
+    fun backUpOnlyNew() = change { settingsRepository.backUpOnlyNew(System.currentTimeMillis() / 1_000) }
+
+    /** Backs up what was already on the phone too. */
+    fun includeExisting() = widen { settingsRepository.includeExisting() }
+
+    fun dismissFolderNotice() {
+        viewModelScope.launch { settingsRepository.dismissFolderNotice() }
     }
 
     /** Opens the destination browser: a folder is required, and never a private one. */
@@ -148,6 +176,18 @@ class BackupViewModel @Inject constructor(
 
     fun backUpNow() {
         viewModelScope.launch { scheduler.backUpNow(settingsRepository.current()) }
+    }
+
+    /** Applies an edit that can give backup more to do, and queues a run for it. */
+    private fun widen(edit: suspend () -> Unit) {
+        viewModelScope.launch {
+            val wasReady = settingsRepository.current().isReady
+            edit()
+            // Works that weren't ready were cancelled, so they have to be armed again. Otherwise they already
+            // match the settings (re-applying would restart a running pass); the queued run picks up the change.
+            if (!wasReady) reapply()
+            scheduler.scheduleContinuation(settingsRepository.current())
+        }
     }
 
     private fun change(edit: suspend () -> Unit) {

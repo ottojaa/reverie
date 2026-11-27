@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BackupDetailTest {
-    private val ready = BackupSettings(enabled = true, bucketIds = setOf(1L), folderId = "camera", folderName = "Camera")
+    private val ready = BackupSettings(enabled = true, bucketIds = setOf(1L), addedAfter = 0)
 
     @Test fun `one album is named, with the network backup waits for`() {
         assertEquals("Camera · Wi-Fi only", backupDetail(ready, album = "Camera"))
@@ -19,6 +19,6 @@ class BackupDetailTest {
 
     @Test fun `backup that is off or unfinished says so`() {
         assertEquals("Photos aren’t backed up automatically", backupDetail(BackupSettings(), album = null))
-        assertEquals("Choose a destination and albums", backupDetail(ready.copy(folderId = null), album = null))
+        assertEquals("Finish setting up backup", backupDetail(ready.copy(addedAfter = null), album = null))
     }
 }

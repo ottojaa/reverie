@@ -7,10 +7,13 @@ import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns
 import com.reverie.app.data.api.model.DocumentScope
 import com.reverie.app.data.api.DocumentsApi
+import com.reverie.app.data.api.FoldersApi
 import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.UploadApi
 import com.reverie.app.data.api.model.CheckContentFile
 import com.reverie.app.data.api.model.CheckContentResult
+import com.reverie.app.data.api.model.CreateFolderRequest
+import com.reverie.app.data.api.model.FolderDto
 import com.reverie.app.data.repository.checkContentInBatches
 import com.reverie.app.data.upload.ContentHasher
 import com.reverie.app.data.upload.openOriginal
@@ -35,6 +38,7 @@ class MediaStoreBackupSource @Inject constructor(
     override suspend fun queryMedia(): List<BackupMedia> = withContext(io) {
         val projection = arrayOf(
             FileColumns._ID, FileColumns.DISPLAY_NAME, FileColumns.MIME_TYPE, FileColumns.SIZE, FileColumns.BUCKET_ID, FileColumns.BUCKET_DISPLAY_NAME,
+            FileColumns.DATE_ADDED,
         )
         val selection = "${FileColumns.MEDIA_TYPE} IN (?, ?)"
         val args = arrayOf(FileColumns.MEDIA_TYPE_IMAGE.toString(), FileColumns.MEDIA_TYPE_VIDEO.toString())
@@ -48,6 +52,7 @@ class MediaStoreBackupSource @Inject constructor(
                 val size = cursor.getColumnIndexOrThrow(FileColumns.SIZE)
                 val bucket = cursor.getColumnIndexOrThrow(FileColumns.BUCKET_ID)
                 val bucketName = cursor.getColumnIndexOrThrow(FileColumns.BUCKET_DISPLAY_NAME)
+                val added = cursor.getColumnIndexOrThrow(FileColumns.DATE_ADDED)
                 while (cursor.moveToNext()) {
                     media += BackupMedia(
                         id = cursor.getLong(id),
@@ -56,6 +61,7 @@ class MediaStoreBackupSource @Inject constructor(
                         sizeBytes = cursor.getLong(size),
                         bucketId = cursor.getLong(bucket),
                         bucketName = cursor.getString(bucketName).orEmpty(),
+                        addedAt = cursor.getLong(added),
                     )
                 }
             }
@@ -68,23 +74,20 @@ internal fun filesUri(): Uri = MediaStore.Files.getContentUri(MediaStore.VOLUME_
 /** The `content://` URI of a MediaStore item; nothing is copied, the bytes are read from it. */
 internal fun BackupMedia.toUri(): Uri = ContentUris.withAppendedId(filesUri(), id)
 
-/** Hashes and uploads straight from MediaStore URIs, and asks the server what it already has. */
+/** Hashes and uploads straight from MediaStore URIs, and asks the server what it has and where to put it. */
 @Singleton
 class MediaStoreBackupTransport @Inject constructor(
     @ApplicationContext private val context: Context,
     private val hasher: ContentHasher,
     private val documentsApi: DocumentsApi,
     private val uploadApi: UploadApi,
+    private val foldersApi: FoldersApi,
 ) : BackupTransport {
 
     override suspend fun hash(media: BackupMedia): String? = hasher.hash(media.toUri(), mimeType = media.mimeType)
 
-    override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> = try {
-        documentsApi.checkContentInBatches(DocumentScope.All, files)
-    } catch (e: IOException) {
-        // The HTTP client reports a lost connection, an unknown host or a timeout as a plain IOException.
-        throw ReverieApiException.Network(e)
-    }
+    override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> =
+        reportingNetwork { documentsApi.checkContentInBatches(DocumentScope.All, files) }
 
     override suspend fun upload(media: BackupMedia, folderId: String): String? {
         val uri = media.toUri()
@@ -117,6 +120,19 @@ class MediaStoreBackupTransport @Inject constructor(
             throw MediaReadException(e)
         }
         return MediaReadStream(stream)
+    }
+
+    override suspend fun createFolder(name: String, parentId: String?): String =
+        reportingNetwork { foldersApi.create(CreateFolderRequest(name, parentId)).id }
+
+    override suspend fun listFolders(parentId: String?): List<FolderDto> =
+        reportingNetwork { foldersApi.children(parentId) }
+
+    private suspend fun <T> reportingNetwork(call: suspend () -> T): T = try {
+        call()
+    } catch (e: IOException) {
+        // The HTTP client reports a lost connection, an unknown host or a timeout as a plain IOException.
+        throw ReverieApiException.Network(e)
     }
 }
 
