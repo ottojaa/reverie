@@ -9,6 +9,7 @@ import com.reverie.app.data.api.model.QuickFilter
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.data.api.model.kind
 import com.reverie.app.data.repository.PageResult
+import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.screens.browse.BrowseFeedModel
 import com.reverie.app.ui.screens.browse.FeedDocuments
 import com.reverie.app.ui.screens.browse.FeedState
@@ -27,8 +28,11 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
-/** How many candidates a kind card's cover is picked from, and how many files the Files card shows. */
+/** How many candidates a picture card's cover is picked from, and how many files the Files card shows. */
 const val PREVIEW_COUNT = 4
+
+/** How many files the Files card chooses its few from: as many as one read of a list can give. */
+const val FILE_CANDIDATES = 100
 
 /** How many of the documents in no folder the Library lists; the rest are behind "See all". */
 const val UNFILED_ROWS = 3
@@ -65,7 +69,7 @@ interface LibraryReads {
 data class KindCovers(
     val photo: DocumentDto? = null,
     val video: DocumentDto? = null,
-    /** Up to four, newest first: the card shows a block for each one's type. */
+    /** Up to four, a block of the card for each one's type: see [filesCardPicks]. */
     val files: List<DocumentDto> = emptyList(),
 )
 
@@ -182,21 +186,31 @@ class LibraryModel(
 
 /**
  * The documents [kind]'s cover can come from: the server's picks once it has named them, and until then
- * (offline, say) the newest cached ones.
+ * (offline, say) the cached ones, newest first.
  */
 private fun candidates(cache: List<DocumentDto>, kind: DocumentKind, ids: List<String>?): List<DocumentDto> {
-    if (ids == null) return cache.filter { it.kind == kind }.take(PREVIEW_COUNT)
+    if (ids == null) return cache.filter { it.kind == kind }
     val byId = cache.associateBy { it.id }
     return ids.mapNotNull(byId::get)
 }
 
 internal fun kindCovers(cache: List<DocumentDto>, previews: Map<DocumentKind, List<String>>): KindCovers {
     fun picks(kind: DocumentKind) = candidates(cache, kind, previews[kind])
-    // A card filled by one picture takes the first candidate that has one.
-    fun cover(kind: DocumentKind) = picks(kind).sortedByDescending { it.hasRenderedThumbnail }.firstOrNull()
+    // A card filled by one picture takes the first of the leading candidates that has one.
+    fun cover(kind: DocumentKind) =
+        picks(kind).take(PREVIEW_COUNT).sortedByDescending { it.hasRenderedThumbnail }.firstOrNull()
     return KindCovers(
         photo = cover(DocumentKind.IMAGE),
         video = cover(DocumentKind.VIDEO),
-        files = picks(DocumentKind.FILE).take(PREVIEW_COUNT),
+        files = filesCardPicks(picks(DocumentKind.FILE)),
     )
+}
+
+/**
+ * The newest file of each extension, newest first, as far as the card has blocks; blocks left over go to
+ * the next newest files.
+ */
+private fun filesCardPicks(newestFirst: List<DocumentDto>): List<DocumentDto> {
+    val newestOfEach = newestFirst.distinctBy { fileTypeLabel(it.mime_type, it.original_filename) }
+    return (newestOfEach + newestFirst).distinctBy { it.id }.take(PREVIEW_COUNT)
 }

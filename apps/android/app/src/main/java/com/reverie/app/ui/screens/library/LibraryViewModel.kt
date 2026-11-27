@@ -148,9 +148,12 @@ private class RepositoryReads(private val deps: BrowseDeps, private val search: 
     override suspend fun unfiledPage(offset: Int): PageResult =
         deps.documents.refresh(DocumentScope.TopLevel, BROWSE_PAGE_SIZE, offset)
 
-    override suspend fun preview(kind: DocumentKind): List<String> = deps.documents
-        .refresh(DocumentScope.All, PREVIEW_COUNT, offset = 0, filter = DocumentFilter.of(kind), preview = true)
-        .ids
+    override suspend fun preview(kind: DocumentKind): List<String> {
+        // The Files card wants one file of each type, so it looks further back than a picture card.
+        val count = if (kind == DocumentKind.FILE) FILE_CANDIDATES else PREVIEW_COUNT
+        val filter = DocumentFilter.of(kind)
+        return deps.documents.refresh(DocumentScope.All, count, offset = 0, filter = filter, preview = true).ids
+    }
 
     override suspend fun summary() {
         deps.documents.fetchSummary(DocumentScope.All)

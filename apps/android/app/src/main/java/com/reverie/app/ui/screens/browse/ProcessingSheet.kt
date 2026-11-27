@@ -37,10 +37,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reverie.app.data.api.model.DocumentDto
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.hasRenderedThumbnail
+import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentThumbnail
 import com.reverie.app.ui.components.EmptyState
+import com.reverie.app.ui.components.FileRowPicture
+import com.reverie.app.ui.components.ROW_PICTURE
 
 /** Rows this close to the end of the list trigger loading the next page. */
 private const val LOAD_MORE_THRESHOLD = 5
@@ -175,15 +179,23 @@ private fun ProcessingRow(document: DocumentDto, onClick: () -> Unit, modifier: 
 
 @Composable
 private fun RowThumbnail(document: DocumentDto) {
-    DocumentThumbnail(
-        documentId = document.id,
-        mimeType = document.mime_type,
-        filename = document.original_filename,
-        blurhash = document.thumbnail_blurhash,
-        hasThumbnail = document.hasRenderedThumbnail,
-        modifier = Modifier.size(52.dp).clip(MaterialTheme.shapes.medium),
-        size = ThumbnailSize.SM,
-    )
+    val isRendered = document.hasRenderedThumbnail
+    val thumbnail: @Composable (Modifier) -> Unit = { picture ->
+        DocumentThumbnail(
+            documentId = document.id,
+            mimeType = document.mime_type,
+            filename = document.original_filename,
+            blurhash = document.thumbnail_blurhash,
+            hasThumbnail = isRendered,
+            modifier = picture,
+            size = ThumbnailSize.SM,
+        )
+    }
+    if (document.kind == DocumentKind.FILE) {
+        FileRowPicture(document.mime_type, document.original_filename, isRendered, preview = thumbnail)
+        return
+    }
+    thumbnail(Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
 }
 
 @Composable

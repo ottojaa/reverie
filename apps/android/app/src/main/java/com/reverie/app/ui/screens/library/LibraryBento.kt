@@ -39,6 +39,9 @@ private val SMALL_CARD_HEIGHT = 124.dp
 private val CARD_GAP = 10.dp
 private val BLOCK_GAP = 2.dp
 
+/** Which file each block shows, a row at a time. The lower left block is under the card's name, so it takes the last. */
+private val FILE_PLACES = listOf(listOf(0, 1), listOf(3, 2))
+
 /** The three kinds of document as cover cards: Photos tall, Videos over Files beside it. */
 @Composable
 fun LibraryBento(
@@ -87,7 +90,7 @@ private fun PictureCard(
     }
 }
 
-/** The Files card: the types of the newest files as four blocks, the name on a scrim over their foot. */
+/** The Files card: the types of the files [KindCovers] picked as four blocks, the name on a scrim over their foot. */
 @Composable
 private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKind) -> Unit, modifier: Modifier) {
     CardFrame(onClick = { onOpen(DocumentKind.FILE) }, modifier) {
@@ -97,13 +100,13 @@ private fun FilesCard(count: Int?, files: List<DocumentDto>, onOpen: (DocumentKi
     }
 }
 
-/** Two rows of two, filled left to right; a place with no file for it stays plain. */
+/** Two rows of two, filled as [FILE_PLACES] says; a place with no file for it stays plain. */
 @Composable
 private fun FileBlocks(files: List<DocumentDto>, modifier: Modifier) {
     Column(modifier.background(MaterialTheme.colorScheme.background), verticalArrangement = Arrangement.spacedBy(BLOCK_GAP)) {
-        repeat(2) { row ->
+        FILE_PLACES.forEach { places ->
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(BLOCK_GAP)) {
-                repeat(2) { column -> FileBlock(files.getOrNull(row * 2 + column), Modifier.weight(1f).fillMaxHeight()) }
+                places.forEach { FileBlock(files.getOrNull(it), Modifier.weight(1f).fillMaxHeight()) }
             }
         }
     }

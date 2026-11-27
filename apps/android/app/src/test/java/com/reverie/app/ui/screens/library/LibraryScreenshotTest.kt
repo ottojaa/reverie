@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.Icon
@@ -15,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
+import com.android.resources.ScreenOrientation
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FileTotalsDto
@@ -193,5 +196,42 @@ class LibraryScreenshotTest {
             ),
             BackupStatus.NeedsAttention,
         )
+    }
+
+    @Test fun recentTypes() {
+        // The strip scrolls sideways: a screen wide enough to hold every tile of it.
+        paparazzi.unsafeUpdateConfig(
+            DeviceConfig.PIXEL_5.copy(
+                screenWidth = 2100, screenHeight = 460, orientation = ScreenOrientation.LANDSCAPE,
+                xdpi = Density.XHIGH.dpiValue, ydpi = Density.XHIGH.dpiValue, density = Density.XHIGH,
+            ),
+        )
+        val documents = listOf(
+            screenshot, recording, statement, added[0],
+            item("household-budget-2026.xlsx", "application/vnd.ms-excel", "2026-11-12T10:00:00Z", 90_000, picture = true),
+            archive, results,
+        )
+        paparazzi.snapshotThemes("recentTypes") {
+            val rows = RowActions(selected = { false }, onClick = {}, onLongClick = {}, starred = { it.id == statement.id })
+            Box(Modifier.padding(vertical = 20.dp)) {
+                RecentlyAdded(
+                    FeedState(FeedDocuments(documents, total = documents.size, fetched = true)), rows,
+                    LibraryDay(LocalDate.of(2026, 11, 26), ZoneOffset.UTC), rememberLazyListState(), onLoadMore = {},
+                )
+            }
+        }
+    }
+
+    /** The Files card of a library whose four newest files are all builds, with other types behind them. */
+    @Test fun filesCard() {
+        resize(width = 780, height = 640, dpi = Density.XHIGH)
+        val builds = listOf("b61deee", "855423e", "ee90ce3", "c0aa129").mapIndexed { age, build ->
+            apk(build, "2026-11-2${6 - age}T19:00:00Z")
+        }
+        val cache = listOf(screenshot, recording) + builds + listOf(statement, archive, results)
+        val figures = DocumentSummaryDto(KindTotalsDto(126), KindTotalsDto(49), FileTotalsDto(77))
+        paparazzi.snapshotThemes("filesCard") {
+            LibraryBento(figures, kindCovers(cache, previews = emptyMap()), onOpen = {})
+        }
     }
 }

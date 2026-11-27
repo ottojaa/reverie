@@ -19,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Names under both captioned tiles, at a grid tile's width and a narrower one. Left to right: one whose
+ * Names under a file's captioned grid tile, at its usual width and a narrower one. Left to right: one whose
  * extension would be split, one too long for two lines, one with a long extension, and one with none.
  */
 class FileTileNameScreenshotTest {
@@ -42,20 +42,10 @@ class FileTileNameScreenshotTest {
             ReverieTheme(themeMode = if (isDark) ThemeMode.DARK else ThemeMode.LIGHT) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     Column(Modifier.padding(4.dp), Arrangement.spacedBy(2.dp)) {
-                        listOf(124.dp, 92.dp).forEach { width ->
-                            FolderTiles(width)
-                            GalleryTiles(width)
-                        }
+                        listOf(124.dp, 92.dp).forEach { width -> GalleryTiles(width) }
                     }
                 }
             }
-        }
-    }
-
-    @Composable
-    private fun FolderTiles(width: Dp) = Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        files.take(visible(width)).forEach { (mime, name) ->
-            FileTypeTile(mime, name, Modifier.size(width), 28.dp, name)
         }
     }
 

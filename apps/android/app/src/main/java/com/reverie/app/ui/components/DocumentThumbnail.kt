@@ -78,9 +78,9 @@ fun DocumentThumbnail(
 }
 
 /**
- * A gallery tile's full visual: the [DocumentThumbnail] fill plus the overlays that let file types
- * read at a glance — a duration badge on videos and, for previewable documents, an extension chip,
- * both in the top corner. Shared by the document grid ([DocumentCard]) and the Search grid.
+ * A gallery tile's full visual: a photo or video as its [DocumentThumbnail], any other file as its
+ * [FileGridTile], under the marks of the top corner: the favourite star and a video's length. Shared by the
+ * document grid ([DocumentCard]) and the Search grid.
  */
 @Composable
 fun GalleryThumbnail(
@@ -95,30 +95,31 @@ fun GalleryThumbnail(
     isStarred: Boolean = false,
 ) {
     val kind = DocumentKind.of(mimeType)
-    val isVideo = kind == DocumentKind.VIDEO
-    val isImage = kind == DocumentKind.IMAGE
     Box(modifier) {
-        DocumentThumbnail(
-            documentId = documentId,
-            mimeType = mimeType,
-            filename = filename,
-            blurhash = blurhash,
-            hasThumbnail = hasThumbnail,
-            size = size,
-            modifier = Modifier.matchParentSize(),
-            isCaptioned = true,
-        )
-        // The top corner, shared: the favourite star, then a video's badge or a type chip.
+        val thumbnail: @Composable (Modifier) -> Unit = { picture ->
+            DocumentThumbnail(
+                documentId = documentId,
+                mimeType = mimeType,
+                filename = filename,
+                blurhash = blurhash,
+                hasThumbnail = hasThumbnail,
+                size = size,
+                modifier = picture,
+                isCaptioned = true,
+            )
+        }
+        if (kind == DocumentKind.FILE) {
+            FileGridTile(mimeType, filename, hasThumbnail, Modifier.matchParentSize(), caption = filename, thumbnail)
+        } else {
+            thumbnail(Modifier.matchParentSize())
+        }
         Row(
             modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isStarred) StarredBadge()
-            if (isVideo) VideoBadge(durationSeconds)
-            // A previewable document (a rendered PDF/office page) still needs a type marker; a file with
-            // no preview already shows its extension in the fill.
-            if (!isImage && !isVideo && hasThumbnail) FileTypeBadge(mime = mimeType, filename = filename)
+            if (kind == DocumentKind.VIDEO) VideoBadge(durationSeconds)
         }
     }
 }
@@ -138,23 +139,6 @@ internal fun VideoBadge(seconds: Double?, modifier: Modifier = Modifier) {
         Text(
             text = formatDuration(seconds),
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, letterSpacing = 0.sp, fontFeatureSettings = "tnum"),
-            color = Color.White,
-        )
-    }
-}
-
-/** Corner chip naming a previewable document's type (e.g. PDF, DOCX) so it stands out in the grid. */
-@Composable
-private fun FileTypeBadge(mime: String, filename: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.small)
-            .padding(horizontal = 5.dp, vertical = 2.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = fileTypeLabel(mime, filename),
-            style = MaterialTheme.typography.labelSmall,
             color = Color.White,
         )
     }

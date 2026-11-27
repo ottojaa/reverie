@@ -193,6 +193,26 @@ class LibraryModelTest {
         assertEquals(listOf("new1", "new2", "new3", "new4"), covers.files.map(DocumentDto::id))
     }
 
+    /** Files named [names], newest first. */
+    private fun files(vararg names: String) = names.map { doc(it, "application/octet-stream", name = it) }
+
+    private fun cardOf(files: List<DocumentDto>, previews: Map<DocumentKind, List<String>> = emptyMap()) =
+        kindCovers(files, previews).files.map(DocumentDto::id)
+
+    @Test fun `the files card shows the newest file of each extension before a second of any`() {
+        val files = files("d.apk", "c.apk", "b.apk", "a.apk", "scan.pdf", "later.apk", "export.zip", "notes.md", "log.txt")
+        val expected = listOf("d.apk", "scan.pdf", "export.zip", "notes.md")
+
+        assertEquals("from the cache", expected, cardOf(files))
+        assertEquals("from the server", expected, cardOf(files, mapOf(DocumentKind.FILE to files.map(DocumentDto::id))))
+    }
+
+    @Test fun `with two extensions the files card shows those, then the next newest files`() {
+        val files = files("d.apk", "c.apk", "b.apk", "export.zip", "a.APK")
+
+        assertEquals(listOf("d.apk", "export.zip", "c.apk", "b.apk"), cardOf(files))
+    }
+
     @Test fun `a kind the server has no picks for has no cover`() {
         val covers = kindCovers(documents, mapOf(DocumentKind.IMAGE to emptyList()))
 

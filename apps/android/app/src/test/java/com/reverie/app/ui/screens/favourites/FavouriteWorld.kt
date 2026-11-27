@@ -264,7 +264,9 @@ internal class FavouriteWorld {
                 (!isMedia || it.kind != DocumentKind.FILE) &&
                 (kind == null || it.kind.wire == kind)
         }
-        val page = Paginated(items, total = items.size, limit = items.size, offset = 0)
+        // The covers' read stops at the number asked for; every other listing comes whole.
+        val sent = if (asked["preview"] == "true") items.take(asked["limit"]?.toInt() ?: items.size) else items
+        val page = Paginated(sent, total = items.size, limit = sent.size, offset = 0)
         return reply(ApiJson.encodeToString(Paginated.serializer(DocumentDto.serializer()), page))
     }
 

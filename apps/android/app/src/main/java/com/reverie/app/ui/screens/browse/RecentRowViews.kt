@@ -22,6 +22,7 @@ import com.reverie.app.data.api.model.kind
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.DocumentThumbnail
+import com.reverie.app.ui.components.FileRowPicture
 import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.fileTypeLabel
 import com.reverie.app.ui.navigation.documentSharedBounds
@@ -86,7 +87,7 @@ private fun docMeta(doc: DocumentDto): String {
 @Composable
 private fun DocThumb(doc: DocumentDto) {
     if (doc.kind == DocumentKind.FILE) {
-        TypeBadge(doc, ROW_PICTURE)
+        FileRowPicture(doc)
         return
     }
     Thumbnail(doc, Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium))
@@ -121,12 +122,12 @@ private fun ThumbnailPile(docs: List<DocumentDto>) {
     }
 }
 
-/** The type badge with two sheets peeking out behind it: the same file, several versions. */
+/** The file's picture with two sheets peeking out behind it: the same file, several versions. */
 @Composable
 private fun StackedBadge(doc: DocumentDto) {
     val ring = MaterialTheme.colorScheme.background
     val shape = MaterialTheme.shapes.medium
-    // Back to front, each a surface step lighter in weight than the badge.
+    // Back to front, each a surface step lighter in weight than the picture.
     val sheets = listOf(
         2 to MaterialTheme.colorScheme.surfaceContainer,
         1 to MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -139,6 +140,6 @@ private fun StackedBadge(doc: DocumentDto) {
                     .border(1.5.dp, ring, shape),
             )
         }
-        Box(Modifier.offset(y = 10.dp)) { TypeBadge(doc, 42.dp) }
+        Box(Modifier.offset(y = 10.dp)) { FileRowPicture(doc, 42.dp) }
     }
 }

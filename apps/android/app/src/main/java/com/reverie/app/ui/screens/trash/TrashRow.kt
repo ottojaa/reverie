@@ -11,9 +11,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.TrashDocumentDto
 import com.reverie.app.ui.components.DocumentRow
 import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.FileRowPicture
 import com.reverie.app.ui.components.FolderThumbnail
 import com.reverie.app.ui.components.ROW_PICTURE
 import com.reverie.app.ui.components.rememberBlurhashPainter
@@ -50,25 +52,36 @@ private fun TrashPicture(item: TrashItem) {
     }
 }
 
-/**
- * A trashed file's thumbnail, loaded by the address the listing signed (a trashed document has no other)
- * and never written to disk.
- */
 @Composable
 private fun DocumentPicture(document: TrashDocumentDto) {
     val url = document.thumbnail_urls?.sm
+    val thumbnail: @Composable (Modifier) -> Unit = { SignedThumbnail(url, document.thumbnail_blurhash, it) }
+    if (DocumentKind.of(document.mime_type) == DocumentKind.FILE) {
+        // The listing signs addresses only for a file the server has rendered.
+        FileRowPicture(document.mime_type, document.original_filename, hasRendered = url != null, preview = thumbnail)
+        return
+    }
     val picture = Modifier.size(ROW_PICTURE).clip(MaterialTheme.shapes.medium)
     if (url == null) {
         FileKindBlock(document.mime_type, document.original_filename, picture)
         return
     }
-    val placeholder = rememberBlurhashPainter(document.thumbnail_blurhash)
+    thumbnail(picture)
+}
+
+/**
+ * A trashed document's thumbnail, loaded by the address the listing signed (a trashed document has no other)
+ * and never written to disk.
+ */
+@Composable
+private fun SignedThumbnail(url: String?, blurhash: String?, modifier: Modifier) {
+    val placeholder = rememberBlurhashPainter(blurhash)
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current).data(url).diskCachePolicy(CachePolicy.DISABLED).build(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         placeholder = placeholder,
         error = placeholder,
-        modifier = picture,
+        modifier = modifier,
     )
 }

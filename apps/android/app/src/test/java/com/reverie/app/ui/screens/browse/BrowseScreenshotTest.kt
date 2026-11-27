@@ -16,6 +16,7 @@ import app.cash.paparazzi.Paparazzi
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.settings.GridLayoutMode
+import com.reverie.app.ui.BLURHASHES
 import com.reverie.app.ui.snapshotThemes
 import org.junit.Rule
 import org.junit.Test
@@ -148,4 +149,42 @@ class BrowseScreenshotTest {
     @Test fun recentList() = paparazzi.snapshotThemes("recentList") { ListScreen(FeedSource.RECENT, "", newestFirst) }
 
     @Test fun headerHalfHidden() = paparazzi.snapshotThemes("headerHalfHidden") { HalfHiddenScreen() }
+
+    private fun pictured(id: String, name: String, mime: String, at: String, bytes: Long, hash: Int, seconds: Double? = null) =
+        item(id, name, mime, at, bytes, seconds).copy(thumbnail_blurhash = BLURHASHES[hash])
+
+    private val xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    /** Documents drawn as their picture (PDF, spreadsheet) among files drawn as their type. */
+    private val fileKinds = listOf(
+        pictured("k-pdf", "Lease agreement – Kalevankatu 12.pdf", "application/pdf", "2026-11-23T14:00:00Z", 1_800_000, 0),
+        item("k-apk", "reverie-1.0.32-release.apk", apk, "2026-11-23T11:00:00Z", 6_600_000),
+        pictured("k-xlsx", "household-budget-2026.xlsx", xlsx, "2026-11-23T09:00:00Z", 90_000, 1),
+        item("k-zip", "holiday-originals.zip", "application/zip", "2026-11-22T16:00:00Z", 412_000_000),
+        item("k-md", "bcdr-tabletop-prep.md", "text/markdown", "2026-11-22T11:00:00Z", 12_300),
+    )
+
+    @Test fun fileTypes() = paparazzi.snapshotThemes("fileTypes") {
+        val others = listOf(
+            // A rendered text file is still drawn as its type.
+            pictured("k-csv", "electricity-readings.csv", "text/csv", "2026-11-20T15:00:00Z", 22_000, 2),
+            item("k-ts", "migrate-folders.ts", "video/mp2t", "2026-11-20T12:00:00Z", 8_100),
+            item("k-m4a", "voice-memo-landlord.m4a", "audio/mp4", "2026-11-20T08:00:00Z", 2_300_000),
+            item("k-bin", "firmware-update.bin", "application/octet-stream", "2026-11-19T08:00:00Z", 48_000_000),
+        )
+        ListScreen(FeedSource.FILES, "191 files", fileKinds + others)
+    }
+
+    @Test fun recentTypes() = paparazzi.snapshotThemes("recentTypes") {
+        val photo = pictured("k-photo", "PXL_20261123_191530.jpg", "image/jpeg", "2026-11-23T19:15:00Z", 3_400_000, 3)
+        val video = pictured("k-video", "Record_2026-11-23-17-02-11.mp4", "video/mp4", "2026-11-23T17:02:00Z", 9_000_000, 2, 42.0)
+        val stacked = listOf(
+            item("k-apk-2", "app-release.apk", apk, "2026-11-21T20:00:00Z", 6_200_000),
+            item("k-apk-1", "app-release.apk", apk, "2026-11-18T20:00:00Z", 6_100_000),
+            pictured("k-sign-2", "tenancy-signed.pdf", "application/pdf", "2026-11-21T10:00:00Z", 640_000, 1),
+            pictured("k-sign-1", "tenancy-signed.pdf", "application/pdf", "2026-11-17T10:00:00Z", 610_000, 1),
+        )
+        val documents = (listOf(photo, video) + fileKinds + stacked).sortedByDescending { it.created_at }
+        ListScreen(FeedSource.RECENT, "", documents)
+    }
 }

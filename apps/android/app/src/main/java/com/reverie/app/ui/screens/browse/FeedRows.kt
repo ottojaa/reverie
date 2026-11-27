@@ -4,26 +4,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.ui.components.DocumentRow
-import com.reverie.app.ui.components.FileKindBlock
+import com.reverie.app.ui.components.FileRowPicture
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
-import com.reverie.app.ui.components.ROW_PICTURE
-import com.reverie.app.ui.components.TilePicture
-import com.reverie.app.ui.components.galleryPicture
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
@@ -40,24 +33,14 @@ class RowActions(
     val onGroupLongClick: (RecentRow.Group) -> Unit = {},
 )
 
-/**
- * Draws one lazy-list row of a document list.
- *
- * @param picture what fills the tiles of a grid band.
- */
+/** Draws one lazy-list row of a document list. */
 @Composable
-fun FeedRowView(
-    row: FeedRow,
-    actions: RowActions,
-    today: LocalDate,
-    zone: ZoneId,
-    picture: TilePicture = galleryPicture,
-) {
+fun FeedRowView(row: FeedRow, actions: RowActions, today: LocalDate, zone: ZoneId) {
     when (row) {
         is FeedRow.Heading -> HeadingRow(row.header)
         is FeedRow.Band -> Box(Modifier.padding(bottom = MOSAIC_GAP.dp)) {
             val section = row.section
-            MosaicSectionView(section, actions.selected, actions.onClick, actions.onLongClick, actions.starred, picture)
+            MosaicSectionView(section, actions.selected, actions.onClick, actions.onLongClick, actions.starred)
         }
         is FeedRow.File -> FileRow(row.doc, actions)
         is FeedRow.Added -> RecentEntryView(row.entry, actions, today, zone)
@@ -93,15 +76,9 @@ private fun FileRow(doc: DocumentDto, actions: RowActions) {
         modifier = Modifier.documentSharedBounds(doc.id),
         selected = actions.selected(doc),
         starred = actions.starred(doc),
-    ) { TypeBadge(doc) }
+    ) { FileRowPicture(doc) }
 }
 
 /** "2.4 MB · 14:03": the size and the time the file was added. */
 fun fileMeta(doc: DocumentDto): String =
     listOfNotNull(formatBytes(doc.size_bytes), formatTimeOfDay(doc.created_at)).joinToString(" · ")
-
-/** A file's extension on a small block, in the place a photo's thumbnail would take. */
-@Composable
-fun TypeBadge(doc: DocumentDto, size: Dp = ROW_PICTURE) {
-    FileKindBlock(doc.mime_type, doc.original_filename, Modifier.size(size).clip(MaterialTheme.shapes.medium))
-}
