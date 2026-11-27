@@ -28,7 +28,8 @@
             "updated_at": "2026-06-30T10:00:00.000Z",
             "file_url": "https://files.test/signed/files/scan.jpg",
             "hls_url": null,
-            "thumbnail_urls": null
+            "thumbnail_urls": null,
+            "city": null
         },
         {
             "id": "20000000-0000-4000-8000-000000000010",
@@ -58,7 +59,8 @@
             "updated_at": "2026-06-30T10:00:00.000Z",
             "file_url": "https://files.test/signed/files/welcome.pdf",
             "hls_url": null,
-            "thumbnail_urls": null
+            "thumbnail_urls": null,
+            "city": null
         }
     ],
     "total": 2,

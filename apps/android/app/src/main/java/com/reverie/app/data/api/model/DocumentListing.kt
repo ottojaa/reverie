@@ -17,6 +17,17 @@ sealed interface DocumentScope {
     }
 }
 
+/** The order a folder's page lists documents in. [wire] is the `sort` the server takes; none means by date. */
+enum class DocumentSort(val wire: String?) {
+    NEWEST(null),
+
+    /** By filename, A to Z. */
+    NAME("name"),
+
+    /** Largest first. */
+    SIZE("size"),
+}
+
 /** Which kinds a document listing holds. */
 enum class DocumentFilter(private val kinds: Set<DocumentKind>) {
     ALL(setOf(DocumentKind.IMAGE, DocumentKind.VIDEO, DocumentKind.FILE)),

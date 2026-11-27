@@ -6,6 +6,7 @@ import com.reverie.app.data.local.PrivateDataPurger
 import com.reverie.app.data.local.PrivateDocumentStore
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentScope
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.local.entity.DocumentEntity
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -15,6 +16,7 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.first
@@ -265,6 +267,29 @@ class DocumentRepositoryTest {
         assertEquals("2026-11-02T09:00:00.000Z", dao.rows.value.single().takenAt)
     }
 
+    @Test fun `the city is cached, and survives a response that carries none`() = runTest {
+        val dao = FakeDocumentDao()
+        val doc = docJson("d1", "f1", "a.jpg", takenAt = "2026-11-02T09:00:00.000Z")
+        val withCity = """{"items":[${doc.dropLast(1)},"city":"Suomenlinna"}],"total":1,"limit":30,"offset":0}"""
+        val without = """{"items":[$doc],"total":1,"limit":30,"offset":0}"""
+
+        repo(dao) { withCity }.refresh(inF1, limit = 30, offset = 0)
+        repo(dao) { without }.refresh(inF1, limit = 30, offset = 0)
+
+        assertEquals("Suomenlinna", dao.rows.value.single().city)
+    }
+
+    @Test fun `a folder page's sort is asked for, and none when it lists by date`() = runTest {
+        val requested = mutableListOf<String>()
+        val repository = repo(FakeDocumentDao(), requested = requested) {
+            """{"items":[],"total":0,"limit":30,"offset":0}"""
+        }
+
+        DocumentSort.entries.forEach { repository.refresh(inF1, limit = 30, offset = 0, sort = it) }
+
+        assertEquals(listOf(null, "name", "size"), requested.map { Url(it).parameters["sort"] })
+    }
+
     @Test fun `private documents are served from memory and never reach Room`() = runTest {
         val dao = FakeDocumentDao()
         val store = PrivateDocumentStore()
@@ -352,7 +377,7 @@ class DocumentRepositoryTest {
         id = id, folderId = folder, originalFilename = "$id.jpg", mimeType = mime, sizeBytes = 1,
         width = null, height = null, durationSeconds = null, thumbnailBlurhash = null, documentCategory = "photo", extractedDate = null,
         ocrStatus = "COMPLETE", thumbnailStatus = "COMPLETE", llmStatus = "COMPLETE", llmSummary = null,
-        llmMetadataJson = null, llmProcessedAt = null, llmTokenCount = null, photoMetadataJson = null, takenAt = takenAt,
+        llmMetadataJson = null, llmProcessedAt = null, llmTokenCount = null, photoMetadataJson = null, takenAt = takenAt, city = null,
         createdAt = "2024-01-01T00:00:00.000Z", updatedAt = "2024-01-01T00:00:00.000Z",
         cachedAt = 0, lastAccessedAt = 0,
     )

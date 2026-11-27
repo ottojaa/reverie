@@ -37,7 +37,7 @@ class Migration7To8Test {
     /** No destructive fallback: a migration that leaves the wrong schema fails the open. */
     private fun open(): ReverieDatabase =
         Room.databaseBuilder(context, ReverieDatabase::class.java, NAME)
-            .addMigrations(Migration7To8)
+            .addMigrations(Migration7To8, Migration8To9)
             .allowMainThreadQueries()
             .build()
             .also { database = it }
@@ -82,6 +82,18 @@ class Migration7To8Test {
         dao.insertTask(UploadTaskEntity("s2", null, null, "QUEUED", 8))
 
         assertEquals(null, dao.getTask("s2")!!.folderId)
+    }
+
+    @Test fun `cached documents survive, with no city yet`() = runBlocking {
+        createVersion7(
+            "INSERT INTO documents (id, originalFilename, mimeType, sizeBytes, ocrStatus, thumbnailStatus, llmStatus, " +
+                "createdAt, updatedAt, cachedAt, lastAccessedAt) " +
+                "VALUES ('d1', 'a.jpg', 'image/jpeg', 1, 'COMPLETE', 'COMPLETE', 'COMPLETE', 'c', 'u', 7, 7)",
+        )
+
+        val kept = open().documentDao().getById("d1")!!
+
+        assertEquals(listOf("a.jpg", null), listOf(kept.originalFilename, kept.city))
     }
 
     private fun item(id: String, session: String, status: String) =

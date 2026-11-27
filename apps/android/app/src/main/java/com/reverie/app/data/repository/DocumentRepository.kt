@@ -6,6 +6,7 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.DocumentScope
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.Paginated
@@ -163,7 +164,7 @@ class DocumentRepository @Inject constructor(
      */
     private suspend fun absorb(items: List<DocumentDto>) {
         val now = System.currentTimeMillis()
-        documentDao.upsertAll(withKnownTakenAt(items.toCacheableEntities(now)))
+        documentDao.upsertAll(withKnownPhotoFacts(items.toCacheableEntities(now)))
         val (private, public) = items.partition { it.is_private }
         privateStore.putAll(private)
         // A document that left its private folder (now public) must stop being served from memory.
@@ -179,20 +180,23 @@ class DocumentRepository @Inject constructor(
     }
 
     /**
-     * A response that carries no date taken (a rename or a search hit) must not wipe the one the
-     * Photos and Videos tabs order by: rows without one keep the cached value.
+     * A response that carries no date taken or city (a rename or a search hit) must not wipe the ones the
+     * lists show and the Photos and Videos tabs order by: a row without one keeps the cached value.
      */
-    private suspend fun withKnownTakenAt(entities: List<DocumentEntity>): List<DocumentEntity> {
-        val missing = entities.filter { it.takenAt == null }.map { it.id }
+    private suspend fun withKnownPhotoFacts(entities: List<DocumentEntity>): List<DocumentEntity> {
+        val missing = entities.filter { it.takenAt == null || it.city == null }.map { it.id }
         if (missing.isEmpty()) return entities
-        val known = documentDao.takenAtOf(missing).associate { it.id to it.takenAt }
+        val known = documentDao.photoFactsOf(missing).associateBy { it.id }
         if (known.isEmpty()) return entities
-        return entities.map { if (it.takenAt == null) it.copy(takenAt = known[it.id]) else it }
+        return entities.map { entity ->
+            val facts = known[entity.id] ?: return@map entity
+            entity.copy(takenAt = entity.takenAt ?: facts.takenAt, city = entity.city ?: facts.city)
+        }
     }
 
     /**
-     * Fetch one page of [scope]'s documents of [filter]'s kinds into the cache; [preview] asks for the
-     * order covers are picked in. Throws [com.reverie.app.data.api.ReverieApiException].
+     * Fetch one page of [scope]'s documents of [filter]'s kinds, in [sort]'s order, into the cache;
+     * [preview] asks for the order covers are picked in. Throws [com.reverie.app.data.api.ReverieApiException].
      */
     suspend fun refresh(
         scope: DocumentScope,
@@ -200,8 +204,9 @@ class DocumentRepository @Inject constructor(
         offset: Int,
         filter: DocumentFilter = DocumentFilter.ALL,
         preview: Boolean = false,
+        sort: DocumentSort = DocumentSort.NEWEST,
     ): PageResult = withContext(io) {
-        val page = documentsApi.list(limit = limit, offset = offset, scope = scope, filter = filter, preview = preview)
+        val page = documentsApi.list(limit, offset, scope, filter, preview = preview, sort = sort)
         absorb(page.items)
 
         // If a single page covered a whole folder or the whole top level, drop rows the server no longer

@@ -1,0 +1,17 @@
+{
+    "ascending": [
+        ["10.jpg"],
+        ["2.jpg"],
+        ["_x.jpg"],
+        ["a b.jpg"],
+        ["a-b.jpg"],
+        ["a.jpg"],
+        ["B.jpg", "b.jpg"],
+        ["same.jpg", "SAME.jpg", "Same.jpg"],
+        ["Z.jpg"],
+        ["Ä.jpg"],
+        ["ä.jpg"],
+        ["�.jpg"],
+        ["😀.jpg"]
+    ]
+}

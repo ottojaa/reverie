@@ -38,6 +38,8 @@ data class DocumentEntity(
     val photoMetadataJson: String?,
     // Date taken as the server sends it (a local clock reading stored as if UTC); null when unknown.
     val takenAt: String?,
+    // Where a photo or video was taken; null when unknown.
+    val city: String?,
     val createdAt: String,
     val updatedAt: String,
     val cachedAt: Long,

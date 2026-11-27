@@ -10,6 +10,7 @@ import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentOcrResult
 import com.reverie.app.data.api.model.DocumentScope
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.DocumentStatusResponse
 import com.reverie.app.data.api.model.JobIdResponse
@@ -47,6 +48,7 @@ class DocumentsApi @Inject constructor(
         filter: DocumentFilter = DocumentFilter.ALL,
         processing: Boolean = false,
         preview: Boolean = false,
+        sort: DocumentSort = DocumentSort.NEWEST,
     ): Paginated<DocumentDto> = client.get("documents") {
         parameter("limit", limit)
         parameter("offset", offset)
@@ -55,6 +57,7 @@ class DocumentsApi @Inject constructor(
         filter.singleKind?.let { parameter("kind", it.wire) }
         if (processing) parameter("processing", true)
         if (preview) parameter("preview", true)
+        sort.wire?.let { parameter("sort", it) }
     }.decode()
 
     /** Count and size per kind of [scope]'s documents. */

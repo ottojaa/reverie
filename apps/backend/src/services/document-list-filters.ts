@@ -1,4 +1,4 @@
-import type { DocumentKind } from '@reverie/shared';
+import type { DocumentKind, DocumentSort } from '@reverie/shared';
 import { sql, type ExpressionBuilder, type SelectQueryBuilder } from 'kysely';
 import type { Database, JobStatus } from '../db/schema';
 import { excludePrivateDocuments, excludeTrashed } from './privacy';
@@ -86,6 +86,30 @@ export const TAKEN_AT_SQL = sql<Date | null>`(SELECT pm.taken_at FROM photo_meta
 
 /** The order of photos and videos: date taken, else upload date, newest first; id keeps offset paging stable. */
 export const TAKEN_OR_CREATED_SQL = sql`coalesce(${TAKEN_AT_SQL}, documents.created_at)`;
+
+/** The city a photo or video was taken in, read the same way as TAKEN_AT_SQL. */
+export const CITY_SQL = sql<string | null>`(SELECT pm.city FROM photo_metadata pm WHERE pm.document_id = documents.id)`;
+
+/**
+ * The filename as `sort=name` compares it. Under the C collation only A-Z fold and strings compare byte by byte, so
+ * the order is the same on every server and a client can reproduce it.
+ */
+const FOLDED_NAME_SQL = sql`lower(documents.original_filename COLLATE "C")`;
+
+/** The order of a listing. */
+export function applyDocumentListOrder<O>(
+    query: SelectQueryBuilder<Database, 'documents', O>,
+    sort: DocumentSort | undefined,
+    byDateTaken: boolean,
+): SelectQueryBuilder<Database, 'documents', O> {
+    if (sort === 'name') return query.orderBy(FOLDED_NAME_SQL).orderBy('id');
+
+    if (sort === 'size') return query.orderBy('size_bytes', 'desc').orderBy('id', 'desc');
+
+    if (byDateTaken) return query.orderBy(TAKEN_OR_CREATED_SQL, 'desc').orderBy('id', 'desc');
+
+    return query.orderBy('created_at', 'desc');
+}
 
 /**
  * A screenshot or a screen recording, by its category or its filename (macOS, Android and iOS names). Such files
