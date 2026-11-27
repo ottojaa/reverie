@@ -42,7 +42,10 @@ internal class SideBySideUploads(parallel: Int, private val manualUploads: Manua
             val started = mutableListOf<Job>()
             for (item in items) {
                 slots.acquire()
-                if (!awaitRoom()) break
+                if (!awaitRoom()) {
+                    slots.release()
+                    break
+                }
                 // Asked last, after every other wait, so the answer still holds when the upload starts.
                 if (manualUploads.isRunning()) started.joinAll()
                 started += launch { runOne { upload(item) } }
