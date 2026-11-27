@@ -48,16 +48,16 @@ class FilesCardTest {
     private fun bounds(tag: String): DpRect =
         compose.onNodeWithTag(tag, useUnmergedTree = true).getUnclippedBoundsInRoot()
 
-    @Test fun `four blocks, newest first, in two rows of two`() {
+    @Test fun `four blocks, the newest along the top and the fourth in the lower left`() {
         show(listOf(file("a.apk"), file("b.zip"), file("c.md", "text/markdown"), file("d.pdf", "application/pdf")))
 
         val (apk, zip, md, pdf) = listOf("APK", "ZIP", "MD", "PDF").map { bounds("file-block:$it") }
 
         assertEquals(apk.top, zip.top)
-        assertEquals(md.top, pdf.top)
-        assertEquals(apk.left, md.left)
-        assertEquals(zip.left, pdf.left)
-        assertTrue(apk.left < zip.left && apk.top < md.top)
+        assertEquals(pdf.top, md.top)
+        assertEquals(apk.left, pdf.left)
+        assertEquals(zip.left, md.left)
+        assertTrue(apk.left < zip.left && apk.top < pdf.top)
     }
 
     @Test fun `the name and the count sit over the foot of the blocks`() {
@@ -65,9 +65,18 @@ class FilesCardTest {
 
         compose.onNodeWithText("Files").assertIsDisplayed()
         val count = compose.onNodeWithText("77", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val lowerLeft = bounds("file-block:MD")
+        val lowerLeft = bounds("file-block:PDF")
 
         assertTrue(count.top > lowerLeft.top && count.bottom <= lowerLeft.bottom)
+    }
+
+    @Test fun `with three files the plain block is the one under the name`() {
+        show(listOf(file("a.apk"), file("b.zip"), file("c.md")))
+
+        val plain = bounds("file-block:plain")
+
+        assertEquals(bounds("file-block:APK").left, plain.left)
+        assertEquals(bounds("file-block:MD").top, plain.top)
     }
 
     @Test fun `with fewer than four files the other blocks are plain`() {

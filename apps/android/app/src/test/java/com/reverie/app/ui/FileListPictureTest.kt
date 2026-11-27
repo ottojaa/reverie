@@ -21,8 +21,12 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.ImageResult
 import coil.request.SuccessResult
+import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentSearchResult
+import com.reverie.app.data.api.model.JobStatus
 import com.reverie.app.data.api.model.ThumbnailUrls
+import com.reverie.app.domain.model.ThumbnailRef
+import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.PhotoResultTile
 import com.reverie.app.ui.components.SearchResultRow
 import com.reverie.app.ui.screens.browse.FeedDocuments
@@ -30,6 +34,8 @@ import com.reverie.app.ui.screens.browse.FeedRow
 import com.reverie.app.ui.screens.browse.FeedRowView
 import com.reverie.app.ui.screens.browse.FeedState
 import com.reverie.app.ui.screens.browse.GroupKind
+import com.reverie.app.ui.screens.browse.ProcessingSheetContent
+import com.reverie.app.ui.screens.browse.ProcessingSheetState
 import com.reverie.app.ui.screens.browse.RecentEntry
 import com.reverie.app.ui.screens.browse.RecentRow
 import com.reverie.app.ui.screens.browse.RowActions
@@ -114,6 +120,24 @@ class FileListPictureTest {
         }
 
         assertTypeTiles("APK", count = 2)
+    }
+
+    private fun showProcessing(document: DocumentDto) = show {
+        val state = ProcessingSheetState(rows = listOf(document.copy(llm_status = JobStatus.PROCESSING)), total = 1, isLoading = false)
+        ProcessingSheetContent(state, onOpenDocument = {}, onLoadMore = {})
+    }
+
+    @Test fun `a processing row shows an APK as its type`() {
+        showProcessing(apk)
+
+        assertTypeTiles("APK")
+    }
+
+    @Test fun `a processing PDF shows its small picture under its badge`() {
+        showProcessing(pdf)
+
+        compose.onNodeWithContentDescription("PDF", useUnmergedTree = true).assertExists()
+        assertEquals(ThumbnailRef(pdf.id, ThumbnailSize.SM), awaitRequest().data)
     }
 
     @Test fun `the recently added tiles show a file's type`() {
