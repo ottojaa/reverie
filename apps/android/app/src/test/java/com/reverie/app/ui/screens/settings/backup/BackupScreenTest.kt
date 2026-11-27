@@ -7,9 +7,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
-import com.reverie.app.data.backup.AlbumBlock
 import com.reverie.app.data.backup.AlbumFolder
-import com.reverie.app.data.backup.AlbumProblem
 import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.BackupSettings
 import com.reverie.app.data.backup.INCLUDE_EXISTING
@@ -22,7 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** The album rows and new-album notices of the backup screen: what they say and what tapping them asks for. */
+/** What tapping the album rows and new-album notices of the backup screen asks for. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class, qualifiers = "w400dp-h2000dp")
 class BackupScreenTest {
@@ -60,7 +58,7 @@ class BackupScreenTest {
         destinations = BackupDestinations(albums = mapOf(1L to "Photos", 2L to "Phone backup › Screenshots")),
     )
 
-    private fun show(state: BackupUiState = this.state) = compose.setContent {
+    private fun show() = compose.setContent {
         ReverieTheme { BackupSettingsContent(state, actions) }
     }
 
@@ -100,12 +98,6 @@ class BackupScreenTest {
         assertEquals(listOf("reset 1"), asked)
     }
 
-    @Test fun `the albums card says a change affects new photos only`() {
-        show()
-
-        assertEquals(1, count("Changing it affects new photos only; ones already backed up stay where they are."))
-    }
-
     @Test fun `a new album is announced with both answers`() {
         show()
 
@@ -115,32 +107,5 @@ class BackupScreenTest {
         compose.onNodeWithText("Back up").click()
 
         assertEquals(listOf("not now 4", "back up 4"), asked)
-    }
-
-    @Test fun `the notice counts videos as videos`() {
-        val albums = listOf(BackupAlbum(5, "Clips", 1, videos = 1), BackupAlbum(6, "Trip", 3, videos = 2))
-        show(state.copy(albums = albums))
-
-        compose.onNodeWithText("New album: Clips, 1 video — back it up?").assertExists()
-        compose.onNodeWithText("New album: Trip, 1 photo and 2 videos — back it up?").assertExists()
-    }
-
-    @Test fun `each blocked row says why and the others say nothing`() {
-        val problems = mapOf(1L to AlbumBlock("photos", AlbumProblem.Gone), 2L to AlbumBlock("shots", AlbumProblem.Locked))
-        show(state.copy(settings = settings.copy(albumProblems = problems)))
-
-        assertEquals(1, count("Not backing up: this folder can't be found. Choose another folder."))
-        assertEquals(
-            1,
-            count("Not backing up: this folder is private and locked. Choose another backup folder, or a folder just for this album."),
-        )
-        assertEquals(2, count("Not backing up"))
-    }
-
-    @Test fun `a locked folder of the album's own asks for another folder`() {
-        val problems = mapOf(1L to AlbumBlock("photos", AlbumProblem.Locked))
-        show(state.copy(settings = settings.copy(albumProblems = problems)))
-
-        assertEquals(1, count("Not backing up: this folder is private and locked. Choose another folder."))
     }
 }

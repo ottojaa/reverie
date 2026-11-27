@@ -13,7 +13,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reverie.app.data.backup.AlbumProblem
 import com.reverie.app.data.backup.BackupAlbum
@@ -61,13 +60,8 @@ private fun AlbumRow(state: BackupUiState, album: BackupAlbum, actions: BackupAc
 private fun AlbumDestination(state: BackupUiState, bucketId: Long, onReset: () -> Unit) {
     val isChosen = state.settings.albumFolder(bucketId)?.isChosen == true
     state.destinations.albums[bucketId]?.let {
-        Text(
-            "To $it",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // The whole path, however long: its end is the folder the files go into.
+        Text("To $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     state.settings.albumProblem(bucketId)?.let {
         Text(problemText(it, isChosen), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

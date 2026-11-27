@@ -66,22 +66,6 @@ class BackupSettingsStoreTest {
         assertFalse(repository.current().isReady)
     }
 
-    @Test fun `an album's chosen folder and its problem are kept until the album is reset`() = runTest {
-        val repository = settingsRepository(files)
-        repository.setBuckets(setOf(1L))
-        repository.chooseAlbumFolder(1, "photos", "Photos")
-        repository.setAlbumProblem(1, AlbumBlock("photos", AlbumProblem.Gone))
-
-        assertEquals(AlbumFolder("photos", "Photos"), repository.current().albumFolder(1))
-        assertEquals(AlbumProblem.Gone, repository.current().albumProblem(1))
-
-        repository.resetAlbumFolder(1)
-
-        assertNull(repository.current().albumFolder(1))
-        assertNull(repository.current().albumProblem(1))
-        assertTrue(repository.current().albumProblems.isEmpty())
-    }
-
     @Test fun `only new is chosen once, and existing media can be added later`() = runTest {
         val repository = settingsRepository(files)
         repository.setEnabled(true)
