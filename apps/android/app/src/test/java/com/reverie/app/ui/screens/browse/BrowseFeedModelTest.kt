@@ -46,7 +46,7 @@ internal class FakeServer(library: List<DocumentDto>, private val isInListingOrd
             error("offline")
         }
         val held = library.filter { filter.holds(it.kind) }
-        val ordered = if (isInListingOrder) held else held.sortedWith(compareBy(sort.order) { sortKeyOf(it, filter) })
+        val ordered = if (isInListingOrder) held else held.sortedWith(compareBy(sort.order) { sortKeyOf(it, filter, sort) })
         val items = ordered.drop(offset).take(PAGE)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
         return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull(), ids = items.map { it.id })

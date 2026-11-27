@@ -13,15 +13,17 @@ data class SortKey(val millis: Long, val id: String, val foldedName: String = ""
 private fun millisOf(iso: String?): Long? = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
 /**
- * The key [doc] has in the feed of [filter]: a feed of photos and videos dates it by the date taken and
- * falls back to the upload time, exactly as the server's `coalesce(taken_at, created_at)` does; any other
- * feed uses the upload time. The date taken is a local clock reading stored as UTC, and the server
- * compares it as such, so it is compared as such here.
+ * The key [doc] has in the feed of [filter] ordered by [sort]: a feed of photos and videos dates it by the
+ * date taken and falls back to the upload time, exactly as the server's `coalesce(taken_at, created_at)`
+ * does; any other feed uses the upload time. The date taken is a local clock reading stored as UTC, and the
+ * server compares it as such, so it is compared as such here. Only the name order gets a folded name: it
+ * costs a string for every row, and no other order reads it.
  */
-fun sortKeyOf(doc: DocumentDto, filter: DocumentFilter): SortKey {
+fun sortKeyOf(doc: DocumentDto, filter: DocumentFilter, sort: DocumentSort): SortKey {
     val created = millisOf(doc.created_at) ?: 0L
     val millis = if (filter.isByDateTaken) millisOf(doc.taken_at) ?: created else created
-    return SortKey(millis, doc.id, foldedName(doc.original_filename), doc.size_bytes)
+    val name = if (sort == DocumentSort.NAME) foldedName(doc.original_filename) else ""
+    return SortKey(millis, doc.id, name, doc.size_bytes)
 }
 
 /**

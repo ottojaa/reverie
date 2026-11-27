@@ -49,7 +49,7 @@ fun deriveFeed(
     // Make each row's key once; the sort below only compares the keys.
     val keyed = cache
         .filter { filter.holds(it.kind) }
-        .map { sortKeyOf(it, filter) to it }
+        .map { sortKeyOf(it, filter, sort) to it }
         .sortedWith(compareBy(sort.order) { it.first })
     if (!cursor.fetched) {
         return FeedDocuments(keyed.map { it.second }, total = keyed.size, isLoading = cursor.isLoading, failed = cursor.failed)

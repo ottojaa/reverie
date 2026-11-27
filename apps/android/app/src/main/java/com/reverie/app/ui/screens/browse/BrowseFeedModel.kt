@@ -122,7 +122,7 @@ class BrowseFeedModel(
         scope.launch {
             try {
                 val page = fetchPage(offset)
-                val reached = page.last?.let { sortKeyOf(it, filter) }
+                val reached = page.last?.let { sortKeyOf(it, filter, sort) }
                 control.update { it.copy(cursor = it.cursor.after(reached, sort, offset, page), isRefreshing = false) }
                 // Page one starts the reads over; a later page adds to them (there are none before page one).
                 val read = if (offset == 0) FeedReads.first(page) else reads?.plus(page)

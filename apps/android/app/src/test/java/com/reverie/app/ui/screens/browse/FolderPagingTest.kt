@@ -21,15 +21,22 @@ import org.junit.Test
 class FolderPagingTest {
 
     /** The names in the server's order, from the file the server's own test reads: groups that fold to one name. */
-    private val names: List<String> by lazy {
+    private val nameGroups: List<List<String>> by lazy {
         val text = checkNotNull(javaClass.classLoader?.getResource("name-order.json")) { "Missing fixture" }.readText()
         Json.parseToJsonElement(text).jsonObject.getValue("ascending").jsonArray
-            .flatMap { group -> group.jsonArray.map { it.jsonPrimitive.content } }
+            .map { group -> group.jsonArray.map { it.jsonPrimitive.content } }
     }
 
-    /** One document per name, ids rising down the list: how the server breaks a tie between equal names. */
+    /**
+     * One document per name. Ids rise within a group, which is how the server breaks a tie between equal
+     * names, and fall from one group to the next, so no order of ids passes for the order of names.
+     */
     private val byName: List<DocumentDto> by lazy {
-        names.mapIndexed { at, name -> doc("d%02d".format(at), "application/pdf", name = name) }
+        nameGroups.flatMapIndexed { group, names ->
+            names.mapIndexed { at, name ->
+                doc("d%02d-%02d".format(nameGroups.size - group, at), "application/pdf", name = name)
+            }
+        }
     }
 
     /**
