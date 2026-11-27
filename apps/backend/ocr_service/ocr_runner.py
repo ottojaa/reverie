@@ -8,16 +8,24 @@ image paths from stdin and writes JSON results to stdout.
 Runs on CPU by default; set OCR_DEVICE=gpu:0 (passed by the Node client)
 to run inference on the GPU. Falls back to CPU if GPU init fails.
 
-Protocol (one request per line):
-    → {"image_path": "/tmp/input.png"}    (JSON on stdin)
-    ← {"text": "...", "confidence": 85.2, "blocks": [...], "engine": "paddleocr/PP-OCRv5"}
-    ← {"error": "File not found: ..."}    (on failure)
+Protocol (one request per line, answered in order):
+    → {"id": 1, "image_path": "/tmp/input.png"}    (JSON on stdin)
+    ← {"id": 1, "text": "...", "confidence": 85.2, "blocks": [...], "engine": "paddleocr/PP-OCRv6"}
+    ← {"id": 1, "error": "File not found: ..."}    (on failure)
+
+Every answer carries its request's "id": the client stops waiting for a request
+that takes too long, and must not read that late answer as the next one's.
+
+A request may carry "settings": keyword arguments for PaddleOCR's predict(),
+used for that request only (every page of a PDF). Without them the pipeline's
+own settings apply.
+    → {"id": 2, "image_path": "/tmp/input.png", "settings": {"use_doc_unwarping": false}}
 
 A special "ping" command can be used to check health:
-    → {"ping": true}
-    ← {"pong": true}
+    → {"id": 3, "ping": true}
+    ← {"id": 3, "pong": true}
 
-Startup sends a ready signal:
+Startup sends a ready signal, or the reason it failed, without an id:
     ← {"ready": true}
 
 Errors are written as JSON to stdout (not stderr) so the Node
@@ -243,12 +251,12 @@ def _build_structured_text(blocks, row_threshold=15):
     return "\n".join(output_lines)
 
 
-def process_image(ocr, image_path):
+def process_image(ocr, image_path, settings=None):
     """Run OCR on a single image and return the result dict."""
     if not Path(image_path).is_file():
         return {"error": f"File not found: {image_path}"}
 
-    results = ocr.predict(image_path)
+    results = ocr.predict(image_path, **(settings or {}))
 
     if not results:
         return _build_empty_result()
@@ -300,7 +308,7 @@ def process_image(ocr, image_path):
     }
 
 
-def process_pdf(ocr, pdf_path):
+def process_pdf(ocr, pdf_path, settings=None):
     """
     Run OCR on a PDF. Uses embedded text when available (perfect spacing);
     falls back to OCR for scanned/image-heavy pages.
@@ -371,7 +379,7 @@ def process_pdf(ocr, pdf_path):
             temp_files.append(temp_path)
             pm.save(temp_path)
 
-            result = process_image(ocr, temp_path)
+            result = process_image(ocr, temp_path, settings)
             if "error" in result:
                 return result
             if result["text"]:
@@ -476,6 +484,23 @@ def _warmup(ocr):
         print(f"[ocr_runner] Warmup skipped: {e}", file=sys.stderr, flush=True)
 
 
+def _handle_request(ocr, request):
+    """The answer to one request, without its id."""
+    # Health check
+    if request.get("ping"):
+        return {"pong": True}
+
+    image_path = request.get("image_path")
+    if not image_path:
+        return {"error": "Missing 'image_path' in request"}
+
+    process = process_pdf if image_path.lower().endswith(".pdf") else process_image
+    try:
+        return process(ocr, image_path, request.get("settings"))
+    except Exception as e:
+        return {"error": f"OCR processing failed: {e}"}
+
+
 def main():
     # ── Load models once ─────────────────────────────────────────
     try:
@@ -505,24 +530,7 @@ def main():
             _print_json({"error": f"Invalid JSON: {e}"})
             continue
 
-        # Health check
-        if request.get("ping"):
-            _print_json({"pong": True})
-            continue
-
-        image_path = request.get("image_path")
-        if not image_path:
-            _print_json({"error": "Missing 'image_path' in request"})
-            continue
-
-        try:
-            if image_path.lower().endswith(".pdf"):
-                result = process_pdf(ocr, image_path)
-            else:
-                result = process_image(ocr, image_path)
-            _print_json(result)
-        except Exception as e:
-            _print_json({"error": f"OCR processing failed: {e}"})
+        _print_json({**_handle_request(ocr, request), "id": request.get("id")})
 
 
 if __name__ == "__main__":

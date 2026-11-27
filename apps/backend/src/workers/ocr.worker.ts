@@ -108,6 +108,7 @@ async function processOcrJob(job: Job<OcrJobData>): Promise<OcrJobResult> {
         const result = await processDocument(documentId, {
             ...(forceReprocess ? { forceReprocess: true } : {}),
             document,
+            lane: job.queueName === QUEUE_NAMES.OCR_BACKGROUND ? 'background' : 'normal',
         });
 
         await publishJobProgress(job.id!, 80, documentId, job.data.sessionId, job.data.userId);

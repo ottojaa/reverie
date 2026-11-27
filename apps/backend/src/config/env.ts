@@ -72,6 +72,12 @@ const envSchema = z.object({
     // PaddleOCR inference device: 'cpu' (default), 'gpu', or 'gpu:0'.
     // Set to 'gpu:0' on a CUDA host; falls back to CPU if GPU init fails.
     OCR_DEVICE: z.string().default('cpu'),
+    // PaddleOCR settings of a background document's requests (phone backup): faster, so a manual upload queued behind
+    // one waits less. Normal documents use the pipeline's defaults.
+    OCR_BACKGROUND_DOC_UNWARPING: envBoolean(false),
+    OCR_BACKGROUND_DOC_ORIENTATION: envBoolean(true),
+    /** Longest image side, in pixels, that text detection works at: larger images are scaled down to it. */
+    OCR_BACKGROUND_DET_MAX_SIDE: z.coerce.number().int().positive().default(1920),
 
     // Anthropic / LLM
     ANTHROPIC_API_KEY: z.string().optional(),
