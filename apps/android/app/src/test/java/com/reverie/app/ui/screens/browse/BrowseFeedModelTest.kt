@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.browse
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentKind
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.FileTotalsDto
 import com.reverie.app.data.api.model.KindTotalsDto
@@ -21,25 +22,39 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** A server holding [library], two rows to a page, that writes each page it serves into [cache] like the repository does. */
-internal class FakeServer(library: List<DocumentDto>) {
-    private var library = library
+/**
+ * A server holding [library], two rows to a page, that writes each page it serves into [cache] like the
+ * repository does. It orders a listing as the app expects the server to, unless [isInListingOrder] says the
+ * library is already given in the order every listing comes in.
+ */
+internal class FakeServer(library: List<DocumentDto>, private val isInListingOrder: Boolean = false) {
+    var library = library
+        private set
     val cache = MutableStateFlow<List<DocumentDto>>(emptyList())
     val requests = mutableListOf<Pair<DocumentFilter, Int>>()
+    /** The order each of [requests] asked for. */
+    val sorts = mutableListOf<DocumentSort>()
     var failNext = false
     /** Where the feed's reconcile callback lands: the repository's `dropStale`, on the fake cache. */
     val reconciled = mutableListOf<Set<String>>()
 
-    fun page(filter: DocumentFilter, offset: Int): PageResult {
+    fun page(filter: DocumentFilter, offset: Int, sort: DocumentSort = DocumentSort.NEWEST): PageResult {
         requests += filter to offset
+        sorts += sort
         if (failNext) {
             failNext = false
             error("offline")
         }
-        val ordered = library.filter { filter.holds(it.kind) }.sortedByDescending { sortKeyOf(it, filter) }
+        val held = library.filter { filter.holds(it.kind) }
+        val ordered = if (isInListingOrder) held else held.sortedWith(compareBy(sort.order) { sortKeyOf(it, filter) })
         val items = ordered.drop(offset).take(PAGE)
         cache.update { (it + items).distinctBy(DocumentDto::id) }
         return PageResult(total = ordered.size, loaded = offset + items.size, last = items.lastOrNull(), ids = items.map { it.id })
+    }
+
+    /** Adds [documents] to the server only, as an upload from another device does. */
+    fun add(vararg documents: DocumentDto) {
+        library = library + documents
     }
 
     fun dropStale(filter: DocumentFilter, keep: Set<String>) {

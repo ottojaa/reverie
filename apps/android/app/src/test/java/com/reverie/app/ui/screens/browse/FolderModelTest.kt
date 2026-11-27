@@ -1,22 +1,14 @@
 package com.reverie.app.ui.screens.browse
 
-import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
-import com.reverie.app.data.api.model.DocumentSummaryDto
-import com.reverie.app.data.api.model.FileTotalsDto
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.FolderWithChildren
-import com.reverie.app.data.api.model.KindCountsDto
-import com.reverie.app.data.api.model.KindTotalsDto
-import com.reverie.app.data.api.model.MediaDatesDto
+import com.reverie.app.data.settings.FolderChoices
+import com.reverie.app.data.settings.FolderView
 import com.reverie.app.data.settings.GridLayoutMode
-import com.reverie.app.domain.folderMeta
 import com.reverie.app.domain.search.SearchScope
 import com.reverie.app.ui.screens.destination.node
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -30,10 +22,9 @@ import java.time.ZoneOffset
 class FolderModelTest {
 
     private val photos = listOf(
-        // p1 was taken after p3 but uploaded before it: the two orders differ.
-        doc("p3", created = "2026-11-23T10:00:00Z", taken = "2026-06-01T10:00:00Z"),
-        doc("p2", created = "2026-11-22T10:00:00Z", taken = "2026-06-02T10:00:00Z"),
-        doc("p1", created = "2026-11-21T10:00:00Z", taken = "2026-06-03T10:00:00Z"),
+        doc("p3", created = "2026-11-23T10:00:00Z"),
+        doc("p2", created = "2026-11-22T10:00:00Z"),
+        doc("p1", created = "2026-11-21T10:00:00Z"),
     )
     private val files = listOf(
         doc("f3", "application/pdf", created = "2026-11-25T12:00:00Z"),
@@ -41,50 +32,17 @@ class FolderModelTest {
         doc("f1", "text/plain", created = "2026-11-20T12:00:00Z"),
     )
 
-    private val leaf = node("lisbon", parent = "trips").copy(kind_counts = KindCountsDto(image = 3, file = 3))
-    private val tree = listOf(node("trips", children = listOf(leaf)).copy(kind_counts = leaf.kind_counts))
-
     private val layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 26), ZoneOffset.UTC)
 
-    private class Fixture(val server: FakeServer, val model: FolderModel, val failures: MutableList<Throwable>) {
-        val state: FolderState get() = model.state.value
-        val photoIds: List<String> get() = state.media.documents.map(DocumentDto::id)
-        val fileIds: List<String>? get() = state.files?.documents?.map(DocumentDto::id)
-    }
-
-    private fun TestScope.start(
-        server: FakeServer,
-        folderId: String? = "lisbon",
-        isLockRefusal: Boolean = false,
-    ): Fixture {
-        val summary = MutableStateFlow<DocumentSummaryDto?>(null)
-        val failures = mutableListOf<Throwable>()
-        val model = FolderModel(
-            scope = backgroundScope as CoroutineScope,
-            folderId = folderId,
-            tree = MutableStateFlow(tree),
-            cache = server.cache,
-            summary = summary,
-            fetchPage = server::page,
-            fetchSummary = { server.summary().also { summary.value = it } },
-            reconcile = { filter, keep -> server.dropStale(filter, keep) },
-            onFirstPageFailed = { failures += it },
-            isLockRefusal = { isLockRefusal },
-            computation = UnconfinedTestDispatcher(testScheduler),
-            sharing = SharingStarted.Eagerly,
-        )
-        return Fixture(server, model, failures)
-    }
-
     @Test fun `the folder is found in the tree with the folders above it`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(emptyList()))
+        val f = openFolder(FakeServer(emptyList()))
 
         assertEquals("lisbon", f.state.node?.name)
         assertEquals(listOf("trips", "lisbon"), f.state.path.map(FolderWithChildren::id))
     }
 
     @Test fun `the root holds the top-level folders, under no folder of its own`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos), folderId = null)
+        val f = openFolder(FakeServer(photos), folderId = null)
 
         assertTrue(f.state.isRoot)
         assertNull(f.state.node)
@@ -92,77 +50,77 @@ class FolderModelTest {
         assertEquals(listOf("trips"), f.state.children.map(FolderWithChildren::id))
     }
 
+    @Test fun `the folders inside come by name, whatever order the tree holds them in`() = runTest(UnconfinedTestDispatcher()) {
+        val tree = listOf(node("zoo"), node("Beach"), node("alps"))
+
+        val f = openFolder(FakeServer(emptyList()), folderId = null, folders = tree)
+
+        assertEquals(listOf("alps", "Beach", "zoo"), f.state.children.map(FolderWithChildren::id))
+    }
+
     @Test fun `search from the root looks through the whole library`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos), folderId = null)
+        val f = openFolder(FakeServer(photos), folderId = null)
 
         assertEquals(SearchScope.Library, f.state.searchScope)
     }
 
-    @Test fun `the root's header counts its own folders and files`() = runTest(UnconfinedTestDispatcher()) {
-        val summary = DocumentSummaryDto(image = KindTotalsDto(count = 2), file = FileTotalsDto(count = 3))
+    @Test fun `only a folder known to be public offers search`() {
+        val leaf = node("lisbon", parent = "trips")
 
-        assertEquals(
-            "1 folder · 5 files",
-            folderPageMeta(FolderState(isRoot = true, children = tree, summary = summary)),
-        )
-        assertEquals("2 photos", folderPageMeta(FolderState(isRoot = true, summary = summary.copy(file = FileTotalsDto()))))
-        assertNull(folderPageMeta(FolderState(isRoot = true, children = tree)))
+        assertEquals(SearchScope.Folder("lisbon"), FolderState(node = leaf).searchScope)
+        assertNull(FolderState(node = leaf.copy(is_private = true)).searchScope)
+        // Inside a private folder further up.
+        assertNull(FolderState(node = leaf.copy(lock_id = "trips")).searchScope)
+        assertNull(FolderState().searchScope)
     }
 
-    @Test fun `the other files are asked for once the photos and videos have been read to the end`() =
+    @Test fun `a mixed folder is one feed of everything in it, newest first, read page by page`() =
         runTest(UnconfinedTestDispatcher()) {
-            val f = start(FakeServer(photos + files))
-            assertEquals(listOf(DocumentFilter.MEDIA to 0), f.server.requests)
-            assertNull(f.state.files)
-            assertTrue(f.state.hasMore)
+            val f = openFolder(FakeServer(photos + files))
+            assertEquals(listOf("f3", "f2"), f.ids)
 
             f.model.loadMore()
-
-            assertEquals(
-                listOf(DocumentFilter.MEDIA to 0, DocumentFilter.MEDIA to 2, DocumentFilter.FILES to 0),
-                f.server.requests,
-            )
-            // Photos go by date taken, files by upload time.
-            assertEquals(listOf("p1", "p2", "p3"), f.photoIds)
-            assertEquals(listOf("f3", "f2"), f.fileIds)
-
             f.model.loadMore()
 
-            assertEquals(DocumentFilter.FILES to 2, f.server.requests.last())
-            assertEquals(listOf("f3", "f2", "f1"), f.fileIds)
-            assertEquals(false, f.state.hasMore)
+            assertEquals(listOf("f3", "f2", "p3", "p2", "p1", "f1"), f.ids)
+            assertEquals(List(3) { DocumentFilter.ALL }, f.server.requests.map { it.first })
+            assertEquals(listOf(0, 2, 4), f.server.requests.map { it.second })
+            assertFalse(f.state.documents.hasMore)
         }
 
-    @Test fun `a folder without photos shows its files straight away`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(files))
+    @Test fun `choosing an order reads the list again in that order, keeping the selection`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val f = openFolder(FakeServer(photos + files))
+            f.model.selection.toggle("f3")
 
-        assertEquals(listOf(DocumentFilter.MEDIA to 0, DocumentFilter.FILES to 0), f.server.requests)
-        assertEquals(listOf("f3", "f2"), f.fileIds)
-    }
+            f.choices.value = FolderChoices(sort = DocumentSort.NAME)
 
-    @Test fun `when the photos cannot be read, the files are still shown from the server or the cache`() =
+            assertEquals(DocumentSort.NAME, f.state.sort)
+            assertEquals(DocumentSort.NAME, f.server.sorts.last())
+            assertEquals(DocumentFilter.ALL to 0, f.server.requests.last())
+            assertEquals(listOf("f1", "f2"), f.ids)
+            assertEquals(setOf("f3"), f.state.selectedIds)
+            f.model.loadMore()
+            assertEquals(DocumentSort.NAME, f.server.sorts.last())
+            assertEquals(listOf("f1", "f2", "f3", "p1"), f.ids)
+        }
+
+    @Test fun `when the first page cannot be read, that is reported and trying again reads it`() =
         runTest(UnconfinedTestDispatcher()) {
             val server = FakeServer(files)
             server.failNext = true
 
-            val f = start(server)
-
+            val f = openFolder(server)
             assertEquals(1, f.failures.size)
-            assertEquals(listOf("f3", "f2"), f.fileIds)
+            assertTrue(f.state.documents.failed)
+
+            f.model.refresh(initial = true)
+
+            assertEquals(listOf("f3", "f2"), f.ids)
         }
 
-    @Test fun `a lock refusal asks for nothing further`() = runTest(UnconfinedTestDispatcher()) {
-        val server = FakeServer(files)
-        server.failNext = true
-
-        val f = start(server, isLockRefusal = true)
-
-        assertEquals(listOf(DocumentFilter.MEDIA to 0), f.server.requests)
-        assertNull(f.state.files)
-    }
-
-    @Test fun `a selection spans both sections`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos.take(2) + files))
+    @Test fun `a selection holds photos and files alike`() = runTest(UnconfinedTestDispatcher()) {
+        val f = openFolder(FakeServer(photos.take(1) + files))
 
         f.model.selection.toggle("f3")
         f.model.selection.toggle("p3")
@@ -172,46 +130,43 @@ class FolderModelTest {
         assertTrue(f.state.selectedIds.isEmpty())
     }
 
-    @Test fun `the viewer swipes through the opened document's section, in the order the page shows it`() =
+    @Test fun `the viewer swipes through the page's documents in the order shown, reading on at the end`() =
         runTest(UnconfinedTestDispatcher()) {
-            val f = start(FakeServer(photos + files))
-            f.model.loadMore()
+            val f = openFolder(FakeServer(photos + files))
 
-            val fileSequence = f.model.prepareSequence(files.first(), ZoneOffset.UTC)
-            assertEquals(listOf("f3", "f2"), fileSequence.initialIds)
-            fileSequence.loadMore()
-            assertEquals(listOf("f3", "f2", "f1"), fileSequence.ids.first())
+            val sequence = f.model.prepareSequence()
+            assertEquals(listOf("f3", "f2"), sequence.initialIds)
+            sequence.loadMore()
 
-            assertEquals(listOf("p1", "p2", "p3"), f.model.prepareSequence(photos.first(), ZoneOffset.UTC).initialIds)
+            assertEquals(listOf("f3", "f2", "p3", "p2"), sequence.ids.first())
         }
 
-    @Test fun `after a delete the figures and both sections follow the server`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos.take(2) + files.take(2)))
+    @Test fun `after a delete the figures and the list follow the server`() = runTest(UnconfinedTestDispatcher()) {
+        val f = openFolder(FakeServer(photos.take(2) + files.take(2)))
         f.server.delete("p3", "f2")
 
         f.model.contentChanged()
 
         assertEquals(1, f.state.summary?.image?.count)
         assertEquals(1, f.state.summary?.file?.count)
-        assertEquals(listOf("p2"), f.photoIds)
-        assertEquals(listOf("f3"), f.fileIds)
+        assertEquals(listOf("f3", "p2"), f.ids)
     }
 
-    @Test fun `pull to refresh re-reads both sections`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos.take(2) + files.take(2)))
+    @Test fun `pull to refresh re-reads the figures and the first page`() = runTest(UnconfinedTestDispatcher()) {
+        val f = openFolder(FakeServer(photos.take(2) + files.take(2)))
         val asked = f.server.requests.size
+        f.server.add(files.last())
 
         f.model.refresh()
 
-        assertEquals(
-            setOf(DocumentFilter.MEDIA to 0, DocumentFilter.FILES to 0),
-            f.server.requests.drop(asked).toSet(),
-        )
+        assertEquals(listOf(DocumentFilter.ALL to 0), f.server.requests.drop(asked))
+        assertEquals(3, f.state.summary?.file?.count)
     }
 
     @Test fun `a locked folder shows nothing of what was read before it locked`() = runTest(UnconfinedTestDispatcher()) {
-        val f = start(FakeServer(photos.take(2) + files.take(2)))
+        val f = openFolder(FakeServer(photos.take(2) + files.take(2)))
         f.model.selection.toggle("p3")
+        assertEquals(FolderView.LIST, f.state.view)
 
         val locked = f.state.unlessLocked(true)
 
@@ -221,56 +176,5 @@ class FolderModelTest {
         assertTrue(folderRows(locked, 360f, layout).isEmpty())
         assertEquals("lisbon", locked.node?.name)
         assertEquals(f.state, f.state.unlessLocked(false))
-    }
-
-    @Test fun `only a folder known to be public offers search`() {
-        assertEquals(SearchScope.Folder("lisbon"), FolderState(node = leaf).searchScope)
-        assertNull(FolderState(node = leaf.copy(is_private = true)).searchScope)
-        // Inside a private folder further up.
-        assertNull(FolderState(node = leaf.copy(lock_id = "trips")).searchScope)
-        assertNull(FolderState().searchScope)
-    }
-
-    @Test fun `a folder with both kinds names its two sections, and only the files are headed by day`() {
-        val sameDay = "2026-11-23T10:00:00Z"
-        val state = FolderState(
-            media = FeedDocuments(documents = listOf(doc("p", created = sameDay)), fetched = true),
-            files = FeedDocuments(documents = listOf(doc("f", "application/pdf", created = sameDay)), fetched = true),
-        )
-
-        val rows = folderRows(state, 360f, layout)
-
-        assertEquals(listOf("Photos and videos", "Files"), rows.filterIsInstance<FeedRow.Section>().map { it.title })
-        assertEquals(1, rows.filterIsInstance<FeedRow.Heading>().size)
-        assertEquals(rows.size, rows.map(FeedRow::key).toSet().size)
-    }
-
-    @Test fun `a folder of photos is one grid, with no headings and no section titles`() {
-        val state = FolderState(media = FeedDocuments(documents = photos, fetched = true))
-
-        val rows = folderRows(state, 360f, layout)
-
-        assertTrue(rows.isNotEmpty())
-        assertTrue(rows.none { it is FeedRow.Section || it is FeedRow.Heading })
-    }
-
-    @Test fun `the photos are titled before the files have been read, when the server counts some`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val f = start(FakeServer(photos + files))
-
-            val rows = folderRows(f.state, 360f, layout)
-
-            assertEquals(listOf("Photos and videos"), rows.filterIsInstance<FeedRow.Section>().map { it.title })
-        }
-
-    @Test fun `a folder's header says what its row says, and spans its photos' days when it has no folders`() {
-        val dates = MediaDatesDto(first = "2026-08-21T09:00:00Z", last = "2026-08-25T18:00:00Z")
-        val summary = DocumentSummaryDto(media_dates = dates)
-        val parent = tree.single()
-
-        assertEquals(folderMeta(parent), folderPageMeta(FolderState(node = parent, summary = summary)))
-        assertEquals(folderMeta(leaf) + " · 21–25 Aug 2026", folderPageMeta(FolderState(node = leaf, summary = summary)))
-        assertEquals(folderMeta(leaf), folderPageMeta(FolderState(node = leaf)))
-        assertNull(folderPageMeta(FolderState()))
     }
 }

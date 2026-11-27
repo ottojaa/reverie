@@ -108,6 +108,7 @@ internal fun FeedScrollEffects(
  * leaves the screen takes its date with it.
  *
  * @param leading how many items of the lazy list come before the first of [rows].
+ * @param dayOf the day a photo is named by.
  */
 @Composable
 internal fun TopDateEffect(
@@ -116,10 +117,11 @@ internal fun TopDateEffect(
     layout: FeedLayout,
     onTopDate: (TopDate?) -> Unit,
     leading: Int = 0,
+    dayOf: (DocumentDto, ZoneId) -> LocalDate? = ::dayTakenOf,
 ) {
     val report by rememberUpdatedState(onTopDate)
-    LaunchedEffect(listState, rows, leading, layout) {
-        snapshotFlow { topDateAt(rows, listState.firstVisibleItemIndex - leading, layout.today, layout.zone) }
+    LaunchedEffect(listState, rows, leading, layout, dayOf) {
+        snapshotFlow { topDateAt(rows, listState.firstVisibleItemIndex - leading, layout.today, layout.zone, dayOf) }
             .distinctUntilChangedBy { it?.title to it?.isOverPhotos }
             .collect { report(it) }
     }

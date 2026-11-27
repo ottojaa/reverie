@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -19,9 +22,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.reverie.app.data.api.model.DocumentDto
-import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.DocumentSearchResult
 import com.reverie.app.data.api.model.kind
+import com.reverie.app.data.settings.FolderView
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.components.PhotoResultTile
 import com.reverie.app.ui.screens.browse.ChromeSlot
@@ -79,6 +82,7 @@ class DocumentDiveTest {
 
     private lateinit var nav: NavHostController
     private lateinit var shared: SharedTransitionScope
+    private var folderView by mutableStateOf(FolderView.LIST)
 
     /** The key each route's screen last gave the image. */
     private val imageKeys = mutableMapOf<String, String>()
@@ -153,17 +157,17 @@ class DocumentDiveTest {
 
     @Composable
     private fun Folder() {
-        val (media, files) = documents.partition { DocumentFilter.MEDIA.holds(it.kind) }
         FolderBody(
             state = FolderState(
-                media = FeedDocuments(media, total = media.size, fetched = true),
-                files = FeedDocuments(files, total = files.size, fetched = true),
+                documents = FeedDocuments(documents, total = documents.size, fetched = true),
+                view = folderView,
             ),
             name = "Trips", description = null,
             links = FolderLinks(emptyMap(), starredIds = emptySet(), onOpen = {}, onOpenCrumb = {}),
             layout = layout,
             actions = RowActions(selected = { false }, onClick = {}, onLongClick = {}),
             focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
+            onSort = {}, onShowAs = {},
             slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = {}, onUpload = {}),
         )
     }
@@ -256,12 +260,16 @@ class DocumentDiveTest {
         assertDives("file")
     }
 
-    @Test fun `a document opened from a folder's grid or file rows dives into the viewer and shrinks back`() {
+    @Test fun `a document opened from a folder's rows or its grid dives into the viewer and shrinks back`() {
         compose.setContent { Host() }
         show(Routes.folder("f1"))
-        assertDives("image", aspect = 1.5f)
-        assertDives("video")
-        assertDives("file")
+        listOf(FolderView.LIST, FolderView.GRID).forEach { view ->
+            compose.runOnUiThread { folderView = view }
+            compose.waitForIdle()
+            assertDives("image", aspect = 1.5f)
+            assertDives("video")
+            assertDives("file")
+        }
     }
 
     @Test fun `a document opened from search dives into the viewer and shrinks back`() {

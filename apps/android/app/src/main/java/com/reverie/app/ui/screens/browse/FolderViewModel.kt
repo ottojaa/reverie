@@ -7,6 +7,8 @@ import com.reverie.app.data.api.ReverieApiException
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.DocumentScope
+import com.reverie.app.data.api.model.DocumentSort
+import com.reverie.app.data.settings.FolderView
 import com.reverie.app.ui.components.FolderFormData
 import com.reverie.app.ui.components.createFolder
 import com.reverie.app.ui.screens.viewer.ViewerFocus
@@ -21,8 +23,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * One folder's page, or the root's ("My files", with no folder id): its lists and selection, a folder made
- * inside it, and the viewer hand-off.
+ * One folder's page, or the root's ("My files", with no folder id): its documents and selection, how they
+ * are shown, a folder made inside it, and the viewer hand-off.
  */
 @HiltViewModel
 class FolderViewModel @Inject constructor(
@@ -52,7 +54,10 @@ class FolderViewModel @Inject constructor(
         tree = deps.folders.observeTree(),
         cache = cache,
         summary = deps.documents.summary(folder),
-        fetchPage = { filter, offset -> deps.documents.refresh(folder, BROWSE_PAGE_SIZE, offset, filter) },
+        choices = deps.settings.folderChoices(folderId),
+        fetchPage = { filter, sort, offset ->
+            deps.documents.refresh(folder, BROWSE_PAGE_SIZE, offset, filter, sort = sort)
+        },
         fetchSummary = { deps.documents.fetchSummary(folder) },
         reconcile = { filter, keep -> deps.documents.dropStale(folder, filter, keep) },
         onFirstPageFailed = session::onRefreshFailed,
@@ -87,8 +92,18 @@ class FolderViewModel @Inject constructor(
 
     fun loadMore() = model.loadMore()
 
-    /** Hand the opened document's section to the viewer. Call right before opening one. */
-    override fun prepareSequence(opened: DocumentDto) = session.publish(model.prepareSequence(opened))
+    /** Hand the page's documents to the viewer. Call right before opening one. */
+    override fun prepareSequence(opened: DocumentDto) = session.publish(model.prepareSequence())
+
+    /** Draws this folder as [view] from now on. */
+    fun showAs(view: FolderView) {
+        viewModelScope.launch { deps.settings.setFolderView(folderId, view) }
+    }
+
+    /** Orders every folder page by [sort]. */
+    fun sortBy(sort: DocumentSort) {
+        viewModelScope.launch { deps.settings.setFolderSort(sort) }
+    }
 
     override fun prefetch(document: DocumentDto) = session.prefetch(document)
 

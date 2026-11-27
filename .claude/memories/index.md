@@ -120,3 +120,7 @@ Format each entry as a short dated bullet:
 ## Server errors
 
 - `2026-11-26` — **A route's 4xx response schema also has to fit what `error-handler.ts` answers with that status** (`{statusCode, error, message}`, plus `details` after a failed validation): a broken body, a rate limit or a failed schema reaches any route. A schema the envelope does not fit, an enum of error codes for one, or one the zod serializer cannot read (raw JSON Schema) turns that answer into a 500. Use `RouteErrorSchema` where a route also sends its own `{error, message}`. The handler passes a 4xx error's message on to the client, so an error whose message quotes the request must be given static text there, as the body parser's `SyntaxError` is.
+
+## Listing order
+
+- `2026-11-27` — **A document listing's order is a contract between backend and Android.** `GET /documents?sort=name|size` (`document-list-filters.ts`) and the phone's `FeedOrder.kt` must rank rows identically, because `BrowseFeedModel` holds cached rows back by comparing them with the last page's furthest key: a different order drops or misplaces rows across pages. Name order is `lower(original_filename COLLATE "C"), id` (only A–Z fold, compared by code point) so it does not depend on the server's locale. `libs/shared/src/fixtures/name-order.json` is read by both test suites; change the two sides together.

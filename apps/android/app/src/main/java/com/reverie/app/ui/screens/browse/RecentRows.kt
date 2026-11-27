@@ -5,8 +5,10 @@ import com.reverie.app.data.api.model.DocumentKind
 import com.reverie.app.data.api.model.kind
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** Neighbouring media uploaded within this long of each other fold into one row. */
@@ -173,11 +175,13 @@ private fun dayRange(from: LocalDate, to: LocalDate, today: LocalDate): String =
 private val weekday = DateTimeFormatter.ofPattern("EEE", Locale.US)
 private val clock = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
-/** When a row was added, short: the time today, "Yesterday", the weekday within a week, else "6 Nov". */
-fun recentWhen(doc: DocumentDto, today: LocalDate, zone: ZoneId): String {
-    val instant = doc.createdMillis()?.let(Instant::ofEpochMilli) ?: return ""
-    val at = instant.atZone(zone)
-    val days = java.time.temporal.ChronoUnit.DAYS.between(at.toLocalDate(), today)
+/** When a row was added, short (see [shortWhen]). */
+fun recentWhen(doc: DocumentDto, today: LocalDate, zone: ZoneId): String =
+    timeAddedOf(doc, zone)?.let { shortWhen(it, today) }.orEmpty()
+
+/** A moment, short: the time today, "Yesterday", the weekday within a week, else "6 Nov". */
+fun shortWhen(at: LocalDateTime, today: LocalDate): String {
+    val days = ChronoUnit.DAYS.between(at.toLocalDate(), today)
     return when {
         days <= 0 -> at.format(clock)
         days == 1L -> "Yesterday"

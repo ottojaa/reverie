@@ -31,8 +31,8 @@ import com.reverie.app.ui.screens.viewer.returnedDocumentId
 import java.time.ZoneId
 
 /**
- * A folder's page, or the root's: the folders inside it, then its own documents. Uploads and new folders land
- * in it.
+ * A folder's page, or the root's: the folders inside it, then its own documents, as a list or a photo grid.
+ * Uploads and new folders land in it.
  */
 @Composable
 fun FolderScreen(
@@ -61,10 +61,7 @@ fun FolderScreen(
     val name = if (viewModel.folderId == null) ROOT_NAME else shown.node?.name ?: ui.folder?.name ?: "Folder"
     val isEmpty = shown.isEmptyOfDocuments && shown.children.isEmpty()
     val layout = remember(layoutMode, featureEvery, today, zone) { FeedLayout(layoutMode, featureEvery, today, zone) }
-    val picked = remember(shown) {
-        val documents = shown.media.documents + shown.files?.documents.orEmpty()
-        pickFrom(shown.selectedIds, documents, shown.children)
-    }
+    val picked = remember(shown) { pickFrom(shown.selectedIds, shown.documents.documents, shown.children) }
     val selectedIds = picked.ids
     val starredIds = favourites.starredDocumentIds
     val actions = remember(viewModel, selectedIds, starredIds) {
@@ -115,6 +112,8 @@ fun FolderScreen(
             focusedId = focusedId,
             onFocusConsumed = viewModel::clearViewerFocus,
             onLoadMore = viewModel::loadMore,
+            onSort = viewModel::sortBy,
+            onShowAs = viewModel::showAs,
             error = ui.error,
             slot = slot,
         )

@@ -2,17 +2,8 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.kind
-import java.time.Instant
-
-/**
- * Where a document sits in a feed's order. Feeds run newest first, so a larger key is nearer the top.
- * Ties on the time break on the id, as the server pages Photos and Videos; it does not for Files and
- * Recently added, which it orders by upload time alone, so the id is only this feed's own tiebreak there.
- */
-data class SortKey(val millis: Long, val id: String) : Comparable<SortKey> {
-    override fun compareTo(other: SortKey): Int = compareValuesBy(this, other, SortKey::millis, SortKey::id)
-}
 
 /**
  * How far down one feed has read the server's list. Rows the feed has not reached are missing from the
@@ -48,28 +39,18 @@ data class FeedDocuments(
     val failed: Boolean = false,
 )
 
-/** Epoch milliseconds of an ISO instant; null when it is absent or doesn't parse. */
-private fun millisOf(iso: String?): Long? = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-
-/**
- * The key [doc] is ordered by in the feed of [filter]: a feed of photos and videos uses the date taken
- * and falls back to the upload time, exactly as the server's `coalesce(taken_at, created_at)` does; any
- * other feed uses the upload time. The date taken is a local clock reading stored as UTC, and the server
- * compares it as such, so it is compared as such here.
- */
-fun sortKeyOf(doc: DocumentDto, filter: DocumentFilter): SortKey {
-    val created = millisOf(doc.created_at) ?: 0L
-    val millis = if (filter.isByDateTaken) millisOf(doc.taken_at) ?: created else created
-    return SortKey(millis, doc.id)
-}
-
-/** The rows of the feed of [filter] out of the one cached list: in the feed's own order and cut at its frontier. */
-fun deriveFeed(cache: List<DocumentDto>, filter: DocumentFilter, cursor: FeedCursor): FeedDocuments {
-    // Parse each row's dates once; the sort below only compares the parsed keys.
+/** The rows of the feed of [filter] out of the one cached list: in the order of [sort] and cut at the feed's frontier. */
+fun deriveFeed(
+    cache: List<DocumentDto>,
+    filter: DocumentFilter,
+    cursor: FeedCursor,
+    sort: DocumentSort = DocumentSort.NEWEST,
+): FeedDocuments {
+    // Make each row's key once; the sort below only compares the keys.
     val keyed = cache
         .filter { filter.holds(it.kind) }
         .map { sortKeyOf(it, filter) to it }
-        .sortedByDescending { it.first }
+        .sortedWith(compareBy(sort.order) { it.first })
     if (!cursor.fetched) {
         return FeedDocuments(keyed.map { it.second }, total = keyed.size, isLoading = cursor.isLoading, failed = cursor.failed)
     }
@@ -79,6 +60,7 @@ fun deriveFeed(cache: List<DocumentDto>, filter: DocumentFilter, cursor: FeedCur
         return FeedDocuments(keyed.map { it.second }, total = cursor.total, isLoading = cursor.isLoading, fetched = true)
     }
     val frontier = cursor.frontier
-    val shown = (if (frontier == null) keyed else keyed.takeWhile { it.first >= frontier }).map { it.second }
+    val read = if (frontier == null) keyed else keyed.takeWhile { sort.order.compare(it.first, frontier) <= 0 }
+    val shown = read.map { it.second }
     return FeedDocuments(shown, total = cursor.total, hasMore = true, isLoading = cursor.isLoading, fetched = true)
 }

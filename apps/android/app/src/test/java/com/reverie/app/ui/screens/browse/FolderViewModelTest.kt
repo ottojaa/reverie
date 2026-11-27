@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -16,8 +17,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.local.ReverieDatabase
 import com.reverie.app.data.local.toCacheableEntities
+import com.reverie.app.data.settings.FolderView
 import com.reverie.app.data.settings.GridLayoutMode
 import com.reverie.app.ui.screens.favourites.FavouriteWorld
 import com.reverie.app.ui.screens.manage.ManageDialog
@@ -27,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -54,17 +58,27 @@ class FolderViewModelTest {
     private val documents = listOf("one", "two", "three").map {
         doc(it, "application/pdf", name = "$it.pdf").copy(folder_id = "f1", file_url = "/files/$it")
     }
+    private val opened = mutableListOf<FolderViewModel>()
+    private lateinit var deps: BrowseDeps
     private lateinit var viewModel: FolderViewModel
 
     @Before fun setUp() {
         world.served = documents
         runBlocking { world.documentDao.upsertAll(documents.toCacheableEntities(now = 0)) }
-        val deps = browseDeps(context, database, scope, world)
-        viewModel = FolderViewModel(SavedStateHandle(mapOf("folderId" to "f1")), deps)
+        deps = browseDeps(context, database, scope, world)
+        viewModel = open("f1")
+    }
+
+    /** A visit to the folder's page: a view model of its own, with the page's state being watched. */
+    private fun open(folderId: String): FolderViewModel {
+        val visit = FolderViewModel(SavedStateHandle(mapOf("folderId" to folderId)), deps)
+        opened += visit
+        scope.launch { visit.state.collect {} }
+        return visit
     }
 
     @After fun tearDown() {
-        viewModel.viewModelScope.cancel()
+        opened.forEach { it.viewModelScope.cancel() }
         scope.cancel()
         database.close()
     }
@@ -80,12 +94,13 @@ class FolderViewModelTest {
                 layout = FeedLayout(GridLayoutMode.UNIFORM, 3, LocalDate.of(2026, 11, 25), ZoneOffset.UTC),
                 actions = documentRowActions(viewModel, state.selectedIds, starredIds = emptySet(), openDocument = {}),
                 focusedId = null, onFocusConsumed = {}, onLoadMore = {}, error = null,
+                onSort = viewModel::sortBy, onShowAs = viewModel::showAs,
                 slot = ChromeSlot(Modifier, PaddingValues(0.dp), onTopDate = {}, onUpload = {}),
             )
         }
     }
 
-    private val shownIds: List<String> get() = viewModel.state.value.files?.documents.orEmpty().map { it.id }
+    private val shownIds: List<String> get() = viewModel.state.value.documents.documents.map { it.id }
 
     /** The view model's work resumes on the main looper, which Robolectric runs only when told to. */
     private fun await(condition: () -> Boolean) = compose.waitUntil(5_000) {
@@ -102,7 +117,7 @@ class FolderViewModelTest {
         await { viewModel.state.value.selectedIds == setOf("one", "two") }
     }
 
-    private fun picked() = pickFrom(viewModel.selection.ids.value, viewModel.state.value.files?.documents.orEmpty())
+    private fun picked() = pickFrom(viewModel.selection.ids.value, viewModel.state.value.documents.documents)
 
     @Test fun `deleting a selection of rows deletes those documents`() {
         show()
@@ -128,5 +143,33 @@ class FolderViewModelTest {
         await { targets.isNotEmpty() }
         assertEquals(listOf("one.pdf", "two.pdf"), targets.map { it.filename }.sorted())
         assertEquals(true, targets.all { it.url.endsWith("/files/" + it.filename.removeSuffix(".pdf")) })
+    }
+
+    // The settings outlive a test within one process, so these folders are no other test's.
+    @Test fun `the view and the order chosen on a folder's page are how it is shown on the next visit`() {
+        val stored = listOf("kept", "other").map { doc("$it-file", "application/pdf").copy(folder_id = it) }
+        runBlocking { world.documentDao.upsertAll(stored.toCacheableEntities(now = 0)) }
+        world.listed = stored
+        viewModel = open("kept")
+        show()
+        await { viewModel.state.value.view == FolderView.LIST }
+
+        try {
+            compose.onNodeWithContentDescription("Show as grid").performClick()
+            await { viewModel.state.value.view == FolderView.GRID }
+            compose.onNodeWithText("Newest first").performClick()
+            compose.onNodeWithText("Size").performClick()
+            await { viewModel.state.value.sort == DocumentSort.SIZE }
+
+            val again = open("kept")
+            await { again.state.value.view != null }
+            assertEquals(FolderView.GRID to DocumentSort.SIZE, again.state.value.let { it.view to it.sort })
+            // Another folder keeps the view its contents call for; the order is one choice for all of them.
+            val other = open("other")
+            await { other.state.value.view != null }
+            assertEquals(FolderView.LIST to DocumentSort.SIZE, other.state.value.let { it.view to it.sort })
+        } finally {
+            runBlocking { deps.settings.setFolderSort(DocumentSort.NEWEST) }
+        }
     }
 }

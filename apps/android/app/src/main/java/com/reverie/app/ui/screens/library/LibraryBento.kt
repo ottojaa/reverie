@@ -19,8 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +31,7 @@ import com.reverie.app.data.api.model.DocumentSummaryDto
 import com.reverie.app.data.api.model.hasRenderedThumbnail
 import com.reverie.app.domain.model.ThumbnailSize
 import com.reverie.app.ui.components.fileTypeLabel
+import com.reverie.app.ui.components.fileTypeOf
 import com.reverie.app.ui.screens.browse.FeedSource
 import com.reverie.app.ui.theme.ReverieTheme
 
@@ -113,22 +112,21 @@ private fun FileBlocks(files: List<DocumentDto>, modifier: Modifier) {
 /** A file's extension on a block tinted by its type. Decoration: the card is read by its name and count. */
 @Composable
 private fun FileBlock(file: DocumentDto?, modifier: Modifier) {
-    val base = MaterialTheme.colorScheme.surfaceContainerHighest
     if (file == null) {
+        val base = MaterialTheme.colorScheme.surfaceContainerHighest
         Box(modifier.background(base).clearAndSetSemantics { testTag = "file-block:plain" })
         return
     }
     val label = fileTypeLabel(file.mime_type, file.original_filename)
-    val tint = fileTint(file.mime_type, file.original_filename)
+    val type = fileTypeOf(file.mime_type, file.original_filename)
     Box(
-        modifier.background(tint.copy(alpha = 0.3f).compositeOver(base))
+        modifier.background(type.ground)
             .clearAndSetSemantics { testTag = "file-block:$label" },
         contentAlignment = Alignment.TopCenter,
     ) {
         Text(
             label,
-            // Drawn towards the text colour, so it stands out from its own tint in either theme.
-            color = lerp(tint, MaterialTheme.colorScheme.onSurface, 0.45f),
+            color = type.ink,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.08.em,
