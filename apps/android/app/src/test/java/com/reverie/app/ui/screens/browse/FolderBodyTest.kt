@@ -1,11 +1,13 @@
 package com.reverie.app.ui.screens.browse
 
+import android.view.KeyEvent
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
@@ -312,6 +314,56 @@ class FolderBodyTest {
 
         compose.onNodeWithText("file-40.pdf").assertIsDisplayed()
         assertEquals(null, focusedId)
+    }
+
+    @Config(qualifiers = "w400dp-h500dp")
+    @Test fun `coming back from the viewer scrolls a grid to its document, past the lines of folder tiles`() {
+        // Enough lines of tiles that forgetting them would leave the document below the screen.
+        folders = (1..15).map { node("sub-$it", parent = "Portugal") }
+        val photos = (1..90).map { doc("p$it", created = "2026-07-14T10:00:00Z") }
+        val apk = doc("a1", "application/vnd.android.package-archive", name = "reverie.apk", created = "2026-07-14T10:00:00Z")
+        documents = photos.take(45) + apk + photos.drop(45)
+        view = FolderView.GRID
+        show()
+        compose.waitForIdle()
+        compose.onNodeWithText("reverie.apk", useUnmergedTree = true).assertDoesNotExist()
+
+        focusedId = "a1"
+        compose.waitForIdle()
+
+        compose.onNodeWithText("reverie.apk", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(null, focusedId)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun `enter works the view button, and opens the sort menu to choose from`() {
+        show()
+
+        compose.onNodeWithContentDescription("Show as grid").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithContentDescription("Show as grid").performKeyInput { pressKey(Key.Enter) }
+        compose.onNodeWithText("Newest first").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithText("Newest first").performKeyInput { pressKey(Key.Enter) }
+        compose.onNodeWithText("Size").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithText("Size").performKeyInput { pressKey(Key.Enter) }
+
+        assertEquals(listOf("show:GRID", "sort:SIZE"), calls)
+    }
+
+    @Test fun `escape closes the sort menu without choosing`() {
+        show()
+        compose.onNodeWithText("Newest first").performClick()
+        compose.onNodeWithText("Size").assertIsDisplayed()
+
+        // The menu is a window of its own, which is where a keyboard's key goes while it is open.
+        val root = compose.onNodeWithText("Size").fetchSemanticsNode().root as ViewRootForTest
+        compose.runOnUiThread {
+            listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP).forEach {
+                root.view.rootView.dispatchKeyEvent(KeyEvent(it, KeyEvent.KEYCODE_ESCAPE))
+            }
+        }
+
+        compose.onNodeWithText("Size").assertDoesNotExist()
+        assertEquals(emptyList<String>(), calls)
     }
 
     private fun pdfs(count: Int) = (1..count).map { doc("f$it", "application/pdf", name = "file-$it.pdf") }
