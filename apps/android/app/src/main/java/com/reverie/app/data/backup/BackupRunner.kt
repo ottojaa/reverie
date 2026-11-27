@@ -26,7 +26,8 @@ private class StopPass(val reason: String) : Exception(reason)
 /**
  * Runs backup passes: finds device files the ledger hasn't handled, skips what the library already
  * holds, uploads the rest into their album's folder, and writes the ledger after every file so a pass
- * can be cut off at any moment and the next one resumes where it stopped.
+ * can be cut off at any moment and the next one resumes where it stopped. An album whose folder takes
+ * no uploads is left out of the rest of the pass; its files wait, and don't count as failures.
  *
  * Only one pass runs at a time in the process: the periodic job, the new-media trigger and "Back up
  * now" are separate works that can start together, and two passes would upload the same file twice.
@@ -37,11 +38,17 @@ class BackupRunner internal constructor(
     private val transport: BackupTransport,
     private val dao: BackupDao,
     private val folders: BackupFolders,
+    private val settings: BackupSettingsRepository,
     private val now: () -> Long,
 ) {
     @Inject
-    constructor(source: BackupMediaSource, transport: BackupTransport, dao: BackupDao, folders: BackupFolders) :
-        this(source, transport, dao, folders, System::currentTimeMillis)
+    constructor(
+        source: BackupMediaSource,
+        transport: BackupTransport,
+        dao: BackupDao,
+        folders: BackupFolders,
+        settings: BackupSettingsRepository,
+    ) : this(source, transport, dao, folders, settings, System::currentTimeMillis)
 
     private val lock = Mutex()
 
@@ -63,6 +70,7 @@ class BackupRunner internal constructor(
     private inner class Pass(val request: BackupRequest) {
         private val deadline = now() + request.budgetMs
         private val failedThisPass = mutableSetOf<Long>()
+        private val blockedAlbums = mutableSetOf<Long>()
         private val uploadedHashes = mutableMapOf<String, String?>()
         private var retries = emptyMap<Long, BackupRetryEntity>()
         private var uploaded = 0
@@ -95,23 +103,38 @@ class BackupRunner internal constructor(
             val ledger = dao.ledgerIds().toSet()
             retries = dao.retries().associateBy { it.mediaId }
             val media = source.queryMedia()
-            makeAlbumFolders(media)
+            val albums = toAlbums(media)
+            noteAlbums(albums)
+            checkAlbumFolders(albums.filter { it.bucketId in request.config.bucketIds })
             val pending = scanPending(media, request.config.bucketIds, ledger, request.config.addedAfter)
             val ordered = orderForRun(pending, retries, now(), request.userInitiated, request.includeParked)
-            return ArrayDeque(ordered.filter { it.id !in failedThisPass })
+            return ArrayDeque(ordered.filter { it.id !in failedThisPass && !isBlocked(it) })
         }
 
-        /** Makes the folder of every backed-up album that has none yet, even with nothing to upload into it. */
-        private suspend fun makeAlbumFolders(media: List<BackupMedia>) {
-            for (album in toAlbums(media).filter { it.bucketId in request.config.bucketIds }) {
+        /** Tells the settings which albums the phone has, when this pass can see all of them. */
+        private suspend fun noteAlbums(albums: List<BackupAlbum>) {
+            if (!request.seesAllMedia) return
+            val ids = albums.map { it.bucketId }.toSet()
+            settings.seedKnownAlbums(ids)
+            // An album that left the phone, say by being renamed, has no row left to show its problem on.
+            settings.keepAlbumProblems(ids)
+        }
+
+        /** Makes the folders [albums] still lack, even with nothing to upload, and finds the ones that take no uploads. */
+        private suspend fun checkAlbumFolders(albums: List<BackupAlbum>) {
+            for (album in albums.filter { it.bucketId !in blockedAlbums }) {
                 try {
-                    folders.folderFor(album.bucketId, album.name)
+                    folders.check(album.bucketId, album.name)
+                } catch (e: AlbumBlocked) {
+                    blockedAlbums += album.bucketId
                 } catch (e: ReverieApiException) {
                     // A refusal of this one folder is recorded against its files when they are uploaded.
                     if (!isOneFilesFault(e)) throw StopPass(stopReason(e))
                 }
             }
         }
+
+        private fun isBlocked(media: BackupMedia) = media.bucketId in blockedAlbums
 
         /** Processes [queue]; false when the time ran out first. */
         private suspend fun drain(queue: ArrayDeque<BackupMedia>): Boolean {
@@ -138,7 +161,7 @@ class BackupRunner internal constructor(
         private suspend fun processGroup(group: List<BackupMedia>): Boolean {
             val hashed = mutableListOf<Pair<BackupMedia, String>>()
             var inTime = true
-            for (media in group) {
+            for (media in group.filterNot(::isBlocked)) {
                 if (isTimeUp()) { inTime = false; break }
                 val hash = transport.hash(media)
                 if (hash == null) recordFailure(media, "Couldn't read the file.") else hashed += media to hash
@@ -152,6 +175,7 @@ class BackupRunner internal constructor(
                 !known
             }
             for ((media, hash) in toUpload) {
+                if (isBlocked(media)) continue
                 if (isTimeUp()) return false
                 upload(media, hash)
             }
@@ -177,28 +201,18 @@ class BackupRunner internal constructor(
             }
             val isFirstUpload = uploadsStarted++ == 0
             try {
-                val documentId = uploadToAlbumFolder(media)
+                val documentId = folders.useFolder(media.bucketId, media.bucketName) { transport.upload(media, it) }
                 uploadedHashes[hash] = documentId
                 ledger(media, hash, documentId, BackupLedgerEntity.OUTCOME_UPLOADED)
             } catch (e: CancellationException) {
                 withContext(NonCancellable) { recordCutOff(media, isFirstUpload) }
                 throw e
+            } catch (e: AlbumBlocked) {
+                blockedAlbums += media.bucketId
             } catch (e: ReverieApiException) {
                 handleUploadFailure(media, e)
             } catch (e: java.io.IOException) {
                 recordFailure(media, "Couldn't read the file.")
-            }
-        }
-
-        /** Uploads into the album's folder; one that turns out to be gone is made again and tried once more. */
-        private suspend fun uploadToAlbumFolder(media: BackupMedia): String? {
-            val folderId = folders.folderFor(media.bucketId, media.bucketName)
-            return try {
-                transport.upload(media, folderId)
-            } catch (e: ReverieApiException.Http) {
-                if (e.statusCode != 404) throw e
-                folders.forget(media.bucketId, folderId)
-                transport.upload(media, folders.folderFor(media.bucketId, media.bucketName))
             }
         }
 
@@ -236,22 +250,4 @@ class BackupRunner internal constructor(
             dao.putRetry(row)
         }
     }
-}
-
-/** A refusal that says nothing about the files after this one. */
-private fun isOneFilesFault(e: ReverieApiException) = e is ReverieApiException.Http && e.statusCode in 400..499 &&
-    !ReverieApiException.isAuthFailure(e) && !isFolderLocked(e) && e.statusCode != 404
-
-/** The server's locked-folder answer, even when it left out which folder. */
-private fun isFolderLocked(e: ReverieApiException) =
-    e.lockedFolderId() != null || (e is ReverieApiException.Http && e.code == ReverieApiException.FOLDER_LOCKED_CODE)
-
-/** Plain-words reason a whole pass has to stop for [e]. */
-internal fun stopReason(e: ReverieApiException): String = when {
-    ReverieApiException.isAuthFailure(e) || e is ReverieApiException.Auth ->
-        "You're signed out. Sign in again to resume backup."
-    isFolderLocked(e) -> "The backup folder is private and locked. Choose another folder."
-    e is ReverieApiException.Network -> "Couldn't reach the server. Backup will try again when the network is back."
-    e is ReverieApiException.Http && e.statusCode == 404 -> "The backup folder couldn't be found. Backup will try again later."
-    else -> e.userMessage()
 }

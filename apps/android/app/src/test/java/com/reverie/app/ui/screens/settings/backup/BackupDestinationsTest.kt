@@ -33,6 +33,18 @@ class BackupDestinationsTest {
         assertEquals("Archive › Phone › WhatsApp - Sent", destinations.albums[2])
     }
 
+    @Test fun `a chosen folder is shown wherever it is, whatever the backup folder`() {
+        val settings = BackupSettings(
+            folderId = "Archive",
+            albumFolders = mapOf(1L to AlbumFolder("Holidays", "Holidays"), 2L to AlbumFolder("elsewhere", "Elsewhere")),
+        )
+
+        val destinations = toBackupDestinations(settings, albums, tree)
+
+        assertEquals("Archive › Phone › Holidays", destinations.albums[1])
+        assertEquals("one the tree doesn't have goes by its own name", "Elsewhere", destinations.albums[2])
+    }
+
     @Test fun `a folder made under another backup folder is no longer shown`() {
         val settings = BackupSettings(
             folderId = "Archive",

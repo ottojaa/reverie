@@ -20,6 +20,9 @@ interface BackupTransport {
 
     /** The folders directly inside [parentId]. Throws like [checkContent]. */
     suspend fun listFolders(parentId: String?): List<FolderDto>
+
+    /** The folder [folderId]; a 404 when it is gone, a 403 when a locked folder hides it. Throws like [checkContent]. */
+    suspend fun fetchFolder(folderId: String): FolderDto
 }
 
 /** What the runner needs to list the device's photos and videos, newest first. */

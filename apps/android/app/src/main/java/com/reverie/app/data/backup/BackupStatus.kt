@@ -29,7 +29,7 @@ sealed interface BackupStatus {
 
     data object Running : BackupStatus
 
-    /** The last run failed, or the app may not see all of the photos. */
+    /** The last run failed, an album's folder takes no uploads, or the app may not see all of the photos. */
     data object NeedsAttention : BackupStatus
 
     data class Waiting(val count: Int) : BackupStatus
@@ -57,7 +57,7 @@ internal fun backupStatus(
         !current.enabled -> BackupStatus.Off
         config == null -> BackupStatus.NotSetUp
         running -> BackupStatus.Running
-        current.lastError != null || access() != MediaAccess.Full -> BackupStatus.NeedsAttention
+        current.lastError != null || current.hasAlbumProblem || access() != MediaAccess.Full -> BackupStatus.NeedsAttention
         else -> pendingStatus(config, uploaded.toSet(), loadMedia)
     }
 }.distinctUntilChanged()

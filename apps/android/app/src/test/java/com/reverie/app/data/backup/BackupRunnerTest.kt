@@ -1,21 +1,14 @@
 package com.reverie.app.data.backup
 
 import com.reverie.app.data.api.ReverieApiException
-import com.reverie.app.data.api.model.CheckContentFile
-import com.reverie.app.data.api.model.CheckContentResult
 import com.reverie.app.data.api.model.ContentLocation
 import com.reverie.app.data.api.model.FolderContent
 import com.reverie.app.data.api.model.PrivateContent
 import com.reverie.app.data.api.model.TrashContent
-import com.reverie.app.data.local.dao.BackupDao
 import com.reverie.app.data.local.entity.BackupLedgerEntity
-import com.reverie.app.data.local.entity.BackupRetryEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -36,62 +29,8 @@ class BackupRunnerTest {
     private val minute = 60_000L
     private var clock = 1_000_000L
 
-    private class FakeDao : BackupDao {
-        val ledger = MutableStateFlow<Map<Long, BackupLedgerEntity>>(emptyMap())
-        val retryRows = MutableStateFlow<Map<Long, BackupRetryEntity>>(emptyMap())
-        override suspend fun ledgerIds(): List<Long> = ledger.value.keys.toList()
-        override fun observeLedgerIds(): Flow<List<Long>> = ledger.map { it.keys.toList() }
-        override suspend fun retries(): List<BackupRetryEntity> = retryRows.value.values.toList()
-        override fun observeRetries(): Flow<List<BackupRetryEntity>> = retryRows.map { it.values.toList() }
-        override suspend fun putLedger(entry: BackupLedgerEntity) { ledger.value = ledger.value + (entry.mediaId to entry) }
-        override suspend fun putRetry(entry: BackupRetryEntity) { retryRows.value = retryRows.value + (entry.mediaId to entry) }
-        override suspend fun deleteRetry(mediaId: Long) { retryRows.value = retryRows.value - mediaId }
-        override suspend fun clearLedger() { ledger.value = emptyMap() }
-        override suspend fun clearRetries() { retryRows.value = emptyMap() }
-    }
-
-    private class FakeSource(var items: List<BackupMedia>) : BackupMediaSource {
-        override suspend fun queryMedia(): List<BackupMedia> = items
-    }
-
-    /** The library's answer per hash, plus hooks for the upload and check calls. */
-    private inner class FakeTransport : FakeFolderTransport() {
-        val known = mutableMapOf<String, ContentLocation>()
-        val uploaded = mutableListOf<Long>()
-        /** The folder each uploaded file went into, as the server names it. */
-        val uploadedTo = mutableMapOf<Long, String?>()
-        val checked = mutableListOf<List<CheckContentFile>>()
-        var uploadCost = 0L
-        var onUpload: suspend (BackupMedia) -> Unit = {}
-        var checkFailure: ReverieApiException? = null
-        var shortAnswer = false
-
-        override suspend fun hash(media: BackupMedia): String? = "h${media.id}"
-
-        override suspend fun checkContent(files: List<CheckContentFile>): List<CheckContentResult> {
-            checked += files
-            checkFailure?.let { throw it }
-            val results = files.map { CheckContentResult(it.name, it.sha256, known[it.sha256]) }
-            return if (shortAnswer) results.dropLast(1) else results
-        }
-
-        override suspend fun upload(media: BackupMedia, folderId: String): String? {
-            onUpload(media)
-            if (!server.isLive(folderId)) throw notFound()
-            uploaded += media.id
-            uploadedTo[media.id] = server.path(folderId)
-            clock += uploadCost
-            return "doc-${media.id}"
-        }
-    }
-
     private val dao = FakeDao()
-    private val transport = FakeTransport()
-
-    private fun media(id: Long, bucket: Long = 1, addedAt: Long = 0) = BackupMedia(
-        id, "IMG_$id.jpg", "image/jpeg", 1_000, bucket,
-        bucketName = if (bucket == 1L) "Camera" else "Album $bucket", addedAt = addedAt,
-    )
+    private val transport = FakeTransport { clock += it }
 
     private lateinit var settings: BackupSettingsRepository
 
@@ -99,7 +38,7 @@ class BackupRunnerTest {
 
     private fun TestScope.runner(source: BackupMediaSource, over: BackupTransport = transport): BackupRunner {
         settings = settingsRepository(files)
-        return BackupRunner(source, over, dao, BackupFolders(settings, over)) { clock }
+        return BackupRunner(source, over, dao, BackupFolders(settings, over), settings) { clock }
     }
 
     private fun request(
@@ -358,27 +297,6 @@ class BackupRunnerTest {
         assertTrue(result.end is PassEnd.Stopped)
         assertTrue(transport.checked.isEmpty())
         assertTrue(dao.retryRows.value.isEmpty())
-    }
-
-    @Test fun `a backup folder locked before its subfolders exist stops the pass`() = runTest {
-        val runner = runner(media(1))
-        val vault = transport.server.add("Vault")
-        transport.server.locked += vault
-        settings.setDestination(vault, "Vault")
-
-        val end = runner.run(request()).end
-
-        assertTrue((end as PassEnd.Stopped).error.contains("private and locked"))
-    }
-
-    @Test fun `a locked destination folder stops the pass with a plain explanation`() = runTest {
-        transport.onUpload = {
-            throw ReverieApiException.Http(403, ReverieApiException.FOLDER_LOCKED_CODE, "Locked")
-        }
-
-        val end = runner(media(1)).run(request()).end
-
-        assertTrue((end as PassEnd.Stopped).error.contains("private and locked"))
     }
 
     @Test fun `a file cut off by the time limit goes first next time and is parked when cut off alone again`() = runTest {

@@ -15,6 +15,7 @@ import com.reverie.app.data.backup.MediaAccess
 import com.reverie.app.data.backup.canReadLocation
 import com.reverie.app.data.backup.isCameraAlbum
 import com.reverie.app.data.backup.mediaAccess
+import com.reverie.app.data.backup.newAlbums
 import com.reverie.app.data.backup.scanPending
 import com.reverie.app.data.backup.toAlbums
 import com.reverie.app.data.local.dao.BackupDao
@@ -53,6 +54,9 @@ data class BackupUiState(
 ) {
     val selectedBuckets: Set<Long> get() = settings.bucketIds.orEmpty()
 
+    /** Albums that appeared on the phone and haven't been answered for. */
+    val newAlbums: List<BackupAlbum> get() = newAlbums(albums, settings)
+
     /** On, with something to back up, and no answer yet on whether that includes what is already there. */
     val needsChoice: Boolean
         get() = settings.enabled && settings.addedAfter == null && selectedBuckets.isNotEmpty() && access != MediaAccess.None
@@ -71,8 +75,11 @@ class BackupViewModel @Inject constructor(
 
     private val device = MutableStateFlow(DeviceSnapshot())
 
-    /** Picks the backup folder. */
+    /** Picks the backup folder, or one album's. */
     val destinations = DestinationBrowser(folderRepository, vault, viewModelScope)
+
+    /** The album [destinations] is picking a folder for; null while it picks the backup folder. */
+    private var pickingFor: Long? = null
 
     val state: StateFlow<BackupUiState> = combine(
         combine(settingsRepository.settings, folderRepository.observeTree(), ::Pair),
@@ -96,8 +103,13 @@ class BackupViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             val access = context.mediaAccess()
-            val media = if (access == MediaAccess.None) emptyList() else loadMedia()
+            val read = if (access == MediaAccess.None) null else loadMedia()
+            val media = read.orEmpty()
             device.update { DeviceSnapshot(media, access, context.canReadLocation()) }
+            // Only a complete listing may count as the first look: what it misses would be announced later.
+            if (access == MediaAccess.Full && read != null) {
+                settingsRepository.seedKnownAlbums(read.map { it.bucketId }.toSet())
+            }
             preselectCamera(media)
         }
     }
@@ -124,9 +136,8 @@ class BackupViewModel @Inject constructor(
         )
     }
 
-    private suspend fun loadMedia(): List<BackupMedia> =
-        // Access can be taken away between the check and the query.
-        runCatching { mediaSource.queryMedia() }.getOrDefault(emptyList())
+    /** Null when the phone's media can't be read: access can be taken away between the check and the query. */
+    private suspend fun loadMedia(): List<BackupMedia>? = runCatching { mediaSource.queryMedia() }.getOrNull()
 
     /** The first time, the camera roll is selected for the person; they can change it. */
     private suspend fun preselectCamera(media: List<BackupMedia>) {
@@ -151,6 +162,14 @@ class BackupViewModel @Inject constructor(
         settingsRepository.setBuckets(if (bucketId in current) current - bucketId else current + bucketId)
     }
 
+    fun backUpNewAlbum(bucketId: Long) = widen {
+        settingsRepository.setBuckets(settingsRepository.current().bucketIds.orEmpty() + bucketId)
+    }
+
+    fun dismissNewAlbum(bucketId: Long) {
+        viewModelScope.launch { settingsRepository.markAlbumKnown(bucketId) }
+    }
+
     /** Leaves what is on the phone now alone and backs up what is added from here on. */
     fun backUpOnlyNew() = change { settingsRepository.backUpOnlyNew(System.currentTimeMillis() / 1_000) }
 
@@ -161,18 +180,32 @@ class BackupViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.dismissFolderNotice() }
     }
 
-    /** Opens the destination browser: a folder is required, and never a private one. */
-    fun pickDestination() {
-        destinations.show(
-            DestinationRules(allowPrivate = false, allowTop = false),
-            startAt = state.value.settings.folderId,
-        )
+    fun pickDestination() = showFolderPicker(albumId = null, startAt = state.value.settings.folderId)
+
+    fun pickAlbumFolder(bucketId: Long) {
+        val settings = state.value.settings
+        showFolderPicker(bucketId, startAt = settings.albumFolder(bucketId)?.folderId ?: settings.folderId)
     }
 
+    /** Opens the destination browser: a folder is required, and never a private one. */
+    private fun showFolderPicker(albumId: Long?, startAt: String?) {
+        pickingFor = albumId
+        destinations.show(DestinationRules(allowPrivate = false, allowTop = false), startAt)
+    }
+
+    /** Takes the picked folder for what the browser was opened for. */
     fun setDestination(destination: Destination) {
         val folderId = destination.folderId ?: return
-        change { settingsRepository.setDestination(folderId, destination.name) }
+        val albumId = pickingFor
+        if (albumId == null) {
+            change { settingsRepository.setDestination(folderId, destination.name) }
+            return
+        }
+        widen { settingsRepository.chooseAlbumFolder(albumId, folderId, destination.name) }
     }
+
+    /** Puts the album back under the backup folder. */
+    fun resetAlbumFolder(bucketId: Long) = widen { settingsRepository.resetAlbumFolder(bucketId) }
 
     fun backUpNow() {
         viewModelScope.launch { scheduler.backUpNow(settingsRepository.current()) }

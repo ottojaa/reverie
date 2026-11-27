@@ -1,7 +1,14 @@
 package com.reverie.app.ui.screens.settings.backup
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import com.reverie.app.data.backup.AlbumBlock
+import com.reverie.app.data.backup.AlbumFolder
+import com.reverie.app.data.backup.AlbumProblem
 import com.reverie.app.data.backup.BackupAlbum
 import com.reverie.app.data.backup.BackupSettings
 import com.reverie.app.data.backup.INCLUDE_EXISTING
@@ -57,6 +64,38 @@ class BackupScreenshotTest {
         running = true,
     )
 
+    /**
+     * Two albums sent elsewhere and working or not, one in a subfolder of a locked backup folder, and two
+     * albums that just appeared on the phone.
+     */
+    private val ownFolders = onlyNew.copy(
+        settings = onlyNew.settings.copy(
+            folderId = "backup",
+            bucketIds = setOf(1L, 2L, 3L, 4L),
+            knownAlbums = setOf(1L, 2L, 3L, 4L),
+            albumFolders = mapOf(
+                1L to AlbumFolder("photos", "Photos"),
+                3L to AlbumFolder("chats", "Chats"),
+                4L to AlbumFolder("family", "Family"),
+            ),
+            albumProblems = mapOf(
+                2L to AlbumBlock("backup", AlbumProblem.Locked),
+                3L to AlbumBlock("chats", AlbumProblem.Gone),
+                4L to AlbumBlock("family", AlbumProblem.Locked),
+            ),
+        ),
+        albums = albums.map { if (it.bucketId == 6L) it.copy(videos = 2) else it },
+        destinations = BackupDestinations(
+            backupFolder = "Phone backup",
+            albums = mapOf(
+                1L to "Photos",
+                2L to "Phone backup › Screenshots",
+                3L to "Chats",
+                4L to "Shared with the family › Photos from my old phones and cameras › Summer 2026 and everything before it",
+            ),
+        ),
+    )
+
     private val off = BackupUiState(
         settings = BackupSettings(bucketIds = setOf(1L)),
         albums = albums.take(3),
@@ -80,6 +119,28 @@ class BackupScreenshotTest {
     @Test fun `a narrow screen with large text`() {
         paparazzi.unsafeUpdateConfig(DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 5_200, fontScale = 1.3f))
         screen("narrow", folderGone.copy(settings = folderGone.settings.copy(addedAfter = 1_780_000_000)))
+    }
+
+    private fun albumRows(name: String, state: BackupUiState) = paparazzi.snapshotThemes(name) {
+        Column(Modifier.padding(16.dp)) { AlbumsCard(state, BackupActions()) }
+    }
+
+    @Test fun `new albums announced above the page`() = screen("new_albums", ownFolders)
+
+    @Test fun `new albums announced on a narrow screen with large text`() {
+        paparazzi.unsafeUpdateConfig(DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 1_800, fontScale = 1.3f))
+        screen("new_albums_narrow", ownFolders)
+    }
+
+    // Shot without the rest of the page, as a whole page is shrunk too far to read.
+    @Test fun `albums with their own folders and problems`() {
+        paparazzi.unsafeUpdateConfig(DeviceConfig.PIXEL_5.copy(screenHeight = 2_100))
+        albumRows("own_folders", ownFolders)
+    }
+
+    @Test fun `albums with their own folders on a narrow screen with large text`() {
+        paparazzi.unsafeUpdateConfig(DeviceConfig.PIXEL_5.copy(screenWidth = 880, screenHeight = 3_300, fontScale = 1.3f))
+        albumRows("own_folders_narrow", ownFolders)
     }
 
     @Test fun `the first choice`() = paparazzi.snapshotThemes("choice") {
