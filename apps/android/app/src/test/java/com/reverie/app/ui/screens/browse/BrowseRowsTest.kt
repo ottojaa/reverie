@@ -95,12 +95,6 @@ class BrowseRowsTest {
         assertEquals("Undated", dateAt(rows, 0)?.title)
     }
 
-    @Test fun `a section title takes the date of what comes under it`() {
-        val band = rows(FeedSource.PHOTOS, mixed).first()
-        val rows = listOf(FeedRow.Section("Photos and videos"), band)
-        assertEquals(TopDate("Today", 1, isOverPhotos = true), dateAt(rows, 0))
-    }
-
     @Test fun `there is no date above the first row, past the last, or in a list without days`() {
         assertNull(dateAt(rows(FeedSource.FILES, mixed), -1))
         assertNull(dateAt(emptyList(), 0))

@@ -2,6 +2,7 @@ package com.reverie.app.ui.screens.browse
 
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentSort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -42,6 +43,12 @@ class FeedDocumentsTest {
         assertEquals(listOf("b", "a"), derive(DocumentFilter.ALL, rows = tied).documents.map { it.id })
     }
 
+    @Test fun `a name is folded for the name order only`() {
+        val row = doc("a", name = "Scan.PDF")
+        val folded = DocumentSort.entries.associateWith { sortKeyOf(row, DocumentFilter.ALL, it).foldedName }
+        assertEquals(mapOf(DocumentSort.NEWEST to "", DocumentSort.NAME to "scan.pdf", DocumentSort.SIZE to ""), folded)
+    }
+
     @Test fun `a feed that has not fetched shows every cached row of its kind`() {
         val files = derive(DocumentFilter.FILES)
         assertEquals(2, files.total)
@@ -51,7 +58,7 @@ class FeedDocumentsTest {
     @Test fun `a fetched feed stops at its frontier so cached stragglers do not leave a gap`() {
         // The photo feed has read down to photo-new-upload; photo-old-upload is cached (it came in through
         // Recently added) but lies below the frontier, so showing it would hide the unread photos between.
-        val frontier = sortKeyOf(library[1], DocumentFilter.IMAGES)
+        val frontier = sortKeyOf(library[1], DocumentFilter.IMAGES, DocumentSort.NEWEST)
         val cursor = FeedCursor(offset = 2, total = 3, fetched = true, frontier = frontier)
         val photos = derive(DocumentFilter.IMAGES, cursor)
         assertEquals(listOf("photo-untaken", "photo-new-upload"), photos.documents.map { it.id })
@@ -72,7 +79,7 @@ class FeedDocumentsTest {
     @Test fun `a feed that has read everything reports the server's total, not the number of cached rows`() {
         // The phone cached 39 photos and one was deleted elsewhere: the card says 38, so the subtitle must too.
         val cached = (1..39).map { doc("p$it", created = "2026-11-%02dT10:00:00Z".format(it.coerceAtMost(28)), taken = "2026-10-%02dT09:00:00.000Z".format(it.coerceAtMost(28))) }
-        val cursor = FeedCursor(offset = 38, total = 38, fetched = true, frontier = sortKeyOf(cached.first(), DocumentFilter.IMAGES))
+        val cursor = FeedCursor(offset = 38, total = 38, fetched = true, frontier = sortKeyOf(cached.first(), DocumentFilter.IMAGES, DocumentSort.NEWEST))
         val photos = derive(DocumentFilter.IMAGES, cursor, rows = cached)
         assertEquals(39, photos.documents.size)
         assertEquals(38, photos.total)

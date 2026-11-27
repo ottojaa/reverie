@@ -33,7 +33,8 @@ import com.reverie.app.data.local.entity.UploadTaskEntity
     // Other version jumps fall back to a destructive rebuild from the network (DatabaseModule).
     // v7: documents gained takenAt, the date taken the Photos and Videos tabs order by (additive; see Migration6To7).
     // v8: folders gained lockId and per-kind counts; uploads may have no folder (see Migration7To8).
-    version = 8,
+    // v9: documents gained city, which a folder's list names (additive; see Migration8To9).
+    version = 9,
     exportSchema = false,
 )
 abstract class ReverieDatabase : RoomDatabase() {

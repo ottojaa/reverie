@@ -3,6 +3,7 @@ package com.reverie.app.ui.screens.browse
 import com.reverie.app.data.api.model.DocumentDto
 import com.reverie.app.ui.screens.manage.Selection
 import com.reverie.app.data.api.model.DocumentFilter
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.repository.PageResult
 import com.reverie.app.ui.screens.viewer.DocumentSequence
 import kotlinx.coroutines.CoroutineDispatcher
@@ -57,13 +58,17 @@ class BrowseFeedModel(
     computation: CoroutineDispatcher = Dispatchers.Default,
     sharing: SharingStarted = SharingStarted.WhileSubscribed(5_000),
     val selection: Selection = Selection(),
+    /** The order [fetchPage] pages in. */
+    private val sort: DocumentSort = DocumentSort.NEWEST,
 ) {
     private val control = MutableStateFlow(Control())
     private var reads: FeedReads? = null
 
     // Selecting rows must not re-sort the library, so the rows depend only on the cache and the cursor.
     private val derived: Flow<FeedDocuments> =
-        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor -> deriveFeed(docs, filter, cursor) }
+        combine(cache, control.map { it.cursor }.distinctUntilChanged()) { docs, cursor ->
+            deriveFeed(docs, filter, cursor, sort)
+        }
             .flowOn(computation)
 
     val state: StateFlow<FeedState> = combine(derived, control, selection.ids) { documents, c, selectedIds ->
@@ -117,7 +122,8 @@ class BrowseFeedModel(
         scope.launch {
             try {
                 val page = fetchPage(offset)
-                control.update { it.copy(cursor = it.cursor.after(filter, offset, page), isRefreshing = false) }
+                val reached = page.last?.let { sortKeyOf(it, filter, sort) }
+                control.update { it.copy(cursor = it.cursor.after(reached, sort, offset, page), isRefreshing = false) }
                 // Page one starts the reads over; a later page adds to them (there are none before page one).
                 val read = if (offset == 0) FeedReads.first(page) else reads?.plus(page)
                 reads = read
@@ -163,18 +169,16 @@ internal fun CoroutineScope.readQuietly(read: suspend () -> Unit) {
     }
 }
 
-/** The cursor once [page] (read from [offset]) has arrived. */
-private fun FeedCursor.after(filter: DocumentFilter, offset: Int, page: PageResult): FeedCursor {
-    val reached = page.last?.let { sortKeyOf(it, filter) }
-    return copy(
+/** The cursor once [page] (read from [offset], reaching down to [reached] in [sort]'s order) has arrived. */
+private fun FeedCursor.after(reached: SortKey?, sort: DocumentSort, offset: Int, page: PageResult): FeedCursor =
+    copy(
         // Page one starts the offset over: rows may have been deleted since, so the old offset could
-        // step over rows that moved up. The frontier keeps its minimum, so nothing already shown
-        // disappears; the next page re-reads rows that are cached, which only upserts them.
+        // step over rows that moved up. The frontier keeps the furthest row reached, so nothing already
+        // shown disappears; the next page re-reads rows that are cached, which only upserts them.
         offset = page.loaded,
         stale = stale && offset != 0,
         total = page.total,
         fetched = true,
         isLoading = false,
-        frontier = if (page.total == 0) null else listOfNotNull(frontier, reached).minOrNull(),
+        frontier = if (page.total == 0) null else listOfNotNull(frontier, reached).maxWithOrNull(sort.order),
     )
-}

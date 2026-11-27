@@ -24,13 +24,6 @@ sealed interface FeedRow {
         override val docIds get() = emptyList<String>()
     }
 
-    /** The title of one of a folder's two sections. */
-    data class Section(val title: String) : FeedRow {
-        override val key get() = "section:$title"
-        override val contentType get() = "section"
-        override val docIds get() = emptyList<String>()
-    }
-
     data class Band(val section: MosaicSection) : FeedRow {
         override val key get() = section.bandKey()
         override val contentType get() = "band"
@@ -106,15 +99,20 @@ fun isNearEnd(lastVisibleIndex: Int, rowCount: Int, hasMore: Boolean): Boolean =
 data class TopDate(val title: String, val position: Int, val isOverPhotos: Boolean)
 
 /**
- * The date of what is at the top of the list when the row at [index] is first: the day of a band's first photo,
- * or the heading a file row sits under. Null above the first row, and in a list without days.
+ * The date of what is at the top of the list when the row at [index] is first: the day of a band's first
+ * document ([dayOf] says which day that is), or the heading a file row sits under. Null above the first row,
+ * and in a list without days.
  */
-fun topDateAt(rows: List<FeedRow>, index: Int, today: LocalDate, zone: ZoneId): TopDate? =
+fun topDateAt(
+    rows: List<FeedRow>,
+    index: Int,
+    today: LocalDate,
+    zone: ZoneId,
+    dayOf: (DocumentDto, ZoneId) -> LocalDate? = ::dayTakenOf,
+): TopDate? =
     when (val row = rows.getOrNull(index)) {
         null, is FeedRow.Added -> null
-        is FeedRow.Band -> TopDate(dayTitle(dayTakenOf(row.section.tiles.first().doc, zone), today), index, true)
-        // A section's title belongs to what comes under it.
-        is FeedRow.Section -> topDateAt(rows, index + 1, today, zone)
+        is FeedRow.Band -> TopDate(dayTitle(dayOf(row.section.tiles.first().doc, zone), today), index, true)
         is FeedRow.Heading, is FeedRow.File -> headingAt(rows, index)?.let { TopDate(it.title, index, false) }
     }
 

@@ -5,6 +5,7 @@ import com.reverie.app.data.api.model.DocumentFilter
 import com.reverie.app.data.api.model.MediaDatesDto
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -30,14 +31,21 @@ private val fullDay = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 private fun instantOf(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
 /**
- * The day a photo or video belongs to. The date taken is a local clock reading stored as if it were
- * UTC, so it is read as written (no zone shift); without one it is the day of the upload, in [zone].
+ * When a photo or video was taken, as a clock reading. The date taken is a local reading stored as if it
+ * were UTC, so it is read as written (no zone shift); without one it is the time of the upload, in [zone].
  */
-fun dayTakenOf(doc: DocumentDto, zone: ZoneId): LocalDate? =
-    instantOf(doc.taken_at)?.atOffset(ZoneOffset.UTC)?.toLocalDate() ?: dayAddedOf(doc, zone)
+fun timeTakenOf(doc: DocumentDto, zone: ZoneId): LocalDateTime? =
+    instantOf(doc.taken_at)?.atOffset(ZoneOffset.UTC)?.toLocalDateTime() ?: timeAddedOf(doc, zone)
 
-/** The day a document was uploaded; an upload time is a real instant, read in [zone]. */
-fun dayAddedOf(doc: DocumentDto, zone: ZoneId): LocalDate? = instantOf(doc.created_at)?.atZone(zone)?.toLocalDate()
+/** When a document was uploaded; an upload time is a real instant, read in [zone]. */
+fun timeAddedOf(doc: DocumentDto, zone: ZoneId): LocalDateTime? =
+    instantOf(doc.created_at)?.atZone(zone)?.toLocalDateTime()
+
+/** The day a photo or video belongs to. */
+fun dayTakenOf(doc: DocumentDto, zone: ZoneId): LocalDate? = timeTakenOf(doc, zone)?.toLocalDate()
+
+/** The day a document was uploaded. */
+fun dayAddedOf(doc: DocumentDto, zone: ZoneId): LocalDate? = timeAddedOf(doc, zone)?.toLocalDate()
 
 /** "Today", "Yesterday", then "Thu 6 Nov" (with the year when it isn't this year's). */
 fun dayLabel(day: LocalDate, today: LocalDate): String {

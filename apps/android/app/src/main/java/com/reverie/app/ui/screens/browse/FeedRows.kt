@@ -22,6 +22,8 @@ import com.reverie.app.ui.components.FileKindBlock
 import com.reverie.app.ui.components.MOSAIC_GAP
 import com.reverie.app.ui.components.MosaicSectionView
 import com.reverie.app.ui.components.ROW_PICTURE
+import com.reverie.app.ui.components.TilePicture
+import com.reverie.app.ui.components.galleryPicture
 import com.reverie.app.ui.navigation.documentSharedBounds
 import com.reverie.app.util.formatBytes
 import com.reverie.app.util.formatTimeOfDay
@@ -38,14 +40,24 @@ class RowActions(
     val onGroupLongClick: (RecentRow.Group) -> Unit = {},
 )
 
-/** Draws one lazy-list row of a document list. */
+/**
+ * Draws one lazy-list row of a document list.
+ *
+ * @param picture what fills the tiles of a grid band.
+ */
 @Composable
-fun FeedRowView(row: FeedRow, actions: RowActions, today: LocalDate, zone: ZoneId) {
+fun FeedRowView(
+    row: FeedRow,
+    actions: RowActions,
+    today: LocalDate,
+    zone: ZoneId,
+    picture: TilePicture = galleryPicture,
+) {
     when (row) {
         is FeedRow.Heading -> HeadingRow(row.header)
-        is FeedRow.Section -> SectionRow(row.title)
         is FeedRow.Band -> Box(Modifier.padding(bottom = MOSAIC_GAP.dp)) {
-            MosaicSectionView(row.section, actions.selected, actions.onClick, actions.onLongClick, actions.starred)
+            val section = row.section
+            MosaicSectionView(section, actions.selected, actions.onClick, actions.onLongClick, actions.starred, picture)
         }
         is FeedRow.File -> FileRow(row.doc, actions)
         is FeedRow.Added -> RecentEntryView(row.entry, actions, today, zone)
@@ -68,18 +80,6 @@ private fun HeadingRow(header: FeedItem.Header) {
             modifier = Modifier.weight(1f),
         )
     }
-}
-
-/** Names one of a folder's two sections, above its photos or its first day of files. */
-@Composable
-private fun SectionRow(title: String) {
-    Text(
-        text = title,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 24.dp, end = 20.dp),
-    )
 }
 
 /** A file row: it stands on the page. */

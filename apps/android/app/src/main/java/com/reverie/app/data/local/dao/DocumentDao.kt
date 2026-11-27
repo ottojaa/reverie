@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 /** One cached document's MIME type (see [DocumentDao.mimeTypesInFolder] and [DocumentDao.allMimeTypes]). */
 data class DocumentMimeType(val id: String, val mimeType: String)
 
-/** One cached document's date taken (see [DocumentDao.takenAtOf]). */
-data class DocumentTakenAt(val id: String, val takenAt: String)
+/** What a cached document knows from its photo or video (see [DocumentDao.photoFactsOf]). */
+data class DocumentPhotoFacts(val id: String, val takenAt: String?, val city: String?)
 
 @Dao
 interface DocumentDao {
@@ -57,9 +57,9 @@ interface DocumentDao {
     @Query("SELECT id FROM documents WHERE folderId IN (:folderIds)")
     suspend fun idsInFolders(folderIds: List<String>): List<String>
 
-    /** The date taken of the cached rows among [ids] that have one. */
-    @Query("SELECT id, takenAt FROM documents WHERE id IN (:ids) AND takenAt IS NOT NULL")
-    suspend fun takenAtOf(ids: List<String>): List<DocumentTakenAt>
+    /** The date taken and the city of the cached rows among [ids] that have either. */
+    @Query("SELECT id, takenAt, city FROM documents WHERE id IN (:ids) AND (takenAt IS NOT NULL OR city IS NOT NULL)")
+    suspend fun photoFactsOf(ids: List<String>): List<DocumentPhotoFacts>
 
     /** Which of [ids] have a cached row (used to detect documents that became private after caching). */
     @Query("SELECT id FROM documents WHERE id IN (:ids)")

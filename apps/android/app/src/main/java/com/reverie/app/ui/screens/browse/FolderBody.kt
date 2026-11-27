@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,31 +25,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.data.api.model.FolderCoverDto
 import com.reverie.app.data.api.model.FolderWithChildren
-import com.reverie.app.domain.folderMeta
+import com.reverie.app.data.settings.FolderView
 import com.reverie.app.ui.components.Breadcrumb
-import com.reverie.app.ui.components.FolderRow
 import com.reverie.app.ui.screens.manage.RowSelection
 
-private val GRID_TOP_GAP = 10.dp
+/** What a grid keeps between itself and what comes before it. */
+private val GRID_TOP_GAP = 4.dp
 
-/** What the rows of the folders inside a folder are drawn from, and where they and the breadcrumb lead. */
+/** What the folders inside a folder are drawn from, and where they and the breadcrumb lead. */
 class FolderLinks(
     val covers: Map<String, FolderCoverDto>,
     val starredIds: Set<String>,
-    /** A folder's row was tapped. */
+    /** A folder was tapped. */
     val onOpen: (folderId: String) -> Unit,
     /** A breadcrumb step was tapped; null is the root. */
     val onOpenCrumb: (folderId: String?) -> Unit,
-    /** The folder rows' part in the page's selection. */
+    /** The folders' part in the page's selection. */
     val selection: RowSelection = RowSelection(),
 )
 
 /**
- * A folder page's body, one list: where the folder is (the root has nowhere to say), its name and figures, a row per folder inside it, then
- * its own documents by day, photos and videos before the other files. Stateless: the screen hands it the state
- * and what to do, so the same body is drawn in a screenshot or a navigation test.
+ * A folder page's body, one scrolling list: where the folder is (the root has nowhere to say), its name and
+ * figures, the sort and view controls, the folders inside it, then its own documents. A list draws a row for
+ * each folder and document; a grid draws the folders as tiles and the documents as one continuous mosaic.
+ * Stateless: the screen hands it the state and what to do, so the same body is drawn in a screenshot or a
+ * navigation test.
  *
  * @param name shown as the page's title.
  */
@@ -65,6 +67,8 @@ fun FolderBody(
     focusedId: String?,
     onFocusConsumed: () -> Unit,
     onLoadMore: () -> Unit,
+    onSort: (DocumentSort) -> Unit,
+    onShowAs: (FolderView) -> Unit,
     error: String?,
     slot: ChromeSlot,
     listState: LazyListState = rememberLazyListState(),
@@ -72,24 +76,28 @@ fun FolderBody(
     BoxWithConstraints(slot.modifier.fillMaxSize()) {
         val width = maxWidth.value
         val rows = remember(state, width, layout) { folderRows(state, width, layout) }
-        // The list starts with the title block and the folder rows.
-        val leading = 1 + state.children.size
-        FeedScrollEffects(rows, listState, state.hasMore, onLoadMore, focusedId, onFocusConsumed, leading)
-        TopDateEffect(rows, listState, layout, slot.onTopDate, leading)
+        val columns = folderColumns(width)
+        // The list starts with the title block and the folders.
+        val leading = 1 + folderLineCount(state, columns)
+        val hasMore = state.documents.hasMore
+        FeedScrollEffects(rows, listState, hasMore, onLoadMore, focusedId, onFocusConsumed, leading)
+        // Only a grid in date order has a date to roll by.
+        val dated = rows.takeIf { state.view == FolderView.GRID && state.sort == DocumentSort.NEWEST }.orEmpty()
+        val dayOf = if (state.filter.isByDateTaken) ::dayTakenOf else ::dayAddedOf
+        TopDateEffect(dated, listState, layout, slot.onTopDate, leading, dayOf)
         LazyColumn(state = listState, contentPadding = slot.contentPadding, modifier = Modifier.fillMaxSize()) {
             item(key = "head", contentType = "head") {
-                val ancestors = state.path.dropLast(1).takeUnless { state.isRoot }
-                FolderHead(ancestors, name, folderPageMeta(state), description, links.onOpenCrumb)
-            }
-            folderRowItems(state.children, links)
-            itemsIndexed(rows, key = { _, row -> row.key }, contentType = { _, row -> row.contentType }) { index, row ->
-                // A grid that starts under a folder row or a section's name stands a little apart from it.
-                val above = rows.getOrNull(index - 1)
-                val startsGrid = row is FeedRow.Band && above !is FeedRow.Band && (above != null || state.children.isNotEmpty())
-                Box(Modifier.padding(top = if (startsGrid) GRID_TOP_GAP else 0.dp)) {
-                    FeedRowView(row, actions, layout.today, layout.zone)
+                Column {
+                    val ancestors = state.path.dropLast(1).takeUnless { state.isRoot }
+                    FolderHead(ancestors, name, folderPageMeta(state), description, links.onOpenCrumb)
+                    val view = state.view ?: return@Column
+                    if (state.children.isEmpty() && state.isEmptyOfDocuments) return@Column
+                    FolderControls(state.sort, view, onSort, onShowAs)
+                    if (view == FolderView.GRID) Box(Modifier.padding(top = GRID_TOP_GAP))
                 }
             }
+            folderItems(state, links, columns, width.dp)
+            if (state.view != null) documentItems(state, rows, actions, layout)
             if (rows.isEmpty()) noDocuments(state, error, slot.onUpload)
         }
     }
@@ -103,7 +111,7 @@ private fun FolderHead(
     description: String?,
     onOpenCrumb: (String?) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) {
         if (ancestors != null) {
             Breadcrumb(ancestors, onOpenCrumb, style = MaterialTheme.typography.bodySmall, endsAtCurrent = false)
         }
@@ -134,25 +142,18 @@ private fun HeadLine(text: String) {
     )
 }
 
-private fun LazyListScope.folderRowItems(folders: List<FolderWithChildren>, links: FolderLinks) {
-    items(folders, key = { "folder:" + it.id }, contentType = { "folder" }) { folder ->
-        FolderRow(
-            folder = folder,
-            cover = links.covers[folder.id],
-            meta = folderMeta(folder),
-            onClick = { links.selection.tap(folder.id) { links.onOpen(folder.id) } },
-            onLongClick = { links.selection.toggle(folder.id) },
-            selected = folder.id in links.selection,
-            starred = folder.id in links.starredIds,
-        )
+private fun LazyListScope.documentItems(state: FolderState, rows: List<FeedRow>, actions: RowActions, layout: FeedLayout) {
+    items(rows, key = { it.key }, contentType = { it.contentType }) { row ->
+        when (row) {
+            is FeedRow.File -> FolderDocumentRow(row.doc, state.filter, actions, layout)
+            else -> FeedRowView(row, actions, layout.today, layout.zone, folderTilePicture)
+        }
     }
 }
 
-/** In place of the document rows: a spinner while they are on their way, or that the folder holds nothing. */
+/** In place of the documents: a spinner while they are on their way, or that the folder holds nothing. */
 private fun LazyListScope.noDocuments(state: FolderState, error: String?, onUpload: () -> Unit) {
-    val files = state.files
-    val isLoading = isFirstLoad(state.media, error) || files == null || isFirstLoad(files, error)
-    if (isLoading) {
+    if (state.view == null || isFirstLoad(state.documents, error)) {
         item(key = "loading") {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -161,7 +162,7 @@ private fun LazyListScope.noDocuments(state: FolderState, error: String?, onUplo
         return
     }
     // A read that failed leaves it unknown whether the folder is empty.
-    if (state.children.isNotEmpty() || !state.media.fetched || files?.fetched != true) return
+    if (state.children.isNotEmpty() || !state.documents.fetched) return
     item(key = "empty") {
         Box(Modifier.fillParentMaxHeight(0.7f)) { EmptyList("This folder is empty", PaddingValues(), onUpload) }
     }

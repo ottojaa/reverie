@@ -181,6 +181,9 @@ export const DocumentSchema = z.object({
     // anything that is not a video and for a video whose renditions are not all encoded yet: play file_url.
     hls_url: z.string().nullable(),
     thumbnail_urls: ThumbnailUrlsSchema.nullable(),
+    // Where a photo or video was taken, so a list row can name the place; sent by GET /documents and the
+    // detail endpoint.
+    city: z.string().nullable().optional(),
     // Only populated on the document detail endpoint (GET /documents/:id);
     // omitted from list responses to avoid per-row joins.
     photo_metadata: DocumentPhotoMetadataSchema.nullable().optional(),
@@ -195,6 +198,10 @@ export type Document = z.infer<typeof DocumentSchema>;
 export const DocumentListResponseSchema = PaginatedResponseSchema(DocumentSchema);
 
 export type DocumentListResponse = z.infer<typeof DocumentListResponseSchema>;
+
+export const DocumentSortSchema = z.enum(['name', 'size']);
+
+export type DocumentSort = z.infer<typeof DocumentSortSchema>;
 
 export const DocumentListQuerySchema = PaginationQuerySchema.extend({
     folder_id: UuidSchema.optional(),
@@ -220,6 +227,11 @@ export const DocumentListQuerySchema = PaginationQuerySchema.extend({
      * (transcoding runs on its own clock and is left out). `total` is then the processing total.
      */
     processing: QueryFlagSchema.optional(),
+    /**
+     * `name`: by filename, A to Z, folding the letters A-Z only and comparing by code point, equal names by id.
+     * `size`: largest first, equal sizes by id descending. Omitted: by date, as `kind` and `media` describe.
+     */
+    sort: DocumentSortSchema.optional(),
 });
 
 export type DocumentListQuery = z.infer<typeof DocumentListQuerySchema>;

@@ -2,7 +2,7 @@ package com.reverie.app.data.repository
 
 import com.reverie.app.data.local.dao.DocumentDao
 import com.reverie.app.data.local.dao.DocumentMimeType
-import com.reverie.app.data.local.dao.DocumentTakenAt
+import com.reverie.app.data.local.dao.DocumentPhotoFacts
 import com.reverie.app.data.local.entity.DocumentEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,8 +40,9 @@ internal class FakeDocumentDao : DocumentDao {
         rows.value.filter { it.folderId == null }.map { DocumentMimeType(it.id, it.mimeType) }
     override suspend fun idsInFolders(folderIds: List<String>): List<String> =
         rows.value.filter { it.folderId in folderIds }.map { it.id }
-    override suspend fun takenAtOf(ids: List<String>): List<DocumentTakenAt> =
-        rows.value.filter { it.id in ids && it.takenAt != null }.map { DocumentTakenAt(it.id, it.takenAt!!) }
+    override suspend fun photoFactsOf(ids: List<String>): List<DocumentPhotoFacts> = rows.value
+        .filter { it.id in ids && (it.takenAt != null || it.city != null) }
+        .map { DocumentPhotoFacts(it.id, it.takenAt, it.city) }
     override suspend fun existingIds(ids: List<String>): List<String> =
         rows.value.map { it.id }.filter { it in ids }
     override suspend fun folderIdsInUse(): List<String> = rows.value.mapNotNull { it.folderId }.distinct()

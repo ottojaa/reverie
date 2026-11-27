@@ -10,9 +10,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.reverie.app.data.api.model.DocumentSort
 import com.reverie.app.ui.theme.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +40,17 @@ enum class VideoBackground {
     /** The app's surface colour, so the bars blend into the viewer chrome. */
     THEME,
 }
+
+/** How a folder page draws what the folder holds. */
+enum class FolderView { LIST, GRID }
+
+/** What has been chosen for one folder page. */
+data class FolderChoices(
+    /** The view toggled to on this page; null while it never has been. */
+    val view: FolderView? = null,
+    /** The order of every folder page. */
+    val sort: DocumentSort = DocumentSort.NEWEST,
+)
 
 /** User-facing app settings persisted across launches. */
 data class AppSettings(
@@ -93,6 +106,7 @@ class SettingsRepository @Inject constructor(
     private val serverUrlKey = stringPreferencesKey("server_url")
     private val cacheCapKey = longPreferencesKey("file_cache_cap")
     private val shortcutOrderKey = stringPreferencesKey("shortcut_order")
+    private val folderSortKey = stringPreferencesKey("folder_sort")
     // TEMPORARY / DEV TUNING keys (see AppSettings motion fields).
     private val motionNavMsKey = intPreferencesKey("motion_nav_ms")
     private val motionDirEasingKey = stringPreferencesKey("motion_dir_easing")
@@ -168,6 +182,27 @@ class SettingsRepository @Inject constructor(
 
     private fun shortcutOrderIn(prefs: Preferences): List<String> =
         prefs[shortcutOrderKey]?.split(',')?.filter { it.isNotEmpty() }.orEmpty()
+
+    /** The choices for the page of the folder [folderId] names, or of the root for null. */
+    fun folderChoices(folderId: String?): Flow<FolderChoices> = context.settingsDataStore.data
+        .map { prefs ->
+            FolderChoices(
+                view = prefs[folderViewKey(folderId)]?.let { runCatching { FolderView.valueOf(it) }.getOrNull() },
+                sort = prefs[folderSortKey]?.let { runCatching { DocumentSort.valueOf(it) }.getOrNull() }
+                    ?: DocumentSort.NEWEST,
+            )
+        }
+        .distinctUntilChanged()
+
+    suspend fun setFolderView(folderId: String?, view: FolderView) {
+        context.settingsDataStore.edit { it[folderViewKey(folderId)] = view.name }
+    }
+
+    suspend fun setFolderSort(sort: DocumentSort) {
+        context.settingsDataStore.edit { it[folderSortKey] = sort.name }
+    }
+
+    private fun folderViewKey(folderId: String?) = stringPreferencesKey("folder_view:" + (folderId ?: "root"))
 
     suspend fun setFileCacheCap(bytes: Long) {
         context.settingsDataStore.edit { it[cacheCapKey] = bytes }

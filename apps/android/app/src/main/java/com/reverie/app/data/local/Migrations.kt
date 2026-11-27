@@ -109,6 +109,17 @@ object Migration6To7 : Migration(6, 7) {
 }
 
 /**
+ * v8 -> v9: documents gain `city`, where a photo or video was taken, which a folder's list names. Additive;
+ * existing rows start with null until the next fetch fills it in.
+ */
+object Migration8To9 : Migration(8, 9) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `documents` ADD COLUMN `city` TEXT")
+    }
+}
+
+/**
  * v7 -> v8: folders nest to any depth and documents may sit at the top level.
  *
  * `folders` is only a copy of the server's tree, so it is dropped and made again empty: a row carried

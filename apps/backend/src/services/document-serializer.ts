@@ -13,7 +13,7 @@ import { getStorageService } from './storage.service.js';
 // so signed URLs are always safe to produce. Built field by field, never by spreading the
 // row, so a column added to `documents` later is not exposed by accident.
 export async function serializeDocument(
-    doc: DbDocument & { taken_at?: Date | null },
+    doc: DbDocument & { taken_at?: Date | null; city?: string | null },
     locks: FolderLocks,
     llmResult?: LlmResult | null,
     photoMeta?: PhotoMetadata | null,
@@ -46,6 +46,7 @@ export async function serializeDocument(
         llm_token_count: llmResult?.token_count ?? null,
         is_private: locks.isPrivate(doc.folder_id),
         ...takenAtOf(doc, photoMeta),
+        ...cityOf(doc, photoMeta),
         created_at: doc.created_at.toISOString(),
         updated_at: doc.updated_at.toISOString(),
         file_url: fileUrl,
@@ -69,6 +70,13 @@ function takenAtOf(doc: { taken_at?: Date | null }, photoMeta: PhotoMetadata | n
     const takenAt = photoMeta === undefined ? doc.taken_at : photoMeta?.taken_at;
 
     return takenAt === undefined ? {} : { taken_at: takenAt ? takenAt.toISOString() : null };
+}
+
+/** `city`, on the same terms as `taken_at`. */
+function cityOf(doc: { city?: string | null }, photoMeta: PhotoMetadata | null | undefined): Pick<Document, 'city'> {
+    const city = photoMeta === undefined ? doc.city : (photoMeta?.city ?? null);
+
+    return city === undefined ? {} : { city: city || null };
 }
 
 function toDocumentVideoMetadata(videoMeta: VideoMetadata): DocumentVideoMetadata {

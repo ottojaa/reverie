@@ -3,6 +3,7 @@ package com.reverie.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -50,13 +53,31 @@ fun FolderThumbnail(locked: Boolean, cover: FolderCoverDto?, modifier: Modifier 
         } else {
             CoverTiles(tiles, picture)
         }
-        FolderBadge(locked, Modifier.align(Alignment.BottomEnd).offset(BADGE_OVERHANG, BADGE_OVERHANG))
+        CornerBadge(
+            icon = if (locked) Icons.Outlined.Lock else Icons.Filled.Folder,
+            label = if (locked) "Locked folder" else "Folder",
+            modifier = overhangingCorner(),
+            iconSize = if (locked) 12.dp else 13.dp,
+        )
     }
 }
 
+/** Puts a [CornerBadge] on the lower right corner of the picture it is in, reaching a little past it. */
+internal fun BoxScope.overhangingCorner(): Modifier =
+    Modifier.align(Alignment.BottomEnd).offset(BADGE_OVERHANG, BADGE_OVERHANG)
+
+/**
+ * The round mark on a picture's corner that says what it is a picture of. It is ringed in the background
+ * colour, so it stands apart from the picture and the page alike.
+ */
 @Composable
-private fun FolderBadge(locked: Boolean, modifier: Modifier) {
-    val label = if (locked) "Locked folder" else "Folder"
+internal fun CornerBadge(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 13.dp,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+) {
     Box(
         modifier
             .size(BADGE_SIZE)
@@ -66,12 +87,7 @@ private fun FolderBadge(locked: Boolean, modifier: Modifier) {
             .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            if (locked) Icons.Outlined.Lock else Icons.Filled.Folder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(if (locked) 12.dp else 13.dp),
-        )
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
 

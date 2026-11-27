@@ -42,8 +42,9 @@ import {
     applyDocumentListFilters,
     IS_SCREEN_CAPTURE_SQL,
     TAKEN_AT_SQL,
-    TAKEN_OR_CREATED_SQL,
     type DocumentListFilters,
+    CITY_SQL,
+    applyDocumentListOrder,
 } from '../../services/document-list-filters';
 import { loadMediaDates, summariseDocuments } from '../../services/document-summary';
 import { excludeTrashed } from '../../services/privacy';
@@ -101,7 +102,7 @@ export default async function (fastify: FastifyInstance) {
         },
         async function (request, reply) {
             const userId = request.user.id;
-            const { limit, offset, folder_id, top_level, preview, category, date_from, date_to, processing, kind, media } = request.query;
+            const { limit, offset, folder_id, top_level, preview, category, date_from, date_to, processing, kind, media, sort } = request.query;
 
             if (folder_id && top_level) return reply.badRequest('Give folder_id or top_level, not both');
 
@@ -125,10 +126,14 @@ export default async function (fastify: FastifyInstance) {
                 media,
             };
             const byDateTaken = media || kind === 'image' || kind === 'video';
-            const page = applyDocumentListFilters(db.selectFrom('documents').selectAll().select(TAKEN_AT_SQL.as('taken_at')), filters);
+            const withPhotoFacts = db
+                .selectFrom('documents')
+                .selectAll()
+                .select([TAKEN_AT_SQL.as('taken_at'), CITY_SQL.as('city')]);
+            const page = applyDocumentListFilters(withPhotoFacts, filters);
             // A preview is a few cards standing for a kind: screenshots and screen recordings come after the rest.
             const ranked = preview && kind ? page.orderBy(IS_SCREEN_CAPTURE_SQL) : page;
-            const orderedPage = byDateTaken ? ranked.orderBy(TAKEN_OR_CREATED_SQL, 'desc').orderBy('id', 'desc') : ranked.orderBy('created_at', 'desc');
+            const orderedPage = applyDocumentListOrder(ranked, sort, byDateTaken);
             const count = applyDocumentListFilters(db.selectFrom('documents').select(db.fn.countAll().as('count')), filters);
 
             const [documents, countResult] = await Promise.all([orderedPage.limit(limit).offset(offset).execute(), count.executeTakeFirst()]);
