@@ -275,8 +275,7 @@ export class UploadService {
             thumbnail_status: canThumbnail ? 'pending' : 'complete',
             // The thumbnail step queues the transcode; until then the video is 'pending', which is what the backfill looks for.
             transcode_status: getFileCategory(mimeType) === 'video' ? 'pending' : 'skipped',
-            // Left to the column default unless needed: a deploy runs this code before the migration adds the column.
-            ...(lane === 'background' && { processing_lane: lane }),
+            processing_lane: lane,
         };
 
         const document = await db.insertInto('documents').values(newDocument).returningAll().executeTakeFirstOrThrow();

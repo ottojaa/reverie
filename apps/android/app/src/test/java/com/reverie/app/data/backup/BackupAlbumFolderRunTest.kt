@@ -48,21 +48,13 @@ class BackupAlbumFolderRunTest {
         assertNull(problem(2))
     }
 
-    @Test fun `an album with a folder of its own uploads into it, the others into their subfolders`() = runTest {
-        val runner = runner()
-        choose(1, server.add("Photos"))
-
-        runner.pass()
-
-        assertEquals(mapOf(1L to "Photos", 2L to "Phone backup/Album 2", 3L to "Photos"), transport.uploadedTo)
-        val backup = settings.current().folderId!!
-        assertEquals("no subfolder for the camera", listOf("Album 2"), server.children(backup).map { it.name })
-    }
-
     @Test fun `a chosen folder holds when the backup folder changes, until the album is reset`() = runTest {
         val runner = runner()
         choose(1, server.add("Photos"))
         runner.pass()
+        assertEquals(mapOf(1L to "Photos", 2L to "Phone backup/Album 2", 3L to "Photos"), transport.uploadedTo)
+        val backup = settings.current().folderId!!
+        assertEquals("no subfolder for the camera", listOf("Album 2"), server.children(backup).map { it.name })
         settings.setDestination(server.add("Archive"), "Archive")
         source.items = listOf(media(4), media(5, bucket = 2))
 

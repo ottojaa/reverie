@@ -1,7 +1,5 @@
-import { Queue } from 'bullmq';
-import { fetchLaneJob } from './lane';
-import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES, type QueueName } from './queue.config';
-import { getRedisConnectionOptions } from './redis';
+import { createLaneQueues } from './lane-queues';
+import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from './queue.config';
 
 export const TRANSCODE_JOBS = {
     TRANSCODE: 'transcode',
@@ -25,36 +23,20 @@ export const BACKFILL_PRIORITY = 10;
 /** One backfill job exists at a time: a restart while it is waiting or delayed collapses into it. */
 export const BACKFILL_JOB_ID = 'transcode-backfill';
 
-let transcodeQueueInstance: Queue | null = null;
-let backgroundQueueInstance: Queue | null = null;
+const queues = createLaneQueues(QUEUE_NAMES.TRANSCODE, QUEUE_NAMES.TRANSCODE_BACKGROUND, {
+    ...DEFAULT_JOB_OPTIONS,
+    // An encode that fails (the GPU is busy, a disk is full) tries again after a growing wait, and the original stays playable meanwhile.
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 60_000 },
+});
 
-function createQueue(name: QueueName): Queue {
-    return new Queue(name, {
-        connection: getRedisConnectionOptions(),
-        // An encode that fails (the GPU is busy, a disk is full) tries again after a growing wait, and the original stays playable meanwhile.
-        defaultJobOptions: { ...DEFAULT_JOB_OPTIONS, attempts: 3, backoff: { type: 'exponential', delay: 60_000 } },
-    });
-}
-
-export function getTranscodeQueue(): Queue {
-    transcodeQueueInstance ??= createQueue(QUEUE_NAMES.TRANSCODE);
-
-    return transcodeQueueInstance;
-}
-
-/** Background documents' videos have their own queue and worker: an encode runs for minutes, and a normal video must not wait for it. */
-export function getBackgroundTranscodeQueue(): Queue {
-    backgroundQueueInstance ??= createQueue(QUEUE_NAMES.TRANSCODE_BACKGROUND);
-
-    return backgroundQueueInstance;
-}
+export const getTranscodeQueue = queues.normal;
+export const getBackgroundTranscodeQueue = queues.background;
+export const closeTranscodeQueue = queues.close;
 
 /** `jobId` is the processing_jobs row's id: the worker's tracking updates that row by the BullMQ job id. */
 export async function addTranscodeJob(data: TranscodeJobData, jobId: string, priority?: number): Promise<void> {
-    const { lane, options } = await fetchLaneJob(data.documentId, { jobId, ...(priority !== undefined && { priority }) });
-    const queue = lane === 'background' ? getBackgroundTranscodeQueue() : getTranscodeQueue();
-
-    await queue.add(TRANSCODE_JOBS.TRANSCODE, data, options);
+    await queues.add(TRANSCODE_JOBS.TRANSCODE, data, { jobId, ...(priority !== undefined && { priority }) });
 }
 
 export async function addTranscodeBackfillJob(): Promise<void> {
@@ -65,10 +47,4 @@ export async function addTranscodeBackfillJob(): Promise<void> {
         removeOnComplete: true,
         removeOnFail: true,
     });
-}
-
-export async function closeTranscodeQueue(): Promise<void> {
-    await Promise.all([transcodeQueueInstance?.close(), backgroundQueueInstance?.close()]);
-    transcodeQueueInstance = null;
-    backgroundQueueInstance = null;
 }

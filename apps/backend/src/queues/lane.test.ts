@@ -16,7 +16,7 @@ import type { ProcessingLane } from '@reverie/shared';
 import type { Queue } from 'bullmq';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Kysely } from 'kysely';
+import { PostgresQueryCompiler, type Kysely } from 'kysely';
 import sharp from 'sharp';
 import type { Database } from '../db/schema';
 import { getUploadService, type UploadedFile } from '../services/upload.service';
@@ -46,6 +46,7 @@ import {
     getTrimQueue,
     promoteToNormal,
 } from './index';
+import { fetchLaneJob } from './lane';
 import { BACKFILL_PRIORITY } from './transcode.queue';
 
 /** Behind every number a normal job is queued with (unprioritised, 5 and 10). */
@@ -160,6 +161,36 @@ describeDb('processing lanes in the queues', () => {
 
     const laneOf = async (id: string) =>
         (await db.selectFrom('documents').select('processing_lane').where('id', '=', id).executeTakeFirstOrThrow()).processing_lane;
+
+    /** The SQL of the queries `run` makes. */
+    async function toStatements(run: () => Promise<unknown>): Promise<string[]> {
+        const statements: string[] = [];
+        const compiler = new PostgresQueryCompiler();
+
+        dbProxy.use(
+            database.db.withPlugin({
+                transformQuery: ({ node }) => {
+                    statements.push(compiler.compileQuery(node).sql);
+
+                    return node;
+                },
+                transformResult: async ({ result }) => result,
+            }),
+        );
+        await run().finally(() => dbProxy.use(database.db));
+
+        return statements;
+    }
+
+    it('reads no more of a document than its lane, and promotes it with a single conditional write', async () => {
+        const id = await seedIn('background');
+
+        expect(await toStatements(() => fetchLaneJob(id, {}))).toEqual(['select "processing_lane" from "documents" where "id" = $1']);
+        expect(await toStatements(() => promoteToNormal(id))).toEqual([
+            'update "documents" set "processing_lane" = $1 where "id" = $2 and "processing_lane" = $3',
+        ]);
+        expect(await laneOf(id)).toBe('normal');
+    });
 
     it.each(STEPS)('$step: a normal document keeps the priority it had', async ({ add, queue, normal }) => {
         const id = await seedIn('normal');

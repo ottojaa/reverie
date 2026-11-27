@@ -32,6 +32,9 @@ sealed interface BackupStatus {
     /** The last run failed, an album's folder takes no uploads, or the app may not see all of the photos. */
     data object NeedsAttention : BackupStatus
 
+    /** [count] albums appeared on the phone, or were renamed there, and the user hasn't said whether to back them up. */
+    data class NewAlbums(val count: Int) : BackupStatus
+
     data class Waiting(val count: Int) : BackupStatus
 
     data object Complete : BackupStatus
@@ -58,22 +61,37 @@ internal fun backupStatus(
         config == null -> BackupStatus.NotSetUp
         running -> BackupStatus.Running
         current.lastError != null || current.hasAlbumProblem || access() != MediaAccess.Full -> BackupStatus.NeedsAttention
-        else -> pendingStatus(config, uploaded.toSet(), loadMedia)
+        else -> photoStatus(current, config, uploaded.toSet(), loadMedia)
     }
 }.distinctUntilChanged()
 
-private suspend fun pendingStatus(
+/** The status where it takes a look at the phone's photos to tell. */
+private suspend fun photoStatus(
+    settings: BackupSettings,
     config: BackupConfig,
     uploaded: Set<Long>,
     loadMedia: suspend () -> List<BackupMedia>,
 ): BackupStatus = try {
-    val waiting = scanPending(loadMedia(), config.bucketIds, uploaded, config.addedAfter).size
-    if (waiting == 0) BackupStatus.Complete else BackupStatus.Waiting(waiting)
+    toPhotoStatus(loadMedia(), settings, config, uploaded)
 } catch (cancelled: CancellationException) {
     throw cancelled
 } catch (_: Exception) {
     // Saying "complete" without having looked would be a guess.
     BackupStatus.Unknown
+}
+
+/** New albums come first: nothing else would say that their photos are not being backed up. */
+private fun toPhotoStatus(
+    media: List<BackupMedia>,
+    settings: BackupSettings,
+    config: BackupConfig,
+    uploaded: Set<Long>,
+): BackupStatus {
+    val added = newAlbums(toAlbums(media), settings).size
+    if (added > 0) return BackupStatus.NewAlbums(added)
+    val waiting = scanPending(media, config.bucketIds, uploaded, config.addedAfter).size
+    if (waiting > 0) return BackupStatus.Waiting(waiting)
+    return BackupStatus.Complete
 }
 
 /** [backupStatus] over this phone's backup settings, work queue, upload ledger and photos. */

@@ -36,7 +36,7 @@ fun AccountButton(backup: BackupStatus, onClick: () -> Unit) {
 @Composable
 private fun ringColor(backup: BackupStatus): Color = when (backup) {
     BackupStatus.Complete, BackupStatus.Running -> MaterialTheme.colorScheme.primary
-    BackupStatus.NeedsAttention -> MaterialTheme.colorScheme.error
+    BackupStatus.NeedsAttention, is BackupStatus.NewAlbums -> MaterialTheme.colorScheme.error
     is BackupStatus.Waiting -> MaterialTheme.colorScheme.outline
     BackupStatus.Off, BackupStatus.NotSetUp, BackupStatus.Unknown -> MaterialTheme.colorScheme.outlineVariant
 }

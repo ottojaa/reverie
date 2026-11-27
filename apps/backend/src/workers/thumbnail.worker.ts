@@ -13,12 +13,12 @@ import { probeVideoFile, toVideoExtension, type VideoProbe } from '../media/vide
 import { enqueueImageEmbedding } from '../embeddings/enqueue';
 import { queueTranscode } from '../transcode/queue-transcode';
 import { decodeTextForPreview } from '../ocr/text-extractor';
-import { QUEUE_CONCURRENCY, QUEUE_NAMES } from '../queues/queue.config';
-import { getRedisConnectionOptions } from '../queues/redis';
+import { QUEUE_NAMES } from '../queues/queue.config';
 import { getBackgroundThumbnailQueue, getThumbnailQueue, type ThumbnailJobData, type ThumbnailJobResult } from '../queues/thumbnail.queue';
 import { assertFitsInMemory, getStorageService } from '../services/storage.service';
 import { getThumbnailStrategy } from '../services/thumbnail-strategy';
-import { holdWhileNormalBusy } from './background-hold';
+import { heldWhileNormalBusy } from './background-hold';
+import { logJobOutcomes, startWorker } from './start-worker';
 import { createWorkerLogger, processJobWithTracking, publishJobProgress } from './worker.utils';
 
 const logger = createWorkerLogger('Thumbnail');
@@ -397,43 +397,39 @@ async function processThumbnailJob(job: Job<ThumbnailJobData>): Promise<Thumbnai
     return result;
 }
 
+async function runTrackedThumbnailJob(job: Job<ThumbnailJobData>): Promise<ThumbnailJobResult> {
+    return processJobWithTracking(job, processThumbnailJob);
+}
+
+/**
+ * Mark the document's thumbnail as failed once retries are exhausted (or the error is non-retryable) so clients stop
+ * showing a "processing" state and fall back to the file-type icon. The worker.utils tracker only updates the job row.
+ */
+function markThumbnailFailedWhenFinal(job: Job<ThumbnailJobData> | undefined, error: Error): void {
+    if (!job) return;
+
+    const maxAttempts = job.opts.attempts ?? 1;
+    const isTerminal = error?.name === 'NonRetryableJobError' || job.attemptsMade >= maxAttempts;
+
+    if (!isTerminal) return;
+
+    db.updateTable('documents')
+        .set({ thumbnail_status: 'failed' })
+        .where('id', '=', job.data.documentId)
+        .execute()
+        .catch((err) => logger.error('Failed to mark thumbnail_status=failed', err instanceof Error ? err : undefined, { documentId: job.data.documentId }));
+}
+
 type ThumbnailQueueName = typeof QUEUE_NAMES.THUMBNAIL | typeof QUEUE_NAMES.THUMBNAIL_BACKGROUND;
 
-function startWorker(queueName: ThumbnailQueueName, processor: Processor<ThumbnailJobData, ThumbnailJobResult>): Worker<ThumbnailJobData, ThumbnailJobResult> {
-    const concurrency = QUEUE_CONCURRENCY[queueName];
-    const worker = new Worker<ThumbnailJobData, ThumbnailJobResult>(queueName, processor, { connection: getRedisConnectionOptions(), concurrency });
+function startThumbnailWorker(
+    queueName: ThumbnailQueueName,
+    processor: Processor<ThumbnailJobData, ThumbnailJobResult>,
+): Worker<ThumbnailJobData, ThumbnailJobResult> {
+    const worker = startWorker(queueName, processor, { label: 'Thumbnail', logger });
 
-    worker.on('completed', (job) => {
-        logger.info('Job completed', { jobId: job.id });
-    });
-
-    worker.on('failed', (job, error) => {
-        logger.error('Job failed', error, { jobId: job?.id });
-
-        if (!job) return;
-
-        // Mark the document's thumbnail as failed once retries are exhausted (or the
-        // error is non-retryable) so clients stop showing a "processing" state and fall
-        // back to the file-type icon. The worker.utils tracker only updates the job row.
-        const maxAttempts = job.opts.attempts ?? 1;
-        const isTerminal = error?.name === 'NonRetryableJobError' || job.attemptsMade >= maxAttempts;
-
-        if (!isTerminal) return;
-
-        db.updateTable('documents')
-            .set({ thumbnail_status: 'failed' })
-            .where('id', '=', job.data.documentId)
-            .execute()
-            .catch((err) =>
-                logger.error('Failed to mark thumbnail_status=failed', err instanceof Error ? err : undefined, { documentId: job.data.documentId }),
-            );
-    });
-
-    worker.on('error', (error) => {
-        logger.error('Worker error', error);
-    });
-
-    logger.info('Thumbnail worker started', { queue: queueName, concurrency });
+    logJobOutcomes(worker, logger);
+    worker.on('failed', markThumbnailFailedWhenFinal);
 
     return worker;
 }
@@ -442,16 +438,14 @@ function startWorker(queueName: ThumbnailQueueName, processor: Processor<Thumbna
  * Create and start the thumbnail worker
  */
 export function createThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobResult> {
-    return startWorker(QUEUE_NAMES.THUMBNAIL, async (job) => processJobWithTracking(job, processThumbnailJob));
+    return startThumbnailWorker(QUEUE_NAMES.THUMBNAIL, runTrackedThumbnailJob);
 }
 
 /** Runs background documents' thumbnails, and starts none while a normal document's thumbnail is waiting or running. */
 export function createBackgroundThumbnailWorker(): Worker<ThumbnailJobData, ThumbnailJobResult> {
-    return startWorker(QUEUE_NAMES.THUMBNAIL_BACKGROUND, async (job) => {
-        await holdWhileNormalBusy(getThumbnailQueue(), getBackgroundThumbnailQueue());
+    const processor = heldWhileNormalBusy(getThumbnailQueue, getBackgroundThumbnailQueue, runTrackedThumbnailJob);
 
-        return processJobWithTracking(job, processThumbnailJob);
-    });
+    return startThumbnailWorker(QUEUE_NAMES.THUMBNAIL_BACKGROUND, processor);
 }
 
 // Run as standalone if executed directly
