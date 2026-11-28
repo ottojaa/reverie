@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { listChats, toChatDto } from '../../agent/agent-chats.js';
 import { fetchAgentStatus } from '../../agent/agent-client.js';
 import { loadChatDetail, removeChat, sendMessage, stopRun, undoWrite } from '../../agent/agent.service.js';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 /**
  * The in-app agent is for the admin only, and that is a licensing line, not just a permissions one: the
@@ -61,7 +62,7 @@ export default async function (fastify: FastifyInstance) {
         '/agent/messages',
         {
             preHandler,
-            config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+            config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: toAddressKey } },
             schema: {
                 description: 'Send a message to the agent; the reply streams over the socket as `agent:event` (admin only)',
                 tags,

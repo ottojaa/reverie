@@ -8,6 +8,13 @@ import { discardUploadedFiles, receiveUploadedFile } from '../../utils/upload-fi
 
 const uploadService = getUploadService();
 
+/**
+ * Uploads have a count of their own for each user, so a phone backup and browsing can't use up each other's
+ * requests: 4 uploads a second, sustained. The Android app's backup holds itself to three quarters of it
+ * (`UploadBudget.kt`), which leaves the rest for the user's own uploads.
+ */
+const UPLOAD_RATE_LIMIT = { max: 3600, timeWindow: '15 minutes' };
+
 export default async function (fastify: FastifyInstance) {
     // Upload images endpoint (requires authentication)
     fastify.post<{
@@ -16,6 +23,7 @@ export default async function (fastify: FastifyInstance) {
     }>(
         '/upload',
         {
+            config: { rateLimit: UPLOAD_RATE_LIMIT },
             preHandler: [fastify.authenticate],
             schema: {
                 description: 'Upload one or more files (any type)',

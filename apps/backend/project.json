@@ -37,7 +37,16 @@
             "inputs": ["default", "^production", { "externalDependencies": ["typescript"] }],
             "options": { "command": "tsc --build --emitDeclarationOnly && tsc -p tsconfig.spec.json" }
         },
-        "test": { "dependsOn": ["build"] },
+        "test": {
+            "dependsOn": ["build"],
+            "inputs": [
+                "default",
+                "^production",
+                { "externalDependencies": ["vitest"] },
+                { "env": "CI" },
+                "{workspaceRoot}/apps/android/app/src/main/java/com/reverie/app/data/backup/UploadBudget.kt"
+            ]
+        },
         "prune-lockfile": {
             "dependsOn": ["build"],
             "cache": true,

@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { clearVaultCookie, loadFolderLocksAndSecret, setVaultCookie } from '../../services/folder-locks.js';
 import { fetchLockSecretState, replaceLockSecret, verifyUnlock, type LockSecretState } from '../../services/lock-secret.js';
 import { loadLockMap } from '../../services/privacy.js';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 const VaultErrorSchema = z.object({ error: z.string(), message: z.string() });
 
@@ -51,7 +52,7 @@ export default async function (fastify: FastifyInstance) {
     fastify.post<{ Body: VaultUnlockRequest }>(
         '/vault/unlock',
         {
-            config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
+            config: { rateLimit: { max: 30, timeWindow: '15 minutes', keyGenerator: toAddressKey } },
             preHandler: [fastify.authenticate],
             schema: {
                 description: 'Unlock one private folder, and what is beneath it, with what the vault status asks for. Other folders stay locked.',
@@ -92,7 +93,7 @@ export default async function (fastify: FastifyInstance) {
     fastify.put<{ Body: VaultSecretRequest }>(
         '/vault/secret',
         {
-            config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
+            config: { rateLimit: { max: 30, timeWindow: '15 minutes', keyGenerator: toAddressKey } },
             preHandler: [fastify.authenticate],
             schema: {
                 description: "Set, change or remove the PIN or password that opens private folders. Closes every other session's open locks.",
