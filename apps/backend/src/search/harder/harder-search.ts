@@ -23,7 +23,9 @@ const BATCH_SIZE = 2;
 
 type RunSearch = (q: string) => Promise<RankedEntry[]>;
 
-const toScope = (request: SearchHarderRequest): SearchScope => ({ folderId: request.folder_id, media: request.media, kind: request.kind });
+function toScope(request: SearchHarderRequest): SearchScope {
+    return { folderId: request.folder_id, media: request.media, kind: request.kind };
+}
 
 function toRunSearch(scope: SearchScope, ctx: HybridContext): RunSearch {
     return async (q) => {

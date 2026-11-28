@@ -46,8 +46,9 @@ function groupById(searches: RankedEntry[][]): Map<string, RankedEntry[]> {
 }
 
 /**
- * The search a document is shown as found by, as an index into `searches`: the one that ranked it highest. Of equal
- * ranks, one whose words matched beats one that only matched its meaning, and then the earlier search wins.
+ * The search a document is shown as found by, as an index into `searches`. Its words highlight the document, so one
+ * whose words matched it comes before one that only matched its meaning, however high that one ranked it. Then the
+ * higher rank wins, then the earlier search.
  */
 function toBestSearch(searches: RankedEntry[][], id: string): number {
     const placings = searches.flatMap((entries, search) => {
@@ -56,11 +57,11 @@ function toBestSearch(searches: RankedEntry[][], id: string): number {
         return rank === -1 ? [] : [{ search, rank, isMeaningOnly: Number(entries[rank]!.match === 'meaning') }];
     });
 
-    return placings.sort((a, b) => a.rank - b.rank || a.isMeaningOnly - b.isMeaningOnly)[0]!.search;
+    return placings.sort((a, b) => a.isMeaningOnly - b.isMeaningOnly || a.rank - b.rank)[0]!.search;
 }
 
 export interface MergedEntry extends RankedEntry {
-    /** Which search found it best: 0 is the user's own, n the n-th rewording. */
+    /** The search whose words highlight it: 0 is the user's own, n the n-th rewording. */
     foundBy: number;
 }
 
