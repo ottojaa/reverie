@@ -32,6 +32,8 @@ describe('readQuery', () => {
         ['photos of', ['type:photo', 'photos']],
         ['"photos 2024" receipt', ['type:receipt', 'receipt']],
         ['photos tag:2024 -video', ['type:photo', 'photos']],
+        ['this year may be better', ['date:2026', 'this year']],
+        ['2024 may bring more', ['date:2024', '2024']],
     ] as [string, ...[string, string][]][])('%s', (sentence, ...reads) => {
         expect(readQuery(sentence, TODAY)).toBe(toExpected(sentence, ...reads));
     });
@@ -44,6 +46,8 @@ describe('readQuery', () => {
         'version 2024',
         'node 20.19.4',
         'we may go',
+        'this may be it',
+        'this march was long',
         'summer cottage',
         'budget 2000 euros',
         'bill 4821',
@@ -114,6 +118,7 @@ describe('readQuery', () => {
         ['2026-11-28', 'in November', '2026-11-01..2026-11-30'],
         ['2026-11-28', 'joulukuussa', '2025-12-01..2025-12-31'],
         ['2026-11-28', 'last November', '2025-11-01..2025-11-30'],
+        ['2026-11-28', 'last May', '2026-05-01..2026-05-31'],
         ['2026-11-28', 'June of 2024', '2024-06-01..2024-06-30'],
         ['2026-11-28', 'vuoden 2024 kesäkuussa', '2024-06-01..2024-06-30'],
         ['2026-11-28', 'last year', '2025'],

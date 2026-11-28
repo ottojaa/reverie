@@ -7,7 +7,10 @@ export interface NamedPeriod {
     relative(today: CalendarDay, offset: number): string;
     /** The most recent one that has begun; null where the word alone names no date. */
     alone(today: CalendarDay): string | null;
-    /** Also an ordinary English word ("may", "march"), so alone it needs "in" or "from" before it. */
+    /**
+     * Also an ordinary English word ("may", "march"): a month only after "in", "from" or "last", or next to a
+     * year that follows it.
+     */
     isAmbiguous: boolean;
 }
 
@@ -54,4 +57,11 @@ const PERIODS: ReadonlyMap<string, NamedPeriod> = new Map([
 
 export function toNamedPeriod(word: string): NamedPeriod | null {
     return PERIODS.get(word) ?? null;
+}
+
+/** `toNamedPeriod` where nothing before the word says it names a time, so an ordinary word doesn't count. */
+export function toUnambiguousPeriod(word: string): NamedPeriod | null {
+    const period = toNamedPeriod(word);
+
+    return period?.isAmbiguous ? null : period;
 }

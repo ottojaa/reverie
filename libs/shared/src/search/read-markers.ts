@@ -45,7 +45,7 @@ export function isPlainWord(token: QueryToken): boolean {
  * The tokens of the first place `words` appear in a row as plain words, ignoring case; filters between
  * them don't break the row. Null when the words aren't there.
  */
-export function findWordRun(tokens: readonly QueryToken[], words: readonly string[]): QueryToken[] | null {
+function findWordRun(tokens: readonly QueryToken[], words: readonly string[]): QueryToken[] | null {
     const text = tokens.filter((token) => token.type !== 'filter');
 
     for (let start = 0; start + words.length <= text.length; start++) {
@@ -55,6 +55,15 @@ export function findWordRun(tokens: readonly QueryToken[], words: readonly strin
     }
 
     return null;
+}
+
+/** The tokens each marker's words name, in marker order: the first run of them no earlier marker took. */
+export function findMarkedWords(tokens: readonly QueryToken[], markers: readonly ReadMarker[]): Set<QueryToken> {
+    return markers.reduce((taken, marker) => {
+        const free = tokens.filter((token) => !taken.has(token));
+
+        return new Set([...taken, ...(findWordRun(free, marker.words) ?? [])]);
+    }, new Set<QueryToken>());
 }
 
 /** Whether `token` is the filter the marker added, still holding the value it read. */
@@ -84,12 +93,9 @@ export function toSearchedTokens(tokens: readonly QueryToken[]): QueryToken[] {
     const filteredKeys = new Set(unmarked.filter((token) => token.type === 'filter').map((token) => token.key));
     const markers = tokens.map(toReadMarker).filter((marker) => marker !== null);
     const applying = markers.filter((marker) => filteredKeys.has(marker.key));
+    const read = findMarkedWords(unmarked, applying);
 
-    return applying.reduce((searched, marker) => {
-        const run = findWordRun(searched, marker.words);
-
-        return run ? searched.filter((token) => !run.includes(token)) : searched;
-    }, unmarked);
+    return unmarked.filter((token) => !read.has(token));
 }
 
 /**

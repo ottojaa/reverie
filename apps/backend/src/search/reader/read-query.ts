@@ -5,7 +5,7 @@
 import {
     buildFilterToken,
     buildReadMarker,
-    findWordRun,
+    findMarkedWords,
     isPlainWord,
     type QueryToken,
     type ReadKey,
@@ -35,21 +35,11 @@ function hasOpenQuote(q: string): boolean {
     return tokenizeQuery(q + ' x').at(-1)?.raw !== 'x';
 }
 
-/** The tokens that already belong to a marker, whether or not its filter is still there. */
-function toClaimedTokens(tokens: readonly QueryToken[]): ReadonlySet<QueryToken> {
-    const markers = tokens.map(toReadMarker).filter((marker) => marker !== null);
-    const claimed = markers.reduce<QueryToken[]>((taken, marker) => {
-        const free = tokens.filter((token) => !taken.includes(token));
-
-        return [...taken, ...(findWordRun(free, marker.words) ?? [])];
-    }, []);
-
-    return new Set(claimed);
-}
-
 /** The runs of words that may be read: quoted, negated, filter and already read tokens end a run. */
 function toReadableRuns(tokens: readonly QueryToken[]): QueryToken[][] {
-    const claimed = toClaimedTokens(tokens);
+    // Words a marker names have been read already, whether or not its filter is still there
+    const markers = tokens.map(toReadMarker).filter((marker) => marker !== null);
+    const claimed = findMarkedWords(tokens, markers);
     const isReadable = (token: QueryToken) => isPlainWord(token) && !claimed.has(token);
     const starts = tokens.flatMap((token, i) => (isReadable(token) && !(i > 0 && isReadable(tokens[i - 1] as QueryToken)) ? [i] : []));
 

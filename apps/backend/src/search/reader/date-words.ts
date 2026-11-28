@@ -3,7 +3,7 @@
  * read for sure ("5 June", "since 2020") is still reported, with no value, so that no part of it, and no
  * other date beside it, gets read instead.
  */
-import { type NamedPeriod, toNamedPeriod } from './date-names';
+import { type NamedPeriod, toNamedPeriod, toUnambiguousPeriod } from './date-names';
 import { type CalendarDay, dayValue, monthValue, weekValue } from './date-ranges';
 
 export interface DatePhrase {
@@ -102,13 +102,14 @@ function matchRelative({ words, at, today }: Words): DatePhrase | null {
     if (offset === undefined) return null;
 
     const unit = UNITS.get(next);
-    const periodOfYear = unit === 'year' ? toNamedPeriod(words[at + 2] ?? '') : null;
+    const periodOfYear = unit === 'year' ? toUnambiguousPeriod(words[at + 2] ?? '') : null;
 
     if (periodOfYear) return { length: 3, value: periodOfYear.inYear(today.year + offset) };
 
     if (unit) return { length: 2, value: UNIT_VALUES[unit](today, offset) };
 
-    const period = toNamedPeriod(next);
+    // "last May" is a month; "this may be it" is not
+    const period = offset === 0 ? toUnambiguousPeriod(next) : toNamedPeriod(next);
 
     return period && { length: 2, value: period.relative(today, offset) };
 }
@@ -154,7 +155,7 @@ function matchYear({ words, at, today }: Words): DatePhrase | null {
 
     if (year === null) return null;
 
-    const period = toNamedPeriod(words[yearAt + 1] ?? '');
+    const period = toUnambiguousPeriod(words[yearAt + 1] ?? '');
 
     if (period) return { length: yearAt - at + 2, value: period.inYear(year) };
 
