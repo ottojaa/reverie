@@ -23,7 +23,7 @@ interface DateFilterPanelProps extends DateFieldState {
 
 const DATE_FIELDS: Array<{ key: DateFieldKey; label: string; hint: string }> = [
     { key: 'uploaded', label: 'Uploaded', hint: 'When the file was added to Reverie' },
-    { key: 'date', label: 'Document date', hint: 'The main date on the document itself — like the issue date on a receipt or letter' },
+    { key: 'date', label: 'Document date', hint: 'The date read from a document, or the date a photo was taken' },
 ];
 
 const DATE_PRESETS = [
