@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import type { SearchQueryState } from '@/lib/hooks/useSearchQuery';
 import { cn } from '@/lib/utils';
-import { isKnownFilter, type SearchFacets } from '@reverie/shared';
+import { getReadKeys, isKnownFilter, type SearchFacets } from '@reverie/shared';
 import { Calendar, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { DateFilterPanel } from './DateFilterPanel';
@@ -11,6 +11,7 @@ import { FILTER_DIMENSIONS } from './filter-defs';
 import { FolderDisclosureRow } from './FolderDisclosureRow';
 import { PropertySections } from './MoreFiltersPanel';
 import { pillBaseClass, pillStateClass } from './pill-style';
+import { ReadMark } from './ReadMark';
 
 interface MobileFilterDrawerProps {
     search: SearchQueryState;
@@ -23,6 +24,7 @@ export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawer
     const [open, setOpen] = useState(false);
     const activeTokenCount = search.tokens.filter(isKnownFilter).length + (search.folderId ? 1 : 0);
     const dateCount = (search.filterValues.get('uploaded')?.length ?? 0) + (search.filterValues.get('date')?.length ?? 0);
+    const readKeys = getReadKeys(search.tokens);
 
     return (
         <Drawer open={open} onOpenChange={setOpen} direction="bottom">
@@ -31,6 +33,7 @@ export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawer
                     <SlidersHorizontal className="size-3.5 shrink-0" />
                     <span>Filters</span>
                     {activeTokenCount > 0 && <span className="tabular-nums">({activeTokenCount})</span>}
+                    {readKeys.size > 0 && <ReadMark />}
                 </Button>
             </DrawerTrigger>
             <DrawerContent className="flex max-h-[85vh] flex-col overflow-hidden border-t p-0">
@@ -47,6 +50,7 @@ export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawer
                     <DimensionDisclosureList
                         dimensions={FILTER_DIMENSIONS}
                         filterValues={search.filterValues}
+                        readKeys={readKeys}
                         facets={facets}
                         onToggleValue={search.toggleFilterValue}
                     >
@@ -62,6 +66,7 @@ export function MobileFilterDrawer({ search, facets, total }: MobileFilterDrawer
                                     icon={Calendar}
                                     label="Date"
                                     badgeCount={dateCount}
+                                    isRead={readKeys.has('date')}
                                     expanded={expandedKey === '__date'}
                                     onToggle={() => setExpandedKey(expandedKey === '__date' ? null : '__date')}
                                 >

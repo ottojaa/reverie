@@ -1,0 +1,110 @@
+{
+    "queries": [
+        {
+            "name": "markers are neither free text nor filters",
+            "q": "kuitit viime kuussa type:receipt date:2026-10-01..2026-10-31 read:\"type:receipt kuitit\" read:\"date:2026-10-01..2026-10-31 viime kuussa\"",
+            "freeText": "kuitit viime kuussa",
+            "filters": ["type:receipt", "date:2026-10-01..2026-10-31"],
+            "readKeys": ["type", "date"]
+        },
+        {
+            "name": "another value picked is a normal filter",
+            "q": "kuitit type:photo read:\"type:receipt kuitit\"",
+            "freeText": "kuitit",
+            "filters": ["type:photo"],
+            "readKeys": []
+        },
+        {
+            "name": "a second value on the key makes it a normal filter",
+            "q": "kuitit type:receipt type:photo read:\"type:receipt kuitit\"",
+            "freeText": "kuitit",
+            "filters": ["type:receipt", "type:photo"],
+            "readKeys": []
+        },
+        {
+            "name": "an orphaned marker reads nothing",
+            "q": "kuitit read:\"type:receipt kuitit\"",
+            "freeText": "kuitit",
+            "filters": [],
+            "readKeys": []
+        },
+        {
+            "name": "a negated filter is not a read one",
+            "q": "kuitit -type:receipt read:\"type:receipt kuitit\"",
+            "freeText": "kuitit",
+            "filters": ["-type:receipt"],
+            "readKeys": []
+        },
+        {
+            "name": "values match whatever their case",
+            "q": "kuitit type:Receipt read:\"type:receipt kuitit\"",
+            "freeText": "kuitit",
+            "filters": ["type:Receipt"],
+            "readKeys": ["type"]
+        },
+        {
+            "name": "a filter without a marker is not read",
+            "q": "beach type:photo",
+            "freeText": "beach",
+            "filters": ["type:photo"],
+            "readKeys": []
+        },
+        {
+            "name": "a read: of another shape is plain text",
+            "q": "read:later read:\"tag:tax taxes\" beach",
+            "freeText": "read:later read:\"tag:tax taxes\" beach",
+            "filters": [],
+            "readKeys": []
+        }
+    ],
+    "setFreeText": [
+        {
+            "name": "markers stay while their words do",
+            "q": "kuitit type:receipt read:\"type:receipt kuitit\"",
+            "text": "Kuitit kaupasta",
+            "result": "Kuitit kaupasta type:receipt read:\"type:receipt kuitit\""
+        },
+        {
+            "name": "deleted words take their marker and filter",
+            "q": "kuitit viime kuussa type:receipt date:2026-10-01..2026-10-31 read:\"type:receipt kuitit\" read:\"date:2026-10-01..2026-10-31 viime kuussa\"",
+            "text": "viime kuussa",
+            "result": "viime kuussa date:2026-10-01..2026-10-31 read:\"date:2026-10-01..2026-10-31 viime kuussa\""
+        },
+        {
+            "name": "a changed filter outlives the words",
+            "q": "kuitit type:photo read:\"type:receipt kuitit\"",
+            "text": "kaupasta",
+            "result": "kaupasta type:photo"
+        },
+        {
+            "name": "an orphaned marker goes with its words",
+            "q": "kuitit read:\"type:receipt kuitit\"",
+            "text": "",
+            "result": ""
+        },
+        {
+            "name": "words no longer in a row are gone",
+            "q": "viime kuussa date:2026-10 read:\"date:2026-10 viime kuussa\"",
+            "text": "viime kerran kuussa",
+            "result": "viime kerran kuussa"
+        },
+        {
+            "name": "quoted words are no longer read words",
+            "q": "kuitit type:receipt read:\"type:receipt kuitit\"",
+            "text": "\"kuitit\"",
+            "result": "\"kuitit\""
+        },
+        {
+            "name": "a typed filter between the words does not part them",
+            "q": "viime kuussa date:2026-10 read:\"date:2026-10 viime kuussa\"",
+            "text": "viime tag:tax kuussa",
+            "result": "viime tag:tax kuussa date:2026-10 read:\"date:2026-10 viime kuussa\""
+        },
+        {
+            "name": "clearing the text keeps picked filters",
+            "q": "kuitit tag:tax type:receipt read:\"type:receipt kuitit\"",
+            "text": "",
+            "result": "tag:tax"
+        }
+    ]
+}

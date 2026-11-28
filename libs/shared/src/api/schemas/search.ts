@@ -6,9 +6,10 @@ import { DocumentCategoryEnum, DocumentKindSchema, ThumbnailUrlsSchema } from '.
 // Parsed Query Types (internal representation of search query)
 // ============================================================================
 
+// Coerced: the response carries these as ISO strings, which a client parses with this same schema
 export const DateRangeSchema = z.object({
-    start: z.date().optional(),
-    end: z.date().optional(),
+    start: z.coerce.date().optional(),
+    end: z.coerce.date().optional(),
     relative: z.enum(['today', 'yesterday', 'last-week', 'last-month', 'last-year']).optional(),
 });
 
@@ -87,6 +88,25 @@ export const SearchQuerySchema = PaginationQuerySchema.extend({
 });
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
+
+// ============================================================================
+// Reading a typed sentence into filters (GET /search/read)
+// ============================================================================
+
+export const ReadQuerySchema = z.object({
+    q: z.string().default(''),
+    /** The user's local date, which "last month" and the like count from. */
+    today: DateOnlySchema,
+});
+
+export type ReadQuery = z.infer<typeof ReadQuerySchema>;
+
+export const ReadResponseSchema = z.object({
+    /** The same query, plus a filter and a `read:` marker for each thing read from its words. */
+    q: z.string(),
+});
+
+export type ReadResponse = z.infer<typeof ReadResponseSchema>;
 
 // ============================================================================
 // Search Results

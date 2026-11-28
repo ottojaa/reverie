@@ -83,10 +83,22 @@ export function SearchPage() {
     const handleQueryChange = useCallback(
         (value: string) => {
             setLocalQuery(value);
+            search.cancelRead();
             clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => search.commitFreeText(value), 300);
         },
-        [search.commitFreeText],
+        [search.commitFreeText, search.cancelRead],
+    );
+
+    // Enter commits at once and has the words read; typing alone never does
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+
+            clearTimeout(debounceRef.current);
+            search.submit(e.currentTarget.value);
+        },
+        [search.submit],
     );
 
     const handleClearQuery = useCallback(() => {
@@ -116,6 +128,7 @@ export function SearchPage() {
                                 type="text"
                                 value={localQuery}
                                 onChange={(e) => handleQueryChange(e.target.value)}
+                                onKeyDown={handleKeyDown}
                                 onFocus={() => {
                                     inputFocusedRef.current = true;
                                 }}
@@ -250,7 +263,7 @@ export function SearchPage() {
                     />
                 )}
 
-                {!hasQuery && <NoQueryState onSearch={search.setQuery} />}
+                {!hasQuery && <NoQueryState onSearch={search.submit} />}
             </div>
         </div>
     );

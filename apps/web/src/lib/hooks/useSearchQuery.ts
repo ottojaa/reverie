@@ -1,3 +1,4 @@
+import { fetchReadQuery } from '@/lib/api/search';
 import type { SearchResultView, SearchSortBy, SearchSortOrder } from '@/routes/search';
 import {
     addFilter,
@@ -13,7 +14,7 @@ import {
     type QueryToken,
 } from '@reverie/shared';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 export interface SearchQueryState {
     q: string;
@@ -29,6 +30,10 @@ export interface SearchQueryState {
     sortOrder: SearchSortOrder;
     view: SearchResultView | undefined;
     commitFreeText: (text: string) => void;
+    /** Commits the text, then has the server read a file type and a date out of it into filters. */
+    submit: (text: string) => Promise<void>;
+    /** Drops the answer to a submit still on its way: the user is typing again. */
+    cancelRead: () => void;
     toggleFilterValue: (key: FilterKey, value: string, opts?: { negated?: boolean }) => void;
     setFilterValue: (key: FilterKey, value: string, opts?: { negated?: boolean }) => void;
     /** Tri-state for a single key+value pair: include (`has:text`), exclude (`-has:text`), or absent. */
@@ -99,6 +104,36 @@ export function useSearchQuery(): SearchQueryState {
     const setFolderId = useCallback((next: string | undefined) => navigateWith({ folder_id: next }), [navigateWith]);
 
     const commitFreeText = useCallback((text: string) => setQuery(setFreeText(qRef.current, text)), [setQuery]);
+
+    const setQueryRef = useRef(setQuery);
+    setQueryRef.current = setQuery;
+
+    // Only the answer to the latest read counts; moving the number on drops one still on its way
+    const readIdRef = useRef(0);
+    const cancelRead = useCallback(() => {
+        readIdRef.current++;
+    }, []);
+
+    // Leaving the page drops it too
+    useEffect(() => cancelRead, [cancelRead]);
+
+    const submit = useCallback(
+        async (text: string) => {
+            cancelRead();
+
+            const readId = readIdRef.current;
+            const committed = setFreeText(qRef.current, text);
+            setQueryRef.current(committed);
+
+            const read = await fetchReadQuery(committed);
+
+            // A query changed since (a filter picked, the field cleared) wins over the answer
+            if (readIdRef.current !== readId || qRef.current !== committed) return;
+
+            setQueryRef.current(read);
+        },
+        [cancelRead],
+    );
 
     const toggleFilterValue = useCallback(
         (key: FilterKey, value: string, opts?: { negated?: boolean }) => {
@@ -175,6 +210,8 @@ export function useSearchQuery(): SearchQueryState {
         sortOrder: sort_order,
         view,
         commitFreeText,
+        submit,
+        cancelRead,
         toggleFilterValue,
         setFilterValue,
         setFilterValueState,

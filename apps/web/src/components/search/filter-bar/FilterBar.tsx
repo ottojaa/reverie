@@ -4,7 +4,7 @@ import { useSearchFacets } from '@/lib/api/search';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import type { SearchQueryState } from '@/lib/hooks/useSearchQuery';
 import { cn } from '@/lib/utils';
-import { formatFilterChip, isKnownFilter, removeFilter, type QueryToken } from '@reverie/shared';
+import { formatFilterChip, getReadKeys, isKnownFilter, removeFilter, type QueryToken } from '@reverie/shared';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Fragment, useState } from 'react';
@@ -57,6 +57,7 @@ export function FilterBar({ search, total }: FilterBarProps) {
     const promotedDims = FILTER_DIMENSIONS.filter((dimension) => !dimension.primary && (filterValues.get(dimension.key)?.length ?? 0) > 0);
     const unmanagedTokens = getUnmanagedTokens(tokens);
     const moreCount = countMorePanelFilters(tokens, filterValues);
+    const readKeys = getReadKeys(tokens);
 
     if (!isDesktop) {
         return <MobileFilterDrawer search={search} facets={facets} total={total} />;
@@ -71,6 +72,7 @@ export function FilterBar({ search, total }: FilterBarProps) {
                     <FilterPill
                         dimension={dimension}
                         activeValues={filterValues.get(dimension.key) ?? []}
+                        isRead={readKeys.has(dimension.key)}
                         facetItems={facets?.[dimension.facetKey] ?? []}
                         onToggleValue={search.toggleFilterValue}
                         onClearDimension={search.removeDimension}
@@ -81,6 +83,7 @@ export function FilterBar({ search, total }: FilterBarProps) {
             <DateFilterPill
                 uploadedValue={filterValues.get('uploaded')?.[0] ?? null}
                 dateValue={filterValues.get('date')?.[0] ?? null}
+                isRead={readKeys.has('date')}
                 onSetValue={search.setFilterValue}
                 onClearField={search.removeDimension}
                 onClearAll={() => search.setQuery(removeFilter(removeFilter(search.q, 'uploaded'), 'date'))}

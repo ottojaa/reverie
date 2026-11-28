@@ -1,4 +1,4 @@
-import { tokenizeQuery, type ParsedQuery, type DateRange } from '@reverie/shared';
+import { tokenizeQuery, toSearchedTokens, type ParsedQuery, type DateRange } from '@reverie/shared';
 
 /**
  * Query Parser for Advanced Search
@@ -16,6 +16,8 @@ import { tokenizeQuery, type ParsedQuery, type DateRange } from '@reverie/shared
  * - Entities: entity:Apple, company:"John Smith"
  * - Tags: tag:important, tag:tax
  * - Negation: -has:text, -type:photo
+ * - Read markers: read:"type:receipt kuitit" keeps those words out of the searched text while a type filter
+ *   is there (see read-markers in @reverie/shared)
  */
 
 // Size units
@@ -194,7 +196,7 @@ export function resolveRelativeDate(relative: DateRange['relative']): { start: D
  * Parse the query string into a structured ParsedQuery object
  */
 export function parseQuery(query: string): ParsedQuery {
-    const tokens = tokenizeQuery(query.trim());
+    const tokens = toSearchedTokens(tokenizeQuery(query.trim()));
     const parsed: ParsedQuery = {};
     const negations: Partial<ParsedQuery> = {};
     const textParts: string[] = [];

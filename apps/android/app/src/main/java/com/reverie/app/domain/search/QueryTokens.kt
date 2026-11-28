@@ -20,6 +20,7 @@ package com.reverie.app.domain.search
  *   repeated `category`/`type`/`format` are OR, repeated `tag` are AND.
  * - Date and size values are opaque strings here (`uploaded:2024-01..2024-06`, `size:>10MB`).
  * - A bare `*` means match-all and is excluded from free text.
+ * - `read:"..."` marks words a filter was read from (see ReadMarkers.kt); it is not free text either.
  */
 
 enum class FilterKey(val key: String) {
@@ -177,12 +178,12 @@ fun isKnownFilter(token: QueryToken): Boolean =
     token.type == TokenType.FILTER && FILTER_KEYS.contains(token.key ?: "")
 
 private fun isFreeTextToken(token: QueryToken): Boolean {
-    if (token.type == TokenType.FILTER) return !isKnownFilter(token)
+    if (token.type == TokenType.FILTER) return !isKnownFilter(token) && toReadMarker(token) == null
 
     return !(token.type == TokenType.TEXT && token.value == "*")
 }
 
-/** The free-text portion of the query (text, quoted, and unknown-key tokens). */
+/** The free-text portion of the query (text, quoted, and unknown-key tokens), without read markers. */
 fun getFreeText(tokens: List<QueryToken>): String =
     serializeQuery(tokens.filter { isFreeTextToken(it) })
 
@@ -234,11 +235,13 @@ fun replaceFilter(q: String, key: FilterKey, value: String, negated: Boolean = f
 }
 
 /**
- * Replace the free-text portion, preserving known filter tokens.
+ * Replace the free-text portion, preserving known filter tokens and read markers. A marker whose words
+ * the new text no longer has goes, with the filter it added.
  * Filter syntax typed into `text` is lifted into real filter tokens.
  */
 fun setFreeText(q: String, text: String): String {
-    val filters = tokenizeQuery(q).filter { isKnownFilter(it) }
+    val kept = tokenizeQuery(q).filter { isKnownFilter(it) || toReadMarker(it) != null }
+    val typed = tokenizeQuery(text)
 
-    return serializeQuery(tokenizeQuery(text) + filters)
+    return serializeQuery(typed + dropDeletedReads(kept, typed))
 }

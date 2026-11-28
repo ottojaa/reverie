@@ -20,7 +20,10 @@
  * - Date and size values are opaque strings at this level
  *   (`uploaded:2024-01..2024-06`, `uploaded:last-week`, `size:>10MB`).
  * - A bare `*` means match-all and is excluded from free text.
+ * - `read:"..."` marks words a filter was read from (see read-markers.ts); it is not free text either.
  */
+
+import { dropDeletedReads, toReadMarker } from './read-markers.js';
 
 export const FILTER_KEYS = [
     'in',
@@ -167,12 +170,12 @@ export function isKnownFilter(token: QueryToken): boolean {
 }
 
 function isFreeTextToken(token: QueryToken): boolean {
-    if (token.type === 'filter') return !isKnownFilter(token);
+    if (token.type === 'filter') return !isKnownFilter(token) && !toReadMarker(token);
 
     return !(token.type === 'text' && token.value === '*');
 }
 
-/** The free-text portion of the query (text, quoted, and unknown-key tokens). */
+/** The free-text portion of the query (text, quoted, and unknown-key tokens), without read markers. */
 export function getFreeText(tokens: QueryToken[]): string {
     return serializeQuery(tokens.filter(isFreeTextToken));
 }
@@ -186,7 +189,7 @@ export function getFilterTokens(tokens: QueryToken[], key?: FilterKey): QueryTok
     return known.filter((token) => token.key === key);
 }
 
-function buildFilterToken(key: FilterKey, value: string, negated: boolean): QueryToken {
+export function buildFilterToken(key: FilterKey, value: string, negated = false): QueryToken {
     const token: Omit<QueryToken, 'raw'> = { type: 'filter', key, value, negated };
 
     return { ...token, raw: toCanonicalRaw(token) };
@@ -226,11 +229,13 @@ export function replaceFilter(q: string, key: FilterKey, value: string, opts?: {
 }
 
 /**
- * Replace the free-text portion, preserving known filter tokens.
+ * Replace the free-text portion, preserving known filter tokens and read markers. A marker whose words
+ * the new text no longer has goes, with the filter it added.
  * Filter syntax typed into `text` is lifted into real filter tokens.
  */
 export function setFreeText(q: string, text: string): string {
-    const filters = tokenizeQuery(q).filter((token) => isKnownFilter(token));
+    const kept = tokenizeQuery(q).filter((token) => isKnownFilter(token) || toReadMarker(token));
+    const typed = tokenizeQuery(text);
 
-    return serializeQuery([...tokenizeQuery(text), ...filters]);
+    return serializeQuery([...typed, ...dropDeletedReads(kept, typed)]);
 }

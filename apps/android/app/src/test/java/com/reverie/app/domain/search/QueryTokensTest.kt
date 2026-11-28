@@ -1,5 +1,10 @@
 package com.reverie.app.domain.search
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -208,5 +213,38 @@ class QueryTokensTest {
 
     @Test fun `drops unknown-key pseudo filters with the old text`() {
         assertEquals("beach type:photo", setFreeText("foo:bar type:photo", "beach"))
+    }
+
+    // ---- read markers, cases shared with the web (libs/shared/src/search/read-markers.test.ts) ----
+
+    private fun readMarkerCases(group: String): List<JsonObject> {
+        val text = checkNotNull(javaClass.classLoader?.getResource("search-read-markers.json")) { "Missing fixture" }
+            .readText()
+
+        return Json.parseToJsonElement(text).jsonObject.getValue(group).jsonArray.map { it.jsonObject }
+    }
+
+    private fun JsonObject.string(name: String): String = getValue(name).jsonPrimitive.content
+
+    private fun JsonObject.strings(name: String): List<String> =
+        getValue(name).jsonArray.map { it.jsonPrimitive.content }
+
+    @Test fun `reads marked queries as the web does`() {
+        readMarkerCases("queries").forEach { case ->
+            val name = case.string("name")
+            val tokens = tokenizeQuery(case.string("q"))
+
+            assertEquals(name, case.string("freeText"), getFreeText(tokens))
+            assertEquals(name, case.strings("filters"), getFilterTokens(tokens).map { it.raw })
+            assertEquals(name, case.strings("readKeys"), getReadKeys(tokens).map { it.key })
+        }
+    }
+
+    @Test fun `replaces the text of marked queries as the web does`() {
+        readMarkerCases("setFreeText").forEach { case ->
+            val result = setFreeText(case.string("q"), case.string("text"))
+
+            assertEquals(case.string("name"), case.string("result"), result)
+        }
     }
 }

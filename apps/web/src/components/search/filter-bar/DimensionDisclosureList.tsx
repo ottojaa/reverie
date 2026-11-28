@@ -5,18 +5,20 @@ import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { FacetListPanel } from './FacetListPanel';
 import type { FilterDimension } from './filter-defs';
+import { ReadMark } from './ReadMark';
 
 interface DisclosureRowProps {
     icon: typeof ChevronDown;
     label: string;
     badgeCount?: number;
+    isRead?: boolean;
     expanded: boolean;
     onToggle: () => void;
     children: React.ReactNode;
 }
 
 /** A stacked row that expands inline (single-level disclosure, never a page swap). */
-export function DisclosureRow({ icon: Icon, label, badgeCount, expanded, onToggle, children }: DisclosureRowProps) {
+export function DisclosureRow({ icon: Icon, label, badgeCount, isRead, expanded, onToggle, children }: DisclosureRowProps) {
     return (
         <div>
             <Button
@@ -27,6 +29,7 @@ export function DisclosureRow({ icon: Icon, label, badgeCount, expanded, onToggl
             >
                 <Icon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="flex-1 text-left">{label}</span>
+                {isRead && <ReadMark />}
                 {(badgeCount ?? 0) > 0 && (
                     <span className="flex size-4.5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                         {badgeCount}
@@ -43,13 +46,15 @@ export function DisclosureRow({ icon: Icon, label, badgeCount, expanded, onToggl
 interface DimensionDisclosureListProps {
     dimensions: FilterDimension[];
     filterValues: Map<FilterKey, string[]>;
+    /** The keys whose filter was read from the words typed. */
+    readKeys?: Set<FilterKey>;
     facets: SearchFacets | undefined;
     onToggleValue: (key: FilterKey, value: string) => void;
     /** Extra disclosure sections appended after the dimensions (e.g. the Date panel). */
     children?: (expandedKey: string | null, setExpandedKey: (key: string | null) => void) => React.ReactNode;
 }
 
-export function DimensionDisclosureList({ dimensions, filterValues, facets, onToggleValue, children }: DimensionDisclosureListProps) {
+export function DimensionDisclosureList({ dimensions, filterValues, readKeys, facets, onToggleValue, children }: DimensionDisclosureListProps) {
     const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
     return (
@@ -60,6 +65,7 @@ export function DimensionDisclosureList({ dimensions, filterValues, facets, onTo
                     icon={dimension.icon}
                     label={dimension.label}
                     badgeCount={filterValues.get(dimension.key)?.length ?? 0}
+                    isRead={readKeys?.has(dimension.key) ?? false}
                     expanded={expandedKey === dimension.key}
                     onToggle={() => setExpandedKey(expandedKey === dimension.key ? null : dimension.key)}
                 >
