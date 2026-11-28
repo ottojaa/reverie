@@ -109,6 +109,23 @@ export const ReadResponseSchema = z.object({
 export type ReadResponse = z.infer<typeof ReadResponseSchema>;
 
 // ============================================================================
+// Search harder (POST /search/harder): a model rewords the sentence and every wording is searched.
+// Answered with SearchResponseSchema: one page of documents, no facets or paging, total = results.length.
+// ============================================================================
+
+export const SearchHarderRequestSchema = z.object({
+    /** The query as typed, filters and read markers included. Only its free text is sent to the model. */
+    q: z.string().max(1000),
+    folder_id: UuidSchema.optional(),
+    media: z.boolean().optional(),
+    kind: DocumentKindSchema.optional(),
+    /** The user's local date, which the model counts "last summer" and the like from. */
+    today: DateOnlySchema,
+});
+
+export type SearchHarderRequest = z.infer<typeof SearchHarderRequestSchema>;
+
+// ============================================================================
 // Search Results
 // ============================================================================
 

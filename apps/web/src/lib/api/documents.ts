@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { apiClient } from './client';
 import { useAuth } from '../auth';
 import { withoutDocuments } from './document-cache';
+import { SEARCH_HARDER_MARK_KEY } from './search';
 
 export type DocumentsResponse = {
     items: Document[];
@@ -474,6 +475,7 @@ export function useDeleteDocuments() {
             queryClient.invalidateQueries({ queryKey: ['sections'] });
             queryClient.invalidateQueries({ queryKey: ['user'] });
             queryClient.invalidateQueries({ queryKey: ['trash'] });
+            queryClient.invalidateQueries({ queryKey: SEARCH_HARDER_MARK_KEY });
             ids.forEach((id) => queryClient.removeQueries({ queryKey: ['document', id] }));
         },
     });

@@ -13,6 +13,7 @@ import {
     sumUsage,
     toTokenCount,
     type ImageCallResult,
+    type JsonCallResult,
     type LlmCallOptions,
     type LlmCallUsage,
     type LlmProvider,
@@ -92,19 +93,24 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     constructor(private readonly config: OpenAiCompatibleConfig) {}
 
     async summarize(prompt: LlmPrompt, options: LlmCallOptions = {}): Promise<TextCallResult> {
+        const { value, call } = await this.completeJson('text_summary', prompt, LlmAnalysisSchema, options);
+
+        return { result: value, tokenCount: toTokenCount(call.usage), call };
+    }
+
+    async completeJson<T>(kind: string, prompt: LlmPrompt, schema: z.ZodType<T>, options: LlmCallOptions = {}): Promise<JsonCallResult<T>> {
         const model = options.model ?? this.config.model;
         const maxTokens = Math.max(256, Math.min(prompt.maxTokens, env.LLM_MAX_OUTPUT_TOKENS));
         const user: ChatMessage = { role: 'user', content: prompt.user };
-        const { value, call } = await inLocalTurn(options, () =>
-            this.completeJson(
-                'text_summary',
-                LlmAnalysisSchema,
+
+        return inLocalTurn(options, () =>
+            this.askForJson(
+                kind,
+                schema,
                 { system: prompt.system, user, model, maxTokens },
                 (finishReason) => new Error('Local LLM gave no usable answer: ' + (finishReason ?? 'unknown')),
             ),
         );
-
-        return { result: value, tokenCount: toTokenCount(call.usage), call };
     }
 
     async understand(image: PreparedImage, prompt: LlmPrompt, options: LlmCallOptions = {}): Promise<ImageCallResult> {
@@ -112,7 +118,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         const maxTokens = Math.max(256, prompt.maxTokens);
         const user: ChatMessage = { role: 'user', content: [{ type: 'text', text: prompt.user }, toImagePart(image)] };
         const { value, call } = await inLocalTurn(options, () =>
-            this.completeJson(
+            this.askForJson(
                 'image_understanding',
                 LlmImageUnderstandingSchema,
                 { system: prompt.system, user, model, maxTokens },
@@ -134,7 +140,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
      * Asks for JSON, validates it, and on an invalid answer asks once more with the problems fed back. Still invalid:
      * `toFailure` says what to throw, so a text summary is retried by the queue as before and an image call is not.
      */
-    private async completeJson<T>(
+    private async askForJson<T>(
         kind: string,
         schema: z.ZodType<T>,
         request: { system: string; user: ChatMessage; model: string; maxTokens: number },

@@ -240,30 +240,47 @@ export interface FusionInput {
     image: readonly string[];
 }
 
-/**
- * Weighted reciprocal-rank fusion. Scores are integers so ties are exact; a tie goes to the document
- * the words match, then to the better full-text rank. Full text counts double, so a document only the meaning
- * found (at most 2/61 from its two streams) can at best tie the top word match, and loses the tie. What can happen is
- * that a weaker word match that both meaning streams rank highly (2/62 + 2/61) passes the top word match.
- * `wordMatches` holds every document the words match, including ones too deep in `fullText` to be listed.
- */
-export function fuseRankings(input: FusionInput, wordMatches: ReadonlySet<string>): string[] {
-    const scores = new Map<string, number>();
-    const fullTextRank = new Map(input.fullText.map((id, index) => [id, index]));
-    const add = (ids: readonly string[], weight: number) =>
-        ids.forEach((id, index) => scores.set(id, (scores.get(id) ?? 0) + weight * Math.round(1e9 / (RRF_K + index + 1))));
+export interface RankedList {
+    /** Best first. */
+    ids: readonly string[];
+    weight: number;
+}
 
-    add(input.fullText, FULL_TEXT_WEIGHT);
-    add(input.text, VECTOR_WEIGHT);
-    add(input.image, VECTOR_WEIGHT);
+/**
+ * Weighted reciprocal-rank fusion of any number of ranked lists. Scores are integers so ties are exact; a tie goes to
+ * a document the words match, then to the better rank in the first list.
+ */
+export function fuseWeighted(lists: readonly RankedList[], wordMatches: ReadonlySet<string>): string[] {
+    const scores = new Map<string, number>();
+    const firstRank = new Map(lists[0]?.ids.map((id, index) => [id, index]));
+
+    for (const { ids, weight } of lists) {
+        ids.forEach((id, index) => scores.set(id, (scores.get(id) ?? 0) + weight * Math.round(1e9 / (RRF_K + index + 1))));
+    }
 
     return [...scores.keys()].sort(
         (a, b) =>
             scores.get(b)! - scores.get(a)! ||
             Number(wordMatches.has(b)) - Number(wordMatches.has(a)) ||
-            (fullTextRank.get(a) ?? Infinity) - (fullTextRank.get(b) ?? Infinity) ||
+            (firstRank.get(a) ?? Infinity) - (firstRank.get(b) ?? Infinity) ||
             a.localeCompare(b),
     );
+}
+
+/**
+ * One search's full text and its two meaning streams, fused. Full text counts double, so a document only the meaning
+ * found (at most 2/61 from its two streams) can at best tie the top word match, and loses the tie. What can happen is
+ * that a weaker word match that both meaning streams rank highly (2/62 + 2/61) passes the top word match.
+ * `wordMatches` holds every document the words match, including ones too deep in `fullText` to be listed.
+ */
+export function fuseRankings(input: FusionInput, wordMatches: ReadonlySet<string>): string[] {
+    const lists = [
+        { ids: input.fullText, weight: FULL_TEXT_WEIGHT },
+        { ids: input.text, weight: VECTOR_WEIGHT },
+        { ids: input.image, weight: VECTOR_WEIGHT },
+    ];
+
+    return fuseWeighted(lists, wordMatches);
 }
 
 let instance: SemanticSearch | undefined;

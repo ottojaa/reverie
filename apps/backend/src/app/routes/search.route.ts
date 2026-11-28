@@ -10,14 +10,18 @@ import {
     QuickFiltersResponseSchema,
     ReadQuerySchema,
     ReadResponseSchema,
+    SearchHarderRequestSchema,
     type ReadQuery,
+    type SearchHarderRequest,
     type SearchQuery,
     type SuggestQuery,
     type FacetsQuery,
 } from '@reverie/shared';
+import { searchHarder } from '../../search/harder/harder-search';
 import { getQuickFilters } from '../../search/quick-filters';
 import { readQuery } from '../../search/reader/read-query';
 import { search, getFacetsOnly, suggest } from '../../search/search.service';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 export default async function (fastify: FastifyInstance) {
     /**
@@ -70,6 +74,31 @@ export default async function (fastify: FastifyInstance) {
                 throw error;
             }
         },
+    );
+
+    /**
+     * Search harder, for a file plain search misses
+     *
+     * POST /api/search/harder
+     *
+     * A language model rewords the query's free text and every wording is searched. The answer is one page of
+     * documents without facets. Each call is paid for, hence the rate limit.
+     */
+    fastify.post<{
+        Body: SearchHarderRequest;
+    }>(
+        '/search/harder',
+        {
+            preHandler: [fastify.authenticate],
+            config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: toAddressKey } },
+            schema: {
+                description: 'Search with a language model rewording the query',
+                tags: ['search'],
+                body: SearchHarderRequestSchema,
+                response: { 200: SearchResponseSchema },
+            },
+        },
+        async (request) => searchHarder(request.body, request.user.id),
     );
 
     /**

@@ -8,6 +8,7 @@ import {
     SuggestResponseSchema,
     type QuickFilter,
     type SearchFacets,
+    type SearchHarderRequest,
     type SearchHelp,
     type SearchResponse,
     type SimilarImagesResponse,
@@ -32,6 +33,13 @@ export interface SearchParams {
 export const searchApi = {
     async search(params: SearchParams): Promise<SearchResponse> {
         const { data } = await apiClient.get('/search', { params });
+
+        return SearchResponseSchema.parse(data);
+    },
+
+    /** A paid run: the server has a language model plan more searches from the words in `q`. */
+    async searchHarder(request: Omit<SearchHarderRequest, 'today'>): Promise<SearchResponse> {
+        const { data } = await apiClient.post('/search/harder', { ...request, today: toToday() });
 
         return SearchResponseSchema.parse(data);
     },
@@ -69,13 +77,18 @@ export const searchApi = {
     },
 };
 
+/** The user's own today, which relative dates are counted from. */
+function toToday(): string {
+    return format(new Date(), 'yyyy-MM-dd');
+}
+
 /**
  * `q` with the file type and date its words name added as filters, relative dates counted from the
  * user's own today. A failed read answers `q` as it is, so the search goes ahead on the words.
  */
 export async function fetchReadQuery(q: string): Promise<string> {
     try {
-        const { data } = await apiClient.get('/search/read', { params: { q, today: format(new Date(), 'yyyy-MM-dd') } });
+        const { data } = await apiClient.get('/search/read', { params: { q, today: toToday() } });
 
         return ReadResponseSchema.parse(data).q;
     } catch {
@@ -84,6 +97,12 @@ export async function fetchReadQuery(q: string): Promise<string> {
 }
 
 const DEFAULT_PAGE_SIZE = 24;
+
+/**
+ * An empty cache entry under the search key, marking a search harder answer as current. Whatever invalidates
+ * `['search']` marks it out of date too, whether or not the search page is open.
+ */
+export const SEARCH_HARDER_MARK_KEY = ['search', 'harder'];
 
 export function useSearch(params: SearchParams, enabled = true) {
     const { isAuthenticated } = useAuth();

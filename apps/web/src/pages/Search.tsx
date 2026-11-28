@@ -1,26 +1,22 @@
 import { HeaderActions } from '@/components/layout/Header';
 import { FilterBar } from '@/components/search/filter-bar/FilterBar';
 import { useFolderFilterName } from '@/components/search/filter-bar/useFolderFilterName';
+import { SearchHarderAction } from '@/components/search/harder/SearchHarderAction';
+import { SearchHarderResults } from '@/components/search/harder/SearchHarderResults';
 import { SearchResultsList } from '@/components/search/results/SearchResultsList';
 import { EmptySearchState, NoQueryState } from '@/components/search/SearchEmptyStates';
+import { SortMenu } from '@/components/search/SortMenu';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { useInfiniteSearch } from '@/lib/api/search';
+import { useSearchHarder } from '@/lib/hooks/useSearchHarder';
 import { useSearchQuery } from '@/lib/hooks/useSearchQuery';
 import { cn } from '@/lib/utils';
-import type { SearchResultView, SearchSortBy } from '@/routes/search';
+import type { SearchResultView } from '@/routes/search';
+import { getFreeText, toSearchedTokens } from '@reverie/shared';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowDownAZ, ArrowUpAZ, Calendar, Check, ChevronDown, Clock, FileText, LayoutGrid, List, Search, Star, X } from 'lucide-react';
+import { LayoutGrid, List, Search, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-const sortOptions: Array<{ value: SearchSortBy; label: string; icon: typeof Star }> = [
-    { value: 'relevance', label: 'Relevance', icon: Star },
-    { value: 'uploaded', label: 'Upload date', icon: Clock },
-    { value: 'date', label: 'Document date', icon: Calendar },
-    { value: 'filename', label: 'Filename', icon: ArrowDownAZ },
-    { value: 'size', label: 'Size', icon: FileText },
-];
 
 const PHOTO_TYPES = new Set(['photo', 'screenshot']);
 const PHOTO_CATEGORIES = new Set(['photo', 'screenshot', 'graphic']);
@@ -33,6 +29,7 @@ export function SearchPage() {
     const [localQuery, setLocalQuery] = useState(freeText);
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const [isTyping, setIsTyping] = useState(false);
     const inputFocusedRef = useRef(false);
 
     const hasQuery = q.trim().length > 0 || folderId !== undefined;
@@ -46,6 +43,9 @@ export function SearchPage() {
 
     const results = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data]);
     const total = data?.pages[0]?.total ?? 0;
+
+    const harder = useSearchHarder({ q, folderId, sortBy, sortOrder });
+    const isHarder = harder.results !== undefined;
 
     // A photo-ish filter defaults the layout to the thumbnail grid
     const view: SearchResultView =
@@ -84,8 +84,12 @@ export function SearchPage() {
         (value: string) => {
             setLocalQuery(value);
             search.cancelRead();
+            setIsTyping(true);
             clearTimeout(debounceRef.current);
-            debounceRef.current = setTimeout(() => search.commitFreeText(value), 300);
+            debounceRef.current = setTimeout(() => {
+                setIsTyping(false);
+                search.commitFreeText(value);
+            }, 300);
         },
         [search.commitFreeText, search.cancelRead],
     );
@@ -96,6 +100,7 @@ export function SearchPage() {
             if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
 
             clearTimeout(debounceRef.current);
+            setIsTyping(false);
             search.submit(e.currentTarget.value);
         },
         [search.submit],
@@ -104,6 +109,7 @@ export function SearchPage() {
     const handleClearQuery = useCallback(() => {
         setLocalQuery('');
         clearTimeout(debounceRef.current);
+        setIsTyping(false);
         search.setQuery('');
         inputRef.current?.focus();
     }, [search.setQuery]);
@@ -112,7 +118,11 @@ export function SearchPage() {
     const openCollection = useCallback((id: string) => navigate({ to: '/browse/$sectionId', params: { sectionId: id } }), [navigate]);
 
     const isEmpty = hasQuery && !isLoading && !isFetching && results.length === 0;
-    const activeSortOption = sortOptions.find((o) => o.value === sortBy);
+    const count = harder.results?.length ?? total;
+    // Words read into a filter are not searched, and search harder needs a searched word to plan from
+    const hasSearchedWords = useMemo(() => getFreeText(toSearchedTokens(search.tokens)).length > 0, [search.tokens]);
+    // Under the last of the plain results (or the empty state)
+    const canSearchHarder = !isHarder && hasSearchedWords && !isLoading && !hasNextPage;
 
     return (
         <div className="flex flex-1 flex-col">
@@ -162,9 +172,15 @@ export function SearchPage() {
                     {/* Meta row: count echo left, sort + view right */}
                     <div className="mt-2 flex h-7 items-center justify-between gap-2">
                         <div className="min-w-0 truncate text-sm text-muted-foreground">
-                            {hasQuery && !isLoading && (
+                            {hasQuery && (isHarder || !isLoading) && (
                                 <>
-                                    {total.toLocaleString()} result{total === 1 ? '' : 's'}
+                                    {isHarder && (
+                                        <span className="font-medium text-primary">
+                                            <Sparkles className="mr-1 inline size-3.5 align-[-2px]" />
+                                            Search harder ·{' '}
+                                        </span>
+                                    )}
+                                    {count.toLocaleString()} result{count === 1 ? '' : 's'}
                                     {freeText && (
                                         <>
                                             {' for '}
@@ -176,31 +192,8 @@ export function SearchPage() {
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-secondary"
-                                    >
-                                        {activeSortOption && <activeSortOption.icon className="size-3.5" />}
-                                        {activeSortOption?.label ?? 'Sort'}
-                                        {sortOrder === 'asc' ? <ArrowUpAZ className="size-3" /> : <ChevronDown className="size-3" />}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                    {sortOptions.map((option) => (
-                                        <DropdownMenuItem
-                                            key={option.value}
-                                            onClick={() => search.setSort(option.value)}
-                                            className={cn(sortBy === option.value && 'font-medium')}
-                                        >
-                                            <option.icon className="size-3.5" />
-                                            {option.label}
-                                            {sortBy === option.value && <Check className="ml-auto size-3.5 text-primary" />}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            {/* A search harder run comes in one order, best matches first */}
+                            {!isHarder && <SortMenu sortBy={sortBy} sortOrder={sortOrder} onSort={search.setSort} />}
 
                             {/* List / grid toggle */}
                             <div className="flex rounded-md border border-border/60 p-0.5">
@@ -236,31 +229,45 @@ export function SearchPage() {
 
             {/* Results */}
             <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-4 md:px-6">
-                {hasQuery && (
-                    <SearchResultsList
-                        results={results}
+                {harder.results ? (
+                    <SearchHarderResults
+                        results={harder.results}
                         view={view}
-                        sortBy={sortBy}
-                        isLoading={isLoading}
-                        hasNextPage={hasNextPage ?? false}
-                        isFetchingNextPage={isFetchingNextPage}
-                        fetchNextPage={fetchNextPage}
+                        freeText={freeText}
                         onOpenDocument={openDocument}
                         onOpenCollection={openCollection}
-                        onFolderClick={openCollection}
                     />
-                )}
+                ) : (
+                    <>
+                        {hasQuery && (
+                            <SearchResultsList
+                                results={results}
+                                view={view}
+                                sortBy={sortBy}
+                                isLoading={isLoading}
+                                hasNextPage={hasNextPage ?? false}
+                                isFetchingNextPage={isFetchingNextPage}
+                                fetchNextPage={fetchNextPage}
+                                onOpenDocument={openDocument}
+                                onOpenCollection={openCollection}
+                                onFolderClick={openCollection}
+                            />
+                        )}
 
-                {isEmpty && (
-                    <EmptySearchState
-                        freeText={freeText}
-                        tokens={search.tokens}
-                        folderName={folderFilter?.name}
-                        onRemoveFolder={() => search.setFolderId(undefined)}
-                        onRemoveToken={search.removeToken}
-                        onClearFilters={search.clearAllFilters}
-                        onSearch={search.setQuery}
-                    />
+                        {isEmpty && (
+                            <EmptySearchState
+                                freeText={freeText}
+                                tokens={search.tokens}
+                                folderName={folderFilter?.name}
+                                onRemoveFolder={() => search.setFolderId(undefined)}
+                                onRemoveToken={search.removeToken}
+                                onClearFilters={search.clearAllFilters}
+                                onSearch={search.setQuery}
+                            />
+                        )}
+
+                        {canSearchHarder && <SearchHarderAction harder={harder} isTyping={isTyping} />}
+                    </>
                 )}
 
                 {!hasQuery && <NoQueryState onSearch={search.submit} />}
