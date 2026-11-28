@@ -11,8 +11,8 @@ function documentHit(id: string, extractedDate: string | null, uploadedAt: strin
 
 // In the server's order for a newest-first date sort: dated documents, then undated ones.
 const datedNewestFirst = [
-    documentHit('today', '2026-11-28', '2026-11-28T09:00:00Z'),
     documentHit('week', '2026-11-24', '2026-11-24T09:00:00Z'),
+    documentHit('month', '2026-11-05', '2026-11-05T09:00:00Z'),
     documentHit('2024', '2024-06-01', '2026-01-10T09:00:00Z'),
     documentHit('2019', '2019-03-15', '2026-01-10T09:00:00Z'),
 ];
@@ -29,8 +29,8 @@ function summarise(results: SearchHit[], sortBy: SearchSortBy) {
 describe('toBuckets in a date sort', () => {
     it('ends a newest-first list with one "No date" group', () => {
         expect(summarise([...datedNewestFirst, ...undatedNewestFirst], 'date')).toEqual([
-            ['Today', ['today']],
             ['This week', ['week']],
+            ['This month', ['month']],
             ['2024', ['2024']],
             ['2019', ['2019']],
             ['No date', ['undated-new', 'undated-old']],
@@ -43,8 +43,8 @@ describe('toBuckets in a date sort', () => {
         expect(summarise(results, 'date')).toEqual([
             ['2019', ['2019']],
             ['2024', ['2024']],
+            ['This month', ['month']],
             ['This week', ['week']],
-            ['Today', ['today']],
             ['No date', ['undated-old', 'undated-new']],
         ]);
     });
@@ -58,7 +58,7 @@ describe('toBuckets in a date sort', () => {
 
 describe('toBuckets in other sorts', () => {
     it('groups an upload-date sort by upload date, dated or not', () => {
-        const results = [documentHit('undated', null, '2026-11-28T09:00:00Z'), documentHit('dated', '2019-03-15', '2024-02-01T09:00:00Z')];
+        const results = [documentHit('undated', null, now.toISOString()), documentHit('dated', '2019-03-15', '2024-02-01T09:00:00Z')];
 
         expect(summarise(results, 'uploaded')).toEqual([
             ['Today', ['undated']],
@@ -68,7 +68,7 @@ describe('toBuckets in other sorts', () => {
 
     it.each(['relevance', 'filename', 'size'] as const)('gives a %s sort no headers', (sortBy) => {
         expect(summarise([...datedNewestFirst, ...undatedNewestFirst], sortBy)).toEqual([
-            [null, ['today', 'week', '2024', '2019', 'undated-new', 'undated-old']],
+            [null, ['week', 'month', '2024', '2019', 'undated-new', 'undated-old']],
         ]);
     });
 
