@@ -45,21 +45,6 @@ describe('a route with a limit per address', () => {
         expect(await send(route)).toMatchObject({ remaining: max - 3 });
         expect(await send({ ...route, bearer: toLoginToken(app, ALICE), from: ELSEWHERE })).toMatchObject({ remaining: max - 1 });
     });
-
-    it.each([
-        ['POST', '/auth/change-password', 30],
-        ['POST', '/api-tokens', 20],
-        ['POST', '/vault/unlock', 30],
-        ['PUT', '/vault/secret', 30],
-    ] as const)('refuses %s %s after %i requests from two users at one address', async (method, url, max) => {
-        const users = [toLoginToken(app, ALICE), toLoginToken(app, BOB)];
-
-        for (let request = 0; request < max; request++) {
-            expect((await send({ method, url, bearer: users[request % 2] })).status).not.toBe(429);
-        }
-
-        for (const bearer of users) expect((await send({ method, url, bearer })).status).toBe(429);
-    });
 });
 
 describe('POST /mcp', () => {

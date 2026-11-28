@@ -18,6 +18,8 @@ sealed class ReverieApiException(message: String, cause: Throwable? = null) : Ex
         val code: String,
         override val message: String,
         val details: JsonObject? = null,
+        /** The answer's `Retry-After` header in seconds, when it had one: how long to wait before asking again. */
+        val retryAfterSeconds: Long? = null,
     ) : ReverieApiException(message)
 
     class Auth(
@@ -64,10 +66,14 @@ sealed class ReverieApiException(message: String, cause: Throwable? = null) : Ex
             else -> false
         }
 
-        /** Parse an error response body into the appropriate exception. */
-        fun parse(status: Int, body: String): ReverieApiException {
+        /** Parse an error response (its body and `Retry-After` header) into the appropriate exception. */
+        fun parse(status: Int, body: String, retryAfter: String? = null): ReverieApiException {
+            val retryAfterSeconds = retryAfter?.trim()?.toLongOrNull()
             val obj = runCatching { ApiJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
-                ?: return Http(status, "unknown", body.take(200).ifBlank { "Request failed ($status)." })
+                ?: return Http(
+                    status, "unknown", body.take(200).ifBlank { "Request failed ($status)." },
+                    retryAfterSeconds = retryAfterSeconds,
+                )
 
             val errorField = obj["error"]?.jsonPrimitive?.contentOrNull
             val hasStatusCode = obj["statusCode"]?.jsonPrimitive?.intOrNull != null
@@ -84,6 +90,7 @@ sealed class ReverieApiException(message: String, cause: Throwable? = null) : Ex
                 code = errorField ?: "error",
                 message = message ?: body.take(200).ifBlank { "Request failed ($status)." },
                 details = obj["details"] as? JsonObject,
+                retryAfterSeconds = retryAfterSeconds,
             )
         }
     }

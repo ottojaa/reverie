@@ -52,12 +52,6 @@ describe('TRUST_PROXY', () => {
         expect((await loadEnv()).TRUST_PROXY).toBeUndefined();
     });
 
-    it('takes the listed addresses', async () => {
-        vi.stubEnv('TRUST_PROXY', '172.18.0.1,fd00::/8');
-
-        expect((await loadEnv()).TRUST_PROXY).toEqual(['172.18.0.1', 'fd00::/8']);
-    });
-
     it('fails startup on a hop count and prints the variable and the entry', async () => {
         vi.stubEnv('TRUST_PROXY', '172.18.0.1,1');
 

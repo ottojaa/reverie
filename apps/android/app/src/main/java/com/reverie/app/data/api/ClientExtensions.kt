@@ -15,9 +15,7 @@ import io.ktor.http.parseServerSetCookieHeader
  * error envelope. The client runs with `expectSuccess = false` so error bodies are readable.
  */
 suspend inline fun <reified T> HttpResponse.decode(): T {
-    if (!status.isSuccess()) {
-        throw ReverieApiException.parse(status.value, runCatching { bodyAsText() }.getOrDefault(""))
-    }
+    throwIfError()
     return try {
         body()
     } catch (e: ReverieApiException) {
@@ -27,10 +25,11 @@ suspend inline fun <reified T> HttpResponse.decode(): T {
     }
 }
 
-/** Throw a typed error for a non-2xx response; used for endpoints with no body (204). */
+/** Throw a typed error for a non-2xx response; used on its own for endpoints with no body (204). */
 suspend fun HttpResponse.throwIfError() {
     if (!status.isSuccess()) {
-        throw ReverieApiException.parse(status.value, runCatching { bodyAsText() }.getOrDefault(""))
+        val body = runCatching { bodyAsText() }.getOrDefault("")
+        throw ReverieApiException.parse(status.value, body, headers[HttpHeaders.RetryAfter])
     }
 }
 

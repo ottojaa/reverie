@@ -46,8 +46,11 @@ sealed interface PassEnd {
     /** The time ran out with files still waiting; the next pass resumes from the ledger. */
     data object OutOfTime : PassEnd
 
-    /** The pass could not go on (signed out, offline, server down); [error] says why in plain words. */
-    data class Stopped(val error: String) : PassEnd
+    /**
+     * The pass could not go on (signed out, offline, server down, told to wait); [error] says why in plain words.
+     * [retryAfterMs] is how long the server told backup to stay away, null when it didn't.
+     */
+    data class Stopped(val error: String, val retryAfterMs: Long? = null) : PassEnd
 
     /** Another pass already holds the lock, so this one did nothing. */
     data object Busy : PassEnd
