@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollectionResultItem } from '../CollectionResultItem';
 import { SearchResultItem } from '../SearchResultItem';
 import { PhotoResultGrid } from './PhotoResultGrid';
+import { toBuckets } from './resultBuckets';
 
 const SKELETON_DELAY_MS = 200;
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -22,60 +23,6 @@ interface SearchResultsListProps {
     onOpenDocument: (id: string) => void;
     onOpenCollection: (id: string) => void;
     onFolderClick: (folderId: string) => void;
-}
-
-interface ResultBucket {
-    label: string | null;
-    items: Array<{ hit: SearchHit; index: number }>;
-}
-
-function getDateBucket(iso: string, now: Date): string {
-    const date = new Date(iso);
-    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const diffDays = Math.floor((startOfDay(now) - startOfDay(date)) / 86_400_000);
-
-    if (diffDays < 0) return date.getFullYear() === now.getFullYear() ? 'Today' : String(date.getFullYear());
-
-    if (diffDays === 0) return 'Today';
-
-    if (diffDays === 1) return 'Yesterday';
-
-    if (diffDays < 7) return 'This week';
-
-    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) return 'This month';
-
-    if (date.getFullYear() === now.getFullYear()) return 'This year';
-
-    return String(date.getFullYear());
-}
-
-/** Date-bucket headers only make sense for date sorts over documents-only pages. */
-function toBuckets(results: SearchHit[], sortBy: SearchSortBy): ResultBucket[] {
-    const indexed = results.map((hit, index) => ({ hit, index }));
-    const isDateSort = sortBy === 'uploaded' || sortBy === 'date';
-    const documentsOnly = results.every((hit) => hit.result_type === 'document');
-
-    if (!isDateSort || !documentsOnly) return [{ label: null, items: indexed }];
-
-    const now = new Date();
-    const buckets: ResultBucket[] = [];
-
-    for (const item of indexed) {
-        if (item.hit.result_type !== 'document') continue;
-
-        const iso = sortBy === 'date' ? (item.hit.extracted_date ?? item.hit.uploaded_at) : item.hit.uploaded_at;
-        const label = getDateBucket(iso, now);
-        const current = buckets.at(-1);
-
-        if (current && current.label === label) {
-            current.items.push(item);
-            continue;
-        }
-
-        buckets.push({ label, items: [item] });
-    }
-
-    return buckets;
 }
 
 function ListRowSkeleton() {
