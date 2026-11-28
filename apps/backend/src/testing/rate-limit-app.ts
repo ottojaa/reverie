@@ -1,5 +1,5 @@
 import sensible from '@fastify/sensible';
-import Fastify, { type FastifyInstance, type InjectOptions } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions, type InjectOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import apiTokenAuthPlugin from '../app/plugins/api-token-auth.js';
 import authPlugin from '../app/plugins/auth.js';
@@ -21,8 +21,8 @@ import vaultRoute from '../app/routes/vault.route.js';
  * goes on to fail its sign-in or its schema was still counted. The importing test mocks the database, the
  * env and the queues.
  */
-export async function buildRateLimitedApp(): Promise<FastifyInstance> {
-    const app = Fastify();
+export async function buildRateLimitedApp(trustProxy?: FastifyServerOptions['trustProxy']): Promise<FastifyInstance> {
+    const app = Fastify({ trustProxy });
 
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
@@ -49,12 +49,17 @@ export interface Sent {
     method?: InjectOptions['method'];
     url: string;
     from?: string;
+    /** The request's X-Forwarded-For header. */
+    forwardedFor?: string;
     bearer?: string;
 }
 
 /** One request, with what the limiter said about the count it went into. */
-export async function sendCounted(app: FastifyInstance, { method = 'GET', url, from = HOME, bearer }: Sent) {
-    const headers = bearer ? { authorization: 'Bearer ' + bearer } : {};
+export async function sendCounted(app: FastifyInstance, { method = 'GET', url, from = HOME, forwardedFor, bearer }: Sent) {
+    const headers = {
+        ...(bearer && { authorization: 'Bearer ' + bearer }),
+        ...(forwardedFor && { 'x-forwarded-for': forwardedFor }),
+    };
     const response = await app.inject({ method, url, remoteAddress: from, headers });
 
     return {

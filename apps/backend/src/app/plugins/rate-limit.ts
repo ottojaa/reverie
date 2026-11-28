@@ -15,9 +15,9 @@ export function toAddressKey(request: FastifyRequest): string {
 }
 
 /**
- * One count per signed-in user, otherwise per client address (behind the reverse proxy, one address for
- * everyone). The limiter runs before `authenticate`, so the login token is verified here: only a token
- * this server signed gets a user's count, anything else counts against its address.
+ * One count per signed-in user, otherwise per client address (behind a reverse proxy that `TRUST_PROXY`
+ * doesn't list, one address for everyone). The limiter runs before `authenticate`, so the login token is
+ * verified here: only a token this server signed gets a user's count, anything else counts against its address.
  */
 function toUserKey(request: FastifyRequest): string {
     const token = readBearerToken(request);

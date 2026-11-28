@@ -10,8 +10,8 @@ const JSON_RPC_INTERNAL_ERROR = { jsonrpc: '2.0', error: { code: -32603, message
 const JSON_RPC_METHOD_NOT_ALLOWED = { jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed: this server is stateless, POST to it' }, id: null };
 
 /**
- * Per client, not per IP: behind the reverse proxy every caller shares one address. The key is
- * made before the token is verified, so it limits a real client's call rate, not a flood of
+ * Per client, not per IP: callers can share an address (a home network, the in-app agent's container).
+ * The key is made before the token is verified, so it limits a real client's call rate, not a flood of
  * made-up tokens (each of which costs one indexed lookup).
  */
 function toRateLimitKey(request: FastifyRequest): string {

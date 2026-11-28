@@ -45,6 +45,8 @@ async function main() {
 
     const server = Fastify({
         logger: envToLogger[env.NODE_ENV],
+        // From the listed proxies only, request.ip (rate limits, the request log) is the client that X-Forwarded-For names.
+        trustProxy: env.TRUST_PROXY,
         serverFactory: (handler) => {
             httpServer.on('request', handler);
 

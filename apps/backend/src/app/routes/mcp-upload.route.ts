@@ -3,8 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { uploadByLink } from '../../mcp/upload-by-link.js';
 import { toAddressKey } from '../plugins/rate-limit.js';
 
-// Keyed by address, which behind the reverse proxy is the same for everyone, so in production this is one
-// shared limit. Enough for one owner; a link is 256 random bits and works once.
+// Keyed by client address (one count for everyone behind a reverse proxy that `TRUST_PROXY` doesn't list).
+// Enough for one owner; a link is 256 random bits and works once.
 const rateLimit = {
     max: 30,
     timeWindow: '1 minute',
