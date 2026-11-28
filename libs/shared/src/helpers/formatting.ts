@@ -46,8 +46,7 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 const WHOLE_YEARS = /^(\d{4})(?:-(\d{4}))?$/;
 const WHOLE_MONTHS = /^(\d{4}-\d{2})\.\.(\d{4}-\d{2})$/;
 const FROM_FIRST_OF_MONTH = /^(\d{4}-\d{2})-01\.\.(\d{4}-\d{2})-(\d{2})$/;
-const DAY = '\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])';
-const DAY_OR_DAY_RANGE = new RegExp(`^(${DAY})(?:\\.\\.(${DAY}))?$`);
+const DAY_OR_DAY_RANGE = /^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/;
 
 interface YearMonth {
     year: number;
@@ -115,6 +114,14 @@ function formatDateValue(dateStr: string): string {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** Whether a `YYYY-MM-DD` string names a day its month has. */
+function isRealDay(value: string): boolean {
+    const month = toYearMonth(value);
+    const day = Number(value.slice(-2));
+
+    return month !== null && day >= 1 && day <= daysInMonth(month);
+}
+
 /** A single day or a day range spelled out; anything unrecognised comes back as written. */
 function formatDays(raw: string): string {
     const days = DAY_OR_DAY_RANGE.exec(raw);
@@ -122,6 +129,8 @@ function formatDays(raw: string): string {
     if (!days) return raw;
 
     const [, from = raw, to = from] = days;
+
+    if (!isRealDay(from) || !isRealDay(to)) return raw;
 
     if (from === to) return formatDateValue(from);
 
@@ -151,7 +160,8 @@ function formatDays(raw: string): string {
  * whole months) or a bare day (`2026-10-03`). "Whole" means from the first day of the first month to
  * the last day of the last one, so February ends on the 29th in a leap year. Month names are the
  * English three-letter ones. Dashes are en dashes, with spaces around them only between two spelled-out
- * days. A value in no known form, or a years or months range that runs backwards, is shown as written.
+ * days. A value in no known form (a day its month doesn't have, such as `2023-02-29`, included), or a
+ * years or months range that runs backwards, is shown as written.
  */
 export function formatDateRange(raw: string): string {
     if (RELATIVE_DATE_LABELS[raw]) return RELATIVE_DATE_LABELS[raw];
