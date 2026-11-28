@@ -231,7 +231,7 @@ describeDb('/mcp', () => {
                 payload: { jsonrpc: '2.0', id: 1, method: 'ping' },
             });
 
-        // Same IP for everyone, as behind the reverse proxy.
+        // Both tokens call from the same address.
         for (let sent = 0; sent < 300; sent++) expect((await post(noisy.secret)).statusCode).toBe(200);
 
         expect((await post(noisy.secret)).statusCode).toBe(429);

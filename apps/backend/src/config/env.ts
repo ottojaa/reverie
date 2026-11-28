@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { z } from 'zod';
+import { trustProxySchema } from './trust-proxy.js';
 
 // Load the env file from the repo root regardless of cwd or build layout:
 // __dirname differs between tsx runs (apps/backend/src/config) and the esbuild
@@ -48,6 +49,8 @@ const envSchema = z.object({
     PORT: z.coerce.number().default(3000),
     HOST: z.string().default('0.0.0.0'),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    /** Reverse proxies whose X-Forwarded-For is believed; unset = none (see trust-proxy.ts). */
+    TRUST_PROXY: trustProxySchema,
 
     // Database
     DATABASE_URL: z.string().url(),

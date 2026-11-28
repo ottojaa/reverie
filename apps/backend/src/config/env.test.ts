@@ -1,3 +1,4 @@
+import { format } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 async function loadEnv() {
@@ -29,6 +30,49 @@ describe('TRASH_RETENTION_DAYS', () => {
         vi.stubEnv('TRASH_RETENTION_DAYS', '45');
 
         expect((await loadEnv()).TRASH_RETENTION_DAYS).toBe(45);
+    });
+});
+
+describe('TRUST_PROXY', () => {
+    beforeEach(() => {
+        vi.stubEnv('ENV_FILE', '.env.does-not-exist');
+        vi.stubEnv('DATABASE_URL', 'postgresql://user:pass@localhost:5432/test');
+        vi.stubEnv('JWT_SECRET', 'x'.repeat(32));
+        vi.stubEnv('FILE_URL_SECRET', 'y'.repeat(32));
+        vi.stubEnv('TRUST_PROXY', '');
+        delete process.env.TRUST_PROXY;
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+    });
+
+    it('trusts no proxy when unset', async () => {
+        expect((await loadEnv()).TRUST_PROXY).toBeUndefined();
+    });
+
+    it('takes the listed addresses', async () => {
+        vi.stubEnv('TRUST_PROXY', '172.18.0.1,fd00::/8');
+
+        expect((await loadEnv()).TRUST_PROXY).toEqual(['172.18.0.1', 'fd00::/8']);
+    });
+
+    it('fails startup on a hop count and prints the variable and the entry', async () => {
+        vi.stubEnv('TRUST_PROXY', '172.18.0.1,1');
+
+        const logged: string[] = [];
+
+        vi.spyOn(console, 'error').mockImplementation((...args) => {
+            logged.push(format(...args));
+        });
+        vi.spyOn(process, 'exit').mockImplementation(() => {
+            throw new Error('exit');
+        });
+
+        await expect(loadEnv()).rejects.toThrow('exit');
+        expect(logged.join('\n')).toContain('TRUST_PROXY');
+        expect(logged.join('\n')).toContain('Not an IP address or CIDR range to trust: "1"');
     });
 });
 
