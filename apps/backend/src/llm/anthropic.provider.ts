@@ -3,14 +3,17 @@
  * models that take them, one log line of tokens and cost per call.
  */
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import type * as z from 'zod/v4';
 import { env } from '../config/env';
 import { NonRetryableJobError } from '../jobs/job.types';
 import { THINKING_HEADROOM_TOKENS, getAnthropicClient, isEffortCapable, logCallCost, toCallUsage, totalTokens } from './anthropic.client';
 import { LlmAnalysisSchema, LlmImageUnderstandingSchema } from './llm-response.schema';
-import type { ImageCallResult, LlmCallOptions, LlmProvider, PingRequest, PreparedImage, TextCallResult } from './provider';
+import type { ImageCallResult, JsonCallResult, LlmCallOptions, LlmProvider, PingRequest, PreparedImage, TextCallResult } from './provider';
 import type { LlmPrompt } from './types';
 
 const PING_MAX_TOKENS = 64;
+/** `completeJson` answers someone who is waiting: the SDK's own default is ten minutes and two retries. */
+const JSON_REQUEST_OPTIONS = { timeout: 30_000, maxRetries: 1 };
 
 export class AnthropicProvider implements LlmProvider {
     constructor(private readonly model: string) {}
@@ -107,6 +110,32 @@ export class AnthropicProvider implements LlmProvider {
         }
 
         return { result: message.parsed_output, tokenCount: totalTokens(message.usage), call };
+    }
+
+    async completeJson<T>(kind: string, prompt: LlmPrompt, schema: z.ZodType<T>, options: LlmCallOptions = {}): Promise<JsonCallResult<T>> {
+        const model = options.model ?? this.model;
+        const effort = isEffortCapable(model) ? (options.effort ?? env.ANTHROPIC_SUMMARY_EFFORT) : undefined;
+        const outputBudget = Math.max(256, Math.min(prompt.maxTokens, env.LLM_MAX_OUTPUT_TOKENS));
+
+        const message = await getAnthropicClient().messages.parse(
+            {
+                model,
+                max_tokens: effort ? outputBudget + THINKING_HEADROOM_TOKENS : outputBudget,
+                system: prompt.system,
+                messages: [{ role: 'user', content: prompt.user }],
+                output_config: { format: zodOutputFormat(schema), ...(effort && { effort }) },
+            },
+            JSON_REQUEST_OPTIONS,
+        );
+        const call = toCallUsage(model, message);
+
+        logCallCost(kind, call, effort);
+
+        if (message.stop_reason === 'refusal' || message.stop_reason === 'max_tokens' || !message.parsed_output) {
+            throw new Error('Anthropic gave no usable answer: ' + (message.stop_reason ?? 'unknown'));
+        }
+
+        return { value: message.parsed_output, call };
     }
 
     async ping({ text, image }: PingRequest): Promise<string> {

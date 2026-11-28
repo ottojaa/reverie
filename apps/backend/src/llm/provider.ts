@@ -4,6 +4,7 @@
  * result: privacy, the photo rules, entity checks and storage live in the callers, so they hold for every provider.
  */
 import type { ProcessingLane } from '@reverie/shared';
+import type * as z from 'zod/v4';
 import type { LlmUsage } from './llm-cost';
 import type { LlmAnalysis, LlmImageUnderstanding } from './llm-response.schema';
 import type { LlmPrompt } from './types';
@@ -48,6 +49,11 @@ export interface ImageCallResult {
     call: LlmCallUsage;
 }
 
+export interface JsonCallResult<T> {
+    value: T;
+    call: LlmCallUsage;
+}
+
 export interface PingRequest {
     text: string;
     image?: PreparedImage;
@@ -58,6 +64,11 @@ export interface LlmProvider {
     summarize(prompt: LlmPrompt, options?: LlmCallOptions): Promise<TextCallResult>;
     /** One call that sees the image and its OCR text. An unusable answer throws NonRetryableJobError. */
     understand(image: PreparedImage, prompt: LlmPrompt, options?: LlmCallOptions): Promise<ImageCallResult>;
+    /**
+     * One answer in the shape of `schema`, for a short text request. `kind` names the call in the cost log.
+     * An unusable answer throws a plain Error.
+     */
+    completeJson<T>(kind: string, prompt: LlmPrompt, schema: z.ZodType<T>, options?: LlmCallOptions): Promise<JsonCallResult<T>>;
     /** A tiny free-text request, for the admin's Test connection. Returns the model's reply. */
     ping(request: PingRequest): Promise<string>;
 }

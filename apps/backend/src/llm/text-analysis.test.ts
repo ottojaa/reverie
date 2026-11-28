@@ -26,6 +26,7 @@ function fakeProvider(): LlmProvider {
             call: { model: 'claude-haiku-5-5', usage: { input_tokens: 10, output_tokens: 5 }, stopReason: 'end_turn', costUsd: 0.001 },
         }),
         understand: vi.fn(),
+        completeJson: vi.fn(),
         ping: vi.fn(),
     };
 }

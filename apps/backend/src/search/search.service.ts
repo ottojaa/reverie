@@ -92,7 +92,7 @@ interface SearchScope {
 }
 
 /** The query string parsed (all its filtering is in the q DSL), narrowed to the scope the request names. */
-function toScopedQuery(q: string, { folderId, media, kind }: SearchScope): ParsedQuery {
+export function toScopedQuery(q: string, { folderId, media, kind }: SearchScope): ParsedQuery {
     return { ...parseQuery(q), ...(folderId && { scopeFolderId: folderId }), ...(media && { scopeMedia: true }), ...(kind && { scopeKind: kind }) };
 }
 
@@ -150,7 +150,7 @@ async function searchDocumentsPaged(
 }
 
 /** The hydrated documents for `entries`, in order, each tagged with why it matched. */
-function toDocumentHits(entries: RankedEntry[], detailMap: Map<string, DocumentSearchResult>): DocumentSearchResult[] {
+export function toDocumentHits(entries: RankedEntry[], detailMap: Map<string, DocumentSearchResult>): DocumentSearchResult[] {
     const hits: DocumentSearchResult[] = [];
 
     for (const entry of entries) {
