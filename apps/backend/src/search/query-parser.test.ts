@@ -100,9 +100,12 @@ describe('parseQuery dates', () => {
         });
     });
 
-    it('parses a month range', () => {
+    it('parses a month range through the end of its last day', () => {
         expect(parseQuery('uploaded:2024-01..2024-06')).toEqual({
-            uploadedRange: { start: new Date('2024-01-01'), end: new Date('2024-06-30') },
+            uploadedRange: { start: new Date('2024-01-01'), end: new Date('2024-06-30T23:59:59.999Z') },
+        });
+        expect(parseQuery('date:2023-12..2024-12')).toEqual({
+            extractedDateRange: { start: new Date('2023-12-01'), end: new Date('2024-12-31T23:59:59.999Z') },
         });
     });
 

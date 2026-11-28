@@ -106,6 +106,25 @@ describeDb('the date: filter', () => {
     });
 });
 
+describeDb('the uploaded: filter', () => {
+    const ctx = useWorld();
+    let userId: string;
+
+    beforeAll(async () => {
+        const { db } = ctx.world();
+        userId = await seedUser(db, 'uploader');
+        const seed = (name: string, createdAt: string) => seedDocument(db, { userId, name, createdAt: new Date(createdAt) });
+
+        await seed('may.pdf', '2024-05-31T23:59:59.999Z');
+        await seed('june-afternoon.pdf', '2024-06-30T15:00:00Z');
+        await seed('july.pdf', '2024-07-01T00:00:00Z');
+    }, 60_000);
+
+    it.each(CALLERS)('takes a month range through its last day: $caller', async ({ find }) => {
+        expect((await find(userId, 'uploaded:2024-06..2024-06')).names).toEqual(['june-afternoon.pdf']);
+    });
+});
+
 describeDb('the date sort', () => {
     const ctx = useWorld();
     let userId: string;

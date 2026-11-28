@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateRange } from './formatting.js';
+import { tokenizeQuery } from '../search/query-tokens.js';
+import { formatDateRange, formatTokenChip } from './formatting.js';
+
+describe('formatTokenChip', () => {
+    it.each([
+        ['uploaded:last-month', 'Uploaded this month'],
+        ['uploaded:today', 'Uploaded today'],
+        ['uploaded:2026-10-01..2026-10-31', 'Uploaded Oct 2026'],
+        ['uploaded:2024-06..2024-08', 'Uploaded Jun–Aug 2024'],
+        ['uploaded:2026-10-03', 'Uploaded Oct 3, 2026'],
+        ['-uploaded:last-month', 'Not uploaded this month'],
+        ['-uploaded:2026-10-01..2026-10-31', 'Not uploaded Oct 2026'],
+        ['-uploaded:2024-06..2024-08', 'Not uploaded Jun–Aug 2024'],
+        ['date:2024-06..2024-08', 'Jun–Aug 2024'],
+        ['-date:2024', 'Not 2024'],
+        ['type:photo', 'Photos'],
+        ['-type:photo', 'Not Photos'],
+        ['has:text', 'Has text'],
+        ['-has:text', 'No text'],
+        ['-has:location', 'No location'],
+    ])('labels %j as %j', (query, label) => {
+        expect(formatTokenChip(tokenizeQuery(query)[0]!)).toBe(label);
+    });
+});
 
 describe('formatDateRange', () => {
     it.each([

@@ -2,6 +2,8 @@
  * Human-readable formatting for filter chips and date ranges.
  */
 
+import type { QueryToken } from '../search/query-tokens.js';
+
 const RELATIVE_DATE_LABELS: Record<string, string> = {
     'last-week': 'This week',
     'last-month': 'This month',
@@ -171,6 +173,28 @@ export function formatDateRange(raw: string): string {
     return months ? formatMonthSpan(months) : formatDays(raw);
 }
 
+/** An upload date filter as it reads mid-sentence: only a preset is lowercased, so month names keep their capital. */
+function toUploadedPhrase(value: string): string {
+    const label = formatDateRange(value);
+
+    return `uploaded ${RELATIVE_DATE_LABELS[value] ? label.toLowerCase() : label}`;
+}
+
+/**
+ * The chip label of a query token, including one that excludes its matches (`-type:photo`).
+ *
+ * @returns A human-readable label
+ */
+export function formatTokenChip({ key = '', value, negated }: Pick<QueryToken, 'key' | 'value' | 'negated'>): string {
+    if (!negated) return formatFilterChip(key, value);
+
+    if (key === 'has') return NEGATED_HAS_LABELS[value] ?? `No ${value}`;
+
+    if (key === 'uploaded') return `Not ${toUploadedPhrase(value)}`;
+
+    return `Not ${formatFilterChip(key, value)}`;
+}
+
 /**
  * Format a filter into a human-readable chip label.
  *
@@ -196,13 +220,11 @@ export function formatFilterChip(type: string, value: string): string {
         case 'location':
             return value;
         case 'uploaded':
-            return `Uploaded ${formatDateRange(value).toLowerCase()}`;
+            return capitalize(toUploadedPhrase(value));
         case 'date':
             return formatDateRange(value);
         case 'has':
             return HAS_LABELS[value] ?? `Has ${value}`;
-        case '-has':
-            return NEGATED_HAS_LABELS[value] ?? `No ${value}`;
         case 'size':
             return `Size ${value}`;
         case 'content':
