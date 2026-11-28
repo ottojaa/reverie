@@ -35,9 +35,9 @@ const RELATIVE_DATES: Record<string, DateRange['relative']> = {
     'last-year': 'last-year',
 };
 
-// Type aliases (what users type -> canonical type token). Expansion of a
-// canonical type into document categories lives in the query builder
-// (TYPE_TO_CATEGORIES), not here — parsed.types holds canonical tokens only.
+// Type aliases (what users type -> canonical type token). What a canonical type
+// matches is decided by the search filters (matchesTypes), not here —
+// parsed.types holds canonical tokens only.
 const TYPE_ALIASES: Record<string, string> = {
     photo: 'photo',
     photos: 'photo',
