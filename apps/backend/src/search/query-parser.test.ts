@@ -12,16 +12,6 @@ import { parseQuery } from './query-parser';
  * absolute date forms produce deterministic Date objects, so toEqual is safe.
  */
 
-/** Mirrors parseDateValue's month-range end computation (last day of end month). */
-function endOfMonth(month: string): Date {
-    const end = new Date(`${month}-01`);
-
-    end.setMonth(end.getMonth() + 1);
-    end.setDate(0);
-
-    return end;
-}
-
 describe('parseQuery free text', () => {
     it('parses empty query to empty object', () => {
         expect(parseQuery('')).toEqual({});
@@ -112,7 +102,7 @@ describe('parseQuery dates', () => {
 
     it('parses a month range', () => {
         expect(parseQuery('uploaded:2024-01..2024-06')).toEqual({
-            uploadedRange: { start: new Date('2024-01-01'), end: endOfMonth('2024-06') },
+            uploadedRange: { start: new Date('2024-01-01'), end: new Date('2024-06-30') },
         });
     });
 

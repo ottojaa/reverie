@@ -69,6 +69,8 @@ describeDb('the date: filter', () => {
 
         await letter('letter-2023.pdf', new Date(2023, 4, 10), '2024-07-15T20:00:00Z');
         await letter('letter-2024.pdf', new Date(2024, 2, 5), '2024-07-16T01:00:00Z');
+        // The day after a month range ends.
+        await letter('autumn.pdf', new Date(2024, 9, 1), '2024-10-02T00:00:00Z');
     }, 60_000);
 
     const BY_DATE = [
@@ -77,10 +79,11 @@ describeDb('the date: filter', () => {
         ['letter-2024.pdf', '2024-03-05'],
         ['summer.jpg', '2024-07-15'],
         ['misread.jpg', '2024-09-01'],
+        ['autumn.pdf', '2024-10-01'],
     ] as const;
 
     it.each(CALLERS)('finds camera photos by capture date and documents by their own date: $caller', async ({ find }) => {
-        expect((await find(userId, 'date:2024')).names.sort()).toEqual(['letter-2024.pdf', 'misread.jpg', 'new-year.jpg', 'summer.jpg']);
+        expect((await find(userId, 'date:2024')).names.sort()).toEqual(['autumn.pdf', 'letter-2024.pdf', 'misread.jpg', 'new-year.jpg', 'summer.jpg']);
         expect((await find(userId, 'date:2023')).names.sort()).toEqual(['letter-2023.pdf', 'new-years-eve.jpg']);
         expect((await find(userId, 'date:2024-07..2024-09')).names.sort()).toEqual(['misread.jpg', 'summer.jpg']);
         expect((await find(userId, 'date:2020')).names).toEqual([]);

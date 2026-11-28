@@ -109,8 +109,8 @@ function parseDateValue(value: string): DateRange {
         const startMonth = monthRangeMatch[1];
         const endMonth = monthRangeMatch[2];
         const endDate = new Date(`${endMonth}-01`);
-        endDate.setMonth(endDate.getMonth() + 1);
-        endDate.setDate(0); // Last day of end month
+        endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+        endDate.setUTCDate(0); // Last day of end month
 
         return {
             start: new Date(`${startMonth}-01`),
