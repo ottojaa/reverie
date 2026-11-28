@@ -21,12 +21,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Which of the scheduled works started a run; "Back up now" is the only one the user asked for. */
-enum class BackupTrigger { Periodic, NewMedia, Continuation, Manual }
+enum class BackupTrigger { Periodic, NewMedia, Continuation, AfterWait, Manual }
 
 private const val PERIODIC_WORK = "reverie-backup-periodic"
 private const val TRIGGER_WORK = "reverie-backup-new-media"
 private const val CONTINUE_WORK = "reverie-backup-continue"
 private const val MANUAL_WORK = "reverie-backup-now"
+private const val WAIT_WORK = "reverie-backup-after-wait"
+private val ALL_WORKS = listOf(PERIODIC_WORK, TRIGGER_WORK, CONTINUE_WORK, WAIT_WORK, MANUAL_WORK)
 internal const val TRIGGER_KEY = "trigger"
 private const val PERIOD_HOURS = 6L
 
@@ -82,6 +84,17 @@ class BackupScheduler @Inject constructor(
         enqueueOnce(CONTINUE_WORK, BackupTrigger.Continuation, constraintsFor(settings.wifiOnly), ExistingWorkPolicy.APPEND_OR_REPLACE)
     }
 
+    /**
+     * The server told the run started by [from] to stay away: start one once [delayMs] has passed. Only one
+     * such run waits at a time, with the latest delay; replacing it from within itself would cancel the run
+     * that is asking, so then the next one is appended.
+     */
+    fun scheduleAfterWait(settings: BackupSettings, delayMs: Long, from: BackupTrigger) {
+        if (!settings.isReady) return
+        val policy = if (from == BackupTrigger.AfterWait) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE
+        enqueueOnce(WAIT_WORK, BackupTrigger.AfterWait, constraintsFor(settings.wifiOnly), policy, delayMs)
+    }
+
     /** "Back up now": same network rule as the others (Wi-Fi only still means unmetered), but a low battery doesn't hold it back. */
     fun backUpNow(settings: BackupSettings) {
         if (!settings.isReady) return
@@ -90,11 +103,11 @@ class BackupScheduler @Inject constructor(
 
     /** True while any backup run is going. */
     fun observeRunning(): Flow<Boolean> = workManager
-        .getWorkInfosFlow(androidx.work.WorkQuery.fromUniqueWorkNames(PERIODIC_WORK, TRIGGER_WORK, CONTINUE_WORK, MANUAL_WORK))
+        .getWorkInfosFlow(androidx.work.WorkQuery.fromUniqueWorkNames(ALL_WORKS))
         .map { infos -> infos.any { it.state == WorkInfo.State.RUNNING } }
 
     private fun cancelAll() {
-        listOf(PERIODIC_WORK, TRIGGER_WORK, CONTINUE_WORK, MANUAL_WORK).forEach(workManager::cancelUniqueWork)
+        ALL_WORKS.forEach(workManager::cancelUniqueWork)
     }
 
     private fun newMediaRequest(constraints: Constraints) = OneTimeWorkRequestBuilder<BackupWorker>()
@@ -112,8 +125,15 @@ class BackupScheduler @Inject constructor(
         .setInputData(inputFor(BackupTrigger.NewMedia))
         .build()
 
-    private fun enqueueOnce(name: String, trigger: BackupTrigger, constraints: Constraints, policy: ExistingWorkPolicy) {
+    private fun enqueueOnce(
+        name: String,
+        trigger: BackupTrigger,
+        constraints: Constraints,
+        policy: ExistingWorkPolicy,
+        delayMs: Long = 0,
+    ) {
         val request = OneTimeWorkRequestBuilder<BackupWorker>()
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
             .setConstraints(constraints)
             .setInputData(inputFor(trigger))
             // The worker never asks for a retry; this only bounds WorkManager's own rescheduling after a process death.

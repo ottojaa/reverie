@@ -25,6 +25,7 @@ internal object BackupKeys {
     val wifiOnly = booleanPreferencesKey("wifi_only")
     val lastSuccessAt = longPreferencesKey("last_success_at")
     val lastError = stringPreferencesKey("last_error")
+    val serverWait = stringPreferencesKey("server_wait")
     val libraryKey = stringPreferencesKey("library_key")
     val version = intPreferencesKey("settings_version")
 }
@@ -42,6 +43,7 @@ internal fun toBackupSettings(prefs: Preferences) = BackupSettings(
     wifiOnly = prefs[BackupKeys.wifiOnly] ?: true,
     lastSuccessAt = prefs[BackupKeys.lastSuccessAt],
     lastError = prefs[BackupKeys.lastError],
+    serverWait = prefs[BackupKeys.serverWait]?.let { Json.decodeFromString<ServerWait>(it) },
     libraryKey = prefs[BackupKeys.libraryKey],
 )
 

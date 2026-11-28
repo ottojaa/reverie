@@ -9,6 +9,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -151,7 +153,15 @@ class BackupSettingsRepository internal constructor(private val store: DataStore
         store.edit { it[BackupKeys.lastError] = message }
     }
 
+    suspend fun setServerWait(wait: ServerWait) {
+        store.edit { it[BackupKeys.serverWait] = Json.encodeToString(wait) }
+    }
+
+    /** Takes [key] as the library backup now uploads to. A wait another server or user was told doesn't hold for it. */
     suspend fun setLibraryKey(key: String) {
-        store.edit { it[BackupKeys.libraryKey] = key }
+        store.edit {
+            it[BackupKeys.libraryKey] = key
+            it.remove(BackupKeys.serverWait)
+        }
     }
 }

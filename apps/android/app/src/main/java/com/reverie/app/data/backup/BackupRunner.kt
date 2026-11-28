@@ -34,6 +34,7 @@ private class StopPass(val reason: String) : Exception(reason)
  *
  * Only one pass runs at a time in the process: the periodic job, the new-media trigger and "Back up
  * now" are separate works that can start together, and two passes would upload the same file twice.
+ * After the server answers "too many requests", no pass asks it anything until the wait it named is over.
  */
 @Singleton
 class BackupRunner internal constructor(
@@ -67,6 +68,9 @@ class BackupRunner internal constructor(
     suspend fun run(request: BackupRequest): PassResult {
         if (!acquire(request)) return PassResult(PassEnd.Busy)
         try {
+            // Asked under the lock, so a pass that waited its turn sees what the one before it was told.
+            val waiting = settings.waitingEnd(now())
+            if (waiting != null) return PassResult(waiting)
             return withContext(passContext) { Pass(request).run() }
         } finally {
             lock.unlock()
@@ -97,7 +101,8 @@ class BackupRunner internal constructor(
             val end = try {
                 workUntilDone()
             } catch (stop: StopPass) {
-                PassEnd.Stopped(stop.reason)
+                // A wait the server asked for during the pass says when to come back, whatever ended it first.
+                settings.waitingEnd(now()) ?: PassEnd.Stopped(stop.reason)
             }
             return PassResult(end, uploaded, skipped, failed, firstFailure)
         }
@@ -143,7 +148,7 @@ class BackupRunner internal constructor(
                     blockedAlbums += album.bucketId
                 } catch (e: ReverieApiException) {
                     // A refusal of this one folder is recorded against its files when they are uploaded.
-                    if (!isOneFilesFault(e)) throw StopPass(stopReason(e))
+                    if (!isOneFilesFault(e)) throw toStop(e)
                 }
             }
         }
@@ -224,7 +229,7 @@ class BackupRunner internal constructor(
             val results = try {
                 transport.checkContent(hashed.map { (media, hash) -> CheckContentFile(media.displayName, hash) })
             } catch (e: ReverieApiException) {
-                throw StopPass(stopReason(e))
+                throw toStop(e)
             }
             // Never upload on a partial answer: an unmatched file would be treated as new.
             if (results.size != hashed.size) throw StopPass("The server sent an unexpected response.")
@@ -255,8 +260,17 @@ class BackupRunner internal constructor(
         }
 
         private suspend fun handleUploadFailure(media: BackupMedia, e: ReverieApiException) {
-            if (!isOneFilesFault(e)) throw StopPass(stopReason(e))
+            if (!isOneFilesFault(e)) throw toStop(e)
             recordFailure(media, e.userMessage())
+        }
+
+        /**
+         * What ends the pass for [e]. A "too many requests" is stored here, as it arrives: with uploads side
+         * by side, another one's failure may be what ends the pass.
+         */
+        private suspend fun toStop(e: ReverieApiException): StopPass {
+            if (isRateLimited(e)) settings.setServerWait(toServerWait(e, now()))
+            return StopPass(stopReason(e))
         }
 
         private suspend fun ledger(media: BackupMedia, hash: String, documentId: String?, outcome: String) {

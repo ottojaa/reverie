@@ -26,6 +26,13 @@ enum class AlbumProblem { Gone, Locked }
 @Serializable
 data class AlbumBlock(val folderId: String, val problem: AlbumProblem)
 
+/** The server asked at [since] to be left alone for [lengthMs]. */
+@Serializable
+data class ServerWait(val since: Long, val lengthMs: Long) {
+    /** How long is left at [now]; 0 once over, and when the clock was set back to before the wait began. */
+    fun left(now: Long): Long = if (now - since in 0 until lengthMs) lengthMs - (now - since) else 0
+}
+
 data class BackupSettings(
     val enabled: Boolean = false,
     /** The albums to back up; null until the user (or the Camera default) has chosen. */
@@ -52,6 +59,8 @@ data class BackupSettings(
     val wifiOnly: Boolean = true,
     val lastSuccessAt: Long? = null,
     val lastError: String? = null,
+    /** The last "too many requests" from the server, which every pass honours, an app restart in between or not. */
+    val serverWait: ServerWait? = null,
     /** Which server and user the ledger belongs to; see [BackupSettingsRepository.setLibraryKey]. */
     val libraryKey: String? = null,
 ) {

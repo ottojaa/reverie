@@ -96,7 +96,7 @@ class BackupWorker @AssistedInject constructor(
             // Whatever else goes wrong, say so on the status line instead of leaving it stale.
             return settingsRepository.recordError("Backup stopped unexpectedly and will try again later.")
         }
-        report(result, settings)
+        report(result, settings, trigger)
     }
 
     private fun isNetworkMetered(): Boolean =
@@ -129,10 +129,13 @@ class BackupWorker @AssistedInject constructor(
         settingsRepository.setLibraryKey(key)
     }
 
-    private suspend fun report(result: PassResult, settings: BackupSettings) {
+    private suspend fun report(result: PassResult, settings: BackupSettings, trigger: BackupTrigger) {
         when (val end = result.end) {
             PassEnd.Busy -> return
-            is PassEnd.Stopped -> settingsRepository.recordError(end.error)
+            is PassEnd.Stopped -> {
+                settingsRepository.recordError(end.error)
+                end.retryAfterMs?.let { scheduler.scheduleAfterWait(settings, it, trigger) }
+            }
             PassEnd.OutOfTime -> {
                 recordOutcome(result)
                 scheduler.scheduleContinuation(settings)

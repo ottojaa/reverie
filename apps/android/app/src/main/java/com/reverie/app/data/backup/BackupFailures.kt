@@ -4,7 +4,10 @@ import com.reverie.app.data.api.ReverieApiException
 
 /** A refusal that says nothing about the files after this one. */
 internal fun isOneFilesFault(e: ReverieApiException) = e is ReverieApiException.Http && e.statusCode in 400..499 &&
-    !ReverieApiException.isAuthFailure(e) && !isFolderLocked(e) && e.statusCode != 404
+    !ReverieApiException.isAuthFailure(e) && !isFolderLocked(e) && e.statusCode != 404 && !isRateLimited(e)
+
+/** The server's "too many requests": it will refuse any file until some time has passed. */
+internal fun isRateLimited(e: ReverieApiException) = e is ReverieApiException.Http && e.statusCode == 429
 
 /** The server's locked-folder answer, even when it left out which folder. */
 internal fun isFolderLocked(e: ReverieApiException) =
