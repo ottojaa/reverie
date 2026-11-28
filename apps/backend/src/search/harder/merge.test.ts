@@ -42,6 +42,18 @@ describe('mergeSearches', () => {
         ]);
     });
 
+    it('says which search ranked each document best, the user’s own being the first', () => {
+        const merged = mergeSearches(toEntries(['a', 'b', 'c']), [toEntries(['b', 'd']), toEntries(['d', 'c'])], 24);
+
+        expect(Object.fromEntries(merged.map((entry) => [entry.id, entry.foundBy]))).toEqual({ a: 0, b: 1, c: 2, d: 2 });
+    });
+
+    it('prefers, of equal ranks, a search whose words matched, and then the earlier one', () => {
+        const merged = mergeSearches(toEntries(['a'], 'meaning'), [toEntries(['a'], 'both'), toEntries(['a'], 'keywords')], 24);
+
+        expect(merged.map((entry) => entry.foundBy)).toEqual([1]);
+    });
+
     it('is empty when nothing was found', () => {
         expect(mergeSearches([], [[]], 24)).toEqual([]);
     });

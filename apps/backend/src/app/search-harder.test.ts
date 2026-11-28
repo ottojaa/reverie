@@ -179,6 +179,46 @@ describeDb('POST /search/harder', () => {
         }
     });
 
+    it('tells the model that word search needs every word, and asks for one to three per search', async () => {
+        await harder({ q: 'power bill' });
+
+        const [body] = sentBodies();
+        const system = String(body!['system']).replace(/\s+/g, ' ');
+
+        expect(system).toContain('only finds a file that contains every word of a search');
+        expect(system).toContain('1 to 3 distinctive words');
+        expect(JSON.stringify(body!['output_config'])).toContain('1 to 3 words');
+    });
+
+    it('highlights each result with the words of the search that found it', async () => {
+        const { db, alice } = world();
+        const lease = await seedDocument(db, { userId: alice, name: 'scan-0500.pdf', ocrText: 'Vuokrasopimus mökki, the power of attorney' });
+        const warranty = await seedDocument(db, { userId: alice, name: 'scan-0501.pdf', ocrText: 'Takuutodistus pesukone' });
+        answerWith({ rewordings: ['Vuokrasopimus', 'Takuutodistus pesukone'], date: null });
+
+        const response = await harder({ q: 'power' });
+        const marked = new Map(
+            response.results.flatMap((hit) =>
+                hit.result_type === 'document' ? [[hit.document_id, [...(hit.snippet ?? '').matchAll(/<mark>(.*?)<\/mark>/g)].map((match) => match[1])]] : [],
+            ),
+        );
+
+        // The user's own search found the lease too, no worse than the rewording, so it keeps the user's word.
+        expect(marked.get(lease)).toEqual(['power']);
+        expect(marked.get(warranty)).toEqual(['Takuutodistus', 'pesukone']);
+
+        await db.deleteFrom('documents').where('id', 'in', [lease, warranty]).execute();
+    });
+
+    it('marks the rewording’s words, not the user’s, in a result only a rewording found', async () => {
+        answerWith({ rewordings: ['Fortum sähkölasku'], date: null });
+
+        const response = await harder({ q: 'power bill from the mökki', folder_id: cabin.id });
+        const bill = response.results.find((hit) => hit.result_type === 'document' && hit.document_id === docs.bill);
+
+        expect(bill?.snippet).toBe('<mark>Fortum</mark> <mark>sähkölasku</mark> mökki');
+    });
+
     it.each([
         ['typed', `date:${YEAR_2025}`],
         ['read', `last year date:${YEAR_2025} read:"date:${YEAR_2025} last year"`],
