@@ -41,7 +41,11 @@ function applySorting(query: SearchQueryBase, parsed: ParsedQuery, options: Sear
     }
 
     if (options.sortBy === 'date') {
-        return query.orderBy(shownDateSql(), options.sortOrder).orderBy('d.created_at', options.sortOrder);
+        // Postgres puts nulls first in a descending order; documents with no shown date go last in both. Kysely 0.27
+        // has no `nulls last` method, so it is part of the direction. `d.id` last: equal dates must not swap between pages.
+        const dateOrder = options.sortOrder === 'desc' ? sql`desc nulls last` : sql`asc nulls last`;
+
+        return query.orderBy(shownDateSql(), dateOrder).orderBy('d.created_at', options.sortOrder).orderBy('d.id');
     }
 
     if (options.sortBy === 'filename') {

@@ -1,4 +1,4 @@
-import { beforeAll, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db/kysely', async () => ({ db: (await import('../testing/db-proxy.js')).dbProxy.db }));
 
@@ -7,7 +7,7 @@ import { seedDocument, seedUser, type SeedDocument } from '../testing/seed.js';
 import { describeDb, run, useWorld } from '../testing/tool-world.js';
 import { search } from './search.service';
 
-/** The `date:` and `type:` filters, asked through the web search and through the agent's `search_documents` tool. */
+/** The `date:` and `type:` filters and the date sort, asked through the web search and through the agent's `search_documents` tool. */
 
 interface Found {
     names: string[];
@@ -103,6 +103,65 @@ describeDb('the date: filter', () => {
 
         expect(pairs(ascending)).toEqual(expected);
         expect(pairs(descending)).toEqual([...expected].reverse());
+    });
+});
+
+describeDb('the date sort', () => {
+    const ctx = useWorld();
+    let userId: string;
+    /** The documents with equal date and upload time, in id order. */
+    let tied: string[];
+
+    beforeAll(async () => {
+        const { db } = ctx.world();
+        userId = await seedUser(db, 'sorted');
+        const seed = (name: string, createdAt: string, extractedDate?: Date) =>
+            seedDocument(db, { userId, name, extractedDate, createdAt: new Date(createdAt) });
+
+        await seed('old.pdf', '2024-06-01T00:00:00Z', new Date(2022, 0, 1));
+        await seed('new.pdf', '2024-06-01T00:00:00Z', new Date(2024, 0, 1));
+        await seed('undated-earlier.pdf', '2024-06-02T00:00:00Z');
+        // A camera photo without a capture date shows none, even with a date read from the picture.
+        await seedDocument(db, {
+            userId,
+            name: 'undated-later.jpg',
+            mime: 'image/jpeg',
+            extractedDate: new Date(2025, 0, 1),
+            createdAt: new Date('2024-06-03T00:00:00Z'),
+            cameraReadAt: new Date(),
+            photo: { cameraMake: 'Apple' },
+        });
+
+        const twins = [1, 2, 3, 4, 5, 6].map(async (n) => {
+            const name = `tied-${n}.pdf`;
+
+            return { name, id: await seed(name, '2024-06-01T00:00:00Z', new Date(2023, 0, 1)) };
+        });
+
+        tied = (await Promise.all(twins)).sort((a, b) => a.id.localeCompare(b.id)).map((twin) => twin.name);
+    }, 60_000);
+
+    const ascending = () => ['old.pdf', ...tied, 'new.pdf', 'undated-earlier.pdf', 'undated-later.jpg'];
+    const descending = () => ['new.pdf', ...tied, 'old.pdf', 'undated-later.jpg', 'undated-earlier.pdf'];
+    const ORDERS = [
+        { sort_order: 'asc' as const, expected: ascending },
+        { sort_order: 'desc' as const, expected: descending },
+    ];
+
+    describe.each(ORDERS)('$sort_order', ({ sort_order, expected }) => {
+        it.each(CALLERS)('puts undated documents last and orders equal ones by id: $caller', async ({ find }) => {
+            expect((await find(userId, '', { sort_by: 'date', sort_order })).names).toEqual(expected());
+        });
+
+        it('keeps that order across every page boundary', async () => {
+            const pages = expected().map(async (_, offset) => {
+                const response = await search(SearchQuerySchema.parse({ q: '', limit: 1, offset, sort_by: 'date', sort_order }), { userId });
+
+                return response.results.map((result) => (result.result_type === 'document' ? result.filename : result.name));
+            });
+
+            expect((await Promise.all(pages)).flat()).toEqual(expected());
+        });
     });
 });
 
