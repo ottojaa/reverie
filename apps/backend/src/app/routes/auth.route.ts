@@ -15,6 +15,7 @@ import type { User } from '../../db/schema.js';
 import { redeemOauthCode } from '../../oidc/oauth-code-store.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
 import { clearVaultCookie } from '../../services/folder-locks.js';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 // Simple success response schema
 const SuccessResponseSchema = z.object({ success: z.boolean() });
@@ -47,7 +48,7 @@ export default async function (fastify: FastifyInstance) {
         '/auth/login',
         {
             config: {
-                rateLimit: { max: 30, timeWindow: '15 minutes' },
+                rateLimit: { max: 30, timeWindow: '15 minutes', keyGenerator: toAddressKey },
             },
             schema: {
                 description: 'Login with email and password',
@@ -93,7 +94,7 @@ export default async function (fastify: FastifyInstance) {
         '/auth/refresh',
         {
             config: {
-                rateLimit: { max: 120, timeWindow: '15 minutes' },
+                rateLimit: { max: 120, timeWindow: '15 minutes', keyGenerator: toAddressKey },
             },
             schema: {
                 description: 'Refresh access token using refresh token',
@@ -208,7 +209,7 @@ export default async function (fastify: FastifyInstance) {
         '/auth/change-password',
         {
             config: {
-                rateLimit: { max: 30, timeWindow: '15 minutes' },
+                rateLimit: { max: 30, timeWindow: '15 minutes', keyGenerator: toAddressKey },
             },
             preHandler: [fastify.authenticate],
             schema: {
@@ -242,7 +243,7 @@ export default async function (fastify: FastifyInstance) {
         '/auth/exchange-oauth-code',
         {
             config: {
-                rateLimit: { max: 30, timeWindow: '15 minutes' },
+                rateLimit: { max: 30, timeWindow: '15 minutes', keyGenerator: toAddressKey },
             },
             schema: {
                 description: 'Exchange external sign-in callback code for access token',

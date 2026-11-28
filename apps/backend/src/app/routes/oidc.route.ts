@@ -7,6 +7,7 @@ import { issueOauthCode } from '../../oidc/oauth-code-store.js';
 import { createOidcClient, type OidcFlowState } from '../../oidc/oidc-client.js';
 import { resolveOidcProviders } from '../../oidc/providers.js';
 import { createAuthService, type AuthService } from '../../services/auth.service.js';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 /** Holds the PKCE verifier, state and nonce in the browser that started the sign-in; signed, so the callback trusts only what this server wrote. */
 const FLOW_COOKIE = 'oidc_flow';
@@ -17,7 +18,7 @@ const REFRESH_COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const FlowCookieSchema = z.object({ provider: z.string(), state: z.string(), nonce: z.string(), verifier: z.string() });
 
 const ProviderParamsSchema = z.object({ provider: z.string() });
-const rateLimit = { rateLimit: { max: 60, timeWindow: '15 minutes' } };
+const rateLimit = { rateLimit: { max: 60, timeWindow: '15 minutes', keyGenerator: toAddressKey } };
 
 export default async function (fastify: FastifyInstance) {
     const providers = resolveOidcProviders(env);

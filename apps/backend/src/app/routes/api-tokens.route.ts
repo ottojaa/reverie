@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ApiToken } from '../../db/schema.js';
 import { createApiToken, listApiTokens, revokeApiToken } from '../../services/api-token.service.js';
+import { toAddressKey } from '../plugins/rate-limit.js';
 
 function toApiTokenDto(token: ApiToken): ApiTokenDto {
     return {
@@ -42,7 +43,7 @@ export default async function (fastify: FastifyInstance) {
         '/api-tokens',
         {
             preHandler,
-            config: { rateLimit: { max: 20, timeWindow: '15 minutes' } },
+            config: { rateLimit: { max: 20, timeWindow: '15 minutes', keyGenerator: toAddressKey } },
             schema: {
                 description: 'Create an API token. The secret is in this response only and cannot be shown again',
                 tags: ['API tokens'],
