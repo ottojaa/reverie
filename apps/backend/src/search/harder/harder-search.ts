@@ -15,8 +15,11 @@ import { mergeSearches, type MergedEntry } from './merge';
 import { fetchSearchPlan, type SearchPlan } from './plan';
 
 const RESULT_LIMIT = 24;
-/** Each search embeds its words twice within a short timeout and shares the database pool with everything else. */
-const CONCURRENT_SEARCHES = 2;
+/**
+ * How many searches, or reads of their results, run at once: they share the database pool with everything else, and each
+ * search also embeds its words twice within a short timeout.
+ */
+const BATCH_SIZE = 2;
 
 type RunSearch = (q: string) => Promise<RankedEntry[]>;
 
@@ -38,8 +41,8 @@ function toRunSearch(scope: SearchScope, ctx: HybridContext): RunSearch {
 async function runInBatches<T, R>(items: T[], run: (item: T) => Promise<R>): Promise<R[]> {
     const results: R[] = [];
 
-    for (let start = 0; start < items.length; start += CONCURRENT_SEARCHES) {
-        results.push(...(await Promise.all(items.slice(start, start + CONCURRENT_SEARCHES).map(run))));
+    for (let start = 0; start < items.length; start += BATCH_SIZE) {
+        results.push(...(await Promise.all(items.slice(start, start + BATCH_SIZE).map(run))));
     }
 
     return results;
