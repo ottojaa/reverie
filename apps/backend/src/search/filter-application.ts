@@ -1,10 +1,12 @@
 import { TEXT_DOCUMENT_CATEGORIES, type DateRange, type ParsedQuery } from '@reverie/shared';
-import { sql, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
+import { sql, type ExpressionBuilder, type RawBuilder, type SelectQueryBuilder, type SqlBool } from 'kysely';
 import { db } from '../db/kysely';
 import type { Database } from '../db/schema';
 import { inNamedFoldersSql, outsideNamedFoldersSql, withinFolderSql } from '../services/folders/scope';
 import { isMediaSql, isOfKind } from '../services/document-list-filters';
 import { excludePrivateDocuments, excludeTrashed } from '../services/privacy';
+import { shownDateSql } from '../tools/photo';
+import { toLocalDay } from '../utils/date';
 import { resolveRelativeDate } from './query-parser';
 
 /**
@@ -66,9 +68,8 @@ const FORMAT_TO_MIME: Record<string, string[]> = {
     mkv: ['video/x-matroska'],
 };
 
-// Canonical type token -> document category mappings
+// Canonical type token -> document category mappings. `photo` is not decided by category alone: see matchesTypes.
 const TYPE_TO_CATEGORIES: Record<string, readonly string[]> = {
-    photo: ['photo', 'other'], // Photos are typically 'other' category without meaningful text
     document: TEXT_DOCUMENT_CATEGORIES,
     receipt: ['receipt'],
     screenshot: ['screenshot'],
@@ -107,37 +108,51 @@ export function documentJoins(): SearchQueryBase {
 }
 
 /**
+ * Whether a document is of any of `types`. A photo is always an image: one filed as photo or other, or one without
+ * meaningful text. The image check keeps out the other files filed as "other" (markdown, PDF, text), and the videos,
+ * audio and archives that also have no meaningful text.
+ */
+function matchesTypes(eb: ExpressionBuilder<SearchDatabase, 'd'>, types: readonly string[]) {
+    const categories = [...new Set(types.filter((t) => t !== 'photo').flatMap((t) => TYPE_TO_CATEGORIES[t] ?? [t]))];
+    const isPhoto = eb.and([
+        eb('d.mime_type', 'like', 'image/%'),
+        eb.or([eb('d.document_category', 'in', ['photo', 'other']), eb('d.has_meaningful_text', '=', false)]),
+    ]);
+
+    return eb.or([...(types.includes('photo') ? [isPhoto] : []), ...(categories.length ? [eb('d.document_category', 'in', categories)] : [])]);
+}
+
+/**
  * Type filter (photo, document, receipt, screenshot, video). Shared by search
  * and the type facet so a facet count equals the number of word matches the filter
  * returns on click. A click also reruns the meaning streams under the new filter,
  * so the result can hold meaning matches the count did not (see semantic-rank.ts).
  */
 export function applyTypesFilter(query: SearchQueryBase, types: readonly string[]): SearchQueryBase {
-    const allCategories = types.flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
-    const uniqueCategories = [...new Set(allCategories)];
+    if (types.length === 0) return query;
 
-    if (uniqueCategories.length === 0) return query;
+    return query.where((eb) => matchesTypes(eb, types));
+}
 
-    // Match by document_category, and for "photo" also include uncategorized images that carry no
-    // meaningful text (category='other'). The fallback is guarded by mime_type LIKE 'image/%' so
-    // videos/audio/archives — which the OCR worker also marks has_meaningful_text = false — don't
-    // leak into "Photo" results (or the Photo facet count, which reuses this same predicate).
-    if (types.includes('photo')) {
-        return query.where((eb) =>
-            eb.or([
-                eb('d.document_category' as any, 'in', uniqueCategories),
-                eb.and([eb('d.has_meaningful_text' as any, '=', false), eb('d.mime_type' as any, 'like', 'image/%')]),
-            ]),
-        );
-    }
+/**
+ * The bounds of a document date range, which is compared with a calendar day. A relative range counts from the local
+ * day. An absolute one is parsed as UTC, and Postgres cuts a bound to its day in the process's time zone, so east of
+ * UTC a year would end on the next New Year's Day.
+ */
+function toDayRange(range: DateRange): DateRange {
+    if (range.relative) return range;
 
-    return query.where('d.document_category' as any, 'in', uniqueCategories);
+    return { start: range.start && toLocalDay(range.start), end: range.end && toLocalDay(range.end) };
 }
 
 /**
  * Apply date range filter to query
  */
-function applyDateRangeFilter<T extends SearchQueryBase>(query: T, dateRange: DateRange | undefined, column: 'd.created_at' | 'd.extracted_date'): T {
+function applyDateRangeFilter<T extends SearchQueryBase>(
+    query: T,
+    dateRange: DateRange | undefined,
+    column: 'd.created_at' | ReturnType<typeof shownDateSql>,
+): T {
     if (!dateRange) return query;
 
     let start = dateRange.start;
@@ -173,10 +188,10 @@ function applyNegations<T extends SearchQueryBase>(
 ): T {
     if (!negations) return query;
 
-    // Negated types
+    // Negated types. `is not true` keeps a document without a category, for which the match is NULL.
     if (!omit?.has('types') && negations.types?.length) {
-        const allNegatedCategories = negations.types.flatMap((t) => TYPE_TO_CATEGORIES[t] || [t]);
-        query = query.where('d.document_category', 'not in', allNegatedCategories) as T;
+        const types = negations.types;
+        query = query.where((eb) => eb(matchesTypes(eb, types), 'is not', true)) as T;
     }
 
     // Negated formats
@@ -304,9 +319,11 @@ export function applySearchFilters(
         query = applyDateRangeFilter(query, parsed.uploadedRange, 'd.created_at');
     }
 
-    // Extracted date filter
+    // Document date filter: the date a result is shown with, so a camera photo is found by its capture date
     if (!omit?.has('extractedDate')) {
-        query = applyDateRangeFilter(query, parsed.extractedDateRange, 'd.extracted_date');
+        const days = parsed.extractedDateRange && toDayRange(parsed.extractedDateRange);
+
+        query = applyDateRangeFilter(query, days, shownDateSql());
     }
 
     // Folder filter: any of the named folders, with everything beneath them

@@ -1,8 +1,7 @@
 import type { ParsedQuery } from '@reverie/shared';
 import { sql, type SqlBool } from 'kysely';
 import { buildPrefixTsQuery, type SearchQueryBase } from '../search/filter-application';
-import { resolveRelativeDate } from '../search/query-parser';
-import { shownDateSql, withholdsImageContentSql } from './photo';
+import { withholdsImageContentSql } from './photo';
 
 /**
  * Keeps search from confirming what the tools refuse to show. A withheld image (see photo.ts) has
@@ -13,16 +12,16 @@ import { shownDateSql, withholdsImageContentSql } from './photo';
  * - content predicates (`content:`, `entity:`, `has:text`, `has:summary`, `in:content`,
  *   `in:summary`, each also negated) drop withheld images altogether;
  * - free text keeps a withheld image only when every word is in its filename, folder path, place
- *   or tags, which the tools do show;
- * - the `date:` filter reads a withheld image's capture date, not the date the model read from
- *   the picture.
+ *   or tags, which the tools do show.
  *
- * Meaning search is stricter (see applySemanticGuard). Not covered: sort order. Relevance (and date) ordering is still computed from the hidden text,
- * which reveals nothing the agent can read back.
+ * The `date:` filter and the date sort need no guard: search reads a withheld image's capture date, never the date
+ * the model read from the picture (see shownDateSql).
+ *
+ * Meaning search is stricter (see applySemanticGuard). Not covered: sort order. Relevance ordering is still computed
+ * from the hidden text, which reveals nothing the agent can read back.
  */
 
 const withheld = withholdsImageContentSql();
-const shownDate = shownDateSql();
 
 function hasContentPredicate(parsed: ParsedQuery): boolean {
     const negations = parsed.negations;
@@ -39,28 +38,15 @@ const visibleTextVector = sql`to_tsvector('english',
     regexp_replace(d.original_filename, '[^[:alnum:]]+', ' ', 'g') || ' ' || coalesce(f.path, '') || ' ' || coalesce(pm.city, '') || ' ' || coalesce(pm.country, '') || ' ' ||
     coalesce((SELECT string_agg(t.tag, ' ') FROM document_tags t WHERE t.document_id = d.id), ''))`;
 
-function applyDateGuard(query: SearchQueryBase, parsed: ParsedQuery): SearchQueryBase {
-    const range = parsed.extractedDateRange;
-
-    if (!range) return query;
-
-    const { start, end } = range.relative ? resolveRelativeDate(range.relative) : range;
-    const withStart = start ? query.where(sql<SqlBool>`${shownDate} >= ${start}`) : query;
-
-    return end ? withStart.where(sql<SqlBool>`${shownDate} <= ${end}`) : withStart;
-}
-
 /** `base` with the guard's conditions added; pass the result as the base query of the search builders. */
 export function applySearchGuard(base: SearchQueryBase, parsed: ParsedQuery): SearchQueryBase {
-    const dated = applyDateGuard(base, parsed);
-
-    if (hasContentPredicate(parsed)) return dated.where(sql<SqlBool>`NOT ${withheld}`);
+    if (hasContentPredicate(parsed)) return base.where(sql<SqlBool>`NOT ${withheld}`);
 
     const tsQuery = parsed.fullText && parsed.searchScope !== 'filename' ? buildPrefixTsQuery(parsed.fullText) : null;
 
-    if (!tsQuery) return dated;
+    if (!tsQuery) return base;
 
-    return dated.where(sql<SqlBool>`(NOT ${withheld} OR ${visibleTextVector} @@ ${tsQuery})`);
+    return base.where(sql<SqlBool>`(NOT ${withheld} OR ${visibleTextVector} @@ ${tsQuery})`);
 }
 
 /**
@@ -68,13 +54,6 @@ export function applySearchGuard(base: SearchQueryBase, parsed: ParsedQuery): Se
  * your words", which confirms what a withheld image shows as surely as a keyword hit would, and no visible
  * text can excuse it. So withheld images never take part, whatever the query.
  */
-export function applySemanticGuard(base: SearchQueryBase, parsed: ParsedQuery): SearchQueryBase {
-    return applyDateGuard(base, parsed).where(sql<SqlBool>`NOT ${withheld}`);
-}
-
-/** The query without its date range, which the guard applies itself. */
-export function withoutDateRange(parsed: ParsedQuery): ParsedQuery {
-    const { extractedDateRange: _dropped, ...rest } = parsed;
-
-    return rest;
+export function applySemanticGuard(base: SearchQueryBase): SearchQueryBase {
+    return base.where(sql<SqlBool>`NOT ${withheld}`);
 }

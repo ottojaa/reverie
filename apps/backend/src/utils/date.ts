@@ -12,3 +12,13 @@ export function formatDateOnly(d: Date | null | undefined): string | null {
 
     return `${y}-${m}-${day}`;
 }
+
+/** The YYYY-MM-DD of a clock reading stored as if it were UTC (photo_metadata.taken_at), whatever the process's time zone. */
+export function formatClockDate(clock: Date | null | undefined): string | null {
+    return clock ? clock.toISOString().slice(0, 10) : null;
+}
+
+/** Local midnight of a Date's UTC day, which is how a `date` column's values and query parameters are read. */
+export function toLocalDay(date: Date): Date {
+    return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}

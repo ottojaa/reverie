@@ -122,6 +122,13 @@ describe('parseQuery dates', () => {
         });
     });
 
+    it('parses a day range through the end of its last day', () => {
+        const range = { start: new Date('2024-07-01'), end: new Date('2024-07-15T23:59:59.999Z') };
+
+        expect(parseQuery('date:2024-07-01..2024-07-15')).toEqual({ extractedDateRange: range });
+        expect(parseQuery('uploaded:2024-07-01..2024-07-15')).toEqual({ uploadedRange: range });
+    });
+
     it('parses relative dates case-insensitively', () => {
         expect(parseQuery('uploaded:last-week')).toEqual({ uploadedRange: { relative: 'last-week' } });
         expect(parseQuery('date:Yesterday')).toEqual({ extractedDateRange: { relative: 'yesterday' } });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { pickBestCopy } from '../duplicates/best-copy';
 import { loadDuplicateClusters } from '../duplicates/groups';
-import { documentJoins, parseQuery } from '../search';
+import { documentJoins } from '../search';
 import { DOCUMENT_ROW_COLUMNS, toDocumentRow } from './document-output';
 import { applySemanticGuard } from './search-guard';
 import { defineTool } from './types';
@@ -31,7 +31,7 @@ export const findDuplicates = defineTool({
         const rows =
             ids.length === 0
                 ? []
-                : await applySemanticGuard(documentJoins(), parseQuery(''))
+                : await applySemanticGuard(documentJoins())
                       .select([...DOCUMENT_ROW_COLUMNS, 'd.size_bytes', 'd.width', 'd.height', 'd.created_at'])
                       .where('d.id', 'in', ids)
                       .execute();

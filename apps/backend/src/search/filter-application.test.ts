@@ -58,7 +58,7 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."document_category" in');
         expect(sql).toContain('"d"."mime_type" in');
         expect(sql).toContain('"d"."created_at" >=');
-        expect(sql).toContain('"d"."extracted_date" <=');
+        expect(sql).toMatch(/coalesce\(d\.extracted_date, .*\) END\) <= /);
         expect(sql).toContain('"d"."folder_id" IN (');
         expect(sql).toContain('lower("root"."path")');
         expect(sql).toContain('"llm"."summary" is not null');
@@ -68,11 +68,11 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('pm.country ILIKE');
     });
 
-    it('restricts the photo fallback to images so videos do not leak into Photo', () => {
+    it('restricts Photo to images, so videos and text files do not leak into it', () => {
         const { sql, parameters } = compile({ types: ['photo'] });
 
-        // photo = document_category in (photo, other) OR (has_meaningful_text = false AND image mime).
-        // The image-mime guard is what keeps videos/audio/archives (also has_meaningful_text = false) out.
+        // photo = image mime AND (document_category in (photo, other) OR has_meaningful_text = false).
+        // The image-mime check keeps out files filed as "other" and videos/audio/archives (also without meaningful text).
         expect(sql).toContain('"d"."document_category" in');
         expect(sql).toContain('"d"."has_meaningful_text" =');
         expect(sql).toContain('"d"."mime_type" like');
@@ -100,11 +100,11 @@ describe('applySearchFilters', () => {
         expect(sql).toContain('"d"."size_bytes" <=');
     });
 
-    it('omitting uploaded drops created_at but keeps extracted_date', () => {
+    it('omitting uploaded drops created_at but keeps the document date', () => {
         const { sql } = compile({ uploadedRange: { relative: 'last-week' }, extractedDateRange: { start: new Date('2024-01-01') } }, ['uploaded']);
 
         expect(sql).not.toContain('created_at');
-        expect(sql).toContain('"d"."extracted_date" >=');
+        expect(sql).toMatch(/coalesce\(d\.extracted_date, .*\) END\) >= /);
     });
 
     it('a folder filter reaches everything beneath the named folders, by whole path or whole name', () => {

@@ -130,15 +130,16 @@ function parseDateValue(value: string): DateRange {
         };
     }
 
-    // Check for single date: 2024-07-15
-    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+    // Check for single date or day range: 2024-07-15, 2024-07-01..2024-07-15
+    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/);
 
     if (dateMatch && dateMatch[1]) {
-        const dateStr = dateMatch[1];
+        const startDay = dateMatch[1];
+        const endDay = dateMatch[2] ?? startDay;
 
         return {
-            start: new Date(dateStr),
-            end: new Date(`${dateStr}T23:59:59.999Z`),
+            start: new Date(startDay),
+            end: new Date(`${endDay}T23:59:59.999Z`),
         };
     }
 
