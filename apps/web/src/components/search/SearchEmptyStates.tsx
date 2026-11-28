@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useSearchState } from '@/lib/hooks/useSearchState';
-import { formatFilterChip, isKnownFilter, type QueryToken } from '@reverie/shared';
+import { formatTokenChip, isKnownFilter, type QueryToken } from '@reverie/shared';
 import { Clock, FolderSearch2, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { QuickFilterChips } from './QuickFilterChips';
@@ -10,13 +10,6 @@ const MAX_RECENT_ROWS = 5;
 
 function MicroLabel({ children }: { children: React.ReactNode }) {
     return <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">{children}</div>;
-}
-
-function tokenLabel(token: QueryToken): string {
-    const key = token.negated && token.key === 'has' ? '-has' : (token.key ?? '');
-    const label = formatFilterChip(key, token.value);
-
-    return token.negated && token.key !== 'has' ? `Not ${label}` : label;
 }
 
 interface NoQueryStateProps {
@@ -97,7 +90,7 @@ export function EmptySearchState({ freeText, tokens, folderName, onRemoveFolder,
     const filterTokens = tokens.filter(isKnownFilter);
     const filters = [
         ...(folderName ? [{ key: 'folder_id', label: `Folder: ${folderName}`, onRemove: onRemoveFolder }] : []),
-        ...filterTokens.map((token) => ({ key: token.raw + token.value, label: tokenLabel(token), onRemove: () => onRemoveToken(token) })),
+        ...filterTokens.map((token) => ({ key: token.raw + token.value, label: formatTokenChip(token), onRemove: () => onRemoveToken(token) })),
     ];
     const hasFilters = filters.length > 0;
 

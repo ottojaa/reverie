@@ -4,7 +4,7 @@ import { useSearchFacets } from '@/lib/api/search';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import type { SearchQueryState } from '@/lib/hooks/useSearchQuery';
 import { cn } from '@/lib/utils';
-import { formatFilterChip, getReadKeys, isKnownFilter, removeFilter, type QueryToken } from '@reverie/shared';
+import { formatTokenChip, getReadKeys, isKnownFilter, removeFilter, type QueryToken } from '@reverie/shared';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Fragment, useState } from 'react';
@@ -33,12 +33,6 @@ function getUnmanagedTokens(tokens: QueryToken[]): QueryToken[] {
         // content (Text-contains) and size live in the More panel; every other off-pill filter is a chip
         return !DIMENSION_KEYS.has(token.key) && !['uploaded', 'date', 'size', 'content'].includes(token.key);
     });
-}
-
-function formatUnmanagedLabel(token: QueryToken): string {
-    const label = formatFilterChip(token.negated && token.key === 'has' ? '-has' : (token.key ?? ''), token.value);
-
-    return token.negated && token.key !== 'has' ? `Not ${label}` : label;
 }
 
 /**
@@ -120,7 +114,7 @@ export function FilterBar({ search, total }: FilterBarProps) {
             {/* Tokens the pills don't manage (negations, scopes) — still visible, still removable */}
             {unmanagedTokens.map((token) => (
                 <span key={token.raw + token.value} className={cn(pillBaseClass, pillStateClass(true), 'inline-flex cursor-default items-center')}>
-                    <span className="max-w-48 truncate">{formatUnmanagedLabel(token)}</span>
+                    <span className="max-w-48 truncate">{formatTokenChip(token)}</span>
                     <Button
                         type="button"
                         variant="ghost"

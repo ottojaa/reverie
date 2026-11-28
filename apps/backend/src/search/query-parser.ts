@@ -113,6 +113,7 @@ function parseDateValue(value: string): DateRange {
         const endDate = new Date(`${endMonth}-01`);
         endDate.setUTCMonth(endDate.getUTCMonth() + 1);
         endDate.setUTCDate(0); // Last day of end month
+        endDate.setUTCHours(23, 59, 59, 999);
 
         return {
             start: new Date(`${startMonth}-01`),
