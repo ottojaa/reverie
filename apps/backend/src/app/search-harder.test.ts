@@ -2,7 +2,7 @@ import sensible from '@fastify/sensible';
 import { SearchResponseSchema, type SearchResponse } from '@reverie/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({ anthropic: vi.fn() }));
 
@@ -35,8 +35,11 @@ vi.mock('../search/hybrid-search', async (importOriginal) => {
     return { ...actual, findRankedDocuments: vi.fn(actual.findRankedDocuments) };
 });
 
+import { toVectorLiteral } from '../embeddings/embedding.repository';
 import { findRankedDocuments } from '../search/hybrid-search';
 import { buildPlanPrompt } from '../search/harder/plan';
+import { createSemanticSearch, setSemanticSearch } from '../search/semantic-rank';
+import { createFakeMl, TEXT_DIMENSIONS, TEXT_MODEL, unit } from '../testing/fake-ml.js';
 import { seedDocument, seedFolder } from '../testing/seed.js';
 import { describeDb, HIDDEN_DOCS, useWorld, type World } from '../testing/tool-world.js';
 import authPlugin from './plugins/auth.js';
@@ -177,6 +180,81 @@ describeDb('POST /search/harder', () => {
         for (const secret of ['Cabin', cabin.id, 'folder:', 'type:receipt', 'read:', YEAR_2025, 'Fortum', 'scan-0412']) {
             expect(sent).not.toContain(secret);
         }
+    });
+
+    it('tells the model that word search needs every word, and asks for one to three per search', async () => {
+        await harder({ q: 'power bill' });
+
+        const [body] = sentBodies();
+        const system = String(body!['system']).replace(/\s+/g, ' ');
+
+        expect(system).toContain('only finds a file that contains every word of a search');
+        expect(system).toContain('1 to 3 distinctive words');
+        expect(JSON.stringify(body!['output_config'])).toContain('1 to 3 words');
+    });
+
+    it('highlights each result with the words of the search that found it', async () => {
+        const { db, alice } = world();
+        const lease = await seedDocument(db, { userId: alice, name: 'scan-0500.pdf', ocrText: 'Vuokrasopimus mökki, the power of attorney' });
+        const warranty = await seedDocument(db, { userId: alice, name: 'scan-0501.pdf', ocrText: 'Takuutodistus pesukone' });
+        answerWith({ rewordings: ['Vuokrasopimus', 'Takuutodistus pesukone'], date: null });
+
+        const response = await harder({ q: 'power' });
+        const marked = new Map(
+            response.results.flatMap((hit) =>
+                hit.result_type === 'document' ? [[hit.document_id, [...(hit.snippet ?? '').matchAll(/<mark>(.*?)<\/mark>/g)].map((match) => match[1])]] : [],
+            ),
+        );
+
+        // The user's own search found the lease too, no worse than the rewording, so it keeps the user's word.
+        expect(marked.get(lease)).toEqual(['power']);
+        expect(marked.get(warranty)).toEqual(['Takuutodistus', 'pesukone']);
+
+        await db.deleteFrom('documents').where('id', 'in', [lease, warranty]).execute();
+    });
+
+    it('marks the words that matched in a result the user’s search ranked higher, by meaning alone', async () => {
+        const { db, alice } = world();
+        const q = 'guarantee for the washer';
+        const certificate = await seedDocument(db, { userId: alice, name: 'scan-0600.pdf', ocrText: 'Takuutodistus pesukone, Koskinen Oy' });
+        // Holds the rewording's words more often, so the rewording ranks it above the certificate.
+        const manual = await seedDocument(db, { userId: alice, name: 'scan-0601.pdf', ocrText: 'Takuutodistus pesukone takuutodistus pesukone' });
+        const ml = createFakeMl();
+        ml.setTextVector(q, unit(TEXT_DIMENSIONS, 5));
+        await db
+            .insertInto('document_text_embeddings')
+            .values({
+                document_id: certificate,
+                chunk_index: 0,
+                char_start: 0,
+                char_end: 1,
+                content_hash: 'h',
+                model: TEXT_MODEL.name,
+                model_version: TEXT_MODEL.revision,
+                embedding: toVectorLiteral(unit(TEXT_DIMENSIONS, 5)),
+            })
+            .execute();
+        const floor = { minSimilarity: 0.5, marginZ: -Infinity };
+        setSemanticSearch(createSemanticSearch(ml, { text: floor, image: floor, topK: 5, breakerMs: 60_000 }));
+        onTestFinished(async () => {
+            setSemanticSearch(undefined);
+            await db.deleteFrom('documents').where('id', 'in', [certificate, manual]).execute();
+        });
+        answerWith({ rewordings: ['Takuutodistus pesukone'], date: null });
+
+        const response = await harder({ q });
+        const hit = response.results.find((result) => result.result_type === 'document' && result.document_id === certificate);
+
+        expect(hit?.snippet).toContain('<mark>Takuutodistus</mark> <mark>pesukone</mark>');
+    });
+
+    it('marks the rewording’s words, not the user’s, in a result only a rewording found', async () => {
+        answerWith({ rewordings: ['Fortum sähkölasku'], date: null });
+
+        const response = await harder({ q: 'power bill from the mökki', folder_id: cabin.id });
+        const bill = response.results.find((hit) => hit.result_type === 'document' && hit.document_id === docs.bill);
+
+        expect(bill?.snippet).toBe('<mark>Fortum</mark> <mark>sähkölasku</mark> mökki');
     });
 
     it.each([

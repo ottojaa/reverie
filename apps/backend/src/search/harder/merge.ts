@@ -45,8 +45,28 @@ function groupById(searches: RankedEntry[][]): Map<string, RankedEntry[]> {
     return found;
 }
 
+/**
+ * The search a document is shown as found by, as an index into `searches`. Its words highlight the document, so one
+ * whose words matched it comes before one that only matched its meaning, however high that one ranked it. Then the
+ * higher rank wins, then the earlier search.
+ */
+function toBestSearch(searches: RankedEntry[][], id: string): number {
+    const placings = searches.flatMap((entries, search) => {
+        const rank = entries.findIndex((entry) => entry.id === id);
+
+        return rank === -1 ? [] : [{ search, rank, isMeaningOnly: Number(entries[rank]!.match === 'meaning') }];
+    });
+
+    return placings.sort((a, b) => a.isMeaningOnly - b.isMeaningOnly || a.rank - b.rank)[0]!.search;
+}
+
+export interface MergedEntry extends RankedEntry {
+    /** The search whose words highlight it: 0 is the user's own, n the n-th rewording. */
+    foundBy: number;
+}
+
 /** The best `limit` documents of the user's search and the rewordings', the assured ones first. */
-export function mergeSearches(own: RankedEntry[], rewordings: RankedEntry[][], limit: number): RankedEntry[] {
+export function mergeSearches(own: RankedEntry[], rewordings: RankedEntry[][], limit: number): MergedEntry[] {
     const searches = [own, ...rewordings];
     const found = groupById(searches);
     // A document only the meaning found is the one kind the words don't match.
@@ -61,6 +81,6 @@ export function mergeSearches(own: RankedEntry[], rewordings: RankedEntry[][], l
     return ordered.slice(0, limit).map((id) => {
         const entries = found.get(id)!;
 
-        return { ...entries[0]!, match: combineMatches(entries.map((entry) => entry.match)) };
+        return { ...entries[0]!, match: combineMatches(entries.map((entry) => entry.match)), foundBy: toBestSearch(searches, id) };
     });
 }

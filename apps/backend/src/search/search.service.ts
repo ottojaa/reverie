@@ -83,7 +83,7 @@ export async function search(query: SearchQuery, options: SearchServiceOptions):
 }
 
 /** What a request narrows a search to, on top of the filters in the query string. */
-interface SearchScope {
+export interface SearchScope {
     folderId?: string;
     /** Photos and videos only. */
     media?: boolean;

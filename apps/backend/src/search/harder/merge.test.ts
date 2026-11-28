@@ -42,6 +42,28 @@ describe('mergeSearches', () => {
         ]);
     });
 
+    it('says which search ranked each document best, the user’s own being the first', () => {
+        const merged = mergeSearches(toEntries(['a', 'b', 'c']), [toEntries(['b', 'd']), toEntries(['d', 'c'])], 24);
+
+        expect(Object.fromEntries(merged.map((entry) => [entry.id, entry.foundBy]))).toEqual({ a: 0, b: 1, c: 2, d: 2 });
+    });
+
+    it('takes a search whose words matched over one that ranked the document higher by meaning alone', () => {
+        const wordsSecond = mergeSearches(toEntries(['a'], 'meaning'), [toEntries(['b', 'a'], 'keywords')], 24);
+        const wordsFirst = mergeSearches(toEntries(['b', 'a'], 'both'), [toEntries(['a'], 'meaning')], 24);
+
+        expect(wordsSecond.find((entry) => entry.id === 'a')!.foundBy).toBe(1);
+        expect(wordsFirst.find((entry) => entry.id === 'a')!.foundBy).toBe(0);
+    });
+
+    it('goes by rank, then the earlier search, when the words matched in all of them or in none', () => {
+        const equal = mergeSearches(toEntries(['a'], 'both'), [toEntries(['a'], 'keywords')], 24);
+        const meaningOnly = mergeSearches(toEntries(['b', 'a'], 'meaning'), [toEntries(['a'], 'meaning')], 24);
+
+        expect(equal.map((entry) => entry.foundBy)).toEqual([0]);
+        expect(meaningOnly.find((entry) => entry.id === 'a')!.foundBy).toBe(1);
+    });
+
     it('is empty when nothing was found', () => {
         expect(mergeSearches([], [[]], 24)).toEqual([]);
     });

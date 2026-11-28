@@ -9,11 +9,15 @@ import type { LlmPrompt } from '../../llm/types';
 
 const MAX_REWORDINGS = 5;
 const MAX_REWORDING_CHARS = 200;
+/** Asked of the model, not enforced: cutting a longer rewording could drop the word that finds the file. */
+const REWORDING_WORDS = '1 to 3';
 const PLAN_MAX_TOKENS = 1024;
 
 /** The wire contract: every field required and nullable, no length limits (structured outputs take none). */
 const SearchPlanAnswerSchema = z.object({
-    rewordings: z.array(z.string()).describe(`At most ${MAX_REWORDINGS} other ways to search for the same files, each a few plain words`),
+    rewordings: z
+        .array(z.string())
+        .describe(`At most ${MAX_REWORDINGS} other ways to search for the same files, each ${REWORDING_WORDS} words a matching file contains`),
     date: z
         .object({ from: z.string().describe('YYYY-MM-DD'), to: z.string().describe('YYYY-MM-DD') })
         .nullable()
@@ -30,9 +34,12 @@ const SYSTEM_PROMPT = `You help someone find a file in their own document and ph
 words and meaning, and their search below did not find the file.
 
 Write up to ${MAX_REWORDINGS} other searches for the same thing. The library holds Finnish and English files, so cover both languages.
-Use synonyms, and above all the words the file itself would contain: the terms printed on such a receipt, invoice,
-contract or certificate, or the things visible in such a photo. Each search is a few plain words, with no quotes,
-operators or "key:value" syntax. Make the searches differ from each other.
+
+Word search only finds a file that contains every word of a search, so a single word the file lacks loses it. Give each
+search ${REWORDING_WORDS} distinctive words that a matching file would actually contain, in Finnish or English, and keep one search to
+one language: the terms printed on such a receipt, invoice, contract or certificate, or the things visible in such a
+photo. Leave out filler and any word the file may well not have. Use synonyms and make the searches differ from each
+other. Write plain words, with no quotes, operators or "key:value" syntax.
 
 If the search says when the file is from ("last summer", "viime vuonna"), give that period as a date, counted from
 today's date. Otherwise the date is null.
