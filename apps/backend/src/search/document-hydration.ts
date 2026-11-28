@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 import { db } from '../db/kysely';
 import { excludeTrashed } from '../services/privacy';
 import { getStorageService } from '../services/storage.service';
+import { shownDateSql } from '../tools/photo';
 import { formatDateOnly } from '../utils/date';
 import { resolveThumbnailUrls } from '../utils/thumbnail-urls';
 import { buildPrefixTsQuery, documentJoins } from './filter-application';
@@ -15,7 +16,8 @@ interface DocumentRow {
     original_filename: string;
     folder_id: string | null;
     created_at: Date;
-    extracted_date: Date | null;
+    /** The date the result is shown with (see shownDateSql). */
+    shown_date: Date | null;
     document_category: string | null;
     mime_type: string;
     size_bytes: number | string;
@@ -30,7 +32,6 @@ interface DocumentRow {
     raw_text: string | null;
     photo_city: string | null;
     photo_country: string | null;
-    photo_taken_at: Date | null;
     relevance?: number | null;
 }
 
@@ -43,7 +44,7 @@ export async function fetchDocumentDetails(userId: string, ids: string[], parsed
         'd.original_filename',
         'd.folder_id',
         'd.created_at',
-        'd.extracted_date',
+        shownDateSql().as('shown_date'),
         'd.document_category',
         'd.mime_type',
         'd.size_bytes',
@@ -58,7 +59,6 @@ export async function fetchDocumentDetails(userId: string, ids: string[], parsed
         'ocr.raw_text',
         'pm.city as photo_city',
         'pm.country as photo_country',
-        'pm.taken_at as photo_taken_at',
     ]);
 
     const tsQuery = parsed.fullText ? buildPrefixTsQuery(parsed.fullText) : null;
@@ -125,7 +125,7 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
                 folder_path: row.folder_path,
                 folder_id: row.folder_id,
                 uploaded_at: row.created_at.toISOString(),
-                extracted_date: formatDateOnly(row.extracted_date),
+                extracted_date: formatDateOnly(row.shown_date),
                 category: row.document_category as DocumentSearchResult['category'],
                 mime_type: row.mime_type,
                 format,
@@ -156,13 +156,12 @@ async function enrichDocumentRows(rows: DocumentRow[], parsed: ParsedQuery): Pro
 function computeDisplayName(row: {
     original_filename: string;
     document_category: string | null;
-    extracted_date: Date | null;
+    shown_date: Date | null;
     llm_title: string | null;
     llm_summary: string | null;
     llm_processing_type: string | null;
     photo_city: string | null;
     photo_country: string | null;
-    photo_taken_at: Date | null;
 }): string {
     // 1. LLM title for text-processed documents and for images the image call has looked at
     if (row.llm_title && (row.llm_processing_type === 'text_summary' || row.llm_processing_type === 'image_understanding')) {
@@ -174,19 +173,16 @@ function computeDisplayName(row: {
 
     if (isPhoto && (row.photo_city || row.photo_country)) {
         const location = row.photo_city ?? row.photo_country;
-        const date = row.photo_taken_at ?? row.extracted_date;
 
-        if (date) {
-            return `Photo in ${location}, ${formatShortDate(date)}`;
+        if (row.shown_date) {
+            return `Photo in ${location}, ${formatShortDate(row.shown_date)}`;
         }
 
         return `Photo in ${location}`;
     }
 
-    if (isPhoto && (row.photo_taken_at || row.extracted_date)) {
-        const date = row.photo_taken_at ?? row.extracted_date!;
-
-        return `Photo, ${formatShortDate(date)}`;
+    if (isPhoto && row.shown_date) {
+        return `Photo, ${formatShortDate(row.shown_date)}`;
     }
 
     // 3. Description from the retired vision call (first sentence); rows it wrote stay until the backfill replaces them
@@ -212,10 +208,8 @@ function computeDisplayName(row: {
     const categoryLabel = row.document_category ? categoryLabels[row.document_category] : undefined;
 
     if (categoryLabel) {
-        const date = row.extracted_date ?? row.photo_taken_at;
-
-        if (date) {
-            return `${categoryLabel}, ${formatShortDate(date)}`;
+        if (row.shown_date) {
+            return `${categoryLabel}, ${formatShortDate(row.shown_date)}`;
         }
 
         return categoryLabel;

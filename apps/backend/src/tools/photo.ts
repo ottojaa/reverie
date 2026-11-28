@@ -90,7 +90,13 @@ export function withholdsImageContentSql(): RawBuilder<SqlBool> {
     return sql<SqlBool>`(${isPhotoSql()} OR (d.mime_type LIKE 'image/%' AND d.document_category = 'photo'))`;
 }
 
-/** The date a document is shown with (see toDisplayDate): a withheld image gets its capture date only. */
+/**
+ * The date a document is shown with (see toDisplayDate): a withheld image gets its capture date only.
+ * `taken_at` is the camera's clock reading stored as if it were UTC, so its day is read in UTC: a bare
+ * `::date` would move it to the next or previous day in a database session set to another time zone.
+ */
 export function shownDateSql(): RawBuilder<Date | null> {
-    return sql<Date | null>`(CASE WHEN ${withholdsImageContentSql()} THEN pm.taken_at::date ELSE coalesce(d.extracted_date, pm.taken_at::date) END)`;
+    const captured = sql`(pm.taken_at AT TIME ZONE 'UTC')::date`;
+
+    return sql<Date | null>`(CASE WHEN ${withholdsImageContentSql()} THEN ${captured} ELSE coalesce(d.extracted_date, ${captured}) END)`;
 }

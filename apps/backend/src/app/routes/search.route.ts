@@ -208,14 +208,14 @@ export default async function (fastify: FastifyInstance) {
                     {
                         name: 'uploaded',
                         syntax: 'uploaded:<date>',
-                        examples: ['uploaded:2024', 'uploaded:last-week', 'uploaded:2024-01..2024-06'],
+                        examples: ['uploaded:2024', 'uploaded:last-week', 'uploaded:2024-01..2024-06', 'uploaded:2024-07-01..2024-07-15'],
                         description: 'Filter by upload date',
                     },
                     {
                         name: 'date',
                         syntax: 'date:<date>',
-                        examples: ['date:2023', 'date:2022-2025'],
-                        description: 'Filter by extracted document date',
+                        examples: ['date:2023', 'date:2022-2025', 'date:2024-07-01..2024-07-15'],
+                        description: "Filter by document date: the date read from a document, or a photo's capture date",
                     },
                     {
                         name: 'folder',

@@ -33,7 +33,7 @@ interface Found {
     facets: Facets;
 }
 
-/** What each kind's scope finds. A video filed as a photo, or a PDF filed under "other", is also what the `photo` type counts. */
+/** What each kind's scope finds. */
 const SCOPES: Array<{ kind: DocumentKind; names: string[]; types: string[]; formats: string[] }> = [
     { kind: 'image', names: ['holiday-beach.jpg'], types: ['photo'], formats: ['jpg'] },
     { kind: 'video', names: ['holiday-drone.mp4', 'holiday-ferry.mp4'], types: ['video'], formats: ['mp4'] },

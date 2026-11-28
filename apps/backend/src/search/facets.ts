@@ -17,8 +17,8 @@ import { applySearchFilters, applyTypesFilter, documentJoins, type FilterDimensi
 const CANONICAL_TYPES = ['photo', 'document', 'receipt', 'screenshot', 'video'] as const;
 
 /**
- * The types a search scoped to one kind does not offer, because they name a different kind. The type filter goes by
- * category, so it can still match a few such documents (a PDF filed under "other" counts as a photo).
+ * The types a search scoped to one kind does not offer, because they name a different kind. Types other than photo go
+ * by category alone, so they can still match a few such documents (a PDF filed as a screenshot).
  */
 const TYPES_RULED_OUT: Record<DocumentKind, readonly string[]> = {
     image: ['video'],

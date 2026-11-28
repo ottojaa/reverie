@@ -1,5 +1,6 @@
 import type { ParsedQuery, SortBy } from '@reverie/shared';
 import { sql, type SelectQueryBuilder } from 'kysely';
+import { shownDateSql } from '../tools/photo';
 import { applySearchFilters, buildPrefixTsQuery, type SearchDatabase, type SearchQueryBase } from './filter-application';
 
 /**
@@ -40,7 +41,7 @@ function applySorting(query: SearchQueryBase, parsed: ParsedQuery, options: Sear
     }
 
     if (options.sortBy === 'date') {
-        return query.orderBy('d.extracted_date', options.sortOrder).orderBy('d.created_at', options.sortOrder);
+        return query.orderBy(shownDateSql(), options.sortOrder).orderBy('d.created_at', options.sortOrder);
     }
 
     if (options.sortBy === 'filename') {

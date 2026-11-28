@@ -1,5 +1,5 @@
 import { db } from '../db/kysely';
-import { formatDateOnly } from '../utils/date';
+import { formatClockDate, formatDateOnly } from '../utils/date';
 import { isPhoto, withholdsImageContent } from './photo';
 
 /**
@@ -67,9 +67,11 @@ export function toPlace(source: Pick<DocumentRowSource, 'city' | 'country'>): st
  * its `extracted_date` is the model's reading of the picture.
  */
 export function toDisplayDate(source: DocumentRowSource): string | null {
-    if (withholdsImageContent(source)) return formatDateOnly(source.taken_at);
+    const captured = formatClockDate(source.taken_at);
 
-    return formatDateOnly(source.extracted_date ?? source.taken_at);
+    if (withholdsImageContent(source)) return captured;
+
+    return formatDateOnly(source.extracted_date) ?? captured;
 }
 
 export function toDocumentType(source: DocumentRowSource): string {

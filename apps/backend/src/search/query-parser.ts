@@ -35,9 +35,9 @@ const RELATIVE_DATES: Record<string, DateRange['relative']> = {
     'last-year': 'last-year',
 };
 
-// Type aliases (what users type -> canonical type token). Expansion of a
-// canonical type into document categories lives in the query builder
-// (TYPE_TO_CATEGORIES), not here — parsed.types holds canonical tokens only.
+// Type aliases (what users type -> canonical type token). What a canonical type
+// matches is decided by the search filters (matchesTypes), not here —
+// parsed.types holds canonical tokens only.
 const TYPE_ALIASES: Record<string, string> = {
     photo: 'photo',
     photos: 'photo',
@@ -109,8 +109,8 @@ function parseDateValue(value: string): DateRange {
         const startMonth = monthRangeMatch[1];
         const endMonth = monthRangeMatch[2];
         const endDate = new Date(`${endMonth}-01`);
-        endDate.setMonth(endDate.getMonth() + 1);
-        endDate.setDate(0); // Last day of end month
+        endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+        endDate.setUTCDate(0); // Last day of end month
 
         return {
             start: new Date(`${startMonth}-01`),
@@ -130,15 +130,16 @@ function parseDateValue(value: string): DateRange {
         };
     }
 
-    // Check for single date: 2024-07-15
-    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+    // Check for single date or day range: 2024-07-15, 2024-07-01..2024-07-15
+    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/);
 
     if (dateMatch && dateMatch[1]) {
-        const dateStr = dateMatch[1];
+        const startDay = dateMatch[1];
+        const endDay = dateMatch[2] ?? startDay;
 
         return {
-            start: new Date(dateStr),
-            end: new Date(`${dateStr}T23:59:59.999Z`),
+            start: new Date(startDay),
+            end: new Date(`${endDay}T23:59:59.999Z`),
         };
     }
 

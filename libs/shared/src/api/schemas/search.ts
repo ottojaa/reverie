@@ -108,6 +108,7 @@ export const DocumentSearchResultSchema = z.object({
 
     // Dates
     uploaded_at: z.string().datetime(),
+    /** The date search filters and sorts by: the date read from the document, or a photo's capture date. Not the document detail's field of this name, which holds only the former. */
     extracted_date: DateOnlySchema.nullable(),
 
     // Classification

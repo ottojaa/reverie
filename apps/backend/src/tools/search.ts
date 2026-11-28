@@ -4,7 +4,7 @@ import { applySearchFilters, documentJoins, parseQuery, validateQuery } from '..
 import { findRankedDocuments, type HybridContext } from '../search/hybrid-search';
 import { findSimilarImages } from '../search/similar-images';
 import { DOCUMENT_ROW_COLUMNS, loadTags, toDocumentRow, type DocumentRow } from './document-output';
-import { applySearchGuard, applySemanticGuard, withoutDateRange } from './search-guard';
+import { applySearchGuard, applySemanticGuard } from './search-guard';
 import { createSelection, MAX_SELECTION_SIZE } from './selection.store';
 import { defineTool, ToolError } from './types';
 import { loadVisibility, type Visibility } from './visibility';
@@ -22,7 +22,7 @@ const searchSchema = z.object({
     categories: z.array(z.string().min(1).max(60)).optional().describe('Document categories, e.g. receipt'),
     tags: z.array(z.string().min(1).max(60)).optional().describe('Every listed tag must be on the document'),
     formats: z.array(z.string().min(1).max(10)).optional().describe('File formats, e.g. pdf, jpg'),
-    date: z.string().max(40).optional().describe('Document date: 2024, 2022-2024, 2024-01..2024-06, 2024-07-15 or last-month'),
+    date: z.string().max(40).optional().describe('Document date: 2024, 2022-2024, 2024-01..2024-06, 2024-07-15, 2024-07-01..2024-07-15 or last-month'),
     uploaded: z.string().max(40).optional().describe('Upload date, same forms as date'),
     location: z.string().max(100).optional().describe('City or country of a photo'),
     folder: z.string().max(300).optional().describe('A folder by its whole path (starts with /) or its name, ignoring case. Includes everything beneath it.'),
@@ -76,7 +76,7 @@ function toParsedQuery(input: SearchInput): ParsedQuery {
     if (errors.length > 0) throw new ToolError('Invalid search: ' + errors[0]);
 
     if (isEmptyRange(parsed.extractedDateRange) || isEmptyRange(parsed.uploadedRange))
-        throw new ToolError('Invalid date filter: use 2024, 2022-2024, 2024-01..2024-06, 2024-07-15 or last-month');
+        throw new ToolError('Invalid date filter: use 2024, 2022-2024, 2024-01..2024-06, 2024-07-15, 2024-07-01..2024-07-15 or last-month');
 
     return input.folder_id ? { ...parsed, scopeFolderId: input.folder_id } : parsed;
 }
@@ -108,7 +108,7 @@ async function runSimilarImages(input: SearchInput, vis: Visibility) {
     if (input.query.trim()) throw new ToolError('Invalid search: similar_to cannot be combined with a query');
 
     const filters = toParsedQuery(input);
-    const source = await applySearchFilters(applySemanticGuard(documentJoins(), parseQuery('')), parseQuery(''), vis.userId, vis.privateFolderIds)
+    const source = await applySearchFilters(applySemanticGuard(documentJoins()), parseQuery(''), vis.userId, vis.privateFolderIds)
         .where('d.id', '=', input.similar_to!)
         .select('d.id')
         .executeTakeFirst();
@@ -118,8 +118,8 @@ async function runSimilarImages(input: SearchInput, vis: Visibility) {
     const similar = await findSimilarImages(vis.userId, vis.privateFolderIds, input.similar_to!, {
         limit: input.limit,
         offset: input.offset,
-        base: applySemanticGuard(documentJoins(), filters),
-        filters: withoutDateRange(filters),
+        base: applySemanticGuard(documentJoins()),
+        filters,
     });
 
     if (!similar) throw new ToolError('Image not analysed yet: ' + input.similar_to);
@@ -139,15 +139,14 @@ async function runSimilarImages(input: SearchInput, vis: Visibility) {
 
 async function runSearch(input: SearchInput, vis: Visibility) {
     const parsed = toParsedQuery(input);
-    const filters = withoutDateRange(parsed);
     const ctx: HybridContext = {
         userId: vis.userId,
         privateFolderIds: vis.privateFolderIds,
         fullTextBase: applySearchGuard(documentJoins(), parsed),
-        semanticBase: applySemanticGuard(documentJoins(), parsed),
+        semanticBase: applySemanticGuard(documentJoins()),
     };
     const options = { limit: MAX_SELECTION_SIZE, offset: 0, sortBy: input.sort_by as SortBy, sortOrder: input.sort_order };
-    const ranked = await findRankedDocuments(filters, ctx, options);
+    const ranked = await findRankedDocuments(parsed, ctx, options);
     const page = ranked.entries.slice(input.offset, input.offset + input.limit);
     const rows = await loadRows(page.map((entry) => entry.id));
     // A selection stands for matches the agent can act on in bulk. Meaning-only matches are loose by nature, so they are
