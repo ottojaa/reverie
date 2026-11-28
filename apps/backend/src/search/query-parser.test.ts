@@ -228,3 +228,35 @@ describe('parseQuery combined queries', () => {
         });
     });
 });
+
+describe('parseQuery read markers', () => {
+    const words = 'kuitit kaupasta viime kuussa';
+    const markers = 'read:"type:receipt kuitit" read:"date:2026-10-01..2026-10-31 viime kuussa"';
+    const dates = { start: new Date('2026-10-01'), end: new Date('2026-10-31T23:59:59.999Z') };
+
+    it('takes the words out of the search while their filter is there', () => {
+        expect(parseQuery(`${words} type:receipt date:2026-10-01..2026-10-31 ${markers}`)).toEqual({
+            fullText: 'kaupasta',
+            types: ['receipt'],
+            extractedDateRange: dates,
+        });
+    });
+
+    it('searches the words again once their filter is gone', () => {
+        expect(parseQuery(`${words} type:receipt ${markers}`)).toEqual({ fullText: 'kaupasta viime kuussa', types: ['receipt'] });
+        expect(parseQuery(`${words} ${markers}`)).toEqual({ fullText: words });
+    });
+
+    it('keeps the words out while the key has any filter', () => {
+        expect(parseQuery(`${words} type:photo ${markers}`)).toEqual({ fullText: 'kaupasta viime kuussa', types: ['photo'] });
+        expect(parseQuery(`kuitit -type:video ${markers}`).fullText).toBeUndefined();
+    });
+
+    it('takes the words out once, in any case, leaving quoted ones', () => {
+        expect(parseQuery('Kuitit "kuitit" kuitit type:receipt read:"type:receipt kuitit"').fullText).toBe('kuitit kuitit');
+    });
+
+    it('searches a read: of another shape as text', () => {
+        expect(parseQuery('read:later beach')).toEqual({ fullText: 'read:later beach' });
+    });
+});

@@ -1,6 +1,7 @@
 import {
     FacetsResponseSchema,
     QuickFiltersResponseSchema,
+    ReadResponseSchema,
     SearchHelpSchema,
     SearchResponseSchema,
     SimilarImagesResponseSchema,
@@ -13,6 +14,7 @@ import {
     type SuggestionType,
 } from '@reverie/shared';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { useAuth } from '../auth';
 import { apiClient } from './client';
 
@@ -66,6 +68,20 @@ export const searchApi = {
         return SearchHelpSchema.parse(data);
     },
 };
+
+/**
+ * `q` with the file type and date its words name added as filters, relative dates counted from the
+ * user's own today. A failed read answers `q` as it is, so the search goes ahead on the words.
+ */
+export async function fetchReadQuery(q: string): Promise<string> {
+    try {
+        const { data } = await apiClient.get('/search/read', { params: { q, today: format(new Date(), 'yyyy-MM-dd') } });
+
+        return ReadResponseSchema.parse(data).q;
+    } catch {
+        return q;
+    }
+}
 
 const DEFAULT_PAGE_SIZE = 24;
 

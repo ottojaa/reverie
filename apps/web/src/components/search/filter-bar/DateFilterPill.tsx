@@ -5,6 +5,7 @@ import { DateFilterPanel, type DateFieldKey, type DateFieldState } from './DateF
 import { PillPopover } from './PillPopover';
 
 interface DateFilterPillProps extends DateFieldState {
+    isRead: boolean;
     onSetValue: (key: DateFieldKey, value: string) => void;
     onClearField: (key: DateFieldKey) => void;
     /** Clears both date fields in a single navigation (two sequential clears would race). */
@@ -20,7 +21,7 @@ function dateLabel({ uploadedValue, dateValue }: DateFieldState): string {
 }
 
 /** The single Date pill covering both date fields (uploaded / document date). */
-export function DateFilterPill({ uploadedValue, dateValue, onSetValue, onClearField, onClearAll }: DateFilterPillProps) {
+export function DateFilterPill({ uploadedValue, dateValue, isRead, onSetValue, onClearField, onClearAll }: DateFilterPillProps) {
     const [open, setOpen] = useState(false);
     const isActive = uploadedValue !== null || dateValue !== null;
 
@@ -31,6 +32,7 @@ export function DateFilterPill({ uploadedValue, dateValue, onSetValue, onClearFi
             icon={Calendar}
             label={dateLabel({ uploadedValue, dateValue })}
             isActive={isActive}
+            isRead={isRead}
             clearLabel="Clear date filters"
             onClear={onClearAll}
         >

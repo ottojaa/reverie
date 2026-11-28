@@ -2,7 +2,7 @@ import { FolderFileCount } from '@/components/search/FolderFileCount';
 import { QuickFilterChips } from '@/components/search/QuickFilterChips';
 import { Button } from '@/components/ui/button';
 import { SectionIcon } from '@/components/ui/SectionIcon';
-import { useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
+import { fetchReadQuery, useQuickFilters, useSearch, useSearchSuggestions } from '@/lib/api/search';
 import { getThumbnailUrl } from '@/lib/commonhelpers';
 import { findFolderByPath } from '@/lib/folders/tree.js';
 import { useSearchState } from '@/lib/hooks/useSearchState';
@@ -85,12 +85,28 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
         [navigate, onOpenChange],
     );
 
+    const latestRef = useRef({ query, open });
+    latestRef.current = { query, open };
+
+    // Searches for what was typed with its file type and date read into filters. Typing on or closing the
+    // palette before the answer arrives drops it.
+    const readAndSearch = useCallback(
+        async (typed: string) => {
+            const read = await fetchReadQuery(typed);
+
+            if (!latestRef.current.open || latestRef.current.query.trim() !== typed) return;
+
+            navigateToSearch(read);
+        },
+        [navigateToSearch],
+    );
+
     const handleSubmit = useCallback(() => {
         if (!query.trim()) return;
 
         addRecentSearch(query.trim());
-        navigateToSearch(query.trim());
-    }, [query, addRecentSearch, navigateToSearch]);
+        readAndSearch(query.trim());
+    }, [query, addRecentSearch, readAndSearch]);
 
     const handleQuickFilter = useCallback(
         (filterQuery: string) => {
@@ -102,9 +118,9 @@ export function SearchCommandPalette({ open, onOpenChange, initialQuery }: Searc
     const handleRecentSearch = useCallback(
         (recentQuery: string) => {
             setQuery(recentQuery);
-            navigateToSearch(recentQuery);
+            readAndSearch(recentQuery);
         },
-        [setQuery, navigateToSearch],
+        [setQuery, readAndSearch],
     );
 
     const handleSuggestionClick = useCallback(

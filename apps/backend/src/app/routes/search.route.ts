@@ -8,11 +8,15 @@ import {
     FacetsQuerySchema,
     FacetsResponseSchema,
     QuickFiltersResponseSchema,
+    ReadQuerySchema,
+    ReadResponseSchema,
+    type ReadQuery,
     type SearchQuery,
     type SuggestQuery,
     type FacetsQuery,
 } from '@reverie/shared';
 import { getQuickFilters } from '../../search/quick-filters';
+import { readQuery } from '../../search/reader/read-query';
 import { search, getFacetsOnly, suggest } from '../../search/search.service';
 
 export default async function (fastify: FastifyInstance) {
@@ -96,6 +100,35 @@ export default async function (fastify: FastifyInstance) {
             const facets = await getFacetsOnly(q, userId, { folderId: folder_id, media, kind });
 
             return { facets };
+        },
+    );
+
+    /**
+     * Read a file type and a date out of a typed sentence
+     *
+     * GET /api/search/read?q=receipts%20from%20last%20month&today=2026-11-28
+     *
+     * Answers the same q with the filters it read added, each marked with the words it came from.
+     */
+    fastify.get<{
+        Querystring: ReadQuery;
+    }>(
+        '/search/read',
+        {
+            preHandler: [fastify.authenticate],
+            schema: {
+                description: 'Read the file type and date a typed sentence names into search filters',
+                tags: ['search'],
+                querystring: ReadQuerySchema,
+                response: {
+                    200: ReadResponseSchema,
+                },
+            },
+        },
+        async function (request) {
+            const { q, today } = request.query;
+
+            return { q: readQuery(q, today) };
         },
     );
 

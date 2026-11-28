@@ -5,6 +5,7 @@ import { ChevronDown, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { PANEL_EASE, pillBaseClass, pillStateClass } from './pill-style';
+import { ReadMark } from './ReadMark';
 
 interface PillPopoverProps {
     open: boolean;
@@ -13,19 +14,22 @@ interface PillPopoverProps {
     label: string;
     title?: string | undefined;
     isActive: boolean;
+    /** The filter was read from the words typed, not picked. */
+    isRead?: boolean;
     clearLabel: string;
     onClear: () => void;
     children: ReactNode;
 }
 
 /** A filter pill that opens its panel, with a clear button while the filter is set. */
-export function PillPopover({ open, onOpenChange, icon: Icon, label, title, isActive, clearLabel, onClear, children }: PillPopoverProps) {
+export function PillPopover({ open, onOpenChange, icon: Icon, label, title, isActive, isRead, clearLabel, onClear, children }: PillPopoverProps) {
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
                 <Button type="button" variant="ghost" title={title} className={cn(pillBaseClass, pillStateClass(isActive, open))}>
                     <Icon className="size-3.5 shrink-0" />
                     <span className="max-w-48 truncate">{label}</span>
+                    {isRead && <ReadMark />}
                     {isActive ? (
                         <span
                             role="button"

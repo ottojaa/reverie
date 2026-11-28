@@ -6,6 +6,7 @@ import { findByText, mount, press, settle, typeInto } from '../../testing/render
 import { SearchCommandPalette } from './SearchCommandPalette';
 
 const navigate = vi.fn();
+const fetchReadQuery = vi.fn<(q: string) => Promise<string>>();
 
 // Two folders named alike: the one picked must be the one searched.
 const bills = toTestFolder('bills-id', { name: 'Bills', path: '/Papers/Bills', parent_id: 'papers-id' });
@@ -14,6 +15,7 @@ const tree = [toTestFolder('papers-id', { name: 'Papers', path: '/Papers', child
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 vi.mock('@/lib/sections', () => ({ useSections: () => ({ data: tree }), useCurrentSection: () => null }));
 vi.mock('@/lib/api/search', () => ({
+    fetchReadQuery: (q: string) => fetchReadQuery(q),
     useSearch: () => ({ data: undefined, isLoading: false }),
     useQuickFilters: () => ({ data: [] }),
     useSearchSuggestions: (type: string) => ({ data: type === 'folder' ? ['/Papers/Bills'] : ['bill.pdf'], isLoading: false }),
@@ -48,5 +50,42 @@ describe('SearchCommandPalette folder suggestions', () => {
 
         expect(document.body.textContent).toContain('Search your documents');
         expect(document.body.textContent).not.toContain('folder:');
+    });
+});
+
+describe('SearchCommandPalette submit', () => {
+    const searchAll = () => findByText('[cmdk-item]', 'Search for');
+
+    it('searches with the query the reader answers', async () => {
+        fetchReadQuery.mockResolvedValue('bil type:receipt');
+        await settle(300);
+        await press(searchAll());
+
+        expect(fetchReadQuery).toHaveBeenCalledWith('bil');
+        expect(navigate).toHaveBeenCalledWith({ to: '/search', search: expect.objectContaining({ q: 'bil type:receipt' }) });
+    });
+
+    it('drops an answer that arrives after more typing', async () => {
+        let answer: (q: string) => void = () => {};
+
+        fetchReadQuery.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        await settle(300);
+        await press(searchAll());
+        await typeInto(input(), 'bills');
+        answer('bil type:receipt');
+        await settle();
+
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('reads a recent search again', async () => {
+        fetchReadQuery.mockResolvedValue('kuitit type:receipt');
+        localStorage.setItem('reverie_recent_searches', JSON.stringify([{ query: 'kuitit', timestamp: '2026-11-01T00:00:00.000Z' }]));
+        view.unmount();
+        view = mount(createElement(SearchCommandPalette, { open: true, onOpenChange: () => {} }));
+        await settle();
+        await press(findByText('[cmdk-item]', 'kuitit'));
+
+        expect(navigate).toHaveBeenCalledWith({ to: '/search', search: expect.objectContaining({ q: 'kuitit type:receipt' }) });
     });
 });
